@@ -1175,6 +1175,12 @@ def _key_row(card: CardView) -> str:
 #: The words a card with no Cobalt stop (a manual card) shows (v3 §5 [F-28]).
 NO_COBALT_STOP = "NULL — no Cobalt stop"
 TRIGGERED_BUTTON = "<button>TRIGGERED</button>"
+#: R627: the ARM and DISARM taps. No `data-key`: the `[data-key]` handler runs before `[data-tap]`.
+ARM_BUTTON = '<button class="arm-key">ARM</button>'
+DISARM_TAP = (
+    '<input name="reason" type="text" maxlength="80" placeholder="disarm reason (required)" value="">'
+    '<button class="arm-key danger">DISARM</button>'
+)
 
 
 def _shown(value: Any) -> str:
@@ -1415,6 +1421,8 @@ def _card_detail(card: CardView, *, stale: str | None = None) -> str:
         state_body = (
             f'<div class="state-block watch-state"><b>WATCH</b> · proposed key {e(proposed)} · '
             f"trigger {e(str(card.trigger))} · stop {e(str(card.stop))}</div>"
+            # R627: WATCH -> ARMED, his tap; an unsized card shows the store's refusal.
+            f"{_card_form(card.id, '/arm', ARM_BUTTON, source='panel')}"
         )
     elif card.state is CardState.ARMED:
         state_body = (
@@ -1422,7 +1430,9 @@ def _card_detail(card: CardView, *, stale: str | None = None) -> str:
             f'<div class="trigger-distance">last {e(str(card.last or "—"))}{stale_badge} · trigger {e(str(card.trigger))}</div>'
             f"<div>key {e(card.grade or '—')} · {card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</div>"
             # S3 C3 (O7 A): ARMED -> TRIGGERED is his tap until the S4 detector.
-            f"{_card_form(card.id, '/triggered', TRIGGERED_BUTTON, source='panel')}</div>"
+            f"{_card_form(card.id, '/triggered', TRIGGERED_BUTTON, source='panel')}"
+            # R627: ARMED -> WATCH, his tap with a reason the store requires.
+            f"{_card_form(card.id, '/disarm', DISARM_TAP, source='panel')}</div>"
         )
     elif card.state is CardState.TRIGGERED:
         state_body = _triggered_block(card)
@@ -1519,6 +1529,7 @@ PANEL_CSS = r"""
 .degraded-line{padding:3px 12px;border:1px solid var(--red);background:#351019;color:#ffd0d6;border-radius:5px;margin:6px 0 0;font-size:12px}.degraded-line[hidden]{display:none}
 .bars-stale{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--red);padding:1px 3px;color:var(--red);border-radius:3px;margin-left:4px;vertical-align:middle}
 .s3-form{display:inline-flex;gap:4px;align-items:center;margin:4px 6px 4px 0;flex-wrap:wrap}.s3-form input{width:90px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:6px}.s3-form button{min-height:40px;padding:0 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px}.s3-form button.danger{border-color:var(--red);color:var(--red)}.s3-form .confirm{display:inline-flex;gap:3px;align-items:center;font-size:13px}.s3-form .confirm input{width:auto}.yours{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--amber);color:var(--amber);padding:1px 4px;border-radius:3px}.cobalt-stop{color:var(--blue)}.stop-line,.running,.drift{font-size:13px;padding:4px 0}.warn{color:var(--amber);font-size:13px;padding:4px 0}.legs{margin-top:6px}.leg-estimated td{color:var(--amber)}.terminal-legs{padding:4px 18px 8px}
+.s3-form button.arm-key{min-height:44px;padding:0 14px}
 """
 
 

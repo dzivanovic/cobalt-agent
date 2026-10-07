@@ -2004,6 +2004,35 @@ async def radar_card_stop_reset(card_id: int, request: Request):
     return await _card_tap(card_id, request, "aset.radar.stop_reset", work)
 
 
+@app.post("/radar/card/{card_id}/arm")
+async def radar_card_arm(card_id: int, request: Request):
+    """WATCH -> ARMED, his tap (R627). No pre-check here: the store refuses
+    an unsized card, a non-WATCH card (a second tap included) and market
+    reset under the row lock, and `_card_tap` shows each verbatim."""
+    def work(form, source):
+        tid = CardStore().transition(card_id, CardState.ARMED, actor=Actor.YOU,
+                                     evidence={"via": f"{source}.arm"})
+        return ({"state": CardState.ARMED.value, "transition_id": tid},
+                f"card {card_id}: ARMED (card_transitions id {tid})")
+    return await _card_tap(card_id, request, "aset.radar.arm", work)
+
+
+@app.post("/radar/card/{card_id}/disarm")
+async def radar_card_disarm(card_id: int, request: Request):
+    """ARMED -> WATCH, his tap with a free-text reason (R627). An empty
+    reason is the store's refusal (`_assert_reason`), never checked here."""
+    def work(form, source):
+        reason = form.get("reason", "").strip()
+        if len(reason) > 80:
+            raise _TapInputRefused(
+                f"REFUSED: a DISARM reason is at most 80 characters, got {len(reason)}. Nothing written.")
+        tid = CardStore().transition(card_id, CardState.WATCH, actor=Actor.YOU,
+                                     evidence={"via": f"{source}.disarm"}, reason=reason or None)
+        return ({"state": CardState.WATCH.value, "transition_id": tid},
+                f"card {card_id}: WATCH — disarmed (card_transitions id {tid})")
+    return await _card_tap(card_id, request, "aset.radar.disarm", work)
+
+
 def _sheet_in_trade(card: dict) -> str:
     """C3-4: a FILLED MANUAL card is not on `/radar` (X-M: `radar_cards_v`
     is `origin = 'radar'`), so its IN-TRADE controls render here, on the
