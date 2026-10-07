@@ -2,7 +2,7 @@ JOB: radar-arm-disarm
 LADDER: S3 smoke blocker (F7, SPRINT-LADDER-v0_1.md:65; his R627)
 BRANCH: ops/radar-arm-disarm-1007
 WORKTREE: radar-arm-disarm-1007
-BASE: «FILL: main HEAD at launch, 8 hex»
+BASE: f6350cc4
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/radar-arm-disarm-1007/docs/40 - DevDocs/reports/radar-arm-disarm-build-2026-10-07.md
 CHECK REPORT:
