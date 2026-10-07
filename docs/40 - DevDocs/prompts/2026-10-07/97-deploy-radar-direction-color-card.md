@@ -1,12 +1,12 @@
 JOB: radar-direction-color-1007
 LADDER: OFF-LADDER — reports/cto-2026-10-07-words.md 2026-10-07 R625
-BRANCH: deploy/radar-direction-color-1007
-WORKTREE: deploy-radar-direction-color-1007
+BRANCH: deploy/radar-direction-color-1007-attempt2
+WORKTREE: deploy-radar-direction-color-1007-attempt2
 BASE: main
 TIP: 541adf0c
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-radar-direction-color-1007.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-radar-direction-color-1007-attempt2.md
 RULINGS: 2026-10-07 R625
-TAG: deploy-2026-10-07-radar-direction-color
+TAG: deploy-2026-10-07-radar-direction-color-attempt2
 MIGRATIONS: none
 SET: none
 TICKERS: none
