@@ -835,6 +835,27 @@ def test_radar_direction_touches_only_strip_and_title(evaluated, phone_frame):
         ), block
 
 
+@pytest.mark.parametrize("direction", [[], {}])
+def test_radar_any_other_direction_is_marked_never_guessed(evaluated, direction):
+    card = _ladder(evaluated["rows"]).active[0].model_copy(
+        update={"direction": direction}
+    )
+    rendered = panel.render_ladder(
+        panel.LadderView(active=[card], terminal=[], empty_message=None)
+    )
+    body = re.search(
+        r'<article class="ladder-item[^"]*" data-card-id="\d+">(.*?)</article>',
+        rendered,
+        re.S,
+    ).group(1)
+    strip, title = _strip_and_title(body)
+    for part in (strip, title):
+        assert "dir-unknown" in part
+        assert "direction ?" in part
+        assert "dir-long" not in part and "dir-short" not in part
+        assert "↑" not in part and "↓" not in part
+
+
 # ---------------------------------------------------------------------
 # JavaScript: fetch POST only, focus law
 # ---------------------------------------------------------------------
