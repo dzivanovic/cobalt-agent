@@ -1,12 +1,12 @@
 JOB: desk-stop-guard
 LADDER: OFF-LADDER — reports/cto-2026-10-06-words.md 2026-10-06 R590
-BRANCH: ops/desk-stop-guard-1006
-WORKTREE: desk-stop-guard-1006
+BRANCH: ops/desk-stop-guard-1006b
+WORKTREE: desk-stop-guard-1006b
 BASE: 18d9da5b
-TIP: 96dad934
-REPORT: /Users/cobalt/cobalt-wt/desk-stop-guard-1006/docs/40 - DevDocs/reports/desk-stop-guard-build-2026-10-06.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-stop-guard-check-2026-10-06.md
-HOUSE B: as needed
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/desk-stop-guard-1006b/docs/40 - DevDocs/reports/desk-stop-guard-build-2026-10-06.md
+CHECK REPORT:
+HOUSE B:
 RULINGS: 2026-10-06 R596
 DB: none
 
