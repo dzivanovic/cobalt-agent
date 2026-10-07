@@ -28,17 +28,17 @@ weekly_pct_close:
 <!-- cobalt:unit seat-usage:2026-10-06 -->
 | model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
 |---|---|---:|---:|---:|---:|---:|
-| `gpt-5.6-sol` | codex · — | 21,598,976 | 0 | 104,273 | $20.84 | +$4.73 |
-| `grok-4.7-build` | grok · — | 12,041,088 | 0 | 446,081 | $3.97 | +$0.75 |
-| `claude-opus-5-5` | claude · — | 317,693,916 | 6,776,748 | 1,537,830 | **unpriced** | — |
-| `claude-sonnet-5-5` | claude · — | 282,514,487 | 5,764,194 | 1,242,769 | **unpriced** | — |
+| `gpt-5.6-sol` | codex · — | 21,598,976 | 0 | 104,273 | $20.84 | $0.00 |
+| `grok-4.7-build` | grok · — | 12,041,088 | 0 | 446,081 | $3.97 | $0.00 |
+| `claude-opus-5-5` | claude · — | 327,011,314 | 6,851,690 | 1,569,512 | **unpriced** | — |
+| `claude-sonnet-5-5` | claude · — | 296,962,517 | 5,953,188 | 1,294,341 | **unpriced** | — |
 
-**Day total (API-equivalent):** ≥ $24.82 · **652,605,008** tokens across 4 model(s), seats: claude, codex, grok
-**Fresh input tokens:** 2,884,646 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+**Day total (API-equivalent):** ≥ $24.82 · **676,717,926** tokens across 4 model(s), seats: claude, codex, grok
+**Fresh input tokens:** 2,884,946 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
 
 > **UNPRICED MODELS: `claude-opus-5-5`, `claude-sonnet-5-5`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
 
-_Generated 2026-10-06 21:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Generated 2026-10-06 23:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
 _Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20261006 --until 20261006 --by-agent --offline`_
 <!-- /cobalt:unit seat-usage:2026-10-06 -->
 <!-- /cobalt:section seat-usage:2026-10-06 -->
