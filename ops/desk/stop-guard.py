@@ -185,11 +185,16 @@ def owed_block(report):
     rest = lines[lines.index(CURRENT) + 1 :]
     while rest and not rest[0]:
         rest = rest[1:]
-    if not rest or not (rest[0] == NONE or rest[0].startswith(ITEM)):
+
+    def item(line):
+        # a bare `OWED: ` is rstripped to `OWED:`: an item with an empty <what> (check O1, A3)
+        return line.startswith(ITEM) or line == ITEM.rstrip()
+
+    if not rest or not (rest[0] == NONE or item(rest[0])):
         return None
     block = rest[:1]
     for line in rest[1:]:
-        if not line.startswith(ITEM):
+        if not item(line):
             break
         block.append(line)
     if block[0] == NONE:
@@ -246,7 +251,8 @@ def unsettled(items):
             path = marker[len(LIVE + WATCH) :]
             if "watch" not in seen:
                 seen["watch"] = watched()
-            if any(path in line for line in seen["watch"]):
+            # G2: `live: watch <absolute path>`; a relative path is none of the forms (check A2)
+            if path.startswith("/") and any(path in line for line in seen["watch"]):
                 continue
         elif marker is not None and marker.startswith(LIVE):
             sid = marker[len(LIVE) :]

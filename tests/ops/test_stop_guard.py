@@ -389,7 +389,7 @@ def test_g2_owed_none_lets_the_turn_end(tmp_path):
     assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
 
 
-def test_g2_an_item_waiting_on_dejan_lets_the_turn_end(tmp_path):
+def test_g2_an_item_waiting_on_him_lets_the_turn_end(tmp_path):
     d = Desk(tmp_path)
     d.owed("OWED: fold R1 | waiting on Dejan")
     r = d.run()
