@@ -91,6 +91,8 @@ def test_a_second_run_links_nothing_and_keeps_all_three(world):
         "install-ops: 0 linked, 0 replaced, 3 kept",
     ]
     assert {p.name: os.readlink(p) for p in links.iterdir() if p.is_symlink()} == before
+    # the first run replaced the plain gamma.sh: all three are the repo's links now
+    assert before == {n: str(repo / "ops" / "desk" / n) for n in ("alpha.sh", "beta.py", "gamma.sh")}
 
 
 def test_a_stale_plain_desk_list_is_replaced_by_the_link(world):

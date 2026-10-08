@@ -74,10 +74,14 @@
 #   install-ops: no launch. Every regular file ops/desk/*.sh and ops/desk/*.py of the repo
 #           (/Users/cobalt/cobalt) is linked into the link folder (/Users/cobalt/.claude/ops, or
 #           $COBALT_OPS_LINK_DIR in tests/ops/test_install_ops.py) as <link folder>/<name> ->
-#           <repo>/ops/desk/<name>, printing `LINKED <name>`; a name that already exists there,
-#           as a link or as a plain file, is left untouched and printed `KEPT <name>` — nothing
-#           there is ever replaced, removed or re-pointed. Last line
-#           `install-ops: <n> linked, <m> kept`, exit 0. No argument (one more is REFUSED).
+#           <repo>/ops/desk/<name>, printing `LINKED <name>`; a plain regular file at the name is
+#           replaced by that link in one rename (card 2026-10-08 106 G3), printing
+#           `REPLACED: <name>` when it differed from the repo copy (`cmp -s`) and nothing when
+#           identical; a failed replace is `REFUSED: install-ops: the replace failed: <path>`,
+#           exit 1. A link (to the repo, elsewhere or dangling) or any other kind at the name is
+#           left untouched and printed `KEPT <name>`; a link is never re-pointed. Last line
+#           `install-ops: <n> linked, <r> replaced, <m> kept`, exit 0. No argument (one more is
+#           REFUSED).
 # It prints each command on stderr as `RUN: <command>` before it runs it, and exits with the
 # status of the last one. DESK_LAUNCH_DRY=1 in the environment prints the three commands on
 # stdout and runs nothing (for the scratch test; the desk's line has no string for it).
@@ -614,18 +618,27 @@ if [ "$kind" = "brain" ]; then
 fi
 
 # ---- kind install-ops: link the ops scripts into the link folder; launches nothing (card 16) --
-# ln -s without -f never replaces a name that exists; an existing name, a link (even a dangling
-# one) or a plain file, is KEPT untouched.
+# A plain regular file at the name is replaced by the link in one rename (card 2026-10-08 106
+# G3): `ln -s` to a dot-name, then `mv` over the name, so the name never goes missing. Any other
+# existing name, a link (even a dangling one) or a directory, is KEPT untouched.
 if [ "$kind" = "install-ops" ]; then
     [ "$#" -eq 1 ] || refuse "usage: desk-launch.sh install-ops"
     links=${COBALT_OPS_LINK_DIR:-/Users/cobalt/.claude/ops}
     [ -d "$links" ] || refuse "install-ops: no link folder $links"
     linked=0
+    replaced=0
     kept=0
     for src in "$REPO"/ops/desk/*.sh "$REPO"/ops/desk/*.py; do
         [ -f "$src" ] && [ ! -L "$src" ] || continue
         name=$(basename "$src")
-        if [ -e "$links/$name" ] || [ -L "$links/$name" ]; then
+        if [ -f "$links/$name" ] && [ ! -L "$links/$name" ]; then
+            same=""
+            ! cmp -s "$src" "$links/$name" || same=1
+            { ln -s "$src" "$links/.$name.new" && mv "$links/.$name.new" "$links/$name"; } \
+                || refuse "install-ops: the replace failed: $links/$name"
+            [ -n "$same" ] || printf 'REPLACED: %s\n' "$name"
+            replaced=$((replaced + 1))
+        elif [ -e "$links/$name" ] || [ -L "$links/$name" ]; then
             printf 'KEPT %s\n' "$name"
             kept=$((kept + 1))
         else
@@ -634,7 +647,7 @@ if [ "$kind" = "install-ops" ]; then
             linked=$((linked + 1))
         fi
     done
-    printf 'install-ops: %s linked, %s kept\n' "$linked" "$kept"
+    printf 'install-ops: %s linked, %s replaced, %s kept\n' "$linked" "$replaced" "$kept"
     exit 0
 fi
 
