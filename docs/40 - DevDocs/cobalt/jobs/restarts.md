@@ -50,3 +50,7 @@ Every path under `ops/desk/` (`OPS_DESK_PREFIX`) classifies as `operator script;
 ## 2026-10-03 — rename-follow-up
 
 `changes()` now also emits the old path of a `git diff --name-status` rename (`R<nn>\told\tnew`) or copy (`C<nn>\told\tnew`) line, as a `D`, beside the new path (which keeps its `R`/`C` letter). Both paths are then classified by the existing rules, so a renamed file that a resident read still derives its restart or escalates (O3; `test_check_o3_a_rename_out_of_a_read_path_into_ops_desk_still_restarts_or_escalates`, `test_changes_emits_the_old_path_of_a_rename_or_copy_as_a_delete`).
+
+## 2026-10-08 — stt-model-fix-1008
+
+`OPS_TOOLS` adds `ops/fetch-voice-models.sh` and `ops/fetch_voice_models.py`, the one model-fetch command, run by hand. No plist names them and no resident imports them, so they are classified `operator script; no Cobalt reader` and derive no restart (`test_the_voice_model_fetch_scripts_derive_no_restart`).

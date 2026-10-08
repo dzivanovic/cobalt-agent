@@ -108,6 +108,18 @@ def test_an_operator_script_with_no_cobalt_reader_derives_no_restart(monkeypatch
     assert "no Cobalt reader" in row.rule
 
 
+def test_the_voice_model_fetch_scripts_derive_no_restart(monkeypatch):
+    # stt-model-fix-1008 row B: the one model-fetch command is run by hand.
+    # No plist names it and no resident imports it, so it derives no restart.
+    paths = ("ops/fetch-voice-models.sh", "ops/fetch_voice_models.py")
+    monkeypatch.setattr(restarts, "changes", lambda _range: [Change(p, "A") for p in paths])
+    by_path = {row.path: row for row in classify("HEAD...HEAD")}
+    for path in paths:
+        assert by_path[path].restarts == ()
+        assert by_path[path].escalate is False
+        assert "no Cobalt reader" in by_path[path].rule
+
+
 def test_every_path_under_ops_desk_is_an_operator_script(monkeypatch):
     # 2026-10-02 ops-glob G1: `ops/desk/` holds the desk's and the hubs' shell
     # tools and a git hook; no plist executes a file in it. Every path under
