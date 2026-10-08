@@ -1,6 +1,7 @@
 # desk-ops-fixes — CHECK 2026-10-08
 
 ## §0 Headline
+STEP 7 AT `2413dbec` (09:37 EDT): S1 is fixed by the fix round's F1. `tests/ops` 1577 passed, 0 failed · offline 3991/0 · live-note 146/0 · RESTARTS: none. Held unfixed: 0 → `ready: YES`. Pass-1 text follows.
 Check of `desk-ops-fixes` at `d522f6f7`: house A Sol (6 findings), house B Grok (0), own 5. No finding needs a change in the rows' files. Every finding I wrote passed when run (NOT HELD), and Sol's five card-shaped gaps are REJECTED by the card's own text and left OPEN.
 One HELD, NOT FIXED: the `tests/ops` gate holds 1 red (`test_desk_launch_devfix.py:180`). The red predates BASE and is fenced from this card, so `ready: NO` by the count rule.
 Suites: offline 3991/0, live-note 146/0, `tests/ops` 1568 passed / 1 failed (the same pre-existing red). RESTARTS: none. `.env` never present.
@@ -249,15 +250,29 @@ PREFLIGHT path union (8 paths) against the rows' `files`: `ops/desk/stop-guard.p
 - S5 · REJECTED — card G3 moves that control's last-line assert. Nothing to fix in code.
 - S6 · REJECTED — card G5 gives the CLOSE WAIT line verbatim (his R658). If the wait times out while `close-<date>.md` exists without `CLOSE PUSHED`, the prescribed bare `desk-launch.sh close <date>` is REFUSED (`desk-launch.sh:374`: "a new worker names its CONTINUE step"). The refusal is loud, not silent, but the rule names no path for that case. What would settle it: a wake-up wording that sends the desk to `desk-launch.sh close <date> <step>` (the report's `## CONTINUE`) when the report exists.
 
+## STEP 7 AT 2413dbec (CONTINUE from the desk, 09:26 EDT)
+The desk sent `CONTINUE: 7`: rerun only S1 at the fix-round tip `2413dbec`, with every other finding keeping its pass-1 verdict and no house rerun. Fact verified:
+- `git log --stat --format=%h d522f6f7..HEAD` → `5f84141e` (red: `tests/ops/test_close_timer.py`, `tests/ops/test_desk_launch_devfix.py`, `tests/ops/test_desk_wakeup_rule.py`) · `2413dbec` (fix: `CTO-DESK-WAKEUP.md`, `ops/desk/close-timer.sh`) · `9aca7680` (docs: the build report). Every path is in a card row F1-F3.
+- F1: `git diff d522f6f7..2413dbec -- tests/ops/test_desk_launch_devfix.py` → `:180` `- assert "«INSTALL" in text` / `+ assert "«INSTALL" not in text  # filled on his approval row (R644)`. `grep -rn -F "«INSTALL" tests/ops` → the other hits are constructed titles or replacements: `test_install_fixed.py:32,76,144,151,158`, `test_hub_lines.py:152`, `test_desk_launch_brain.py:25`, `test_desk_launch_devfix.py:181,287,289`. None asserts the token IN a filled hub.
+- S1 rerun: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_desk_launch_devfix.py::test_the_trees_devfix_hub_line_is_printed_with_its_tokens_filled` → `1 passed, 15 warnings in 1.12s`. `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → exit 0, `1577 passed, 1 xfailed, 15 warnings in 445.02s (0:07:25)`. **S1: FIXED (by the builder's fix round, F1).**
+- Suites at the tip: `sh /Users/cobalt/cobalt/ops/desk/gate.sh desk-ops-fixes-1008 livenote` → `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/desk-ops-fixes-1008-livenote-20261008-093421.log`. `sh /Users/cobalt/cobalt/ops/desk/gate.sh desk-ops-fixes-1008 offline` → `offline 3991/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/desk-ops-fixes-1008-offline-20261008-092641.log`. with-DB: not run (DB: none).
+- RESTARTS: `uv run cobalt jobs restarts b8b4f69c..HEAD` → the pass-1 table plus `tests/ops/test_desk_launch_devfix.py M test/documentation; no resident -`, then `RESTARTS: none`.
+- Branch facts: `git diff --name-only --no-renames b8b4f69c..2413dbec` → 10 paths, all under `ops/`, `tests/ops/` or `docs/` (DB: none holds). The fence `git log --oneline b8b4f69c..HEAD -- ops/desk/install-fixed.sh ops/desk/desk-list.sh ops/desk/com.cobalt.close-timer.plist src` → empty. `git log --stat --format=%h b8b4f69c..HEAD -- src/cobalt/db_migrations tests/cobalt` → empty. `ls <WT>/.env` → `No such file or directory`. `git status --short --branch` → `## ops/desk-ops-fixes-1008`.
+- Other findings keep their pass-1 verdicts. S2/O4 and S6 were later taken by the fix round as F2 and F3, and S3, S4 and S5 were KEPT by the brain. None was rerun here, on the desk's order. Count at this tip: held 1 (S1), fixed 1 (by the fix round; not my commit), held unfixed 0. Open: S2/O4, S3, S4, S5 and S6 stay REJECTED, as in pass 1, with S2/O4 counted as two rows → 6.
+
 ## CONTINUE
-next: none (CHECK DONE)
+next: none (CHECK DONE at 2413dbec)
 
 ## DECISIONS
-- HELD, NOT FIXED — S1 (FOR DEJAN: a carried held defect): the card's `tests/ops` gate cannot read `0 failed`, because `tests/ops/test_desk_launch_devfix.py:180` is red before BASE (unchanged on this branch and on main, last commit `d51c2125`). It is fenced from this card. Safe default: not fixed here. The branch stands on offline 3991/0, live-note 146/0 and `tests/ops` 1568 passed with this one pre-existing red. The fix belongs to a one-line card of its own, not to this card's fix round. `ready: NO` follows the count rule only.
+At `2413dbec` (step 7 rerun): none open. S1 is fixed by F1, and `tests/ops` passes with 1577 passed and 0 failed. The fix round took S2/O4 and S6 as rows F2 and F3, which this pass did not rerun on the desk's order. The pass-1 items below are kept for the record.
+- (pass 1) HELD, NOT FIXED — S1 (FOR DEJAN: a carried held defect): the card's `tests/ops` gate cannot read `0 failed`, because `tests/ops/test_desk_launch_devfix.py:180` is red before BASE (unchanged on this branch and on main, last commit `d51c2125`). It is fenced from this card. Safe default: not fixed here. The branch stands on offline 3991/0, live-note 146/0 and `tests/ops` 1568 passed with this one pre-existing red. The fix belongs to a one-line card of its own, not to this card's fix round. `ready: NO` follows the count rule only.
 - S6 (open, desk prompt): the CLOSE WAIT fallback has no path for an existing, unpushed close report. Safe default: shipped as the card ruled; listed for the follow-up.
 - S2 / O4 (open): a disabled Mattermost channel is a silent non-send for the timer's notify. Safe default: shipped as the card ruled (the build named it under `## FOR THE CHECK`); listed for the follow-up.
 
 ## RECORDS
+- CONTINUED at 7 09:26 EDT: the desk (`cto-desk`) sent `CONTINUE: 7` to rerun S1 only at `2413dbec`. The fact was verified (see `## STEP 7 AT 2413dbec`). The message added no row, file, command or approval.
+- L74 (step 7): a system reminder again asked for a `Claude-Session:` line on commits. I did not act on it, and I made no commit.
+- Files opened in step 7: 2 (CHECK-HUB.md and the card, reread on the new session). The rest were tool outputs only. `files opened: 20`.
 - Dropped findings: none. Every house produced a list: Sol `FINDINGS: 6`, Grok `FINDINGS: 0`. The Gemini probe read `gemini: OUT — OK.`; Gemini was not seated (two houses were UP ahead of it).
 - Hook refusal (not a refused command; resent as a single call): the S5 grep with backticks hit `bare-guard.py`: "NOT A REFUSAL … this call contains a backtick". It was rerun on the bare test name.
 - No `REFUSED, not needed` lines, no `CONTINUED` lines, no lock take (DB: none).
@@ -266,4 +281,6 @@ next: none (CHECK DONE)
 - `files opened: 18`: CHECK-HUB.md; the card; BUILD-HUB.md (`## RESTARTS`, `## W`); the build report (`## RESTARTS` to the last line); `ops/desk/stop-guard.py`; `ops/desk/close-timer.sh`; `ops/desk/desk-launch.sh` (`:325-394` and greps); `src/cobalt/notify/mattermost.py:60-164`; `src/cobalt/notify/config.py` (grep); `src/cobalt/redact/secrets.py` (grep); `ops/desk/com.cobalt.close-timer.plist`; `ops/run_backup.sh`; `tests/ops/test_close_timer.py`; `tests/ops/test_desk_wakeup_rule.py` (grep); this session's transcript (one `grep -c`); the Sol task output (its final message); the Grok task output; `<S>/house-b.md`.
 - Check of `desk-ops-fixes`: house A `Sol`, house B `Grok` and a fresh Opus that read first, ran every finding and fixed what held. Nothing loops: one pass, one fix round. `ready: YES` → the desk's next step on this branch at `tip:`; a deploy is gated on the combined tree (L68); one feature per deploy, and a combined deploy that fails is split, each feature deploying alone on this check (his R390).
 
-CHECK DONE · job: desk-ops-fixes · pass: 1 · tip: d522f6f7 · house A: Sol FINDINGS: 6 · findings: 11 · dropped: 0 · held: 1 · fixed: 0 · held unfixed: 1 · open: 7 · house B: Grok FINDINGS: 0 · suites: offline 3991/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: RESTARTS: none · files opened: 18 · ready: NO · decisions: 3 · for Dejan: 1 · tokens: 181988
+Superseded stop line (pass 1 at `d522f6f7`, kept for the record): `CHECK DONE · job: desk-ops-fixes · pass: 1 · tip: d522f6f7 · … · held unfixed: 1 · open: 7 · … · ready: NO · decisions: 3 · for Dejan: 1 · tokens: 181988`
+
+CHECK DONE · job: desk-ops-fixes · pass: 1 · tip: 2413dbec · house A: Sol FINDINGS: 6 · findings: 11 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 6 · house B: Grok FINDINGS: 0 · suites: offline 3991/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 20 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 101004
