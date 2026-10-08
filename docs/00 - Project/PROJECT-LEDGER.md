@@ -3568,3 +3568,50 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - STOP LINE (L35), `reports/close-2026-10-05.md`: `CLOSE PUSHED 768dd986 · days: 1 · … · push: verified`.
 - DEPLOY (L35): `git tag --list "deploy-2026-10-06*"` = `deploy-2026-10-06-drc-d5-o1-b2-attempt2`, `deploy-2026-10-06-flake-fix`, `deploy-2026-10-06-flake-fix-2`, `deploy-2026-10-06-guard-g2`, `deploy-2026-10-06-launcher-next-flow`, `deploy-2026-10-06-next-flow`, `deploy-2026-10-06-radar-ladder-refresh`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-06.md` `## 8`.
+
+### 2026-10-07 — Desk stop-guard, worktree salvage, radar colour and ARM/DISARM deployed; 112 worktrees swept; S3 smoke moves to 10-08
+- R612 06:06 DESK RECORD: desk `02bc7d67` woke; predecessor `9149c1a1` removed; card 66 build watch re-armed.
+- R613 06:37 HIS RULING: worktree cleanup is the desk's (inspect, report, remove). APPROVED.
+- R614 06:39 LAUNCHED: card `66` BUILT tip `8d6540f5`; check next.
+- R615 06:39 DESK RECORD: salvage added to `job-clean.sh` by card.
+- R616 06:48 LAUNCHED: his chat order, salvage script drafter on prompt `82`, card `83`.
+- R617 06:53 LAUNCHED: card `83` DRAFTED; preflight on prompt `84`.
+- R618 06:54 LAUNCHED: card `83` preflight 1 FAIL, ready NO; amend drafter on `85`.
+- R619 06:56 LAUNCHED: card `83` AMENDED; preflight r2 on `86`.
+- R620 06:57 LAUNCHED: card `83` preflight r2 ready YES; build on `ops/worktree-salvage-1007`, BASE `c4e52f4e`.
+- R621 07:14 LAUNCHED: card `66` CHECK DONE tip `b133afb5`, ready YES; deploy card `87`.
+- R622 07:53 RECORD: card `66` DEPLOYED, tag `deploy-2026-10-07-desk-stop-guard` `60a31686`, smoke GREEN.
+- R623 07:53 LAUNCHED: card `83` BUILT tip `df4cd805`; check next.
+- R624 10:13 RECORD (his chat): `/radar` shows cards; full S3 smoke not run.
+- R625 10:15 HIS RULING: radar card header colour green for long, red for short. APPROVED; drafter prompt `88`.
+- R626 10:22 LAUNCHED: colour card `89` DRAFTED; preflight on `90`.
+- R627 10:24 HIS RULING: ARM and DISARM control on the radar card. APPROVED; drafter prompt `91`.
+- R628 10:25 LAUNCHED: card `89` preflight 1 FAIL, ready NO; amend drafter on `93`.
+- R629 10:26 LAUNCHED: card `89` AMENDED; preflight r2 on `94`.
+- R630 10:29 LAUNCHED: card `89` preflight r2 ready YES; build on `ops/radar-direction-color-1007`, BASE `d2b53d6d`.
+- R631 10:30 LAUNCHED: card `92` DRAFTED; preflight on `95`.
+- R632 10:33 RECORD: card `92` preflight ready YES; build waits for card `89` to merge.
+- R633 10:38 LAUNCHED: salvage card `83` CHECK `64142ff9`.
+- R634 11:11 LAUNCHED: card `83` CHECK DONE tip `71d34bd9`, ready YES; deploy card `96`.
+- R635 11:12 LAUNCHED: card `89` BUILT tip `6370ea6a`; check next.
+- R636 11:47 LAUNCHED: card `83` DEPLOYED, tag `deploy-2026-10-07-worktree-salvage` `3a994357`, smoke GREEN.
+- R637 11:48 RECORD: first sweep `job-clean.sh salvage desk-stop-guard-1006`; tree removed, branch `wip/desk-stop-guard-1006-salvage-20261007`.
+- R638 12:30 LAUNCHED: card `89` CHECK DONE tip `541adf0c`, ready YES; deploy card `97`.
+- R639 12:57 LAUNCHED: card `89` DEPLOY FAILED at gate (c3), `user.aset_sizings` 1538 of 1600; production untouched; devfix drafter on `98`.
+- R640 13:03 LAUNCHED: DESK RECORD, devfix drafter round 2 on prompt `100`.
+- R641 13:00 LAUNCHED: devfix card `99` DRAFTED; preflight on `101`.
+- R642 13:01 LAUNCHED: devfix card `99` preflight ready YES; `desk-launch.sh devfix`.
+- R643 13:02 RECORD: `desk-launch.sh devfix` REFUSED, `DEVFIX-HUB.md` carries the `«INSTALL` marker.
+- R644 13:47 HIS RULING: install `DEVFIX-HUB.md`. APPROVED.
+- R645 13:50 LAUNCHED: DEVFIX `user.aset_sizings` REBUILT, `max_attnum` 1538 → 54; `recut` on card `97`.
+- R646 13:50 RECORD: RECUT attempt 2 FAILED at gate (c3), the cobalt_dev column-slot guard.
+- R647 14:27 LAUNCHED: card `89` DEPLOYED attempt 2, tag `deploy-2026-10-07-radar-direction-color-attempt2` `8c91922b`, smoke GREEN.
+- R648 15:12 LAUNCHED: card `92` BUILT tip `0544f91d`; check next.
+- R649 15:54 LAUNCHED: card `92` CHECK DONE, ready YES; deploy card `102`.
+- R650 16:04 LAUNCHED: card `92` DEPLOYED, tag `deploy-2026-10-07-radar-arm-disarm` `a627c96b`, smoke GREEN.
+- R651 16:06 LAUNCHED: worktree survey, 94 trees; sweep helper on prompt `104`.
+- R652 16:24 RECORD: WORKTREE SWEEP DONE, 112 trees removed, `agy-trial` kept.
+- R653 17:26 HIS RULING: S3 smoke look and colour verdict move to 10-08; S3 stop 10-07 ends LATE. APPROVED.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-07*"` = `deploy-2026-10-07-desk-stop-guard`, `deploy-2026-10-07-radar-arm-disarm`, `deploy-2026-10-07-radar-direction-color-attempt2`, `deploy-2026-10-07-worktree-salvage`.
+- STOP LINE (L35), `reports/close-2026-10-06.md`: `CLOSE PUSHED 13d02cc9 · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-07.md` `## 8`.

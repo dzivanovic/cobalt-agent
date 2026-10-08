@@ -827,6 +827,31 @@ OFF-LADDER work of 2026-10-06 (ruled, not on a ladder line; each with the ruling
 | Desk routing by script (`desk-next.sh`) | NOT STARTED | His R596: draft after card 66 deploys. |
 | Standing rules of the day | RULED | 10-06 R587 (single-feature deploy cards by `deploy-card.sh`, APPLIED), R590 (stop-guard, APPLIED), R608 (the close runs at the first safe moment, APPLIED). |
 
+### Status 2026-10-07
+S3 status block (ruled 09-19 R14); S3's eighth; the earlier `### Status` blocks above stay as written. Written by close hub `close-1007` for 10-07 alone from `reports/cto-2026-10-07.md` rows R612–R653 (06:06 → 17:26 ET); re-verified against the tree (L35): `git tag --list "deploy-2026-10-07*"` = `-desk-stop-guard`, `-radar-arm-disarm`, `-radar-direction-color-attempt2`, `-worktree-salvage`. Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| S3 feature | Status | Evidence |
+|---|---|---|
+| F11 Fill recompute + fill/exit capture | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`). First live-morning proof not recorded. |
+| F22 Trade-note auto-creation | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`, `-4`). |
+| F14 DRC prefill / reconcile / DRC→mode | DONE-LIVE | Unchanged (K3 `07a4b8fe`, D5 `c8503415`, card 39 `9a29f61e`). Open to him: D5-3 rule question. |
+| F15 Prediction records | DONE-LIVE | Unchanged (P1; P2 `1b1d298e`). |
+| S3 smoke (live morning, tap through DRC and replay) | NOT STARTED | NOT RUN on 10-07: cards had expired; his R653 moves the look and colour verdict to 10-08 (steps: ARM, trigger, fill, ½ off, close; note, DRC, proposal, replay). `/radar` now carries ARM / DISARM (card `92`, R650) and the direction colour (card `89`, R647). |
+
+**Stop date: 2026-10-07. S3: LATE — day 14 of 14 (10-07).** Reason: the stop date passed without the S3 smoke; his R653 (17:26 ET) records the smoke look moving to 10-08 and S3 ending LATE. All four S3 features are DONE-LIVE; what is open is the smoke alone. Watch items (not a ruling): colour card `89` deploy FAILED once at gate (c3), `user.aset_sizings` 1538 of 1600, then deployed after the dev-only devfix (R639, R645, R647); X29 fixture error still owed its own card; D2 (Finviz rate) and E1 (secure origin) open to him.
+
+OFF-LADDER work of 2026-10-07 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Desk stop-guard (card 66) | DONE-LIVE | His R590, R596 (10-06). `deploy-2026-10-07-desk-stop-guard` `60a31686`, offline 3963/0, with-DB 4847/0, RESTARTS none, smoke GREEN (R622). |
+| Worktree salvage (`job-clean.sh salvage`, card 83) | DONE-LIVE | His R613, R616. `deploy-2026-10-07-worktree-salvage` `3a994357`, smoke GREEN (R636). |
+| Radar direction colour (card 89) | DONE-LIVE | His R625. `deploy-2026-10-07-radar-direction-color-attempt2` `8c91922b`, RESTARTS aset + radar, smoke GREEN (R647); attempt 1 FAILED gate (c3) (R639). Colour verdict: his look 10-08 (R653). |
+| Devfix `user.aset_sizings` (card 99) | DONE-DARK (`cobalt_dev` only) | Desk R640–R645; `DEVFIX-HUB.md` INSTALLED by his R644. `max_attnum` 1538 → 54, proof test PASSED (R645). |
+| Radar ARM / DISARM (card 92) | DONE-LIVE | His R627. `deploy-2026-10-07-radar-arm-disarm` `a627c96b`, RESTARTS aset + radar, smoke GREEN (R650). |
+| Worktree survey + sweep | DONE | His R613. Survey 94 trees (R651); sweep 112 removed, `agy-trial` kept, 25 unmerged branches kept, 1 dirty tree to a `wip/` branch (R652). |
+| S4-P1 card `72`, S4-P2 card `73` | NOT STARTED (cards ready) | His R598 (10-06): builds wait for the S3 smoke and D2. |
+| Standing rules of the day | RULED | 10-07 R613 (worktree cleanup is the desk's, APPLIED at wake-up 10-08), R644 (DEVFIX-HUB installed). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
