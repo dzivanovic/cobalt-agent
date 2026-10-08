@@ -17,8 +17,8 @@
 # under the worktree root = worker; anything else is UNKNOWN, and an unknown seat meets only the
 # kind-free rules G1, G3, G6.
 #
-# THE RULES, first hit wins. Bash: G3 .env read · G2 production (not deploy), but a marked db
-# query (R511) · G4 git shape
+# THE RULES, first hit wins. Bash: G3 .env or secret read · G2 production (not deploy), but the
+# one db query read (R686) · G4 git shape
 # (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
 # check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
@@ -58,6 +58,10 @@ ROUTE = {
     "G3": (
         "route: .env is never read; `ls -la <path>/.env` shows it is there, "
         "and the lock scripts copy and remove it"
+    ),
+    "G3 secret": (
+        "route: a secret (~/.cobalt_key, data/.cobalt_vault, a keychain password) is never read; "
+        "ls -la shows it is there"
     ),
     "G4": "route: git add <paths> then commit -m … -- <paths>; a merge is the deploy hub's",
     "G5 fixed": "route: a fixed file changes by a card row",
@@ -790,6 +794,39 @@ def is_env(path):
     return False
 
 
+# card 120 O2 (his 2026-10-08 R686): the secrets beside .env, refused for every seat
+SECRETS = (".cobalt_key", ".cobalt_vault")
+KEYCHAIN_READS = ("find-generic-password", "find-internet-password", "dump-keychain", "export")
+
+
+def is_secret(path):
+    """.env, or a path whose basename names a secret file: after brace and glob expansion (a
+    leading dot is matched only by a literal one), in any case — as is_env reads .env (check O1,
+    B3)."""
+    if is_env(path):
+        return True
+    for alt in braces(path):
+        base = os.path.basename(alt).lower()
+        if base.startswith(".") and any(fnmatch.fnmatchcase(name, base) for name in SECRETS):
+            return True
+    return False
+
+
+def keychain_read(ws):
+    """`security` whose command, after its global options (`-p` takes a value) and brace
+    expansion, reads a password or the keychain out (check O2, A1, B2)."""
+    i = 0
+    while i < len(ws) and ASSIGN.match(ws[i]):
+        i += 1
+    if i >= len(ws) or os.path.basename(ws[i]) != "security":
+        return False
+    rest = [x for w in ws[i + 1:] for x in braces(w) if x]
+    j = 0
+    while j < len(rest) and rest[j].startswith("-"):
+        j += 2 if not rest[j].startswith("--") and rest[j].endswith("p") else 1
+    return j < len(rest) and rest[j] in KEYCHAIN_READS
+
+
 def env_words(args):
     """G3's words to test: each operand, and (B8) each option value — the text after the first
     `=` of a `--name=value` word, and the word after `--files0-from` given without `=`."""
@@ -804,8 +841,13 @@ def env_words(args):
 
 def g3_bash(segs):
     for ws in segs:
-        if verb(ws) in ENV_READERS and any(is_env(w) for w in env_words(ws[1:])):
-            return ROUTE["G3"]
+        # bash removes a backslash-newline inside a word; words() keeps its newline (check B3)
+        args = [x for w in env_words(ws[1:]) for x in (w, w.replace("\n", ""))]
+        if verb(ws) in ENV_READERS and any(is_secret(w) for w in args):
+            # a .env read keeps G3's own route
+            return ROUTE["G3"] if any(is_env(w) for w in args) else ROUTE["G3 secret"]
+        if keychain_read(ws):
+            return ROUTE["G3 secret"]
         if verb(ws) == "awk" and awk_reads(ws[1:]) and not awk_writes(ws[1:]):
             # B9: a file the program itself names; a program G11 denies keeps G11's sentence
             return ROUTE["G3"]
@@ -844,24 +886,21 @@ def git_problem(ws):
     return False
 
 
-# G2's one pass (his 2026-10-06 R511; card 21 guard-g2 R2): the stamp desk-launch.sh appends to a
-# prompt's launch message when its RULINGS row is proven, and the one production read it allows
-MARKER = re.compile(r" PROD-READ: 20\d\d-\d\d-\d\d R\d+")
+# G2's one pass (his 2026-10-06 R511; card 21 guard-g2 R2; his 2026-10-08 R686, card 120 O1):
+# the one production read every seat runs, no stamp
 PROD_READ = ["COBALT_ENV=production", "uv", "run", "cobalt", "db", "query"]
 SIDES = ("user", "system")
 
 
-def marked_read(command, s):
-    """R2: True when (i) the seat's first user record holds the stamp and (ii) the command, read
-    by words(), opens `COBALT_ENV=production uv run cobalt db query`, its later words hold exactly
-    one `--prod` and no `--prod=`, every --side value (an argparse prefix of it too) is user or
-    system, and PROD matches no other word. The working tree is never read for this proof.
+def prod_read(command):
+    """True when the command, read by words(), opens `COBALT_ENV=production uv run cobalt db
+    query`, its later words hold exactly one `--prod` and no `--prod=`, every --side value (an
+    argparse prefix of it too) is user or system, and PROD matches no other word (his 2026-10-08
+    R686: every seat, no stamp). The working tree is never read for this proof.
     The words are the ones bash runs (check O1-O3, B1, B2): no backslash-newline (bash joins
     it, words() keeps it), no `#` that words() reads as a comment (bash starts none inside a
     word), no brace word that expands to an option or a PROD word, no option that names prod
     but `--prod` itself (`--allow-prod`)."""
-    if not MARKER.search(s["first"]):
-        return False
     if "\\\n" in command:
         return False
     ws = words(command)
@@ -901,7 +940,7 @@ def bash_rules(command, s):
     deny = g3_bash(segs)
     if deny:
         return "G3", deny
-    if kind is not None and kind != "deploy" and PROD.search(command) and not marked_read(command, s):
+    if kind is not None and kind != "deploy" and PROD.search(command) and not prod_read(command):
         return "G2", ROUTE["G2"]
     if kind in GIT_SHAPED and any(git_problem(ws) for ws in segs):
         return "G4", ROUTE["G4"]
@@ -1019,7 +1058,9 @@ def decide(event):
     if not isinstance(path, str) or not path:
         return None
     if tool == "Read":
-        return ("G3", ROUTE["G3"], path) if is_env(path) else None
+        if is_env(path):
+            return "G3", ROUTE["G3"], path
+        return ("G3", ROUTE["G3 secret"], path) if is_secret(path) else None
     if tool in ("Write", "Edit"):
         s = seat(event)
         full = os.path.normpath(path if os.path.isabs(path) else os.path.join(s["cwd"] or "/", path))
