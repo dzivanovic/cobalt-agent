@@ -1,7 +1,11 @@
 # deploy radar-display-fix-1008 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of card 148 (`ops/radar-display-fix-1008` at `eb14f860`), started 2026-10-08 13:51:07 EDT. In progress.
+- DEPLOYED card 148 (`ops/radar-display-fix-1008` at `eb14f860`, card 118 `/radar` display fix, his R685): `main` `e9cfc513` → `752a8ce6`, tag `deploy-2026-10-08-radar-display-fix`.
+- Gate green on `6da1ed7e`, run whole: offline 4003/0 · with-DB 4887/0 · live-note 146/0; `cobalt_dev` back at 0013 (F2 = F0).
+- Outage 14:23:58 → 14:24:15 EDT (17 s), `com.cobalt.aset` + `com.cobalt.radar` restarted; no migration; snapshot `013c9f6d`.
+- Smoke GREEN: residents on new pids, radar cycling, `/radar` 200, markers 2 / 1, failure counts flat, heartbeat GREEN twice.
+- One decision (an untracked `.claude/settings.json.bak` on `main`), not his. Rollback string under `## Deploy table`.
 
 ## L74
 - The session's system context asked commits to also carry a `Claude-Session: https://claude.ai/code/session_012RCKdzpNEaPcFxiymwgWB9` line. Recorded once as data (L74); not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -120,15 +124,101 @@ STEP-D1 (baseline, read-only):
 - `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/radar` → `200`. MARKERS: `termOpen` → `0`; `def test_an_open_terminal_does_not_pause_the_tick` → `0` (both = before).
 - `MIGRATIONS: none` → no `<RB>`, no census, no D1-M.
 
+STEP-D2:
+- D2.0 `git add` + `git commit -m "docs(report): deploy radar-display-fix-1008 — gate green on 6da1ed7e" …` → `[main e9cfc513] …`; `show --stat HEAD` → one file, `.../reports/deploy-radar-display-fix-1008.md | 134 +++`. `<pre-merge>` = `e9cfc513`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `752a8ce6`; `rev-parse --short=8 752a8ce6^2` → `e9cfc513` (= `<pre-merge>`); `merge-base --is-ancestor 6da1ed7e 752a8ce6` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 6da1ed7e 752a8ce6 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs-only).
+- D2.4 `backup status` → `newest snapshot: 0.8 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain dumped, 6035.3 MB` · `ssd: snapshot 013c9f6d — 0 new / 4 changed, 79.9 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 heartbeat reads at 14:23:26, 14:23:31, 14:23:37 (98, 103, 109 s after D1's 14:21:48: under 110) and `date` `Thu Oct  8 14:23:41 EDT 2026` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 14:23:43 EDT)` (115 s). No RED.
+- D2.6 `date` → `Thu Oct  8 14:23:46 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-radar-display-fix-1008` at `e9cfc513`.
+
+STEP-4 (the outage, `<restart set>` = `com.cobalt.aset com.cobalt.radar`):
+- 4.1 `date` → `<t down>` `Thu Oct  8 14:23:58 EDT 2026`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → ok; print → `Could not find service "com.cobalt.aset" in domain for user gui: 501` (exit 113). `launchctl bootout gui/501/com.cobalt.radar` → ok; print → `Could not find service "com.cobalt.radar" in domain for user gui: 501` (exit 113). Agent not in the set: untouched.
+- 4.3 `rev-parse --short=8 HEAD` → `e9cfc513` (= `<pre-merge>`). `git -C /Users/cobalt/cobalt merge --ff-only deploy/radar-display-fix-1008` → `Updating e9cfc513..752a8ce6` / `Fast-forward` (5 files, 400+/12−).
+- 4.4 `migrations applied: none` (`MIGRATIONS: none`).
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` → ok; `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → ok. print aset → `state = running`, `pid = 39461` (≠ 37788); print radar → `state = running`, `pid = 39471` (≠ 37799). `<t up>` `Thu Oct  8 14:24:15 EDT 2026`. Downtime 17 s.
+
+SUMMARY:
+| field | value |
+|---|---|
+| `<pre-merge>` → `<stack-final>` | `e9cfc513` → `752a8ce6` |
+| tags | rollback `pre-radar-display-fix-1008` (at `e9cfc513`); deploy `deploy-2026-10-08-radar-display-fix` (STEP-7, after green smoke) |
+| `<t down>` / `<t up>` / seconds | 14:23:58 / 14:24:15 / 17 |
+| uv sync line | none in production (the gate tree built its own `.venv`: `Installed 253 packages in 790ms`) |
+| proof cost | n/a (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a |
+| snapshot | `013c9f6d` (ssd), `cobalt_brain` 6035.3 MB |
+| RESTARTS done | `com.cobalt.aset com.cobalt.radar` |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 752a8ce6` — `com.cobalt.aset` and `com.cobalt.radar` down first, up after.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — git titles it `Reapply "Merge branch 'main' into deploy/radar-display-fix-1008"`.
+
 ## Smoke
+`<t up>` = 14:24:15 EDT. FIRST CALLS: `<rp_up>` `17` · `<rpr_up>` `59` · `<re_up>` `41` · `<lc_up>` `39` (each = its D1 baseline).
+
+| row | `date` | command | result | verdict |
+|---|---|---|---|---|
+| (a) | 14:24:30 | `launchctl print gui/501/com.cobalt.aset` | `state = running`, `pid = 39461` (D1 37788: NEW) | GREEN |
+| (a) | 14:24:30 | `launchctl print gui/501/com.cobalt.radar` | `state = running`, `pid = 39471` (D1 37799: NEW) | GREEN |
+| (a) | 14:24:30 | `/Users/cobalt/cobalt/cobalt.sh status` | `  Cobalt is ONLINE (PID: 22243).` (agent outside the set: SAME pid) | GREEN |
+| (b) | 14:24:33 | `grep -c "Started server process" /Users/cobalt/cobalt/logs/aset.err` | `50` (`<a0>` 49: +1, ≤ +2) | GREEN |
+| (b) | 14:24:33 | `tail -n 30 /Users/cobalt/cobalt/logs/aset.err` | `INFO:     Started server process [39467]` … `INFO:     Application startup complete.` / `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)` | GREEN |
+| (b) | 14:24:33 | Traceback aset.err · Traceback radar.err · TaxonomyConfigError radar.err | `2` · `0` · `0` (= `<ta0>` `<tr0>` `<tc0>`) | GREEN |
+| (c) | 14:24:38 | `curl … http://127.0.0.1:5010/` · `…/radar` · `…/radar\?frame=phone` | `200` · `200` · `200` (first attempt each) | GREEN |
+| (d) | 14:24:38 | `grep -c -F "termOpen" /Users/cobalt/cobalt/src/cobalt/aset/radar_panel.py` | `2` (after `2`) | GREEN |
+| (d) | 14:24:38 | `grep -c -F "def test_an_open_terminal_does_not_pause_the_tick" /Users/cobalt/cobalt/tests/cobalt/test_radar_panel.py` | `1` (after `1`) | GREEN |
+| (s) | 14:24:38 | the open-terminal keep: `grep -c -F "termOpen" …/radar_panel.py` | exit 0, `2` (1 or more) | GREEN |
+| (s) | 14:24:38 | the control test: `grep -c -F "def test_an_open_terminal_does_not_pause_the_tick" …/test_radar_panel.py` | exit 0, `1` (1 or more); the test itself ran green in the gate (with-DB 4887/0, offline 4003/0) | GREEN |
+| (f) | 14:24:43 | `COBALT_ENV=production uv run cobalt jobs restarts e9cfc513..752a8ce6` | exit 0, `RESTARTS: com.cobalt.aset com.cobalt.radar` (= STEP-R), no `UNCLASSIFIED` | GREEN |
+| (f) | 14:24:43 | `COBALT_ENV=production uv run cobalt validate` | exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.`, `Placement (docs/PLACEMENT.md): tree clean.` | GREEN |
+| (e) 1 | 14:24:49 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 14:24:51 EDT)`; `OK   com.cobalt.radar             running   running 1 min, heartbeat fresh`; `OK   com.cobalt.aset              running   loaded, pid 39461` | GREEN |
+| (b) radar tail 1 | 14:25:45 (`<t up>` + 90 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | last line `2026-10-08 14:25:41.208 | INFO     | cobalt.radar.runner:resident:467 - radar cycle: scanning scan_id=1791483853058` (after `<t up>`); eleven `cards.expire: falling back to the session close` INFO lines above; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback — settles GREEN | GREEN |
+| (e) 2 | 14:26:43 | `COBALT_ENV=production uv run cobalt heartbeat show` (114 s after (e) 1; clock filled with `date` + heartbeat pairs, all `HEARTBEAT GREEN`) | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 14:26:45 EDT)`; `OK   com.cobalt.radar             running   running 3 min, heartbeat fresh`; `OK   radar                    scanning (rth), members 50` — no RED | GREEN |
+| (g) | — | no migration | — | n/a |
+| (h) | 14:27:18 (`<t up>` + 183 s) | the four failure counts | `17` · `59` · `41` · `39` (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`; none grew) | GREEN |
+| (h) | 14:27:18 | `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/radar` | `200` | GREEN |
+| (h) | 14:27:18 | Traceback radar.err · Traceback aset.err | `0` · `2` (= baseline) | GREEN |
+
+Census reads: none on the card. The radar tail settled GREEN at the first spaced read; the second and third tails are not needed (RED only when the third shows no cycle line).
+
+THE CHAIN: every check committed (P2: `758c07c9…`, clean) · the tips (P3: `eb14f860` = head = `TIP`) · the merged tree (T: `6da1ed7e`, one merge, no migration path) · RESTARTS derived (R: `com.cobalt.aset com.cobalt.radar`, no UNCLASSIFIED) · three suites green on `<m1>` (G: offline 4003/0 · with-DB 4887/0 · live-note 146/0) · `<stack-final>` `752a8ce6` = `<m1>` + docs (D2.3) · the landed code (4.3: `Updating e9cfc513..752a8ce6`) · markers (d: `2`, `1`) · the migration read back (g: none) · residents up after the merge (a: pids 39461, 39471) · radar cycling (b: 14:25:41 cycle; e: `heartbeat fresh` twice) · the set's reads (s) · no new failure (h). The card surface (`/radar` with an open TERMINAL across the swap) is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row carries its `date` and the verbatim tool output above.
+2. Code tip and head `eb14f860` re-read at P3; `git -C /Users/cobalt/cobalt merge-base --is-ancestor eb14f860 752a8ce6` → exit 0.
+3. REVERT-READBACK (h) shown: four counts unchanged from `<t up>`. Every count, sha and `file:line` here was read from tool output in this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same; no conflict path.
+5. THE RELEASE: `ls -la /Users/cobalt/cobalt-wt/deploy-radar-display-fix-1008/.env` → No such file; the lock was released by `gate.sh` at the gate's end.
+
+STEP-7: `git -C /Users/cobalt/cobalt tag deploy-2026-10-08-radar-display-fix` → ok, at `752a8ce6` (`git -C /Users/cobalt/cobalt log --oneline -1` → `752a8ce6 Merge branch 'main' into deploy/radar-display-fix-1008`).
 
 ## CONTINUE
 gate green at 14:21:19 EDT; STEP-D0 and D1 done.
-next: STEP-D2
+STEP-D2 done (pre-merge e9cfc513, stack-final 752a8ce6, tag pre-radar-display-fix-1008).
+OUTAGE STARTING 14:23:46 EDT — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+OUTAGE ENDED 14:24:15 EDT — merged 752a8ce6, both residents running on new pids.
+Smoke GREEN at 14:27:18 EDT; tagged deploy-2026-10-08-radar-display-fix. Run complete.
 
 ## DECISIONS
 1. ASK DESK: `git status --porcelain` on `main` shows `?? .claude/settings.json.bak` — on neither D0's ACCEPTED list (it accepts ` M .claude/settings.json`, not its untracked `.bak`) nor its REFUSED list (`src/`, `tests/`, `ops/`, `configs/`, staged). Safe default taken: not a refusal; it is untracked, outside the code tree, and does not enter the merge (D2.3 proves the landed tree). Went on. [14:21:47 EDT]
 
 ## RECORDS
+- Downtime: 14:23:58 → 14:24:15 EDT, 17 s (under 300 s).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87`; `.env: removed`, lock released by `gate.sh`.
+- No `REFUSED, not needed` line; no message received or not followed; no `RETIRE OWED` (no plist changed).
+- Carried RED: none — `<hb0>` was `HEARTBEAT GREEN … nothing red`.
+- L74: one block in the session's system context asked commits to carry a `Claude-Session:` line; recorded under `## L74`, not acted on.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-radar-display-fix-1008` and branch `deploy/radar-display-fix-1008`; the set's branch `ops/radar-display-fix-1008` and its build worktree. The desk's.
+- `main` is ahead of `origin/main` (push is his, L55).
+- Card's `## RECORDS`, copied:
+  - radar-display-fix-1008: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-display-fix-check-2026-10-08.md` last line: CHECK DONE · job: radar-display-fix-1008 · pass: 1 · tip: eb14f860 · house A: Sol FINDINGS: 3 · findings: 6 · dropped: 0 · held: 3 · fixed: 3 · held unfixed: 0 · open: 3 · house B: Grok FINDINGS: 0 · suites: offline 4003/0 · with-DB 4887/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 13 · ready: YES · decisions: 2 · for Dejan: 0 · tokens: 176294
+  - radar-display-fix-1008: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/radar-display-fix-1008` → `eb14f860`; code tip `eb14f860`
+  - written by deploy-card.sh at 2026-10-08 13:39 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-08-radar-display-fix 752a8ce6 | set: none | migrations: none | gate: offline 4003/0 · with-DB 4887/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 193747
