@@ -4,7 +4,7 @@ BRANCH: ops/guard-g2-open-reads-1008
 WORKTREE: guard-g2-open-reads-1008
 BASE: 4125ff02
 TIP:
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/guard-g2-open-reads-build-2026-10-08.md
+REPORT: /Users/cobalt/cobalt-wt/guard-g2-open-reads-1008/docs/40 - DevDocs/reports/guard-g2-open-reads-build-2026-10-08.md
 CHECK REPORT:
 HOUSE B:
 DB: none
