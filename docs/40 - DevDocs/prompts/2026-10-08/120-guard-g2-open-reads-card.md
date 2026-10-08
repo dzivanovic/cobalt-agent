@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-08.md R686
 BRANCH: ops/guard-g2-open-reads-1008
 WORKTREE: guard-g2-open-reads-1008
 BASE: 4125ff02
-TIP:
+TIP: 773f39e7
 REPORT: /Users/cobalt/cobalt-wt/guard-g2-open-reads-1008/docs/40 - DevDocs/reports/guard-g2-open-reads-build-2026-10-08.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/guard-g2-open-reads-check-2026-10-08.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-08 R686
 
