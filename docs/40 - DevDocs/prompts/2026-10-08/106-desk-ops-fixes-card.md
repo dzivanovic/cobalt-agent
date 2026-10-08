@@ -2,7 +2,7 @@ JOB: desk-ops-fixes
 LADDER: OFF-LADDER — reports/cto-2026-10-08.md R657
 BRANCH: ops/desk-ops-fixes-1008
 WORKTREE: desk-ops-fixes-1008
-BASE: «FILL: main HEAD at launch, 8 hex»
+BASE: b8b4f69c
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/desk-ops-fixes-1008/docs/40 - DevDocs/reports/desk-ops-fixes-build-2026-10-08.md
 CHECK REPORT:
