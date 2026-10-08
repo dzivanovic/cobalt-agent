@@ -101,7 +101,9 @@ def box(tmp_path):
     b.notify = tmp_path / "notify.txt"
     b.reports = repo / "docs" / "40 - DevDocs" / "reports"
 
-    def run(now: str):
+    b.bin = bin_dir
+
+    def run(now: str, extra: dict | None = None, drop: tuple = ()):
         env = dict(
             os.environ,
             PATH=f"{bin_dir}:{os.environ['PATH']}",
@@ -115,8 +117,12 @@ def box(tmp_path):
             COBALT_NOTIFY=str(sender),
             NOTIFY_OUT=str(b.notify),
         )
+        env.update(extra or {})
+        for k in drop:
+            env.pop(k, None)
         return subprocess.run(
-            ["sh", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60
+            ["sh", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60,
+            cwd=tmp_path,
         )
 
     def calls() -> list[str]:
@@ -240,6 +246,100 @@ def test_g4_id_less_rows_do_not_crash_and_count_only_real_rows(box):
     done = box.run(f"{EVENING} 22:05")
     assert done.returncode == 0, done.stderr
     assert [n for n in box.notes() if "desk missing" in n] == []
+
+
+# ---- card 106 F2: the real sender line, `sent=False` → NOTIFY FAILED, exit 1 -----------------
+# COBALT_NOTIFY is unset, so the timer takes its own sender path: a constructed key file under a
+# tmp HOME, a stub `uv` on PATH that runs the timer's `python -c` line against a stand-in
+# cobalt.notify whose send_dm returns `sent` as FAKE_SENT says. No real key, no real send.
+
+UV_STUB = """#!/bin/sh
+[ "$1" = run ] && [ "$2" = --project ] && [ "$4" = python ] || exit 64
+shift 4
+PYTHONPATH="$FAKE_SENDER" exec "$FAKE_PY" "$@"
+"""
+
+FAKE_NOTIFY = """import os
+
+
+class SendResult:
+    def __init__(self, sent):
+        self.sent = sent
+
+
+def send_dm(message):
+    with open(os.environ["SENT_OUT"], "a") as f:
+        f.write(message + "\\n")
+    return SendResult(os.environ["FAKE_SENT"] == "1")
+"""
+
+
+@pytest.fixture
+def real_sender(box, tmp_path):
+    import sys
+
+    (box.bin / "uv").write_text(UV_STUB)
+    (box.bin / "uv").chmod(0o755)
+    pkg = tmp_path / "fake-sender" / "cobalt" / "notify"
+    pkg.mkdir(parents=True)
+    (pkg.parent / "__init__.py").write_text("")
+    (pkg / "__init__.py").write_text(FAKE_NOTIFY)
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".cobalt_key").write_text("export COBALT_MASTER_KEY=constructed-not-a-key\n")
+    sent_out = tmp_path / "sent.txt"
+
+    def run(now: str, sent: bool):
+        extra = dict(
+            HOME=str(home), FAKE_SENDER=str(tmp_path / "fake-sender"), FAKE_PY=sys.executable,
+            SENT_OUT=str(sent_out), FAKE_SENT="1" if sent else "0",
+        )
+        return box.run(now, extra=extra, drop=("COBALT_NOTIFY",))
+
+    def sent_lines() -> list[str]:
+        return sent_out.read_text().splitlines() if sent_out.exists() else []
+
+    return run, sent_lines
+
+
+def _fire(box, path: str) -> None:
+    # every path after the desk-missing notify: the launch, the deferral, the done-already
+    box.rows.write_text(LOOKALIKE + "\n" + (HUB + "\n" if path == "deferred" else ""))
+    if path == "done":
+        box.report(EVENING, DONE_LINE)
+
+
+@pytest.mark.parametrize("path", ["launch", "deferred", "done"])
+def test_f2_a_not_sent_notify_prints_notify_failed_and_exits_1(box, real_sender, path):
+    run, sent_lines = real_sender
+    _fire(box, path)
+    done = run(f"{EVENING} 22:05", sent=False)
+    assert sent_lines() == [DESK_MISSING]
+    assert "NOTIFY FAILED: not sent (sent=False)" in done.stdout.splitlines(), done.stdout
+    assert done.returncode == 1, (done.stdout, done.stderr)
+    # the fire's own path still ran
+    assert box.calls_made() == ([f"close {EVENING}"] if path == "launch" else [])
+
+
+@pytest.mark.parametrize("path", ["launch", "deferred", "done"])
+def test_f2_a_sent_notify_exits_as_before(box, real_sender, path):
+    # negative control: sent=True → no NOTIFY FAILED line, exit 0 as before F2
+    run, sent_lines = real_sender
+    _fire(box, path)
+    done = run(f"{EVENING} 22:05", sent=True)
+    assert sent_lines() == [DESK_MISSING]
+    assert "NOTIFY FAILED" not in done.stdout
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert box.calls_made() == ([f"close {EVENING}"] if path == "launch" else [])
+
+
+def test_f2_a_not_sent_refused_notify_still_exits_1(box, real_sender):
+    run, sent_lines = real_sender
+    box.launcher.unlink()
+    done = run(f"{EVENING} 21:05", sent=False)
+    assert sent_lines() == ["close-timer: " + refused_line(done)]
+    assert "NOTIFY FAILED: not sent (sent=False)" in done.stdout.splitlines()
+    assert done.returncode == 1
 
 
 def test_at_0105_with_yesterdays_close_absent_the_close_is_yesterdays(box):

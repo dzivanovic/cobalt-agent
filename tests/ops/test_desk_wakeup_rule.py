@@ -43,6 +43,21 @@ def test_the_wakeup_holds_the_close_wait_rule():
         assert part in text, part
 
 
+def test_f3_an_existing_close_report_is_resumed_at_its_continue_step():
+    # card 106 F3: the bare `close <date>` refuses an existing report (desk-launch.sh:374), so a
+    # timed-out wait on a report that exists resumes it at its CONTINUE step; the bare form
+    # stays for a missing report
+    text = WAKEUP.read_text()
+    rule = [ln for ln in text.splitlines() if ln.startswith("CLOSE WAIT (his 10-08 R658)")]
+    assert len(rule) == 1
+    for part in (
+        "the report is missing → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> yourself",
+        "it exists → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> "
+        "\"<the report's ## CONTINUE next step>\" yourself",
+    ):
+        assert part in rule[0], part
+
+
 def test_the_wait_on_a_missing_close_report_times_out_with_exit_2(tmp_path):
     script = stage(tmp_path)
     report = tmp_path / f"close-{DAY}.md"
