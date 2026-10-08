@@ -1,12 +1,12 @@
 JOB: desk-ops-fixes-1008
 LADDER: OFF-LADDER — reports/cto-2026-10-08.md R657
-BRANCH: deploy/desk-ops-fixes-1008
-WORKTREE: deploy-desk-ops-fixes-1008
+BRANCH: deploy/desk-ops-fixes-1008-attempt2
+WORKTREE: deploy-desk-ops-fixes-1008-attempt2
 BASE: main
 TIP: 9aca7680
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-desk-ops-fixes-1008.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-desk-ops-fixes-1008-attempt2.md
 RULINGS: 2026-10-08 R657
-TAG: deploy-2026-10-08-desk-ops-fixes
+TAG: deploy-2026-10-08-desk-ops-fixes-attempt2
 MIGRATIONS: none
 SET: none
 TICKERS: none
