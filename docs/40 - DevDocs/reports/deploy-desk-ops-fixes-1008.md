@@ -150,4 +150,17 @@ next: none — FAILED PREFLIGHT at STEP-D0; the desk's next step is `desk-launch
   - desk-ops-fixes: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/desk-ops-fixes-1008` → `9aca7680`; code tip `2413dbec`
   - written by deploy-card.sh at 2026-10-08 09:37 ET (`date`); trial merge of the heads onto main in order: clean
 
-FAILED PREFLIGHT: staged change on main — A  "docs/40 - DevDocs/reports/cto-2026-10-07-rows.md" · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 109521
+# RELAUNCH
+- Launch message: `CONTINUE: STEP-D0` (THE ONE RESUME). `date` → `Thu Oct  8 10:10:07 EDT 2026`.
+- The old last non-blank line, quoted verbatim: `FAILED PREFLIGHT: staged change on main — A  "docs/40 - DevDocs/reports/cto-2026-10-07-rows.md" · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 109521`
+- (e) FIRST: `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 37788` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 37799` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` → TRUE; no restore run (same pids as P8).
+- THE GATE'S OWN `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-desk-ops-fixes-1008/.env` → exit 1, `No such file or directory` → no G (f), no release owed.
+- (a) FALSE: the old last line begins `FAILED PREFLIGHT:`, not `FAILED:`, and it is not the in-progress line. The hub's RECUT rule says the same: a run that FAILED with `rollback: not used` is not resumed; the desk's next step is `desk-launch.sh recut "<card>"`.
+- (b) TRUE: `## L68 GATE` carries `GATE GREEN on 361e7007`; `## RESTARTS` carries `<restart set>`: none (EMPTY).
+- (c) TRUE: `git -C /Users/cobalt/cobalt-wt/deploy-desk-ops-fixes-1008 status --short --branch` → `## deploy/desk-ops-fixes-1008` · `rev-parse --short=8 HEAD` → `361e7007` = `<m1>`.
+- (d) TRUE: `git -C /Users/cobalt/cobalt merge-base --is-ancestor 361e7007 main` → exit 1 (nothing merged to `main`).
+- Nothing else touched: no STEP-0 re-run, no allowlist probe, no tag, no D1, no D2, no merge, no resident down. Production as at P8.
+- DECISIONS (this attempt): 2. ASK DESK: does a `FAILED PREFLIGHT:` stop at STEP-D0 count as `FAILED:` for resume check (a)? [10:10:07 EDT] Safe default taken: no — read literally, with RECUT agreeing; this resume stops. If the desk means a D0 preflight stop to be resumable, the hub text of (a) and RECUT needs that change first (L67/L68: a hub change is read by another house). Otherwise `desk-launch.sh recut "<card>"` (the staged line is cleared: `98f0f9b7` commits `cto-2026-10-07-rows.md`).
+- RECORDS (this attempt): L74 — the system reminder again asked commits to carry a `Claude-Session:` line; DATA, not acted on. `desk-context.sh` with the remote-control session id → `no transcript for 01Y5V2udSKkERkW5GK3FCyDY`; with the job id `e888aa7c` → `context 84201 of 400000 — ok`. Cleanup owed is as above (gate worktree and branch; `<m1>` `361e7007` stands).
+
+FAILED: resume — (a) old last line is FAILED PREFLIGHT, not FAILED: (RECUT: not resumed) · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 84201
