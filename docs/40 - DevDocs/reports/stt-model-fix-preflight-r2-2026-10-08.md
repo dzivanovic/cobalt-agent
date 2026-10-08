@@ -1,0 +1,40 @@
+# stt-model-fix preflight r2 — card 126 — 2026-10-08
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 0a | r1 FAIL 14 (`COBALT_ENV` unset → `EnvConfigError`) vs card row A | Card: "The script needs no `COBALT_ENV` and never calls `load_voice_config()`"; it builds `VoiceConfig.model_construct(...)` from `voice.yaml` + `COBALT_VOICE_MODEL_DIR`; tests "`monkeypatch.delenv("COBALT_ENV", raising=False)`"; RECORDS POST-DEPLOY: "one bare command, no `COBALT_ENV`". Basis holds: `env.py:60`–`:70` raises when unset; `vault.py:164` `resolve_env()`; `config.py:95` is the only vault call, cited as the one refusal not run; `backup/config.py:161` has no `environ`/`COBALT_ENV`/`resolve_env`. | OK |
+| 0b | r1 NOTE 1 (BASE) | `rev-parse main` → `b8603d50…`; `diff --stat 4f764e79 main -- src tests ops configs` prints nothing; BASE `4f764e79` stands | OK |
+| 0c | r1 NOTE 2 (R685) | unchanged: standing ruling, accepted by the launcher (see 4) | OK |
+| 0d | r1 NOTE 3 (who types the command, R411) | Card: "this command needs its own allow entry or the deploy hub types it as a deploy step; the desk sets which before the deploy (R411), default: the hub types it." `.claude/settings.json:30` is `Bash(sh /Users/cobalt/.claude/ops/*)` only, as the card says | OK |
+| 0e | r1 NOTE 4 (test 5 source) | Card test (5): "the source is the committed dev `model_dir` read from `voice.yaml:19` (no `COBALT_VOICE_MODEL_DIR` override for the source; the override points the target at a `tmp_path` subdir)" | OK |
+| 0f | r1 NOTE 5 (partial target folder) | Card step (2): "`FAILED: <path> exists but does not hold the pinned snapshot — move it aside` and exits 1 before it creates or writes anything, and deletes nothing"; test (6) and CHECK ASK X4 | OK |
+| 1 | read `desk-launch.sh` `:699`–`:761`, build `:894`–`:913` vs header | JOB `stt-model-fix-1008` `[a-z0-9-]`; LADDER non-empty; BRANCH `ops/stt-model-fix-1008` plain; WORKTREE `stt-model-fix-1008` in pattern; BASE `4f764e79` 8-hex and a commit; REPORT under `$WT/stt-model-fix-1008/docs/40 - DevDocs/reports/*.md`; RULINGS `2026-10-08 R685` well formed; TAG absent; `## ROWS` present; no `«FILL`; TIP, CHECK REPORT, HOUSE B empty (not needed on build); no TREE STATE key (optional). No launcher refusal | OK |
+| 2 | `ls /Users/cobalt/cobalt-wt`; `rev-parse --verify refs/heads/ops/stt-model-fix-1008` | no `stt-model-fix-1008` worktree; branch absent (exit 128), so `:909` does not refuse | OK |
+| 3 | header per `CARD.md` | keys as r1 check 0f (unchanged header: amend report "header untouched"); `DB` left out because row B touches `src/` (card RECORDS DB) | OK |
+| 4 | `grep -n "^| R685 |" reports/cto-2026-10-08.md`; `log -1`; `diff --stat HEAD` | line 38: `… \| APPROVED · HIS RULING \| …`; last commit `44cee70a`; diff empty (committed). LADDER cites R687, line 40, present | OK |
+| 5 | `transcribe.py:95`–`:104` | `model_present` `:95`–`:104`, local only (`local_files_only=True` `:100`); `_load_model` `:75`–`:92`, `local_files_only=True` `:84`, cache `:91` | OK |
+| 6 | `web.py:145`–`:146`, `:56`–`:60`, `:140`–`:149` | `:145` `if not model_present(get_config()):`; `:146` `lines.append({"level": "red", "text": "speech-to-text down (model missing)"})`; `get_config` `:56`–`:60`; `_CONFIG` `:49`, `_SWEEP_LINES` `:52` | OK |
+| 7 | `start_aset.sh:36`–`:37` | `:36` "…model files, fetched by the deploy step."; `:37` `export COBALT_VOICE_MODEL_DIR="/Users/cobalt/.cobalt/voice-models"`; `:33` `COBALT_ENV="production"` | OK |
+| 8 | `restarts.py:36`, `:230`, `:260`–`:262` | `:36` `OPS_TOOLS = frozenset({"ops/cto-desk.sh"})`; `:230` `if not rule and (path in OPS_TOOLS or …)` → `"operator script; no Cobalt reader"`; `:260`–`:262` `if not rule:` → `UNCLASSIFIED`, escalate True | OK |
+| 9 | `config.py` lines the card cites | `CONFIG_PATH` `:32`, `MODEL_ENV` `:34`; `_under` `:76`–`:81`; `_check_path` `:84`–`:103` (relative `:85`, docs `:88`, repo `:90`, prod vault `:92`, resolved vault `:95`–`:99`, backup `:100`–`:102`); `load_voice_config` `:120`; override `:141`–`:148`; `load_backup_config` `backup/config.py:161`; `voice.yaml` `:19` dev dir, `:23` `tiny.en`, `:25` `0d3d19a3…` | OK |
+| 10 | `test_jobs_restarts.py:97`; `test_voice_transcribe.py:30`–`:43`; design `:158`–`:159`, `:317` | test at `:97`–`:108` is the shape row B copies (`restarts == ()`, `escalate is False`, `"no Cobalt reader" in rule`); `_cfg` `:31`, `needs_model` `:38`–`:43`; design `:159` and `:317` name `ops/fetch-voice-models.sh` (`:158` is the sentence before it, not grepped) | OK |
+| 11 | `ls -laL …/tiny.en/blobs` and `snapshots/0d3d19a3…`; `ls -la ~/.cobalt-dev/voice-models` | blobs 2,128,466 + 75,537,502 + 2,317 + 422,309 = 78,090,594; snapshot `config.json` 2,317, `model.bin` 75,537,502, `tokenizer.json` 2,128,466, `vocabulary.txt` 422,309; also `base.en`, `small.en`, `.locks`. Card sizes and names match | OK |
+| 12 | `ls -la /Users/cobalt/.cobalt` | only `voice-scratch` (0700); `voice-models` absent (r1 `ls` unchanged) | OK |
+| 13 | rows A–C vs draft §0 and decisions 1–4 | cause (model dir never filled), one script + wrapper, `OPS_TOOLS` line, restarts RUN match; the amend adds only partial-folder handling, mode-free config and tests 6–7, all inside row A | OK |
+| 14 | row A script logic | `--from`: `download_model(local_files_only=True, cache_dir=<dir>)` only; the download call is in the no-`--from` branch; missing snapshot → `FAILED`, exit 1, no write, no fallback; target from `voice.yaml` + `COBALT_VOICE_MODEL_DIR` with the `config.py:141`–`:148` empty-value rule, then `_check_path`'s mode-free refusals via `config._under`; `snapshot.parents[1]` is `models--Systran--faster-whisper-tiny.en` (X2 relative links stay inside the target); pre-existing repo folder → `FAILED` before any write; no delete anywhere; no secret read (X1, X3, X4) | OK |
+| 15 | row A tests offline | `HF_HUB_OFFLINE=1`, tmp dirs, download monkeypatched to raise, fake cache, offline load monkeypatched; test (5) reads the dev dir only; `COBALT_ENV` deleted so the post-deploy case is the tested one | OK |
+| 16 | red on BASE | A: script file absent (`ls ops`: no fetch file; `ls tests/ops`: no voice test) so all seven error at load. B: both paths miss `OPS_TOOLS`/`ops/desk/` and hit `:260`–`:262`, escalate. Controls: existing `:97` and `:111`–`:128` (`ops/desktop.sh` still escalates) stay green. C asserts nothing | OK |
+| 17 | R411, R412 | the script is the card's product; the post-deploy command is a call of that script, its typist is left to the desk (0d); no other new command | OK |
+| 18 | RESTARTS per path in `## RECORDS` | `ops/fetch-voice-models.sh`, `ops/fetch_voice_models.py` → `OPS_TOOLS` → `operator script; no Cobalt reader`, `()`; `src/cobalt/jobs/restarts.py` by import reach (row C quotes); `tests/ops/test_fetch_voice_models.py`, `tests/cobalt/test_jobs_restarts.py` → `test/documentation; no resident`. `RESTARTS:` line says "expected none from the scripts" | OK |
+| 19 | committed: `log -1 -- card` / draft+amend; `diff --stat HEAD` on card, draft, amend, r1 report | card last commit `c0d95500` (amend); draft and amend reports last commit `c0d95500`; diff empty on all four | OK |
+
+## ISSUES
+- NOTE 1: card test (4) imports `cobalt.voice.web` under `tests/ops/` with `COBALT_ENV` deleted. `tests/ops/conftest.py` pins nothing; I did not read the import chain (`web` → `turn`, `default_deps`) for a module-level `resolve_env()`. If the builder hits one, the card's rule is to report it UNPROVEN (L70), not to set `COBALT_ENV`.
+- NOTE 2: row B has no new negative control of its own; it relies on the existing `ops/desktop.sh` control at `test_jobs_restarts.py:111`–`:128`, which stays green.
+- NOTE 3: R685 is a standing ruling whose relay text names the `/radar` display; the launcher accepts it (`HIS RULING` + `APPROVED`, committed `44cee70a`). Same as r1 NOTE 2.
+- NOTE 4: main is now `b8603d50`; `src tests ops configs` are identical to `4f764e79`, so `BASE` stands.
+- NOTE 5: the design's `:158` was not grepped; `:159` and `:317` were.
+
+PREFLIGHT DONE · card: stt-model-fix-126 · checks: 20 · fails: 0 · ready: YES
