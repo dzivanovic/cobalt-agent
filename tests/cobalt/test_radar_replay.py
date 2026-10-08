@@ -449,7 +449,8 @@ def test_the_radar_call_site_drops_a_fund_by_either_column_on_real_export_rows()
     snapshot = ScreenerSnapshot(
         source=f"screen:{screen_item.block.screen}",
         at=instant,
-        rows=tuple(rows_by_ticker[ticker] for ticker in wanted),
+        # R692: above the price floor, so the floor leaves the four as candidates.
+        rows=tuple({**rows_by_ticker[ticker], "Price": "10.00"} for ticker in wanted),
         header=tuple(rows_by_ticker[wanted[0]]),
     )
 

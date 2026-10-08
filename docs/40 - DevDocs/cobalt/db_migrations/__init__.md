@@ -275,3 +275,6 @@ name `0021_legs.rollback.sql` first in every rollback list.
 
 ## 2026-09-30 — f15-p1
 `FORWARD` gains `0022_prediction_records.sql` (last) and `REVERSE` its rollback (first). The forward is the F15 FINAL's `[F-40]` DDL: `"user".prediction_records` (USER, the 0007 tenancy shape; `card_id` FK with no `ON DELETE`; `UNIQUE (card_id, seq)`; `transition_id BIGINT NOT NULL`, no FK; `CHECK ((kind = 'tap') = (run_id IS NULL))`; trigger `prediction_records_immutable BEFORE UPDATE OR DELETE` → 0007's `refuse_row_update()`, R2-2 B, in a `DO` guard) and `aset_sizings.last_price_bar_ts`. The rollback drops the table, then the column. The registry pins in the suite gain the one 0022 entry each.
+
+## 2026-10-08 — price-floor-1008
+`FORWARD` gains `0023_radar_price_floor.sql` (last) and `REVERSE` its rollback (first). No table: the forward finds the one `system.radar_membership` CHECK holding `'config_cap'` in `pg_constraint` (raising unless exactly one), and replaces it with `radar_membership_excluded_by_check` over the four values plus `price_floor` (a no-op when already there); the rollback clears `price_floor` on admitted rows (COST: the reason is lost, `left_at` stays) and restores the four-value CHECK, a no-op without the table. The registry pins in the suite gain the one 0023 entry each (R692).

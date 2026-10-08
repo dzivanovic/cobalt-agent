@@ -113,9 +113,10 @@ def _raises(exc, sql, params=None):
 def test_the_pair_exists_and_is_registered_after_0016():
     assert SQL.exists() and ROLLBACK.exists()
     names = [p.name for p in FORWARD]
-    # S3 exits C1's 0021 and F15 P1's 0022 sit above the DRC lane: every index is two places further out.
-    assert names[-7:-4] == ["0016_drc.sql", "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[4] == ROLLBACK and [p.name for p in REVERSE[5:7]] == [
+    # S3 exits C1's 0021, F15 P1's 0022 and the price floor's 0023 sit above the DRC lane: every index is
+    # three places further out.
+    assert names[-8:-5] == ["0016_drc.sql", "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
+    assert REVERSE[5] == ROLLBACK and [p.name for p in REVERSE[6:8]] == [
         "0017_voice_turns.rollback.sql", "0016_drc.rollback.sql"]
 
 
@@ -123,6 +124,7 @@ def test_down_to_0016_selects_only_the_k1_rollback():
     # every rollback newer than 0016, newest first — voice V1's 0017 sits between (numeric order);
     # DRC D2 fix r1's 0019 is newer than K1's
     assert [p.name for p in _rollback_paths("0016")] == [
+        "0023_radar_price_floor.rollback.sql",
         "0022_prediction_records.rollback.sql", "0021_legs.rollback.sql",
         "0020_drc_build_kinds.rollback.sql", "0019_drc_events.rollback.sql", "0018_drc_stated_books.rollback.sql",
         "0017_voice_turns.rollback.sql"]

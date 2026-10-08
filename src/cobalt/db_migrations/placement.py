@@ -103,6 +103,7 @@ CREATED_TABLES: dict[str, Side] = {
     "drc_events": Side.USER,
     # db_migrations/0020_drc_build_kinds.sql — DRC D3: no table; it widens
     # `drc_rows.kind` (placed above, USER) by the build's two kinds.
+    # db_migrations/0023_radar_price_floor.sql — R692: no table; it widens radar_membership.excluded_by (SYSTEM) by price_floor.
     # db_migrations/0021_legs.sql — S3 exits M1: his fills and exits (L32).
     # Declared USER by ADR-0008 D2; it leaves DECLARED now that it is built.
     "legs": Side.USER,

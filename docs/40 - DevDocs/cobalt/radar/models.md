@@ -27,3 +27,6 @@ the block ships absent until he rules). A wrap serializer drops the key
 when it is absent, so every dump of an absent-handicap block — the settings
 mirror, the S5 receipt's `pool_unit` — stays byte-identical to the pre-H1
 shape. The values are his and live only in his note (L32, L53).
+
+## 2026-10-08 — price-floor-1008
+`ExcludedBy.PRICE_FLOOR = "price_floor"` (R692, migration 0023): the reason an admitted member read at or below the price floor departs with.

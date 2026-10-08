@@ -93,13 +93,19 @@
                          `aset_sizings.last_price_bar_ts`. Additive.
 `0022_prediction_records.rollback.sql` — drops exactly those: the table,
                          the one column.
+`0023_radar_price_floor.sql` — R692: no table; widens
+                         `radar_membership.excluded_by` by `price_floor`.
+`0023_radar_price_floor.rollback.sql` — clears `price_floor` on admitted
+                         rows (the reason is lost, `left_at` stays) and
+                         restores 0004's four-value CHECK.
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
 (`0016_drc`); 0018 is DRC K1's (`0018_drc_stated_books`), 0019 the DRC
 D2 fix round's (`0019_drc_events`) and 0020 DRC D3's
 (`0020_drc_build_kinds`); 0021 is S3 exits C1's (`0021_legs`), 0022 F15
-P1's (`0022_prediction_records`, FINAL `## SEAM`) — the settled seam
+P1's (`0022_prediction_records`, FINAL `## SEAM`), 0023 the price floor's
+(`0023_radar_price_floor`, R692) — the settled seam
 (`reports/devdb-builds-reissue-2026-09-23.md` `## MIGRATION SEAM`;
 `reports/cto-2026-09-25.md` R64 (5)). Whichever lands later keeps every
 number, in numeric order.
@@ -154,10 +160,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0020_drc_build_kinds.sql",
     MIGRATIONS_DIR / "0021_legs.sql",
     MIGRATIONS_DIR / "0022_prediction_records.sql",
+    MIGRATIONS_DIR / "0023_radar_price_floor.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0023_radar_price_floor.rollback.sql",
     MIGRATIONS_DIR / "0022_prediction_records.rollback.sql",
     MIGRATIONS_DIR / "0021_legs.rollback.sql",
     MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql",

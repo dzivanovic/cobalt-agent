@@ -158,7 +158,7 @@ def test_screener_cache_write_survives_an_old_day_with_nested_daily(tmp_path, mo
         # R16 "C": an ordinary stock's `Asset Type` cell is BLANK, and
         # both not-equity columns are required headers now.
         return SimpleNamespace(
-            content=b"Ticker,Volume,Relative Volume,Asset Type,Industry\nAAA,1,1,,Capital Markets\n")
+            content=b"Ticker,Volume,Relative Volume,Asset Type,Industry,Price\nAAA,1,1,,Capital Markets,10.00\n")
 
     monkeypatch.setattr(module, "finviz_get", get)
     screener = FinvizScreenerCollector("synthetic", config=load_config(), bucket=CountingBucket(), cache_root=tmp_path)

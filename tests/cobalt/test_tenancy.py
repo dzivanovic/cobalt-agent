@@ -513,7 +513,8 @@ def test_down_to_0004_selects_0009_0008_0007_0006_then_0005_reverse():
 
     selected = [path.name for path in _rollback_paths("0004")]
     names = selected
-    assert selected[:12] == [
+    assert selected[:13] == [
+        "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0020_drc_build_kinds.rollback.sql",  # DRC D3

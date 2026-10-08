@@ -16,9 +16,11 @@ def test_the_union_tail_is_0015_to_0021_and_reverse_mirrors_it():
     reverse = [p.name for p in REVERSE]
     print("FORWARD:", *forward, sep="\n  ")
     print("REVERSE:", *reverse, sep="\n  ")
-    # F15 P1's 0022 lands on top of the union tail (FINAL `## SEAM`).
-    assert [name[:4] for name in forward[-8:]] == ["0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022"]
-    assert [name[:4] for name in reverse[:8]] == ["0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
+    # F15 P1's 0022 lands on top of the union tail (FINAL `## SEAM`), the price floor's 0023 (R692) above it.
+    assert [name[:4] for name in forward[-9:]] == [
+        "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023"]
+    assert [name[:4] for name in reverse[:9]] == [
+        "0023", "0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
     assert all(p.exists() for p in (*FORWARD, *REVERSE))
 
 

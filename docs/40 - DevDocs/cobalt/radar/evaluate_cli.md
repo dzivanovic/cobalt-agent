@@ -64,3 +64,6 @@ which is the point of keeping it (L57).
 
 ## 2026-09-30 — f15-p1
 The candidate harness's simulated taps pass `settings=frozen` (the frozen `CardSettings`) to `tap_dot` instead of `bands=frozen.proposed_key` (F15 `[F-05]`).
+
+## 2026-10-08 — price-floor-1008
+Both `members_for_day` reads (the replay and the candidate harness) pass `price_floor_rows=True`, so their input keeps the `price_floor` departures (R692).

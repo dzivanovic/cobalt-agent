@@ -52,13 +52,19 @@ class RadarStore:
             row = cursor.fetchone()
             return dict(zip([item.name for item in cursor.description], row)) if row else None
 
-    def members_for_day(self, pool_key: str, trade_date: date) -> list[dict]:
+    def members_for_day(self, pool_key: str, trade_date: date, *, price_floor_rows: bool = False) -> list[dict]:
         """Return every membership episode for one pool and trading day.
 
         This intentionally includes open, departed, and never-admitted
         episodes.  Admission is represented by ``entered_at IS NOT NULL``;
         callers must not mistake every open row for a pool member.
+
+        R692: a member that departed under the price floor
+        (``excluded_by = 'price_floor'``) is left out by default, so the
+        departed and excluded lists never show it. Every DRC-side reader
+        passes ``price_floor_rows=True`` and gets every row, as before.
         """
+        hidden = "" if price_floor_rows else "AND excluded_by IS DISTINCT FROM 'price_floor' "
         with self._connect() as conn:
             cursor = conn.execute(
                 "SELECT id, pool_key, ticker, trade_date, first_seen_at, "
@@ -66,7 +72,7 @@ class RadarStore:
                 "below_cap_streak, excluded_by, session, opened_scan_id, "
                 "last_scan_id, closed_scan_id, rank_metric, rank_value, "
                 "raw_rank, handicap_factor, handicap FROM radar_membership "
-                "WHERE pool_key = %s AND trade_date = %s ORDER BY id",
+                "WHERE pool_key = %s AND trade_date = %s " + hidden + "ORDER BY id",
                 (pool_key, trade_date),
             )
             columns = [item.name for item in cursor.description]
@@ -489,7 +495,10 @@ class RadarStore:
 
     def members_for_replay(self, pool_key: str, trade_date: date) -> list[dict]:
         """Admitted episodes of one day (read-only dry-run input)."""
-        return [row for row in self.members_for_day(pool_key, trade_date) if row["entered_at"] is not None]
+        return [
+            row for row in self.members_for_day(pool_key, trade_date, price_floor_rows=True)
+            if row["entered_at"] is not None
+        ]
 
 
 __all__ = ["RadarStore"]

@@ -180,7 +180,7 @@ def replay_formations(
         if not ev.evaluable:
             report.not_evaluable[ld.slug] = list(ev.missing_atoms)
             out(f"{ld.slug}: not evaluable: missing atoms {list(ev.missing_atoms)}")
-    members = radar_store.members_for_day(pool_key, day)
+    members = radar_store.members_for_day(pool_key, day, price_floor_rows=True)
     if not members:
         out(f"replay {day}: no membership episodes for pool {pool_key!r}")
     admitted_ever = [m for m in members if m.get("entered_at") is not None]
@@ -379,7 +379,7 @@ async def candidate_run(
             raise CandidateRefused(f"a simulated tap is {{factor, grade 1-10}}, got {tap!r}")
 
     instant = [start or datetime.now(timezone.utc)]
-    members = radar_store.members_for_day(pool_key, day)
+    members = radar_store.members_for_day(pool_key, day, price_floor_rows=True)
 
     def frozen_settings() -> dict:
         return {**settings_values(), **frozen.rows()}

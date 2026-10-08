@@ -85,6 +85,7 @@ def test_collect_puts_float_and_cap_into_metrics_through_number_and_the_config_h
             "rvol": _number(row.get(config.export.metric_headers.rvol)),
             "float_m": _number(row.get(headers.float)),
             "market_cap_m": _number(row.get(headers.market_cap)),
+            "price": _number(row.get(config.export.metric_headers.price)),
         }
     assert all(m["float_m"] is not None and m["market_cap_m"] is not None for m in screen.metrics.values())
 

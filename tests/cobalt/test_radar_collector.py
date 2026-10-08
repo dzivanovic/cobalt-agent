@@ -69,8 +69,8 @@ def test_list_requests_are_chunked_with_t_parameter(monkeypatch, tmp_path):
         names = params["t"].split(",")
         # R16 "C": an ordinary stock's `Asset Type` cell is BLANK (a
         # non-blank one is a fund) and both columns are required headers.
-        body = ("Ticker,Volume,Relative Volume,Asset Type,Industry\n"
-                + "".join(f"{name},1,1,,Capital Markets\n" for name in names))
+        body = ("Ticker,Volume,Relative Volume,Asset Type,Industry,Price\n"
+                + "".join(f"{name},1,1,,Capital Markets,10.00\n" for name in names))
         return SimpleNamespace(content=body.encode())
 
     monkeypatch.setattr(module, "finviz_get", get)

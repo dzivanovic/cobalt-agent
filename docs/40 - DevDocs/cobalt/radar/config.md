@@ -13,3 +13,6 @@ Four modules used to build the 151-index list for themselves (`radar/collector.p
 ## The handicap headers (float handicap H1, 2026-09-24)
 
 `HandicapHeaders` names the two export columns the float handicap reads — `export.handicap_headers: {float: Shares Float, market_cap: Market Cap}` (v3 §3, F5). It is required engine config, validated like every other key, and it is deliberately NOT folded into `required_headers`: a missing or renamed column must degrade the handicap alone (R54 — the scan's handicap goes inoperative with a banner naming the header), never fail every source's parse. The header NAMES are engine config; the thresholds and factor they are compared with are the trader's, in his pool note.
+
+## 2026-10-08 — price-floor-1008
+R692: `RadarConfig.price_floor` (`Decimal`, `gt=0`, no default; `radar.yaml` ships `5.00`) and `MetricHeaders.price` (`Price`, required of every export through `load_config`'s header check), so a config without the floor, with one at or below zero, or without `Price` in `required_headers` is refused at load, naming it.

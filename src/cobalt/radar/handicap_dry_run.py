@@ -508,7 +508,7 @@ def command(args) -> None:
     if block is not None:
         scans, found = identity_mismatches(day_dir, parsed, config, block)
         print(f"h = 1 identity: scans {scans} · mismatches {len(found)}")
-    rows = RadarStore().members_for_day(config.pool_key, day)
+    rows = RadarStore().members_for_day(config.pool_key, day, price_floor_rows=True)
     matched, unmatched, mismatches = stored_mismatches(report.admitted, report.instants, rows)
     print(f"stored membership: matched {matched} scans · unmatched {unmatched} · mismatches {len(mismatches)}")
     for line in mismatches[:20]:

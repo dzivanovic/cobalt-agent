@@ -18,14 +18,17 @@ notes:
 export:
   v: 152
   columns: "0-150"
-  required_headers: [Ticker, Volume, Relative Volume, Asset Type, Industry]
+  required_headers: [Ticker, Volume, Relative Volume, Asset Type, Industry, Price]
   metric_headers:
     volume: Volume
     rvol: Relative Volume
+    price: Price
   handicap_headers:
     float: Shares Float
     market_cap: Market Cap
 list_chunk_size: 50
+# R692: the radar removes every stock priced at or below this, once per scan (radar/runner.py _collect).
+price_floor: 5.00
 not_equity:
   asset_type_header: Asset Type
   industry_header: Industry

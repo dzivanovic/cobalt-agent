@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -31,6 +32,8 @@ class MetricHeaders(BaseModel):
     model_config = ConfigDict(extra="forbid")
     volume: str = Field(min_length=1)
     rvol: str = Field(min_length=1)
+    #: R692: the column the price floor reads on every row.
+    price: str = Field(min_length=1)
 
 
 class HandicapHeaders(BaseModel):
@@ -158,6 +161,10 @@ class RadarConfig(BaseModel):
     notes: NotesConfig
     export: ExportConfig
     list_chunk_size: int = Field(gt=0)
+    #: R692: every stock priced at or below this is removed, once per scan
+    #: (`runner.RadarRunner._collect`). No default: a config without it is
+    #: refused at load.
+    price_floor: Decimal = Field(gt=0)
     not_equity: NotEquityConfig
     cache: CacheConfig
     context: ContextConfig
@@ -179,6 +186,7 @@ def load_config(path: Path = CONFIG_PATH) -> RadarConfig:
     needed = {
         config.export.metric_headers.volume,
         config.export.metric_headers.rvol,
+        config.export.metric_headers.price,
         config.not_equity.asset_type_header,
         config.not_equity.industry_header,
         "Ticker",

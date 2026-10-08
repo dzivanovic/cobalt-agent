@@ -400,7 +400,7 @@ def run_nightly(trade_date: date, *, dry_run: bool, deps: ReplayDeps, live: Opti
         if dry_run and live and outcome.would_fetch:
             deps.out(f"DRY RUN would archive i1 bars for: {', '.join(outcome.would_fetch)}")
 
-        episodes = [Episode(**row) for row in deps.radar_store.members_for_day(deps.radar_config.pool_key, trade_date)]
+        episodes = [Episode(**row) for row in deps.radar_store.members_for_day(deps.radar_config.pool_key, trade_date, price_floor_rows=True)]
         rows = benchmark_misses(stored, episodes, settings=settings, trade_date=trade_date,
                                 not_equity=deps.radar_config.not_equity, verdicts=verdicts)
         for row in rows:

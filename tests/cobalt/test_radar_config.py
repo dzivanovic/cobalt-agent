@@ -1,6 +1,7 @@
 """Strict engine-only radar config tests."""
 
 import copy
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -132,6 +133,49 @@ def test_required_headers_must_carry_both_not_equity_headers(tmp_path):
         path.write_text(yaml.safe_dump(narrowed, sort_keys=False))
         with pytest.raises(RadarConfigError, match=rf"required_headers missing configured headers \['{header}'\]"):
             load_config(path)
+
+
+def test_required_headers_must_carry_price(tmp_path):
+    """R692 F1: the floor reads `Price` on every row, so a config whose
+    `required_headers` drops it is refused, naming it."""
+    raw = yaml.safe_load(CONFIG_PATH.read_text())
+    raw["export"]["required_headers"] = [name for name in raw["export"]["required_headers"] if name != "Price"]
+    path = tmp_path / "radar.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    with pytest.raises(RadarConfigError, match=r"required_headers missing configured headers \['Price'\]"):
+        load_config(path)
+
+
+# ---------------------------------------------------------------------
+# R692 F4 — the tunable `price_floor`, validated at load
+# ---------------------------------------------------------------------
+
+
+def test_the_shipped_config_carries_price_floor():
+    assert load_config().price_floor == Decimal("5.00")
+    assert load_config().export.metric_headers.price == "Price"
+
+
+def test_a_config_without_price_floor_is_refused_naming_it(tmp_path):
+    raw = yaml.safe_load(CONFIG_PATH.read_text())
+    raw.pop("price_floor", None)
+    path = tmp_path / "radar.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    with pytest.raises(RadarConfigError, match="price_floor"):
+        load_config(path)
+
+
+@pytest.mark.parametrize("bad", [0, "0.00", -5])
+def test_a_non_positive_price_floor_is_refused(tmp_path, bad):
+    raw = yaml.safe_load(CONFIG_PATH.read_text())
+    path = tmp_path / "radar.yaml"
+    raw["price_floor"] = "0.01"  # the control: a positive floor loads
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    assert load_config(path).price_floor == Decimal("0.01")
+    raw["price_floor"] = bad
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    with pytest.raises(RadarConfigError, match=r"(?s)price_floor.*greater than 0"):
+        load_config(path)
 
 
 def test_the_not_equity_comment_block_records_the_evidence_not_an_open_question():
