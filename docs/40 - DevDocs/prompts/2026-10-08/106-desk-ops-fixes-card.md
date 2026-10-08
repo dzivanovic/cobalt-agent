@@ -26,6 +26,17 @@ THE DEPLOY GATE is every row's proof. Run `uv run pytest -q -rs -p no:cacheprovi
 
 RESTARTS (K10): `uv run cobalt jobs restarts <BASE>..HEAD`, quote the table whole. Operator scripts under `ops/desk/` and tests under `tests/ops/`, with no Cobalt reader. Expected `RESTARTS:` none.
 
+## FIX ROUND
+Authority: the brain's order (2026-10-08, L79 as amended by his R662; under L75, R347, R438), after the check `reports/desk-ops-fixes-check-2026-10-08.md` (tip `d522f6f7`) `## OPEN` S1, S2, S6. One fix round. Rows F1-F3, in order; the words are the brain's.
+
+| row | what | red first | files |
+|---|---|---|---|
+| F1 | every test under `tests/ops` that asserts an install token (the literal `«INSTALL`) is still IN a hub that his install already filled is turned to assert it is NOT there, citing the install row (R644 for `DEVFIX-HUB.md`, R358 for `BRAIN-HUB.md`). The builder lists them by `grep -rn "INSTALL in" tests/ops` and names each file in its report | `tests/ops/test_desk_launch_devfix.py:180` today; green after; `tests/ops` whole | those test files only: `tests/ops/test_desk_launch_devfix.py` (the drafter's grep of `«INSTALL` at `d522f6f7` finds the one such assertion, `:180`; the builder's grep fills any other) |
+| F2 | `ops/desk/close-timer.sh` (G4's notify): when the sender returns `sent=False` (a disabled Mattermost channel, `mattermost.py:152`), the timer prints `NOTIFY FAILED` and exits 1; a sent notify exits as before | tested with the sender stubbed both ways | `ops/desk/close-timer.sh`, `tests/ops/test_close_timer.py` |
+| F3 | `prompts/CTO-DESK-WAKEUP.md` (G5): when the 22:00 wait times out and `reports/close-<date>.md` exists without `CLOSE PUSHED`, the desk launches `desk-launch.sh close <date> <the report's CONTINUE next step>`, not the bare form (`desk-launch.sh:374` refuses it); the bare form stays for a missing report | pinned like G5's other fragments | `docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md`, `tests/ops/test_desk_wakeup_rule.py` |
+
+Findings S3, S4, S5 are rejected by the brain: KEEP, no row.
+
 ## DECISIONS
 - C1 (G1): the key is read from the first non-isMeta user entry, which is where it stands in a background transcript (draft RECORDS). Alternative: any entry. Rejected because the launch entry is the one the desk rule already reads.
 - C2 (G2): the block text is the bare `session list unreadable — fix it`, with no `start it: ` prefix, and it shares the 3-block give-up. Alternative: an unbounded block. Rejected because it can loop a desk whose list stays broken.
@@ -55,6 +66,9 @@ RESTARTS (K10): `uv run cobalt jobs restarts <BASE>..HEAD`, quote the table whol
 ## RECORDS
 - Citations proven at main HEAD `c6b4a04d` by Read / Grep (drafter, 2026-10-08 07:18 EDT); see `reports/desk-ops-fixes-draft-2026-10-08.md` `## RECORDS`.
 - G4 key handling (L4): `~/.cobalt_key` holds one `export COBALT_MASTER_KEY=` line (counted, value unread). The subshell sources it, so the key lives only in that subshell's environment and its `uv` child. No `echo`, `set -x`, argv or log line carries it; the argv holds only the REFUSED line. The test stubs `COBALT_NOTIFY`, so no test reads the key file or sends. The desk-missing notify uses the same sender and carries no key either.
+- FIX ROUND RESTARTS (K10): the F1 test file `tests/ops/test_desk_launch_devfix.py` (and any file the builder's F1 grep adds) is under `tests/ops/`, class `test/documentation; no resident`, as the card's other `tests/ops` paths. F2 `ops/desk/close-timer.sh` and F3's `docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md` repeat paths already in the table above (operator script; no Cobalt reader / DOCS). Expected `RESTARTS:` none.
+- Fix-round citations proven at `d522f6f7` by `git grep` / `git show` (drafter, 2026-10-08): `src/cobalt/notify/mattermost.py:152` `return SendResult(False, "channel disabled in configs/cobalt/notify.yaml", safe.hits)`; `ops/desk/close-timer.sh:63` `send_dm(sys.argv[1])` (the result is discarded); `ops/desk/desk-launch.sh:374` `[ ! -e "$creport" ] || refuse "the close report already exists: …"`; `tests/ops/test_desk_launch_devfix.py:180` `assert "«INSTALL" in text`. S3, S4, S5 (check `## OPEN`) read and KEPT, no row.
+- F1 grep note: the brain's `grep -rn "INSTALL in" tests/ops` matches nothing at `d522f6f7` (the literal is `«INSTALL`, not `INSTALL in`); `«INSTALL` finds `test_desk_launch_devfix.py:180` (asserted IN a filled hub: change) and `:287`/`:289`, `test_desk_launch_brain.py:25` (constructed or already NOT-asserting: keep). The builder runs the greps, reports the real output and names each file.
 - Post-deploy, the desk's: `sh /Users/cobalt/.claude/ops/desk-launch.sh install-ops` once, which replaces the stale `desk-list.sh` by G3. Quote its `REPLACED:` lines.
 
 ## PRE-STOP SELF-CHECK
