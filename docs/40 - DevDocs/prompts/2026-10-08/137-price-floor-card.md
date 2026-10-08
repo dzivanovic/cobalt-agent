@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-08-words.md 2026-10-08 R692
 BRANCH: ops/price-floor-1008
 WORKTREE: price-floor-1008
 BASE: 059da441
-TIP:
+TIP: f105b82e
 REPORT: /Users/cobalt/cobalt-wt/price-floor-1008/docs/40 - DevDocs/reports/price-floor-build-2026-10-08.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/price-floor-check-2026-10-08.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R692
 
 ## ROWS
