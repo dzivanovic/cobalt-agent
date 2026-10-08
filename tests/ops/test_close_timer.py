@@ -7,6 +7,8 @@ arguments), a tmp directory standing in for /Users/cobalt/cobalt-wt
 (COBALT_DESK_LIST) that prints constructed session rows. `date` is a stub on
 PATH: a plain read of the clock answers FAKE_NOW, and a `date -j …` (date
 arithmetic, no clock) runs the real /bin/date. Every date is constructed.
+The sender is a stub notify.sh (COBALT_NOTIFY) that appends its arguments to tmp
+notify.txt (card 2026-10-08 106 G4): no test reads a key file or sends a message.
 """
 
 from __future__ import annotations
@@ -54,6 +56,12 @@ LIST_STUB = """#!/bin/sh
 cat "$LIST_ROWS"
 """
 
+NOTIFY_STUB = """#!/bin/sh
+printf '%s\\n' "$*" >> "$NOTIFY_OUT"
+"""
+
+DESK_MISSING = "close-timer: desk missing — relaunch with desk-launch.sh desk"
+
 CTO = "aaaa1111-0000-4000-8000-000000000001 · cto-desk · ~/cobalt · running · idle"
 HUB = "bbbb2222-0000-4000-8000-000000000002 · deploy-hub-set9 · ~/cobalt · running · busy"
 # negative control: a name that is not a deploy hub, a cwd that holds the words
@@ -79,17 +87,23 @@ def box(tmp_path):
     rows.write_text(CTO + "\n")
     wt = tmp_path / "wt"
     wt.mkdir()
+    sender = tmp_path / "notify.sh"
+    sender.write_text(NOTIFY_STUB)
+    sender.chmod(0o755)
 
     class Box:
         pass
 
     b = Box()
-    b.repo, b.wt, b.rows, b.launcher = repo, wt, rows, launcher
+    b.repo, b.wt, b.rows, b.launcher, b.listing = repo, wt, rows, launcher, listing
     b.calls = tmp_path / "calls.txt"
     b.list_fail = tmp_path / "list-fail"
+    b.notify = tmp_path / "notify.txt"
     b.reports = repo / "docs" / "40 - DevDocs" / "reports"
 
-    def run(now: str):
+    b.bin = bin_dir
+
+    def run(now: str, extra: dict | None = None, drop: tuple = ()):
         env = dict(
             os.environ,
             PATH=f"{bin_dir}:{os.environ['PATH']}",
@@ -100,13 +114,24 @@ def box(tmp_path):
             CALLS=str(b.calls),
             LIST_ROWS=str(rows),
             LIST_FAIL=str(b.list_fail),
+            COBALT_NOTIFY=str(sender),
+            NOTIFY_OUT=str(b.notify),
         )
+        env.update(extra or {})
+        for k in drop:
+            env.pop(k, None)
         return subprocess.run(
-            ["sh", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60
+            ["sh", str(SCRIPT)], env=env, capture_output=True, text=True, timeout=60,
+            cwd=tmp_path,
         )
 
     def calls() -> list[str]:
         return b.calls.read_text().splitlines() if b.calls.exists() else []
+
+    def notes() -> list[str]:
+        return b.notify.read_text().splitlines() if b.notify.exists() else []
+
+    b.notes = notes
 
     def report(day: str, last: str) -> None:
         (b.reports / f"close-{day}.md").write_text(f"# close {day}\n\n## RECORDS\n\n{last}\n\n")
@@ -125,6 +150,7 @@ def test_a_free_evening_launches_one_close_of_that_date_and_logs_it(box):
     assert f"LAUNCHED: close {EVENING}" in done.stdout
     log = box.wt / ".timer-logs" / f"close-{EVENING}.log"
     assert f"stub launched: close {EVENING}" in log.read_text()
+    assert not box.notify.exists()
 
 
 def test_a_live_deploy_hub_defers_and_launches_nothing(box):
@@ -133,6 +159,7 @@ def test_a_live_deploy_hub_defers_and_launches_nothing(box):
     assert done.returncode == 0, done.stderr
     assert "DEFERRED: deploy live — deploy-hub-set9" in done.stdout
     assert box.calls_made() == []
+    assert not box.notify.exists()
 
 
 def test_a_cwd_that_merely_names_a_deploy_hub_is_not_one(box):
@@ -149,6 +176,7 @@ def test_a_finished_close_report_is_done_already(box):
     assert done.returncode == 0, done.stderr
     assert "DONE ALREADY" in done.stdout
     assert box.calls_made() == []
+    assert not box.notify.exists()
 
 
 def test_a_failed_close_report_is_not_done(box):
@@ -159,20 +187,159 @@ def test_a_failed_close_report_is_not_done(box):
     assert box.calls_made() == [f"close {EVENING}"]
 
 
+def refused_line(done) -> str:
+    return [l for l in done.stdout.splitlines() if l.startswith("REFUSED: ")][0]
+
+
 def test_a_missing_launcher_is_refused(box):
     box.launcher.unlink()
     done = box.run(f"{EVENING} 21:05")
     assert done.returncode != 0
     assert "REFUSED" in done.stdout + done.stderr
     assert box.calls_made() == []
+    # card 106 G4: one notify, the REFUSED line; the launcher check is before the list read
+    assert box.notes() == ["close-timer: " + refused_line(done)]
 
 
 def test_an_unreadable_session_list_is_refused(box):
     box.list_fail.write_text("x")
     done = box.run(f"{EVENING} 21:05")
-    assert done.returncode != 0
+    assert done.returncode == 1
     assert "REFUSED" in done.stdout + done.stderr
     assert box.calls_made() == []
+    # card 106 G4: the desk-missing notify first, then the REFUSED notify (C10)
+    assert box.notes() == [DESK_MISSING, "close-timer: " + refused_line(done)]
+    # the other unreadable path: no session list file at all (:75)
+    box.notify.unlink()
+    box.listing.unlink()
+    done = box.run(f"{EVENING} 21:05")
+    assert done.returncode == 1
+    assert refused_line(done).startswith("REFUSED: no session list: ")
+    assert box.notes() == [DESK_MISSING, "close-timer: " + refused_line(done)]
+    assert box.calls_made() == []
+
+
+def test_g4_a_list_with_no_cto_desk_row_sends_one_desk_missing_notify(box):
+    box.rows.write_text(LOOKALIKE + "\n")
+    done = box.run(f"{EVENING} 21:05")
+    assert done.returncode == 0, done.stderr
+    assert box.notes() == [DESK_MISSING]
+    assert box.calls_made() == [f"close {EVENING}"]
+
+
+def test_g4_a_live_cto_desk_row_sends_no_desk_missing_notify(box):
+    box.rows.write_text(CTO + "\n")
+    done = box.run(f"{EVENING} 21:05")
+    assert done.returncode == 0, done.stderr
+    assert [n for n in box.notes() if "desk missing" in n] == []
+    assert box.calls_made() == [f"close {EVENING}"]
+
+
+def test_g4_id_less_rows_do_not_crash_and_count_only_real_rows(box):
+    odd = "a row with no separator\n · cto-desk · ~/cobalt · running · idle\n" + LOOKALIKE + "\n"
+    box.rows.write_text(odd)
+    done = box.run(f"{EVENING} 21:05")
+    assert done.returncode == 0, done.stderr
+    assert box.notes() == [DESK_MISSING]
+    box.notify.unlink()
+    box.rows.write_text(odd + CTO + "\n")
+    done = box.run(f"{EVENING} 22:05")
+    assert done.returncode == 0, done.stderr
+    assert [n for n in box.notes() if "desk missing" in n] == []
+
+
+# ---- card 106 F2: the real sender line, `sent=False` → NOTIFY FAILED, exit 1 -----------------
+# COBALT_NOTIFY is unset, so the timer takes its own sender path: a constructed key file under a
+# tmp HOME, a stub `uv` on PATH that runs the timer's `python -c` line against a stand-in
+# cobalt.notify whose send_dm returns `sent` as FAKE_SENT says. No real key, no real send.
+
+UV_STUB = """#!/bin/sh
+[ "$1" = run ] && [ "$2" = --project ] && [ "$4" = python ] || exit 64
+shift 4
+PYTHONPATH="$FAKE_SENDER" exec "$FAKE_PY" "$@"
+"""
+
+FAKE_NOTIFY = """import os
+
+
+class SendResult:
+    def __init__(self, sent):
+        self.sent = sent
+
+
+def send_dm(message):
+    with open(os.environ["SENT_OUT"], "a") as f:
+        f.write(message + "\\n")
+    return SendResult(os.environ["FAKE_SENT"] == "1")
+"""
+
+
+@pytest.fixture
+def real_sender(box, tmp_path):
+    import sys
+
+    (box.bin / "uv").write_text(UV_STUB)
+    (box.bin / "uv").chmod(0o755)
+    pkg = tmp_path / "fake-sender" / "cobalt" / "notify"
+    pkg.mkdir(parents=True)
+    (pkg.parent / "__init__.py").write_text("")
+    (pkg / "__init__.py").write_text(FAKE_NOTIFY)
+    home = tmp_path / "home"
+    home.mkdir()
+    (home / ".cobalt_key").write_text("export COBALT_MASTER_KEY=constructed-not-a-key\n")
+    sent_out = tmp_path / "sent.txt"
+
+    def run(now: str, sent: bool):
+        extra = dict(
+            HOME=str(home), FAKE_SENDER=str(tmp_path / "fake-sender"), FAKE_PY=sys.executable,
+            SENT_OUT=str(sent_out), FAKE_SENT="1" if sent else "0",
+        )
+        return box.run(now, extra=extra, drop=("COBALT_NOTIFY",))
+
+    def sent_lines() -> list[str]:
+        return sent_out.read_text().splitlines() if sent_out.exists() else []
+
+    return run, sent_lines
+
+
+def _fire(box, path: str) -> None:
+    # every path after the desk-missing notify: the launch, the deferral, the done-already
+    box.rows.write_text(LOOKALIKE + "\n" + (HUB + "\n" if path == "deferred" else ""))
+    if path == "done":
+        box.report(EVENING, DONE_LINE)
+
+
+@pytest.mark.parametrize("path", ["launch", "deferred", "done"])
+def test_f2_a_not_sent_notify_prints_notify_failed_and_exits_1(box, real_sender, path):
+    run, sent_lines = real_sender
+    _fire(box, path)
+    done = run(f"{EVENING} 22:05", sent=False)
+    assert sent_lines() == [DESK_MISSING]
+    assert "NOTIFY FAILED: not sent (sent=False)" in done.stdout.splitlines(), done.stdout
+    assert done.returncode == 1, (done.stdout, done.stderr)
+    # the fire's own path still ran
+    assert box.calls_made() == ([f"close {EVENING}"] if path == "launch" else [])
+
+
+@pytest.mark.parametrize("path", ["launch", "deferred", "done"])
+def test_f2_a_sent_notify_exits_as_before(box, real_sender, path):
+    # negative control: sent=True → no NOTIFY FAILED line, exit 0 as before F2
+    run, sent_lines = real_sender
+    _fire(box, path)
+    done = run(f"{EVENING} 22:05", sent=True)
+    assert sent_lines() == [DESK_MISSING]
+    assert "NOTIFY FAILED" not in done.stdout
+    assert done.returncode == 0, (done.stdout, done.stderr)
+    assert box.calls_made() == ([f"close {EVENING}"] if path == "launch" else [])
+
+
+def test_f2_a_not_sent_refused_notify_still_exits_1(box, real_sender):
+    run, sent_lines = real_sender
+    box.launcher.unlink()
+    done = run(f"{EVENING} 21:05", sent=False)
+    assert sent_lines() == ["close-timer: " + refused_line(done)]
+    assert "NOTIFY FAILED: not sent (sent=False)" in done.stdout.splitlines()
+    assert done.returncode == 1
 
 
 def test_at_0105_with_yesterdays_close_absent_the_close_is_yesterdays(box):

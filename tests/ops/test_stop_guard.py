@@ -275,8 +275,9 @@ def today() -> str:
 class Desk:
     """The staged repo as the desk's cwd, a desk transcript and today's desk report."""
 
-    def __init__(self, tmp_path: Path, first: str = DESK_LINE):
+    def __init__(self, tmp_path: Path, first: str = DESK_LINE, kind: str | None = "bg"):
         self.tmp = tmp_path
+        self.kind = kind
         self.hook = stage(tmp_path)
         self.repo = tmp_path / "repo"
         reports = self.repo / "docs" / "40 - DevDocs" / "reports"
@@ -288,10 +289,14 @@ class Desk:
         self.first(first)
 
     def first(self, text: str) -> None:
+        """The launch entry carries `"sessionKind": <kind>` (card 106 G1); kind=None omits it."""
+        launch = {"type": "user", "message": {"role": "user", "content": text}, "sessionId": "s-1"}
+        if self.kind is not None:
+            launch["sessionKind"] = self.kind
         lines = [
             {"type": "summary", "summary": "x"},
             {"type": "user", "isMeta": True, "message": {"role": "user", "content": "caveat"}},
-            {"type": "user", "message": {"role": "user", "content": text}, "sessionId": "s-1"},
+            launch,
             {"type": "assistant", "message": {"role": "assistant",
                                               "content": [{"type": "text", "text": "ok"}]}},
             {"type": "user", "message": {"role": "user", "content": DESK_LINE}},
@@ -336,6 +341,16 @@ def test_g1_the_desk_with_no_owed_block_is_blocked(tmp_path):
     d.owed()
     r = d.run()
     assert (r.returncode, r.stdout, r.stderr) == (2, "", missing(d))
+
+
+@pytest.mark.parametrize("kind", [None, "fg"], ids=["key-absent", "fg"])
+def test_g1_a_foreground_session_that_read_the_wake_up_is_not_the_desk(tmp_path, kind):
+    """Card 106 G1: the desk is a background session; the same launch text in any other seat
+    lets the turn end silently."""
+    d = Desk(tmp_path, kind=kind)
+    d.owed()
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
 
 
 def test_g1_a_cwd_below_the_repo_is_the_desk(tmp_path):
@@ -586,11 +601,52 @@ def test_g5_a_directory_at_the_report_path_fails_open(tmp_path):
     unguarded(d.run())
 
 
-def test_g5_a_failing_desk_list_fails_open(tmp_path):
+UNREADABLE = "session list unreadable — fix it\n"
+
+
+def test_g2_a_failing_desk_list_blocks(tmp_path):
+    """Card 106 G2: an unreadable session list blocks, it never lets the desk end unguarded."""
     d = Desk(tmp_path)
     d.lister(ROW, code=1)
     d.owed("OWED: build x | live: b43daef9")
-    unguarded(d.run())
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", UNREADABLE)
+
+
+def test_g2_no_desk_list_beside_the_hook_blocks(tmp_path):
+    d = Desk(tmp_path)
+    assert not (d.hook.parent / "desk-list.sh").exists()
+    d.owed("OWED: build x | live: b43daef9")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", UNREADABLE)
+
+
+def test_g2_a_desk_list_that_times_out_blocks(tmp_path):
+    d = Desk(tmp_path)
+    (d.hook.parent / "desk-list.sh").write_text("#!/bin/sh\nexec sleep 40\n")
+    d.owed("OWED: build x | live: b43daef9")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", UNREADABLE)
+
+
+def test_g2_an_unreadable_list_gives_up_after_three_blocks_and_records(tmp_path):
+    d = Desk(tmp_path)
+    d.lister(ROW, code=1)
+    d.owed("OWED: build x | live: b43daef9")
+    codes = [d.run(active=a).returncode for a in (False, True, True, True)]
+    assert codes == [2, 2, 2, 0]
+    lines = d.desk_stop.read_text().splitlines()
+    assert len(lines) == 1, lines
+    assert re.match(r"^\S+ s-1 GAVE UP after 3 blocks — session list unreadable — fix it$", lines[0]), lines
+    assert not d.count.exists()
+
+
+def test_g2_owed_none_never_runs_a_failing_list(tmp_path):
+    d = Desk(tmp_path)
+    d.lister(ROW, code=1)
+    d.owed("owed: none")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
 
 
 def test_g5_a_directory_at_the_count_file_fails_open(tmp_path):
