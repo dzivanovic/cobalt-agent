@@ -686,6 +686,82 @@ def test_g3_a_secret_shown_present_or_a_near_name_is_allowed(roots, kind, comman
     assert_allowed(run(command, make_seat(roots, kind)))
 
 
+# ---- check of card 120 (pass 1): the findings run on the tip --------------------------------
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "command",
+    ["cat ~/.cobalt_k?y", "cat /Users/cobalt/.cobalt_ke*", "tail -c 9 data/.cobalt_v[a]ult"],
+)
+def test_g3_a_glob_naming_a_secret_is_denied(roots, kind, command):
+    """check O1: bash expands the glob to the secret file, as is_env reads a glob for .env."""
+    assert_denied(run(command, make_seat(roots, kind)), G3_SECRET_ROUTE)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "command",
+    [
+        "security -q dump-keychain",
+        "security -v find-generic-password -w -s x",
+        "security -l -q find-internet-password -w -s x",
+        "security export -k login.keychain -o out.p12",
+    ],
+)
+def test_g3_a_keychain_read_behind_a_global_option_is_denied(roots, kind, command):
+    """check O2: security's global options (-h -i -l -q -v, -p prompt) stand before the command."""
+    assert_denied(run(command, make_seat(roots, kind)), G3_SECRET_ROUTE)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "command",
+    [
+        "security -q find-generic-password -w -s cobalt",
+        "security {dump-keychain,}",
+    ],
+)
+def test_g3_a_keychain_read_cannot_hide_its_subcommand(roots, kind, command):
+    """check A1 (Sol)."""
+    assert_denied(run(command, make_seat(roots, kind)), G3_SECRET_ROUTE)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "command",
+    [
+        "security -q dump-keychain",
+        "security -v dump-keychain",
+        "security -q find-generic-password -w -s cobalt",
+        "security -v find-internet-password -w -s x",
+        "security -q export",
+    ],
+)
+def test_x3_a_keychain_dump_with_a_global_option_first_is_denied(roots, kind, command):
+    """check B2 (Grok)."""
+    assert_denied(run(command, make_seat(roots, kind)), G3_SECRET_ROUTE)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "command",
+    [
+        "cat /Users/cobalt/.cobalt_k*",
+        "cat /Users/cobalt/.cobalt_ke?",
+        "head -c 72 data/.cobalt_vaul?",
+        "tail -c 9 /Users/cobalt/cobalt/data/.cobalt_v*",
+        'cat /x/.e\\\nnv',
+        'cat ~/.cobalt_ke\\\ny',
+        'cat /Users/cobalt/cobalt/data/.cobalt_vaul\\\nt',
+    ],
+)
+def test_x3_a_secret_path_whose_basename_the_guard_does_not_see_is_denied(roots, kind, command):
+    """check B3 (Grok)."""
+    route = G3_ROUTE if ".e\\\n" in command else G3_SECRET_ROUTE
+    assert_denied(run(command, make_seat(roots, kind)), route)
+
+
 # ---- G4 GIT SHAPE FROM A WORKER ----------------------------------------------------------
 
 GIT_DENIED = [
