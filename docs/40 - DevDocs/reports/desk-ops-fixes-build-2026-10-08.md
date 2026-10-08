@@ -1,7 +1,9 @@
 # desk-ops-fixes — build report 2026-10-08
 
 ## §0 Headline
-G1–G5 are built at `d522f6f7` on `b8b4f69c`, DB: none:
+FIX ROUND (F1–F3, check S1, S2, S6) is built at `2413dbec` on `d522f6f7`. F1: the DEVFIX test now asserts the token is gone (R644). F2: a `sent=False` notify prints `NOTIFY FAILED: not sent (sent=False)` and the fire exits 1. F3: an existing close report is resumed at its CONTINUE step. Offline 3991/0, live-note 146/0, `tests/ops` 1577/0 (DECISION W-1 closed). RESTARTS: none. Details under `## FIX ROUND`.
+
+Build round: G1–G5 are built at `d522f6f7` on `b8b4f69c`, DB: none:
 - The desk guard now requires a background session (G1), and an unreadable session list blocks instead of failing open (G2).
 - `install-ops` replaces a stale plain file with the link (G3). The close timer DMs every REFUSED line and a missing desk (G4). The wake-up gains the close-wait rule (G5, +452 bytes).
 - Offline 3991/0, live-note 146/0, the four row files 110/0. `tests/ops` holds one red that was already red on BASE, outside the rows (DECISION W-1). RESTARTS: none.
@@ -166,15 +168,113 @@ No UNCLASSIFIED row.
 - The records copied at PREFLIGHT are under `## PREFLIGHT`.
 - For the checker: `notify()` uses `.` rather than `source` (the plist runs `sh`). `send_dm` returning a disabled-channel `SendResult` exits 0, so a disabled channel prints nothing. `test_only_regular_sh_and_py_files_are_linked` (`:116`, not named by the card) had its last-line assert moved to the new shape. The first install test was renamed to `…_replaces_the_stale_plain_one`, because its old name said "keeps".
 
+## FIX ROUND
+The card's `## FIX ROUND`, rows F1–F3, after the check `desk-ops-fixes-check-2026-10-08.md` (tip `d522f6f7`). One round; the same session.
+
+### AUTHORIZATION
+`sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → exit 0, `AUTHORIZED`. Every row matches the build round's output above, except that the card is now committed at a new commit: `CARD COMMITTED · … · 0 · a69ff5975e3dc3b108917f21ef11b2838052676c` · `CARD UNCHANGED · … · 0 · nothing`.
+
+### PREFLIGHT
+| rule | command | exit | output |
+|---|---|---|---|
+| mechanical rows | `sh /Users/cobalt/cobalt/ops/desk/preflight.sh build "<card>"` | 1 | `clock · date · 0 · Thu Oct  8 09:00:58 EDT 2026` · `status · … · ## ops/desk-ops-fixes-1008` · `head · git log --oneline -1 · 0 · fb203e62 docs(desk-ops-fixes): build report — d522f6f7` · `diff · git diff --stat b8b4f69c · 0 · (10 lines)` (the build's 9 files) · `main repo · … · fb203e62` · `env here · … · 1 · No such file or directory` · `env anywhere · … · 1 · siblings holding .env: none` · **`FAILED PREFLIGHT: head`** (ASK DESK FR-0) |
+| base | `git show --stat d522f6f7` | 0 | `fix(desk-ops-fixes): desk is bg-only, …` · `5 files changed, 127 insertions(+), 37 deletions(-)` |
+| F1 brain grep | `grep -rn "INSTALL in" tests/ops` | 1 | nothing (as the card's record says) |
+| F1 token grep | `grep -rn -F "«INSTALL" tests/ops` | 0 | `test_hub_lines.py:152` (a `.replace`, no assertion) · `test_install_fixed.py:32,76,144,151,158` (constructed X-HUB fixtures) · `test_desk_launch_brain.py:25` (`INSTALL = "«INSTALL"`; its `:285` already reads `assert INSTALL not in text  # filled on his approval row (R358)`) · `test_desk_launch_devfix.py:180 assert "«INSTALL" in text` (**the one assertion of a token IN a filled hub**), `:181` (a `.replace`), `:287`, `:289` (constructed hub, refusal text). Only `test_desk_launch_devfix.py` changes |
+| F2 sender | `grep -n -F "send_dm" ops/desk/close-timer.sh` | 0 | `37`, `53` (comments) · `63: … send_dm(sys.argv[1])' "close-timer: $1"` (the result is dropped) |
+| F2 disabled | Read `src/cobalt/notify/mattermost.py:147-152`; Grep `class SendResult` | — | `if not cfg.enabled: … return SendResult(False, "channel disabled in configs/cobalt/notify.yaml", safe.hits)`; `src/cobalt/notify/result.py:20 class SendResult:` · `:21 sent: bool` |
+| F3 refusal | `grep -n -F "creport" ops/desk/desk-launch.sh` | 0 | `372: [ -f "$creport" ] \|\| refuse "a close resume needs its report: $creport"` · `374: [ ! -e "$creport" ] \|\| refuse "the close report already exists: $creport (a new worker names its CONTINUE step)"` |
+| F3 rule | `grep -n -F "CLOSE WAIT" …/CTO-DESK-WAKEUP.md` | 0 | `44:CLOSE WAIT (his 10-08 R658): … → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> yourself; one §4 row.` |
+| wc -l | `wc -l <five files>` | 0 | `383 tests/ops/test_desk_launch_devfix.py` · `149 ops/desk/close-timer.sh` · `323 tests/ops/test_close_timer.py` · `53 …/CTO-DESK-WAKEUP.md` · `69 tests/ops/test_desk_wakeup_rule.py` |
+| check report | `tail -n 3 "…/desk-ops-fixes-check-2026-10-08.md"` | 0 | `CHECK DONE · job: desk-ops-fixes · pass: 1 · tip: d522f6f7 · … · ready: NO · decisions: 3 · for Dejan: 1 · tokens: 181988` |
+| RESTARTS | `uv run cobalt jobs restarts fb203e62..HEAD` | 0 | `docs/40 - DevDocs/reports/desk-ops-fixes-build-2026-10-08.md	M	DOCS	-` · `RESTARTS: none` (only this report, being edited) |
+| lock | not run | — | DB: none |
+
+Card records re-read: `mattermost.py:152`, `close-timer.sh:63`, `desk-launch.sh:374` and `test_desk_launch_devfix.py:180` all match the drafter's fix-round citations. The F1 grep note holds: `INSTALL in` matches nothing, and `«INSTALL` finds the hits above.
+
+### E2 RED
+Tests only. `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_desk_launch_devfix.py tests/ops/test_close_timer.py tests/ops/test_desk_wakeup_rule.py` on `d522f6f7` code → exit 1: `5 failed, 72 passed, 15 warnings in 59.82s`. Committed `5f84141e wip(desk-ops-fixes): red — F1-F3 tests before the fix`.
+- F1 `test_the_trees_devfix_hub_line_is_printed_with_its_tokens_filled` (`:180`): red at `d522f6f7` in the build round's `tests/ops` run (`## W`): `assert '«INSTALL' in "# DEVFIX-HUB — … (INSTALLED 2026-10-07 · STANDING = INSTALL: 2026-10-07 R644 …"`. Turned to `assert "«INSTALL" not in text  # filled on his approval row (R644)`, the form of `test_desk_launch_brain.py:285` (R358). Green in this run. Its mutation red is under E3.
+- F2 `test_f2_a_not_sent_notify_prints_notify_failed_and_exits_1[launch|deferred|done]`: `AssertionError: LAUNCHED: close 2031-05-14 — exit 0 — …` / `DEFERRED: deploy live — deploy-hub-set9` / `DONE ALREADY: close 2031-05-14`. The real sender line ran (`sent_lines() == [DESK_MISSING]` passed before this assert) with `sent=False`, and printed no `NOTIFY FAILED`. Exit 0. This is the row's defect.
+- F2 `test_f2_a_not_sent_refused_notify_still_exits_1`: `assert 'NOTIFY FAILED: not sent (sent=False)' in ['REFUSED: no launcher: …']`.
+- F3 `test_f3_an_existing_close_report_is_resumed_at_its_continue_step`: `AssertionError: the report is missing → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> yourself`.
+- NEGATIVE CONTROL, green on `d522f6f7` in the same run: `test_f2_a_sent_notify_exits_as_before[launch|deferred|done]` (`sent=True` → exit 0, no `NOTIFY FAILED`).
+- How the sender is stubbed both ways: `COBALT_NOTIFY` is unset, so the timer takes its own sender path. A constructed `.cobalt_key` sits under a tmp `HOME`. A stub `uv` on PATH checks `run --project <repo> python` and runs the timer's own `python -c` line against a stand-in `cobalt.notify` (`PYTHONPATH`). That `send_dm` writes the message to tmp `sent.txt` and returns `sent` as `FAKE_SENT` says. No real key, no real send.
+
+### E3 THE ROWS
+Commit `2413dbec fix(desk-ops-fixes): filled-hub token test, unsent notify exits 1, close wait resumes an existing report (F1-F3, L1)` (`ops/desk/close-timer.sh`, `CTO-DESK-WAKEUP.md`; the test files are in `5f84141e`).
+- **F1** `tests/ops/test_desk_launch_devfix.py:180` only: `in` → `not in`, citing R644. `git diff --stat d522f6f7 -- tests/ops/test_desk_launch_devfix.py` → `1 file changed, 1 insertion(+), 1 deletion(-)`. No other `tests/ops` file asserts a token IN a filled hub (PREFLIGHT grep).
+- **F2** `ops/desk/close-timer.sh`: the sender line is now `sys.exit(0 if send_dm(sys.argv[1]).sent else 3)`. `notify()` maps exit 3 to `NOTIFY FAILED: not sent (sent=False)` and sets `unsent`. Any other non-zero still prints `NOTIFY FAILED: exit <n>`. A new `finish <code>` turns an exit 0 into 1 when `unsent` is set, and is used at the DEFERRED (`:147`), DONE ALREADY (`:153`) and LAUNCHED (`:164`) exits. `refuse` exits 1 as before. The header (`:39-42`) names the rule. See DECISION FR-F2.
+- **F3** `CTO-DESK-WAKEUP.md:44`: after the timeout, if the report is missing, the bare `desk-launch.sh close <date>` runs, as before. If it exists, `desk-launch.sh close <date> "<the report's ## CONTINUE next step>"` runs instead, with `(the bare form refuses an existing report)`. G5's three fragments still hold. `wc -c`: 12060 → 12250, +190 bytes.
+- Green, the three files: `77 passed, 15 warnings in 59.93s`.
+- Test counts (`grep -c -F "def test_"`), before (`d522f6f7`) → after: `test_close_timer.py` 18 → 21 · `test_desk_wakeup_rule.py` 3 → 4 · `test_desk_launch_devfix.py` 23 → 23 (one line changed). In collected ids, `test_close_timer.py` goes 18 → 25 (the two F2 tests are parametrized over 3 paths).
+- DevDocs: operator scripts and a prompt, with no module page (as in the build round). No dated line.
+
+THE MUTATIONS, each made and undone with the Edit tool:
+- F2 fix undone (`send_dm(sys.argv[1])`, the result dropped) → `4 failed, 3 passed`: the three `…not_sent…exits_1[*]` with `assert 'NOTIFY FAILED: not sent (sent=False)' in ['LAUNCHED: …' / 'DEFERRED: …' / 'DONE ALREADY: …']`, and `…refused_notify_still_exits_1` the same against `['REFUSED: no launcher: …']`.
+- F2 `finish` undone (`|| exit 0`) → `3 failed, 4 passed`: `…not_sent…exits_1[launch|deferred|done]` `assert 0 == 1`, with stdout `NOTIFY FAILED: not sent (sent=False)` then the path line.
+- F2 negative-control mutation (`sent=3` forced after every send) → `test_f2_a_sent_notify_exits_as_before[launch|deferred|done]`: `3 failed`, `assert 'NOTIFY FAILED' not in 'NOTIFY FAIL…'`.
+- F1 undone (`not in` → `in`) → `test_the_trees_devfix_hub_line…` `:180 assert '«INSTALL' in "# DEVFIX-HUB — … (INSTALLED 2026-10-07 · STANDING = INSTALL: 2026-10-07 R644 …"`.
+- F3 undone (the `it exists → …` clause removed) → `test_f3_…` `AssertionError: it exists → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> "<the report's ## CONTINUE next step>" yourself`. The F1 and F3 mutations ran together: `2 failed, 3 passed`.
+- After the undos: `git diff --stat` → `CTO-DESK-WAKEUP.md | 2 +-`, this report, `ops/desk/close-timer.sh | 29 ++++++++++++++++------`, which is the fix. Three files: `77 passed`.
+
+### RESTARTS
+`uv run cobalt jobs restarts b8b4f69c..HEAD` at `2413dbec`:
+```
+path	change	rule	restart
+docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md	M	DOCS	-
+docs/40 - DevDocs/reports/desk-ops-fixes-build-2026-10-08.md	M	DOCS	-
+ops/desk/close-timer.sh	M	operator script; no Cobalt reader	-
+ops/desk/desk-launch.sh	M	operator script; no Cobalt reader	-
+ops/desk/stop-guard.py	M	operator script; no Cobalt reader	-
+tests/ops/test_close_timer.py	M	test/documentation; no resident	-
+tests/ops/test_desk_launch_devfix.py	M	test/documentation; no resident	-
+tests/ops/test_desk_wakeup_rule.py	A	test/documentation; no resident	-
+tests/ops/test_install_ops.py	M	test/documentation; no resident	-
+tests/ops/test_stop_guard.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+No UNCLASSIFIED row (`report` shows `M` because the branch already holds the build round's report).
+
+### W THE THREE SUITES
+`<tip>` = `2413dbec`.
+- (a0) `git diff --name-only --no-renames b8b4f69c` → `CTO-DESK-WAKEUP.md`, this report, `ops/desk/close-timer.sh`, `ops/desk/desk-launch.sh`, `ops/desk/stop-guard.py`, `tests/ops/test_close_timer.py`, `tests/ops/test_desk_launch_devfix.py`, `tests/ops/test_desk_wakeup_rule.py`, `tests/ops/test_install_ops.py`, `tests/ops/test_stop_guard.py`. Every path starts with `ops/`, `tests/ops/` or `docs/`. **`cobalt_dev: not taken (DB: none — 10 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh desk-ops-fixes-1008 offline` → exit 0: `offline 3991/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/desk-ops-fixes-1008-offline-20261008-091102.log`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh desk-ops-fixes-1008 livenote` → exit 0: `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/desk-ops-fixes-1008-livenote-20261008-091103.log`. Its one skip: `56: SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set`. It does not name `COBALT_LIVE_VAULT_ROOT`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → exit 0: `1577 passed, 1 xfailed, 15 warnings in 447.74s (0:07:27)`. 0 failed. The build round's one red (DECISION W-1) is gone.
+- with-DB, F0/F1/F2, lock: not run (DB: none). `ls /Users/cobalt/cobalt-wt/desk-ops-fixes-1008/.env` → `No such file or directory` (09:21 EDT).
+
+### PRE-STOP SELF-CHECK (fix round)
+(1) Every added or changed test was shown red. The F2 tests' reds on `d522f6f7` are quoted under E2. The F1 `:180` red at `d522f6f7` and under its mutation, and the F3 red on `d522f6f7` and under its mutation, are quoted. The F2 `sent=True` control is red under the forced-unsent mutation. No test stayed green under its mutation.
+(2) Entry paths of F2. The `finish` sites DEFERRED `:147`, DONE ALREADY `:153` and LAUNCHED `:164` are each pinned (parametrized `deferred`, `done`, `launch`), with `sent=False` and with `sent=True`. The `refuse` path is pinned on the launcher site (`:118`). The other `refuse` sites (`:110`, `:114`, `:121`, `:122`, `:158`) share the one `notify` and the unconditional `exit 1`; `:121` and `:122` are pinned by the COBALT_NOTIFY tests. Not pinned: a sender crash, i.e. a non-zero exit other than 3 (DECISION G4-2, narrowed).
+(3) Re-read at the tip with `grep -n -F`: `finish` (79, 80, 147, 153, 164), `unsent` (58, 59, 73, 79, 81), `refuse ` (110, 114, 118, 121, 122, 158), `CLOSE WAIT`/`it exists` (`:44`), `def test_f` (313, 325, 336; wakeup 46); `grep -c -F "def test_"` (21, 4, 23); `wc -c` (12250).
+
+### FOR THE CHECK (fix round)
+- Range `d522f6f7..2413dbec`: `fb203e62 docs(desk-ops-fixes): build report — d522f6f7` · `5f84141e wip(desk-ops-fixes): red — F1-F3 tests before the fix` · `2413dbec fix(desk-ops-fixes): filled-hub token test, unsent notify exits 1, close wait resumes an existing report (F1-F3, L1)`.
+- Rerun after the fix: the three row files `77 passed`; the deploy-gate pass for a DB: none card is gate.sh `offline` and `livenote` plus `tests/ops`, all above. `--deploy` is not typed: BUILD-HUB W (a0) says gate.sh accepts it with `withdb` and `all` only.
+
 ## CONTINUE
 next: none (BUILT)
 
 ## DECISIONS
+Fix round:
+- ASK DESK FR-0 [09:00 EDT]: `preflight.sh build` printed `FAILED PREFLIGHT: head`. Its head rule expects `<BASE>` (`b8b4f69c`) or a `wip(<JOB>):` commit, but a fix round on the same card starts at the build's report commit `fb203e62`, on top of the card's `TIP: d522f6f7`. Every other row passed: branch, main repo at `fb203e62`, no `.env` anywhere. The diff holds only the build round's 9 files. Safe default: the mismatch was read as the fix-round state, and the round went on. The script has no fix-round mode, so the desk may want one.
+- DECISION FR-F2: F2 says that on `sent=False` "the timer prints NOTIFY FAILED and exits 1". The card's G4 also says the desk-missing notify "never changes … the deferral / done-already / launch paths after it". Safe default, which keeps both:
+  - an unsent notify is marked, the fire runs its own path to the end (the close still launches), and an exit 0 becomes 1;
+  - a non-zero launcher status is kept as it is;
+  - `sent=False` is the sender's exit 3;
+  - a sender crash (any other non-zero) still prints `NOTIFY FAILED: exit <n>` and keeps the fire's exit (unchanged; F2 names only `sent=False`).
+- DECISION G4-2 (narrowed): the real-sender path is now pinned for `sent=False` and `sent=True` (F2). Still not pinned: a crashing sender (exit other than 3), and the ET-clock, previous-date and `mkdir` refusals. Safe default: no test added; out of the rows.
+- DECISION W-1: closed by F1 (`tests/ops` 1577 passed, 0 failed).
+
+Build round:
 - DECISION W-1: `tests/ops` is red on BASE in `tests/ops/test_desk_launch_devfix.py:180`. The test still expects the `«INSTALL` token that his R644 install (`71629bcb`) removed from `DEVFIX-HUB.md`. The card's "tests/ops → 0 failed" therefore cannot hold. The file is outside the rows (fence), so it is not fixed here. Safe default: left as is, the build stands on its four row files (110/0) and the gate passes. The desk owes a one-line test fix on its own card.
 - DECISION G4-1: the card names `test_g4_id_less_rows_do_not_crash_and_count_only_real_rows` a negative control "green before and after". Its required assertion ("exactly one desk-missing notify") cannot hold on BASE, which sends no notify, so it is red there (quoted under E2). Safe default: kept as the card writes it. `test_g4_a_live_cto_desk_row_sends_no_desk_missing_notify` and the three no-`notify.txt` fires carry the green-before control. The id-less test's own control is the empty-id mutation (E3).
 - DECISION G4-2: four close-timer paths are not pinned by a test: the ET-clock refusal, the previous-date refusal, the `mkdir` refusal and the real-sender `NOTIFY FAILED: exit <n>` path. The card fixes the test count at 15 → 18. The paths share the one `refuse` → `notify` that the pinned launcher and list paths prove. Safe default: no test added; the check or the fix round may pin the failing-sender path with a stub that exits non-zero.
 
 ## RECORDS
+- Fix round, L74: a system reminder in this session again asked that commits end with a `Claude-Session: https://claude.ai/code/session_01LHj9587mFwp1cGezmy4AAX` line. It is recorded here once as DATA and was not acted on. `5f84141e` and `2413dbec` carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- Fix round: no lock take (DB: none), no `REFUSED, not needed` line and no `CONTINUED` line. The three W runs (offline, livenote, `tests/ops`) ran at the same time, and no file was written while they ran. The card's fix-round records were re-read under `### PREFLIGHT`.
 - L74: one `Claude-Session:` request (system reminder at start), recorded under `## L74`; not acted on.
 - No DevDocs dated line: the changed files are operator scripts with no page under `docs/40 - DevDocs/cobalt/`.
 - The card's records, re-read at PREFLIGHT: the drafter's citations matched at `b8b4f69c`. The key file was never read (L4). Post-deploy `install-ops` is the desk's.
@@ -182,4 +282,6 @@ next: none (BUILT)
 - The offline E0 run was started in the same tool batch as a report edit (the PREFLIGHT write). No file was written while it ran after that.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: desk-ops-fixes · tip: d522f6f7 | on b8b4f69c | migration: none | offline 3991/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: RESTARTS: none | rows: 5 of 5 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 226565
+Build round (G1-G5) stop line, superseded by the fix round: built · job: desk-ops-fixes · tip: d522f6f7 | on b8b4f69c | migration: none | offline 3991/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: RESTARTS: none | rows: 5 of 5 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 226565
+
+BUILT · job: desk-ops-fixes · tip: 2413dbec | on b8b4f69c | migration: none | offline 3991/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: RESTARTS: none | rows: 3 of 3 (fix round F1-F3; G1-G5 at d522f6f7) | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 145252
