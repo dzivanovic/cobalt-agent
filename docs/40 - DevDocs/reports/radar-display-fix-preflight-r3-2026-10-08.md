@@ -1,0 +1,37 @@
+## CHECKS
+
+Main HEAD `cc2009bc`. Card commits: `0fc205b8` (draft), `ff3bd757` (amend 1), `cdbfe8e7` (amend 2, row C). BASE `50b0cd87`.
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | `git diff -U0 ff3bd757 cdbfe8e7 -- <card>` | one hunk, `@@ -20 +20 @@`: row C only. Header lines 1–10 and rows A, B, D, E, F, NOT IN THIS JOB, READ, CHECK ASKS, RECORDS are untouched since round 2 | OK |
+| 2 | `git diff --stat HEAD -- <card>` | prints nothing (card committed, clean) | OK |
+| 3 | `git diff --stat 50b0cd87 HEAD -- src tests configs/cobalt/jobs.yaml` | prints nothing; BASE carries the same code as HEAD | OK |
+| 4 | `git log -- <card>` | `cdbfe8e7`, `ff3bd757`, `0fc205b8`; header TIP / CHECK REPORT / HOUSE B still empty | OK |
+| 5 | Read `radar_panel.py:1605`–`:1636` | `:1605` `let ladderInFlight=false;`; `:1609` first guard (`ladderInFlight\|\|sending>0\|\|…tap-strip…\|\|layer.querySelector('details.terminal[open]')\|\|…`); `:1610` `const seen`; `:1611` `ladderInFlight=true;`; `:1612` `try{`; `:1613` fetch; `:1620` second guard with `now.querySelector('details.terminal[open]')`; `:1621` keep; `:1622` `now.replaceWith(next)`; `:1623` toggle; `:1624`–`:1629` catch; `:1630` `}finally{ladderInFlight=false;}`; `:1633`–`:1634` both `setInterval`; `:1636` end | OK |
+| 6 | Read `:1546`–`:1555` and `test_radar_panel.py:1115` | `refreshLadder` is byte-equal to `REFRESH_LADDER_BODY`; the card leaves it alone | OK |
+| 7 | `grep -n` `cards/store.py` | `:968` `RADAR_OPEN_STATES = ("WATCH","ARMED","TRIGGERED","FILLED")`; `:1047` `def radar_board_cards`; `:1055` `OR (state_at AT TIME ZONE 'America/New_York')::date = %s` | OK |
+| 8 | `grep -n` `test_radar_panel.py` | `:1112` `TICK_GUARDS` (holds `details.terminal[open]`), `:1115` `REFRESH_LADDER_BODY`, `:1132` `_tick_stretches`, `:1161` `test_tick_never_swaps…`, `:1170` `test_an_expanded_card…`, `:1193` `test_one_ladder_fetch…`, `:1197` `assert "finally{ladderInFlight=false;}" in body`, `:1251`–`:1257` mutation partner, `:1376` second `TICK_GUARDS` user | OK |
+| 9 | `grep -n` `logs/aset.log` for his client's `GET /radar` | last in the card's window `:15298`; later ones `:15533`, `:15537`, `:15540` are reloads after the card was read; none between `:15298` and `:15527` | OK |
+| 10 | `<details class="terminal">` in `render_ladder` | `radar_panel.py:1518`; the post-swap `#ladder-layer details.terminal` query (row B) finds it | OK |
+| 11 | Rows A, E, F, NOT IN THIS JOB vs round 2 | byte-identical (check 1); row A still cites `:211`–`:212` for fixture rows (round 1 NOTE 3, cosmetic) | OK |
+| 12 | Row B red on BASE | `details.terminal[open]` in `before` at `:1609`; `TICK_GUARDS` amend keeps `:1163` and `:1376` consistent | OK |
+| 13 | Rows C and D red on BASE | `AbortController`, `ladderOkAt`, `LADDER NOT REFRESHED`, `owned` absent from `PANEL_JS` | OK |
+| 14 | Round-2 FAIL 19 (scope) re-checked in row C | Row C now declares `const ctl` and `let timer=null` before `try{`, beside `let owned=false;` (row D); `timer=setTimeout(...)` is armed after `owned=true;`; `clearTimeout(timer)` comes first in `finally`. `ctl`, `timer`, `owned` are function-scoped and reach the `finally`. FIXED | OK |
+| 15 | WALK 1: declarations. `ctl`, `timer`, `owned` before `try{`; `ladderOkAt` and `interval` outer (`:1589`); `seen`, `termOpen`, `response`, `doc`, `next`, `now`, `active`, `keep` are used only inside the `try`; `current`, `box` only inside the `catch` | Every `const`/`let` reaches every use, including `finally` (it reads `timer`, `owned`, `ladderInFlight`) | OK |
+| 16 | WALK 2: early returns. First guard at `:1609` (inside the `try`, `owned=false`): `finally` runs `clearTimeout(null)`, skips the reset, so another fetch's `ladderInFlight=true` is kept and a free flag stays false. Second guard (`:1620`, `owned=true`): resets to false. A throw in a guard: catch banner, no reset of another fetch's flag | Matches the card's design (ownership). Single-flight holds | OK |
+| 17 | WALK 3: `finally{clearTimeout(timer); if(owned){ladderInFlight=false;}}` | `clearTimeout(null)` and `clearTimeout(<id>)` never throw; nothing else sits before the reset; a throw in the `catch` still runs the `finally` | OK |
+| 18 | WALK 4: abort path. `timer` fires `ctl.abort()` → the pending `await fetch(…)` or `await response.text()` rejects with `AbortError` → `catch(failure)` adds `refresh-failed stale-data`, creates or reuses `#ladder-refresh-status`, writes `REFRESH FAILED … AbortError…` → `finally` clears and resets | The abort path ends in the banner. X2 holds: no path keeps `ladderInFlight` true past the abort | OK |
+| 19 | WALK 5: TERMINAL open. First guard no longer holds it, so the tick fetches; second guard no longer holds it; `const termOpen=!!now.querySelector('details.terminal[open]');` is read before `now.replaceWith(next)`; after the swap `#ladder-layer details.terminal` gets `.open=true` | TERMINAL open survives the swap. Every other guard (tap strip, focused/edited input, `sending>0`, `sendGeneration`) remains in both stretches | OK |
+| 20 | WALK 6: stale line (row D) is the first statement in the `try`: `Date.now()-ladderOkAt>3*interval` → `stale-data` + `#ladder-refresh-status` with `LADDER NOT REFRESHED · since <time>`; `ladderOkAt=Date.now()` after `replaceWith`; a swap brings a fresh layer, so the box clears | X3 holds. No `{return;}` in the stale line, so `test_one_ladder_fetch…` (`:1201`–`:1202`) still finds the first guard | OK |
+| 21 | Existing tests against the new shape: `_tick_stretches` (`fetch_at`, `replaceWith(`, last `await ` before it), `:1175`–`:1178` (`TICK_KEEP`), `:1196` (`ladderInFlight=true;` before the first `await `), `:1247` (`const seen` in `before`), `:1260` mutation (`if(ladderInFlight\|\|`), `_js_body` end `"\n }\n"` | All keep their reading; only `:1112` and `:1197` need the card's two amends. Focus-law test (`test_radar_panel_cards.py:960`–`:967`): the new text has no `alert(`, `confirm(`, `prompt(`, `.focus(`, `location.reload`, `submit(` | OK |
+| 22 | New tests vs their mutations: B (`details.terminal[open]` back in the first `if(`), C (`const ctl`/`let timer` moved just after `try{`), D (`if(owned){…}` → bare `ladderInFlight=false;`) | Each assertion bites its mutation, same pattern as `:1251`–`:1257` | OK |
+| 23 | Row F / RESTARTS | unchanged; expected `com.cobalt.aset com.cobalt.radar` | OK |
+
+## ISSUES
+- NOTE 1 (row C/D, layout): the card does not say where `const layer` and `const focused` sit. Both are read by the stale line and the guards. Put them above `try{` (with `ctl`, `timer`, `owned`) so the stale line and the guards are the `try`'s first statements; if the builder moves them inside the `try`, they must precede the stale line (TDZ).
+- NOTE 2 (row C, timing): the timer is armed a few ms after the tick starts, so the next tick (one interval later) fires just before the abort and returns at the in-flight guard; the abort lands right after it and the tick after that fetches. Recovery is within two intervals, the abort within one. The card's "the next interval fetches again" is one tick optimistic; no change needed.
+- NOTE 3: row A cites `:211`–`:212` for fixture rows (they are `variants` at `:136`; `evaluated` at `:121`). Cosmetic, carried from round 1.
+- NOTE 4: his client's later `GET /radar` lines (`aset.log:15533`, `:15537`, `:15540`) are reloads; they do not touch the claim that none came between `:15298` and `:15527`.
+
+PREFLIGHT DONE · card: radar-display-fix-118 · checks: 23 · fails: 0 · ready: YES
