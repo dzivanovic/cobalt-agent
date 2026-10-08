@@ -395,9 +395,9 @@ PROD_CALLS = [
 
 
 @pytest.mark.parametrize("command", PROD_CALLS)
-@pytest.mark.parametrize("kind", ["build", "check", "devfix", "desk", "brain"])
+@pytest.mark.parametrize("kind", ["build", "check", "devfix", "desk", "brain", "worker"])
 def test_g2_production_from_a_non_deploy_seat_is_denied(roots, kind, command):
-    assert_denied(run(command, make_seat(roots, kind)), G2_ROUTE)
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
 
 
 @pytest.mark.parametrize("command", PROD_CALLS)
@@ -457,12 +457,33 @@ def test_g2_a_marked_seat_runs_a_production_db_query(roots, kind, command):
     assert_allowed(run(command, marked_seat(roots, kind)))
 
 
-@pytest.mark.parametrize("where", ["none", "later", "body"])
-@pytest.mark.parametrize("kind", MARKED_KINDS)
-def test_g2_a_seat_without_the_marker_in_its_first_record_is_denied(roots, kind, where):
-    """CONTROL (a): the marker in the first user record is the proof; a RULINGS line, a row, a
-    later record or the prompt body is none."""
-    assert_denied(run(PROD_QUERY, marked_seat(roots, kind, where=where)), G2_ROUTE)
+# ---- card 120 guard-g2-open-reads (his 2026-10-08 R686): every seat reads, no stamp -------
+
+UNSTAMPED_KINDS = ["build", "check", "devfix", "desk", "brain", "worker"]
+
+
+def unstamped_seat(roots, kind: str) -> dict:
+    """A seat of the kind with no stamp in any record: a hub, desk or brain launch as make_seat
+    builds it; a worker as marked_seat builds it (cwd under the worktree root), unstamped."""
+    if kind == "worker":
+        return marked_seat(roots, "worker", where="none")
+    return make_seat(roots, kind)
+
+
+UNSTAMPED_SEATS = [(k, None) for k in UNSTAMPED_KINDS] + [
+    (k, w) for k in MARKED_KINDS for w in ["none", "later", "body"]
+]
+
+
+@pytest.mark.parametrize("command", PROD_READS)
+@pytest.mark.parametrize("kind,where", UNSTAMPED_SEATS)
+def test_g2_every_seat_runs_a_production_db_query_without_the_stamp(roots, kind, where, command):
+    """RED (1) on BASE: G2 passed the read only for a seat whose first record held the stamp.
+    where None: a seat of the kind with no stamp anywhere; "none", "later", "body": the stamp
+    nowhere, in a later record only, in the prompt body only (card 21's control (a), now a
+    pass)."""
+    seat = unstamped_seat(roots, kind) if where is None else marked_seat(roots, kind, where=where)
+    assert_allowed(run(command, seat))
 
 
 MARKED_DENIED = [
@@ -483,20 +504,35 @@ MARKED_DENIED = [
     "COBALT_ENV=production uv run cobalt db query --prod --side user \"SELECT '--prod'\"",
     "uv run cobalt db query --prod --side user x",
     "psql cobalt_brain",
+    # card 120 CONTROL (2): no other production verb passes
+    "COBALT_ENV=production uv run cobalt db apply",
+    "COBALT_ENV=production uv run cobalt validate",
+    "uv run cobalt_brain",
+    'COBALT_ENV=production uv run python -c "print(1)"',
 ]
 
+# card 120: every G2 control runs on the stamped seat and on an unstamped seat of each kind
+CONTROL_SEATS = ["stamped"] + UNSTAMPED_KINDS
 
+
+def control_seat(roots, which: str) -> dict:
+    return marked_seat(roots) if which == "stamped" else unstamped_seat(roots, which)
+
+
+@pytest.mark.parametrize("which", CONTROL_SEATS)
 @pytest.mark.parametrize("command", MARKED_DENIED)
-def test_g2_a_marked_seat_is_denied_anything_but_the_one_query_shape(roots, command):
+def test_g2_a_marked_seat_is_denied_anything_but_the_one_query_shape(roots, command, which):
     """Controls (b), (f) and the rest: green on BASE (G2 refused every production string) and
-    after (R2(ii) refuses each)."""
-    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+    after (prod_read refuses each), stamp or none."""
+    assert_denied(run(command, control_seat(roots, which)), G2_ROUTE)
 
 
+@pytest.mark.parametrize("which", CONTROL_SEATS)
 @pytest.mark.parametrize("tail", [" ; ls", " | sh", " | cat"])
-def test_g2_a_marked_query_with_a_separator_is_g1s_to_deny(roots, tail):
-    """CONTROL (e): R2 does not forbid `;` or `|`; G1 denies them with its resend sentence."""
-    done = run(PROD_QUERY + tail, marked_seat(roots))
+def test_g2_a_marked_query_with_a_separator_is_g1s_to_deny(roots, tail, which):
+    """CONTROL (e): G2 does not forbid `;` or `|`; G1 denies them with its resend sentence. An
+    unstamped seat is RED on BASE (G2 denied it first)."""
+    done = run(PROD_QUERY + tail, control_seat(roots, which))
     assert done.returncode == 2, done.stderr
     line = done.stderr.strip()
     assert G2_ROUTE not in line, line
@@ -508,45 +544,50 @@ def test_g2_a_marked_query_with_a_separator_is_g1s_to_deny(roots, tail):
     'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" --pr\\\nod',
     'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT cobalt_br\\\nain"',
 ])
-def test_g2_a_marked_seat_is_denied_a_production_word_split_by_a_line_continuation(roots, command):
+@pytest.mark.parametrize("which", CONTROL_SEATS)
+def test_g2_a_marked_seat_is_denied_a_production_word_split_by_a_line_continuation(roots, command, which):
     """check O1: bash joins `\\<newline>`; the second --prod or cobalt_brain is still there."""
-    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+    assert_denied(run(command, control_seat(roots, which)), G2_ROUTE)
 
 
 @pytest.mark.parametrize("command", [
     'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1"#cobalt_brain',
     'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" x# --prod',
 ])
-def test_g2_a_marked_seat_is_denied_a_production_word_behind_a_mid_word_hash(roots, command):
+@pytest.mark.parametrize("which", CONTROL_SEATS)
+def test_g2_a_marked_seat_is_denied_a_production_word_behind_a_mid_word_hash(roots, command, which):
     """check O2: to bash a `#` inside a word starts no comment; what follows it is run."""
-    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+    assert_denied(run(command, control_seat(roots, which)), G2_ROUTE)
 
 
 @pytest.mark.parametrize("command", [
     'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" --pro{d,}',
     'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1" cobalt_b{r,}ain',
 ])
-def test_g2_a_marked_seat_is_denied_a_production_word_in_a_brace_word(roots, command):
+@pytest.mark.parametrize("which", CONTROL_SEATS)
+def test_g2_a_marked_seat_is_denied_a_production_word_in_a_brace_word(roots, command, which):
     """check O3: the shell brace-expands the word into a second --prod or cobalt_brain."""
-    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+    assert_denied(run(command, control_seat(roots, which)), G2_ROUTE)
 
 
-def test_g2_allow_prod_does_not_pass_for_a_marked_seat(roots):
+@pytest.mark.parametrize("which", CONTROL_SEATS)
+def test_g2_allow_prod_does_not_pass_for_a_marked_seat(roots, which):
     """X1 / fence: `--allow-prod` is not the one `--prod` of R2(ii)."""
     command = (
         'COBALT_ENV=production uv run cobalt db query --prod --allow-prod '
         '--side user "SELECT 1"'
     )
-    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+    assert_denied(run(command, control_seat(roots, which)), G2_ROUTE)
 
 
-def test_g2_a_brace_word_cannot_hide_a_side_value(roots):
+@pytest.mark.parametrize("which", CONTROL_SEATS)
+def test_g2_a_brace_word_cannot_hide_a_side_value(roots, which):
     """X1: a brace word is not the words() the side check reads."""
     command = (
         'COBALT_ENV=production uv run cobalt db query --prod --side user '
         '"SELECT 1" {--side,admin}'
     )
-    assert_denied(run(command, marked_seat(roots)), G2_ROUTE)
+    assert_denied(run(command, control_seat(roots, which)), G2_ROUTE)
 
 
 # ---- G3 .env NEVER READ ------------------------------------------------------------------
@@ -593,6 +634,56 @@ def test_g3_the_lock_steps_on_env_are_allowed(roots, command):
 
 def test_g3_the_read_tool_on_another_file_is_allowed(roots):
     assert_allowed(call("Read", {"file_path": "/x/wt/job/.env.example"}, make_seat(roots, "build")))
+
+
+# ---- card 120 O2 (his 2026-10-08 R686): a secret is never read, by any seat ----------------
+
+G3_SECRET_ROUTE = (
+    "route: a secret (~/.cobalt_key, data/.cobalt_vault, a keychain password) is never read; "
+    "ls -la shows it is there"
+)
+SECRET_READS = [
+    "cat ~/.cobalt_key",
+    "cat /Users/cobalt/.cobalt_key",
+    "grep KEY /Users/cobalt/.cobalt_ke{y,}",
+    "head -c 72 ~/.cobalt_key",
+    "cat data/.cobalt_vault",
+    "tail -c 9 /Users/cobalt/cobalt/data/.cobalt_vault",
+    "security find-generic-password -w -s cobalt",
+    "security find-internet-password -w -s x",
+    "security dump-keychain",
+]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize("command", SECRET_READS)
+def test_g3_a_read_of_a_secret_is_denied_from_every_seat(roots, kind, command):
+    """RED (3) on BASE: G3 refused only a .env read; deploy and an unknown seat too."""
+    assert_denied(run(command, make_seat(roots, kind)), G3_SECRET_ROUTE)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "path", ["/Users/cobalt/.cobalt_key", "/Users/cobalt/cobalt/data/.cobalt_vault"]
+)
+def test_g3_the_read_tool_on_a_secret_is_denied(roots, kind, path):
+    """RED (3) on BASE: the Read rule tested is_env only."""
+    assert_denied(call("Read", {"file_path": path}, make_seat(roots, kind)), G3_SECRET_ROUTE)
+
+
+@pytest.mark.parametrize("kind", KINDS)
+@pytest.mark.parametrize(
+    "command",
+    [
+        "ls -la /Users/cobalt/.cobalt_key",
+        "ls -la /Users/cobalt/cobalt/data/.cobalt_vault",
+        "cat /x/.cobalt_key.example",
+        "security list-keychains",
+    ],
+)
+def test_g3_a_secret_shown_present_or_a_near_name_is_allowed(roots, kind, command):
+    """CONTROL: green on BASE and after."""
+    assert_allowed(run(command, make_seat(roots, kind)))
 
 
 # ---- G4 GIT SHAPE FROM A WORKER ----------------------------------------------------------
