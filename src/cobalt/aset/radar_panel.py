@@ -1603,31 +1603,40 @@ PANEL_JS = r"""
    }
  }
  let ladderInFlight=false;
+ let ladderOkAt=Date.now();
  async function tickLadder(){
-   const layer=document.getElementById('ladder-layer');
-   const focused=document.activeElement;
-   if(ladderInFlight||sending>0||layer.querySelector('.tap-strip:not([hidden])')||layer.querySelector('details.terminal[open]')||(focused&&focused.tagName==='INPUT'&&layer.contains(focused))||Array.from(layer.querySelectorAll('input')).some(x=>x.type==='checkbox'?x.checked!==x.defaultChecked:x.value!==x.defaultValue)){return;}
-   const seen=sendGeneration;
-   ladderInFlight=true;
+   let owned=false;
+   const ctl=new AbortController(); let timer=null;
    try{
-     const response=await fetch('/radar',{headers:{accept:'text/html'}});
+     const layer=document.getElementById('ladder-layer');
+     if(Date.now()-ladderOkAt>3*interval){layer.classList.add('stale-data'); let box=document.getElementById('ladder-refresh-status'); if(!box){box=document.createElement('div'); box.id='ladder-refresh-status'; layer.prepend(box);} box.innerHTML='<div class="refresh-failure"><b>LADDER NOT REFRESHED</b> · since '+new Date(ladderOkAt).toLocaleTimeString()+' · reload the page</div>';}
+     const focused=document.activeElement;
+     if(ladderInFlight||sending>0||layer.querySelector('.tap-strip:not([hidden])')||(focused&&focused.tagName==='INPUT'&&layer.contains(focused))||Array.from(layer.querySelectorAll('input')).some(x=>x.type==='checkbox'?x.checked!==x.defaultChecked:x.value!==x.defaultValue)){return;}
+     const seen=sendGeneration;
+     ladderInFlight=true;
+     owned=true;
+     timer=setTimeout(()=>ctl.abort(),interval);
+     const response=await fetch('/radar',{headers:{accept:'text/html'},signal:ctl.signal});
      if(!response.ok){throw new Error('HTTP '+response.status);}
      const doc=new DOMParser().parseFromString(await response.text(),'text/html');
      const next=doc.getElementById('ladder-layer');
      if(!next){throw new Error('the /radar page returned no ladder');}
      const now=document.getElementById('ladder-layer');
      const active=document.activeElement;
-     if(sending>0||sendGeneration!==seen||now.querySelector('.tap-strip:not([hidden])')||now.querySelector('details.terminal[open]')||(active&&active.tagName==='INPUT'&&now.contains(active))||Array.from(now.querySelectorAll('input')).some(x=>x.type==='checkbox'?x.checked!==x.defaultChecked:x.value!==x.defaultValue)){return;}
+     if(sending>0||sendGeneration!==seen||now.querySelector('.tap-strip:not([hidden])')||(active&&active.tagName==='INPUT'&&now.contains(active))||Array.from(now.querySelectorAll('input')).some(x=>x.type==='checkbox'?x.checked!==x.defaultChecked:x.value!==x.defaultValue)){return;}
      const keep=items().filter(x=>x.classList.contains('open')).map(x=>x.dataset.cardId);
+     const termOpen=!!now.querySelector('details.terminal[open]');
      now.replaceWith(next);
      items().forEach(x=>x.classList.toggle('open',keep.indexOf(x.dataset.cardId)>=0));
+     if(termOpen){const t=document.querySelector('#ladder-layer details.terminal'); if(t){t.open=true;}}
+     ladderOkAt=Date.now();
    }catch(failure){
      const current=document.getElementById('ladder-layer');
      current.classList.add('refresh-failed','stale-data');
      let box=document.getElementById('ladder-refresh-status');
      if(!box){box=document.createElement('div'); box.id='ladder-refresh-status'; current.prepend(box);}
      box.innerHTML='<div class="refresh-failure"><b>REFRESH FAILED</b> · retained data is stale · '+String(failure)+'</div>';
-   }finally{ladderInFlight=false;}
+   }finally{clearTimeout(timer); if(owned){ladderInFlight=false;}}
  }
  window.COBALT_RADAR={collapseAll:collapseAll,topTwo:topTwo,refreshPool:refreshPool,refreshLadder:refreshLadder};
  window.setInterval(refreshPool,interval);

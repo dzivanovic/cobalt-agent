@@ -18,7 +18,7 @@ import hashlib
 import html
 import json
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from types import SimpleNamespace
 
@@ -219,6 +219,89 @@ def test_empty_ladder_is_explicit_and_needs_no_rung():
         tunables_loader=_tunables(), rung_source=lambda i, c: (_ for _ in ()).throw(AssertionError("rung read")),
     )
     assert view.active == [] and view.terminal == [] and view.empty_message == "No radar cards today"
+
+
+def test_radar_today_shape_renders_five_watch_and_fourteen_expired(evaluated):
+    """R685 CONTROL: the 10-08 survey's shape (5 WATCH + 14 EXPIRED, one ET day) reaches the page."""
+    watch, expired = evaluated["rows"][0], evaluated["rows"][5]
+    assert watch["state"] == "WATCH" and expired["state"] == "EXPIRED"
+    rows = []
+    for template, count in ((watch, 5), (expired, 14)):
+        for _ in range(count):
+            n = len(rows) + 1
+            # 13:40Z .. 19:40Z = 09:40 .. 15:40 ET on 2026-10-08, constructed (L32)
+            rows.append(copy.deepcopy(template) | {"card_id": 100 + n, "ticker": f"TST{n:02d}",
+                                                   "state_at": datetime(2026, 10, 8, 13, 40, tzinfo=UTC) + timedelta(minutes=20 * n)})
+    store = RowStore(rows)
+    # 21:30 ET on 10-08: the UTC date has already rolled to 10-09
+    now = datetime(2026, 10, 9, 1, 30, tzinfo=UTC)
+    view = panel.build_ladder_view(
+        card_store=store, settings_store=Settings(SETTINGS_ROWS), clock=session_clock(), now=now,
+        tunables_loader=_tunables(), rung_source=lambda instant, cfg: "reduced", position_reader=lambda card_id: POSITION,
+    )
+    assert store.days == [date(2026, 10, 8)]
+    assert len(view.active) == 5 and {c.state for c in view.active} == {CardState.WATCH}
+    assert len(view.terminal) == 14 and {c.state for c in view.terminal} == {CardState.EXPIRED}
+    assert view.empty_message is None
+    rendered = panel.render_ladder(view)
+    assert rendered.count('<article class="ladder-item') == 5
+    assert "TERMINAL · 14" in rendered and "EXPIRED · 14" in rendered
+    assert "No radar cards today" not in rendered
+
+
+def test_hidden_cards_stay_hidden_by_the_store_where(monkeypatch):
+    """R685 CONTROL: yesterday's terminal cards are left out by the store's WHERE, never by the page."""
+    from cobalt.cards.store import CardStore
+
+    calls = []
+
+    class Cursor:
+        description = []
+
+        def fetchall(self):
+            return []
+
+    class Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, sql, params=None):
+            calls.append((sql, params))
+            return Cursor()
+
+    monkeypatch.setattr(CardStore, "_connect", lambda self, **kwargs: Conn())
+    assert CardStore("not_a_db").radar_board_cards(date(2026, 10, 8)) == []
+    assert len(calls) == 1
+    sql, params = calls[0]
+    assert "state = ANY(%s)" in sql
+    assert "(state_at AT TIME ZONE 'America/New_York')::date = %s" in sql
+    # check A3: open states OR today's ET day, never both required
+    assert "state = ANY(%s) OR (state_at AT TIME ZONE 'America/New_York')::date = %s" in sql
+    assert CardStore.RADAR_OPEN_STATES == ("WATCH", "ARMED", "TRIGGERED", "FILLED")
+    assert params == (list(CardStore.RADAR_OPEN_STATES), date(2026, 10, 8))
+    terminal = {s.value for s in (CardState.CLOSED, CardState.PASSED, CardState.EXPIRED, CardState.MISSED)}
+    assert not terminal & set(params[0])
+
+
+def test_hidden_cards_control_rejects_and_instead_of_or(monkeypatch):
+    from cobalt.cards.store import CardStore
+
+    def broken(self, trade_date):
+        with self._connect() as conn:
+            conn.execute(
+                "SELECT * FROM radar_cards_v WHERE state = ANY(%s) "
+                "AND (state_at AT TIME ZONE 'America/New_York')::date = %s "
+                "ORDER BY card_id",
+                (list(self.RADAR_OPEN_STATES), trade_date),
+            )
+        return []
+
+    monkeypatch.setattr(CardStore, "radar_board_cards", broken)
+    with pytest.raises(AssertionError):
+        test_hidden_cards_stay_hidden_by_the_store_where(monkeypatch)
 
 
 @pytest.mark.parametrize("case", ["read", "row", "dot", "rung", "settings"])
