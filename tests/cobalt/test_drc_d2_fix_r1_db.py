@@ -160,10 +160,10 @@ def test_s1_12_the_pair_is_registered_last_and_first_and_placed_user_side():
     from cobalt.drc import store
 
     assert SQL.exists() and ROLLBACK.exists()
-    # DRC D3 (`0020_drc_build_kinds`), S3 exits C1 (`0021_legs`) and F15 P1 (`0022_prediction_records`)
-    # now follow it: 0019 is fourth-last.
-    assert FORWARD[-4] == SQL and FORWARD[-5].name == "0018_drc_stated_books.sql"
-    assert REVERSE[3] == ROLLBACK and REVERSE[4].name == "0018_drc_stated_books.rollback.sql"
+    # DRC D3 (`0020_drc_build_kinds`), S3 exits C1 (`0021_legs`), F15 P1 (`0022_prediction_records`) and
+    # the price floor (`0023_radar_price_floor`) now follow it: 0019 is fifth-last.
+    assert FORWARD[-5] == SQL and FORWARD[-6].name == "0018_drc_stated_books.sql"
+    assert REVERSE[4] == ROLLBACK and REVERSE[5].name == "0018_drc_stated_books.rollback.sql"
     assert side_of("drc_events") is Side.USER and CREATED_TABLES["drc_events"] is Side.USER
     assert "drc_events" in store.TABLES
 
@@ -179,6 +179,7 @@ def test_s1_12_the_sql_is_the_seams_sketch_and_the_rollback_states_its_cost():
     assert "-- COST:" in back and 'DROP TABLE IF EXISTS "user".drc_events;' in back
     assert "to_regclass('\"user\".drc_imports')" in back
     assert [p.name for p in _rollback_paths("0018")] == [
+        "0023_radar_price_floor.rollback.sql",
         "0022_prediction_records.rollback.sql", "0021_legs.rollback.sql", "0020_drc_build_kinds.rollback.sql",
         "0019_drc_events.rollback.sql"]
 

@@ -63,10 +63,11 @@ def _code(path: Path) -> str:
 
 def test_the_pair_exists_and_is_registered_last():
     assert SQL.exists() and ROLLBACK.exists()
-    # S3 exits C1's 0021 and F15 P1's 0022 sit above the DRC lane: every index is two places further out.
-    assert FORWARD[-7] == SQL and [p.name for p in FORWARD[-6:-4]] == [
+    # S3 exits C1's 0021, F15 P1's 0022 and the price floor's 0023 sit above the DRC lane: every index is
+    # three places further out.
+    assert FORWARD[-8] == SQL and [p.name for p in FORWARD[-7:-5]] == [
         "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[6] == ROLLBACK and [p.name for p in REVERSE[4:6]] == [
+    assert REVERSE[7] == ROLLBACK and [p.name for p in REVERSE[5:7]] == [
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql"]
 
 
@@ -142,6 +143,7 @@ def test_the_rollback_drops_exactly_the_three_tables_children_first():
 
 def test_down_to_0011_on_this_tree_selects_only_this_rollback():
     assert [p.name for p in _rollback_paths("0011")] == [
+        "0023_radar_price_floor.rollback.sql",
         "0022_prediction_records.rollback.sql",
         "0021_legs.rollback.sql",
         "0020_drc_build_kinds.rollback.sql",

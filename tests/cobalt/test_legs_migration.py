@@ -26,8 +26,8 @@ def _code(path) -> str:
 
 def test_the_pair_is_registered_last_and_reversed_first():
     assert SQL.exists() and ROLLBACK.exists()
-    # F15 P1's 0022 now follows it (second-last forward, second reversed).
-    assert FORWARD[-2] == SQL and REVERSE[1] == ROLLBACK
+    # F15 P1's 0022 and the price floor's 0023 now follow it (third-last forward, third reversed).
+    assert FORWARD[-3] == SQL and REVERSE[2] == ROLLBACK
 
 
 def test_legs_and_its_view_are_user_side_and_fills_stays_declared():

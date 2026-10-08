@@ -242,26 +242,28 @@ def test_0013_is_registered_forward_and_reverse():
     assert MIGRATIONS_DIR / "0013_tunables_slug_nullable.sql" in FORWARD
     assert MIGRATIONS_DIR / "0013_tunables_slug_nullable.rollback.sql" in REVERSE
     # 0014 (the float handicap H1) now follows it; 0013 stays directly before.
-    assert FORWARD[-10].name == "0013_tunables_slug_nullable.sql"
-    assert FORWARD[-9].name == "0014_radar_handicap.sql"
-    assert REVERSE[9].name == "0013_tunables_slug_nullable.rollback.sql"
-    assert REVERSE[8].name == "0014_radar_handicap.rollback.sql"
-    assert FORWARD[-8].name == "0015_shadow_agreement_stale.sql"  # the stale-score build (R40)
-    assert REVERSE[7].name == "0015_shadow_agreement_stale.rollback.sql"
-    assert FORWARD[-7].name == "0016_drc.sql"  # DRC D1
-    assert REVERSE[6].name == "0016_drc.rollback.sql"
-    assert FORWARD[-6].name == "0017_voice_turns.sql"
-    assert REVERSE[5].name == "0017_voice_turns.rollback.sql"
-    assert FORWARD[-5].name == "0018_drc_stated_books.sql"  # DRC K1
-    assert REVERSE[4].name == "0018_drc_stated_books.rollback.sql"
-    assert FORWARD[-4].name == "0019_drc_events.sql"  # DRC D2 fix r1
-    assert REVERSE[3].name == "0019_drc_events.rollback.sql"
-    assert FORWARD[-3].name == "0020_drc_build_kinds.sql"  # DRC D3
-    assert REVERSE[2].name == "0020_drc_build_kinds.rollback.sql"
-    assert FORWARD[-2].name == "0021_legs.sql"  # S3 exits C1 (M1)
-    assert REVERSE[1].name == "0021_legs.rollback.sql"
-    assert FORWARD[-1].name == "0022_prediction_records.sql"  # F15 P1 (M1)
-    assert REVERSE[0].name == "0022_prediction_records.rollback.sql"
+    assert FORWARD[-11].name == "0013_tunables_slug_nullable.sql"
+    assert FORWARD[-10].name == "0014_radar_handicap.sql"
+    assert REVERSE[10].name == "0013_tunables_slug_nullable.rollback.sql"
+    assert REVERSE[9].name == "0014_radar_handicap.rollback.sql"
+    assert FORWARD[-9].name == "0015_shadow_agreement_stale.sql"  # the stale-score build (R40)
+    assert REVERSE[8].name == "0015_shadow_agreement_stale.rollback.sql"
+    assert FORWARD[-8].name == "0016_drc.sql"  # DRC D1
+    assert REVERSE[7].name == "0016_drc.rollback.sql"
+    assert FORWARD[-7].name == "0017_voice_turns.sql"
+    assert REVERSE[6].name == "0017_voice_turns.rollback.sql"
+    assert FORWARD[-6].name == "0018_drc_stated_books.sql"  # DRC K1
+    assert REVERSE[5].name == "0018_drc_stated_books.rollback.sql"
+    assert FORWARD[-5].name == "0019_drc_events.sql"  # DRC D2 fix r1
+    assert REVERSE[4].name == "0019_drc_events.rollback.sql"
+    assert FORWARD[-4].name == "0020_drc_build_kinds.sql"  # DRC D3
+    assert REVERSE[3].name == "0020_drc_build_kinds.rollback.sql"
+    assert FORWARD[-3].name == "0021_legs.sql"  # S3 exits C1 (M1)
+    assert REVERSE[2].name == "0021_legs.rollback.sql"
+    assert FORWARD[-2].name == "0022_prediction_records.sql"  # F15 P1 (M1)
+    assert REVERSE[1].name == "0022_prediction_records.rollback.sql"
+    assert FORWARD[-1].name == "0023_radar_price_floor.sql"  # the price floor (R692)
+    assert REVERSE[0].name == "0023_radar_price_floor.rollback.sql"
 
 
 @requires_db

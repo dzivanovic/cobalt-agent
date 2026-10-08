@@ -100,6 +100,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     now reverses all four, newest first. P4's own bound is still pinned
     below it: nothing at or below the bound is ever selected."""
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0020_drc_build_kinds.rollback.sql",  # DRC D3
@@ -119,6 +120,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     above_0009 = [p.name for p in _rollback_paths("0009")]
     assert not [n for n in above_0009 if n.startswith(("0008", "0009"))], above_0009
     assert above_0009 == [
+        "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0020_drc_build_kinds.rollback.sql",  # DRC D3
@@ -134,6 +136,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     ]
     # ...and at 0008 exactly 0009 and everything newer, 0008 itself excluded.
     assert [p.name for p in _rollback_paths("0008")] == [
+        "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
         "0020_drc_build_kinds.rollback.sql",  # DRC D3
