@@ -113,7 +113,8 @@
 #     or a fixed file handed over as a prompt; a prompt that names no cwd; a line that names
 #     `--name brain` or `--remote-control brain` (the brain seat launches by the kind `brain` only);
 #     a line that types `PROD-READ:` other than the stamp this script appends after `follow it
-#     exactly.` for a proven production-read RULINGS row (card 21 guard-g2 R1, his 2026-10-06 R511);
+#     exactly.` for a proven production-read RULINGS row (card 21 guard-g2 R1, his 2026-10-06 R511;
+#     kept for prompts in flight, read by no rule since his 2026-10-08 R686);
 #   - kind `desk`: a wake-up line that does not name `cto-desk`;
 #   - kind `brain`: a handover that is not a .md file directly under $PROMPTS/<YYYY-MM-DD>/, holds
 #     a character outside [A-Za-z0-9 ._/-] or '..', does not exist, or still holds a «FILL token;
@@ -504,7 +505,7 @@ brain
     # card 21 guard-g2 R1 (his 2026-10-06 R511): a committed, clean prompt whose one RULINGS line
     # cites ONE `<date> R<n>` whose row is HIS RULING + APPROVED and committed (ruling_row), its file
     # clean, and names production reads launches with ` PROD-READ: <date> R<n>` after `follow it
-    # exactly.` — the marker bare-guard.py G2 reads in the seat's first message. A line that
+    # exactly.`, kept for prompts in flight and read by no rule since his 2026-10-08 R686. A line that
     # already types `PROD-READ:` is refused unless it holds exactly that stamp, once, in that place;
     # it is then not stamped twice. The row's status cell starts APPROVED (not DISAPPROVED) and it
     # names a production read as words (not `production ready`) (check A1, B4)
