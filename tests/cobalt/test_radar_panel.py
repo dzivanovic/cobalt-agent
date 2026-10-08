@@ -1239,6 +1239,8 @@ def test_a_paused_ladder_says_so_within_three_intervals():
     assert body.count("ladderOkAt=Date.now()") == 1
     assert body.index("now.replaceWith(next)") < body.index("ladderOkAt=Date.now()")
     head = body[: body.index("{return;}")]
+    # check O1, O2: the banner sits inside the one three-interval branch, at exactly 3*interval
+    assert head.count("if(Date.now()-ladderOkAt>3*interval){layer.classList.add('stale-data'); let box=") == 1
     for needed in ("Date.now()-ladderOkAt>3*interval", "classList.add('stale-data')", "box.id='ladder-refresh-status'",
                    '<div class="refresh-failure"><b>LADDER NOT REFRESHED</b> · since \'+new Date(ladderOkAt).toLocaleTimeString()+\' · reload the page</div>'):
         assert needed in head[: _first_guard_at(body)], needed

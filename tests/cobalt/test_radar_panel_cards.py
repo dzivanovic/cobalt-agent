@@ -278,6 +278,8 @@ def test_hidden_cards_stay_hidden_by_the_store_where(monkeypatch):
     sql, params = calls[0]
     assert "state = ANY(%s)" in sql
     assert "(state_at AT TIME ZONE 'America/New_York')::date = %s" in sql
+    # check A3: open states OR today's ET day, never both required
+    assert "state = ANY(%s) OR (state_at AT TIME ZONE 'America/New_York')::date = %s" in sql
     assert CardStore.RADAR_OPEN_STATES == ("WATCH", "ARMED", "TRIGGERED", "FILLED")
     assert params == (list(CardStore.RADAR_OPEN_STATES), date(2026, 10, 8))
     terminal = {s.value for s in (CardState.CLOSED, CardState.PASSED, CardState.EXPIRED, CardState.MISSED)}
