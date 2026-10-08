@@ -336,7 +336,7 @@ def export_replay(
     rows = merge_tunables(dict(tunables), user_rows)
     scan_interval = int(rows["radar.scan_interval"].value)
     by_slug = {d.slug: d for d in defs}
-    admitted = [m for m in radar_store.members_for_day(pool_key, day) if m.get("entered_at") is not None]
+    admitted = [m for m in radar_store.members_for_day(pool_key, day, price_floor_rows=True) if m.get("entered_at") is not None]
     start = datetime.combine(day, datetime.min.time(), ET).astimezone(timezone.utc)
     bars: dict[str, list] = {}
     daily: dict[str, Any] = {}

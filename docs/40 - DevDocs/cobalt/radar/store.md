@@ -55,3 +55,6 @@ No backfill (L57): rows written before 0008 stay NULL.
 ## 2026-09-24 — float handicap H1 (migration 0014)
 
 `apply_membership` writes the three `0014` columns wherever it writes a rank: the RETAIN update, the never-admitted EXCLUDE update and every INSERT carry `raw_rank`, `handicap_factor` and `handicap`, the last one the transition's `HandicapRecord` re-validated through the model and serialised to JSON just before the write. A HOLD's update and a LEAVE leave all three untouched, like the rank columns. When the pool block has no handicap the factor and record are NULL and `raw_rank` is still stored. `members_for_day` selects the three (the panel and the dry-run read them); `open_members` does not — the resident's own read into `OpenMember` is unchanged.
+
+## 2026-10-08 — price-floor-1008
+`members_for_day` gains `*, price_floor_rows=False`: by default it leaves out `excluded_by = 'price_floor'` rows, so `/radar`'s departed and excluded lists never show one; `members_for_replay` and every DRC-side caller pass `True` and read every row as before (R692).

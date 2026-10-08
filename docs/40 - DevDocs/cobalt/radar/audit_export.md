@@ -46,3 +46,6 @@ The replay candidate's dots come from `evaluate.card_dots(...)` with the formati
 - **`export_run` has a version gate.** It reads `observations.evaluator_version` from every receipt in the chain. If that value is missing, or differs from `EVALUATOR_VERSION`, the export is refused. The refusal names the receipt and both versions ("written at evaluator version …"). It happens before the hash checks and before `replay_receipt` runs. A run from another version is therefore refused by name, and never reported as a replay mismatch.
 - **`export_replay` has no `trigger` fallback.** Its candidate scorer takes `last=score_last(ev)`, and the old `else trigger` fallback is deleted. A formed member with no last price now raises `EvaluateError` before anything is written; before, it emitted proximity 1 (X11). A candidate's `proximity` is written as JSON null when it is null.
 - `FORMULAS_IN_WORDS["proximity"]` now says when proximity is null: when there is no closed bar, or when the last one is too old (2 × `radar.scan_interval`).
+
+## 2026-10-08 — price-floor-1008
+The admitted-member read passes `price_floor_rows=True`, so a `price_floor` departure stays in the export (R692).

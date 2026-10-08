@@ -28,7 +28,7 @@ UTC = timezone.utc
 class ReadOnlyRadar(sup.FakeRadarStore):
     """Every read works; every write is a test failure."""
 
-    def members_for_day(self, pool_key, day):
+    def members_for_day(self, pool_key, day, *, price_floor_rows=False):
         return [dict(m, trade_date=day) for m in self.members]
 
     def __getattribute__(self, name):
@@ -131,7 +131,7 @@ def test_candidate_harness_refuses_outside_dev_and_without_enabled_settings(tmp_
 
 
 class DayRadar(sup.FakeRadarStore):
-    def members_for_day(self, pool_key, day):
+    def members_for_day(self, pool_key, day, *, price_floor_rows=False):
         return [dict(m, trade_date=day) for m in self.members]
 
 

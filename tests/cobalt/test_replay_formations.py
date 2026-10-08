@@ -75,7 +75,7 @@ requires_db = pytest.mark.skipif(
 class ReadOnlyRadar(sup.FakeRadarStore):
     """P2's `--replay` store: every read works, every write is a failure."""
 
-    def members_for_day(self, pool_key, day):
+    def members_for_day(self, pool_key, day, *, price_floor_rows=False):
         return [dict(m, trade_date=day) for m in self.members]
 
     def __getattribute__(self, name):

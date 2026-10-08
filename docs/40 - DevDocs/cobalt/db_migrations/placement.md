@@ -75,3 +75,7 @@ holds the state of his own DRC runs (L32).
 ## 2026-09-30 — f15-p1
 
 `prediction_records` leaves `DECLARED_TABLES` for `CREATED_TABLES` (USER, from `0022`): one trader's card-grade records (L32).
+
+## 2026-10-08 — price-floor-1008
+
+One comment line for `0023_radar_price_floor`: no table; it widens `radar_membership.excluded_by` (SYSTEM) by `price_floor` (R692). The map is unchanged.

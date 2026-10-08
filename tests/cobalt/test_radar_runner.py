@@ -61,7 +61,7 @@ class ActiveClock(Clock):
 #: R16 "C": not-equity is a non-blank `Asset Type` OR a fund `Industry`,
 #: so an ordinary stock carries a BLANK `Asset Type` and an ordinary
 #: industry — which is what Finviz actually returns for one.
-SCREEN_HEADER = ("Ticker", "Volume", "Relative Volume", "Asset Type", "Industry")
+SCREEN_HEADER = ("Ticker", "Volume", "Relative Volume", "Asset Type", "Industry", "Price")
 STOCK_COLUMNS = {"Asset Type": "", "Industry": "Capital Markets"}
 
 

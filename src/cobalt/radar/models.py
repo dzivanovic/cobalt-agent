@@ -195,6 +195,8 @@ class ExcludedBy(str, Enum):
     NOT_EQUITY = "not_equity"
     SCREEN_INACTIVE = "screen_inactive"
     MANUAL = "manual"
+    #: R692: an ADMITTED member read at or below `price_floor` (0023).
+    PRICE_FLOOR = "price_floor"
 
 
 class SourceHealth(str, Enum):

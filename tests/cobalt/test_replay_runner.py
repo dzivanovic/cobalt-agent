@@ -404,7 +404,7 @@ def p2_sources():
     ]
 
     class Radar(sup.FakeRadarStore):
-        def members_for_day(self, pool_key, day):
+        def members_for_day(self, pool_key, day, *, price_floor_rows=False):
             return [dict(m, trade_date=day) for m in self.members]
 
     def no_daily(ticker, day):
@@ -841,7 +841,7 @@ def fake_deps(*, job_row="default", settings="default", collector=None, now=None
             return len(rows)
 
     class Radar:
-        def members_for_day(self, pool_key, day):
+        def members_for_day(self, pool_key, day, *, price_floor_rows=False):
             calls.append("radar_store.members_for_day")
             return membership
 

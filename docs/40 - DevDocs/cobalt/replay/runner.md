@@ -130,3 +130,6 @@ step ends green. The DRC build, once `drc-rules` exists, is the only later
 writer of that line, from the stored blob (`line.render_stored`); E6
 proves the re-render is byte-identical. A note present at 21:10 is written
 exactly as before.
+
+## 2026-10-08 — price-floor-1008
+The episode read passes `price_floor_rows=True`, so the mover benchmark sees every membership row, `price_floor` departures included (R692).

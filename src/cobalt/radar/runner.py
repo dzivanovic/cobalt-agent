@@ -8,6 +8,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, time as wall_time, timedelta, timezone
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Callable
 from zoneinfo import ZoneInfo
@@ -72,6 +73,7 @@ class RadarRunner:
         now: Callable[[], datetime] = clock_mod.now_utc,
         evaluator=None,
         ceiling_rpm: int | None = None,
+        card_store=None,
     ):
         # S5 (S2-P2 R1). `build_runner` always wires the stage; `None` is
         # the S1-S4-only shape the pre-S5 tests and the membership replay
@@ -93,6 +95,14 @@ class RadarRunner:
         # market_reset.  Keep the failure on the resident runner until the
         # next active cycle can put it on radar_pool.
         self._pending_drop: tuple[str, str] | None = None
+        # R692 F3: `build_runner` hands the S5 stage's CardStore here; `None`
+        # (the replay tool, the pre-floor tests) reads and moves no card.
+        self.card_store = card_store
+        # R692 F1: the last `_collect`'s floored tickers and their lowest
+        # readable price, read by `cycle()` for the WATCH expiry.
+        self._floored: dict[str, Decimal] = {}
+        # (ET day, ticker) already logged with no readable price.
+        self._price_unknown: set[tuple[date, str]] = set()
 
     def _dropped(self, scan_id: int, decision: Decision, stage: str, error: StageDropped) -> CycleResult:
         detail = scrub(str(error))
@@ -106,8 +116,11 @@ class RadarRunner:
         source_sets: list[SourceSet] = []
         candidates: dict[str, list[str]] = defaultdict(list)
         excluded: set[str] = set()
+        prices: dict[str, Decimal] = {}
         blocks = parsed.screens.blocks + parsed.lists.blocks
-        local_hhmm = instant.astimezone(self.clock.to_et(instant).tzinfo).strftime("%H:%M")
+        et_now = self.clock.to_et(instant)
+        local_hhmm = instant.astimezone(et_now.tzinfo).strftime("%H:%M")
+        price_header = self.config.export.metric_headers.price
         for order, item in enumerate(blocks):
             block = item.block
             source_id: str | None = None
@@ -132,6 +145,7 @@ class RadarRunner:
                     continue
                 tickers: list[str] = []
                 metrics = {}
+                source_prices: dict[str, Decimal] = {}
                 for snapshot in snapshots:
                     for row in snapshot.rows:
                         ticker = row["Ticker"].strip().upper()
@@ -143,13 +157,22 @@ class RadarRunner:
                             # of the group verdict, in every receipt's pool_unit.
                             "float_m": _number(row.get(self.config.export.handicap_headers.float)),
                             "market_cap_m": _number(row.get(self.config.export.handicap_headers.market_cap)),
+                            "price": _number(row.get(price_header)),
                         }
+                        price = _price(row.get(price_header))
+                        if price is None:
+                            self._flag_price_unknown(et_now.date(), ticker, source_id)
+                        elif ticker not in source_prices or price < source_prices[ticker]:
+                            source_prices[ticker] = price
                         candidates[ticker].append(source_id)
                         if is_not_equity(row, self.config.not_equity):
                             excluded.add(ticker)
                 source_sets.append(
                     SourceSet(source=source_id, kind=kind, tickers=list(dict.fromkeys(tickers)), metrics=metrics, note_order=order)
                 )
+                for ticker, price in source_prices.items():
+                    if ticker not in prices or price < prices[ticker]:
+                        prices[ticker] = price
             except Exception as e:
                 logger.error("radar source {} failed: {}", source_id, scrub(str(e)))
                 held = [
@@ -162,14 +185,65 @@ class RadarRunner:
                     )
         from .models import ExcludedBy
 
+        # R692 F1: the price floor, ONCE, after every source is gathered.
+        # A ticker with any readable price at or below the floor in this
+        # scan leaves every SourceSet (healthy and degraded `held` alike),
+        # so `decide()` sees it in no list. F2: an ADMITTED member stays a
+        # candidate carrying `price_floor`, so `decide()` emits its LEAVE
+        # now; any other floored ticker is dropped.
+        floor = self.config.price_floor
+        floored = {ticker: price for ticker, price in prices.items() if price <= floor}
+        if floored:
+            for item in source_sets:
+                removed = [ticker for ticker in item.tickers if ticker in floored]
+                if not removed:
+                    continue
+                item.tickers = [ticker for ticker in item.tickers if ticker not in floored]
+                item.metrics = {ticker: m for ticker, m in item.metrics.items() if ticker not in floored}
+                logger.info("radar price floor {}: {} removed {} ({})", floor, item.source, len(removed), ", ".join(removed))
+        admitted = {row["ticker"] for row in open_rows if row.get("entered_at") is not None}
+        self._floored = floored
+
+        def reason(ticker: str) -> ExcludedBy | None:
+            if ticker in floored:
+                return ExcludedBy.PRICE_FLOOR
+            return ExcludedBy.NOT_EQUITY if ticker in excluded else None
+
         return [
-            Candidate(
-                ticker=ticker,
-                sources=ids,
-                excluded_by=ExcludedBy.NOT_EQUITY if ticker in excluded else None,
-            )
+            Candidate(ticker=ticker, sources=ids, excluded_by=reason(ticker))
             for ticker, ids in candidates.items()
+            if ticker not in floored or ticker in admitted
         ], source_sets
+
+    def _flag_price_unknown(self, day: date, ticker: str, source_id: str | None) -> None:
+        """A row with no readable price is kept (unknown is not below the
+        floor) and logged once per ticker per ET day."""
+        if any(seen != day for seen, _ticker in self._price_unknown):
+            self._price_unknown = {item for item in self._price_unknown if item[0] == day}
+        if (day, ticker) in self._price_unknown:
+            return
+        self._price_unknown.add((day, ticker))
+        logger.warning("radar price unknown: {} ({}) — kept", ticker, source_id)
+
+    def _expire_floored(self, floored: dict[str, Decimal], scan_id: int) -> None:
+        """R692 F3: WATCH -> EXPIRED for a radar card on a floored ticker.
+        `open_radar_cards` reads `origin = 'radar'` only; ARMED, TRIGGERED
+        and FILLED cards are never passed to `transition`."""
+        from cobalt.cards.models import Actor, CardState, IllegalTransition
+
+        for card in self.card_store.open_radar_cards():
+            if card.state != "WATCH" or card.ticker not in floored:
+                continue
+            try:
+                self.card_store.transition(
+                    card.card_id, CardState.EXPIRED, actor=Actor.COBALT,
+                    evidence={"via": "radar.price_floor", "price": str(floored[card.ticker]),
+                              "floor": str(self.config.price_floor), "scan_id": scan_id},
+                    reason="price floor",
+                    before_commit=gate("price_floor:card", clock=self.clock, now=self.now),
+                )
+            except IllegalTransition as e:
+                logger.warning("radar price floor expiry of card {} not applied: {}", card.card_id, e)
 
     async def cycle(self) -> CycleResult:
         instant = self.now()
@@ -187,6 +261,7 @@ class RadarRunner:
         open_rows = self.radar_store.open_members(self.config.pool_key)
         opens = [OpenMember(**row) for row in open_rows]
         candidates, source_sets = await self._collect(parsed, instant, open_rows)
+        floored = self._floored
         decision = decide(
             candidates, opens,
             [item.block for item in parsed.screens.blocks + parsed.lists.blocks] if not parsed.frozen else None,
@@ -214,10 +289,24 @@ class RadarRunner:
             self.radar_store.put_pool(row, now=instant, before_commit=gate("pool_row", clock=self.clock, now=self.now))
             return CycleResult(scan_id, "failed", decision, "membership", detail)
 
+        # R692 F3: a radar WATCH card on a floored ticker expires; nothing
+        # else moves. A failure is stamped and the cycle goes on.
+        expiry_failed: str | None = None
+        if self.card_store is not None and floored:
+            try:
+                self._expire_floored(floored, scan_id)
+            except StageDropped as e:
+                return self._dropped(scan_id, decision, "membership", e)
+            except Exception as e:
+                expiry_failed = scrub(f"price floor expiry failed: {type(e).__name__}: {e}")
+                logger.error("radar {}", expiry_failed)
+
         # S2.
         row = self._pool_row(parsed, decision, scan_id, instant, session, elapsed_started, open_rows, existing_pool)
         if pending_drop is not None:
             row.update(failed_stage=pending_drop[0], failed_detail=pending_drop[1])
+        elif expiry_failed is not None:
+            row.update(failed_stage="evaluate", failed_detail=expiry_failed)
         try:
             self.radar_store.put_pool(row, now=instant, before_commit=gate("pool_row", clock=self.clock, now=self.now))
         except StageDropped as e:
@@ -305,8 +394,10 @@ class RadarRunner:
         except StageDropped as e:
             return self._dropped(scan_id, decision, "bars", e)
         self._pending_drop = None
-        failed_stage = "mirror" if mirror_failed else pending_drop[0] if pending_drop else None
-        detail = mirror_failed if mirror_failed else pending_drop[1] if pending_drop else None
+        failed_stage = (
+            "mirror" if mirror_failed else pending_drop[0] if pending_drop else "evaluate" if expiry_failed else None
+        )
+        detail = mirror_failed if mirror_failed else pending_drop[1] if pending_drop else expiry_failed
         if lifecycle_refusal is not None:
             try:
                 self.radar_store.stamp_failure(
@@ -406,6 +497,21 @@ def _number(raw: str | None) -> float | None:
         return None
 
 
+def _price(raw: str | None) -> Decimal | None:
+    """The export's `Price` cell as the floor compares it (R692): `,` cut;
+    None for blank, `-`, absent or unparseable — unknown, never below."""
+    if raw is None:
+        return None
+    text = str(raw).replace(",", "").strip()
+    if not text or text == "-":
+        return None
+    try:
+        value = Decimal(text)
+    except InvalidOperation:
+        return None
+    return value if value.is_finite() else None
+
+
 async def build_runner() -> RadarRunner:
     config = load_config()
     tunables = load_tunables().by_key
@@ -422,6 +528,9 @@ async def build_runner() -> RadarRunner:
     from .evaluate import EvaluateStage
 
     settings_store = TraderSettingsStore()
+    # ONE CardStore: S5 evaluates the cards, the price floor stage (R692 F3)
+    # expires a floored ticker's WATCH card.
+    card_store = CardStore()
 
     def rung(instant, daymode_cfg):
         from cobalt.daymode import DayModeStore, decided_or_stage1
@@ -432,7 +541,7 @@ async def build_runner() -> RadarRunner:
     evaluator = EvaluateStage(
         rung_source=rung,
         radar_store=RadarStore(),
-        card_store=CardStore(),
+        card_store=card_store,
         defs_source=TradeDefStore().loaded_for_evaluation,
         settings_values=settings_store.values,  # re-read every cycle (plan §5)
         daily_source=FinvizDailyBarsCollector(token, config=config, bucket=bucket).daily,
@@ -443,6 +552,7 @@ async def build_runner() -> RadarRunner:
     )
     return RadarRunner(
         evaluator=evaluator,
+        card_store=card_store,
         ceiling_rpm=int(rpm),
         config=config,
         sources_loader=configured_sources,
