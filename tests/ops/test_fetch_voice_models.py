@@ -170,3 +170,80 @@ def test_a_target_under_the_repo_is_refused(env, fake_load, tmp_path, monkeypatc
     assert copies == []
     assert not under_docs.exists()
     assert calls == []
+
+
+def test_a_source_link_out_of_its_folder_never_lands_in_the_target(env, fake_load, tmp_path, capsys):
+    # X2: a snapshot link that leaves the repo folder (here, absolute into the
+    # source's blobs) must never be copied as a link back into the source.
+    mod, target, calls = env
+    src = _fake_source(tmp_path / "src")
+    link = src / REPO_DIR / "snapshots" / REV / "model.bin"
+    blob = link.resolve()
+    link.unlink()
+    os.symlink(str(blob), link)
+    rc = mod.main(["--from", str(src)])
+    copied = target / REPO_DIR / "snapshots" / REV / "model.bin"
+    if rc == 0:
+        assert copied.resolve().is_relative_to(target.resolve()), f"{copied} resolves to {copied.resolve()}"
+    else:
+        assert capsys.readouterr().out.strip().splitlines()[-1].startswith("FAILED: ")
+        assert not (target / REPO_DIR).exists()
+    assert calls == []
+
+
+def test_a_source_link_that_would_point_back_to_the_source_is_refused(
+    env, fake_load, tmp_path, monkeypatch, capsys
+):
+    mod, target, calls = env
+    src = _fake_source(tmp_path / "src")
+    snap = src / REPO_DIR / "snapshots" / REV
+    source_only = src / "source-only-model.bin"
+    source_only.write_bytes(b"constructed source-only model")
+
+    copied_link = target / REPO_DIR / "snapshots" / REV / "model.bin"
+    source_link = snap / "model.bin"
+    source_link.unlink()
+    os.symlink(
+        os.path.relpath(source_only, start=copied_link.parent),
+        source_link,
+    )
+    assert source_link.resolve() == source_only.resolve()
+
+    monkeypatch.setattr(
+        mod,
+        "_snapshot",
+        lambda cfg, cache_dir: Path(cache_dir) / REPO_DIR / "snapshots" / REV,
+    )
+    monkeypatch.setattr(
+        tr,
+        "model_present",
+        lambda cfg: (
+            cfg.model_dir / REPO_DIR / "snapshots" / REV / "model.bin"
+        ).exists(),
+    )
+
+    assert mod.main(["--from", str(src)]) == 1
+    assert capsys.readouterr().out.strip().splitlines()[-1].startswith("FAILED: ")
+    assert not (target / REPO_DIR).exists()
+    assert calls == []
+
+
+def test_malformed_arguments_fail_with_the_command_contract(env, capsys):
+    mod, _target, calls = env
+
+    assert mod.main(["--from"]) == 1
+    captured = capsys.readouterr()
+    assert captured.err == ""
+    assert captured.out.strip().splitlines()[-1].startswith(
+        "FAILED: arguments — "
+    )
+    assert calls == []
+
+
+def test_a_copy_that_leaves_the_model_absent_names_the_exception(env, fake_load, tmp_path, monkeypatch, capsys):
+    mod, _target, _calls = env
+    monkeypatch.setattr(mod, "_copy", lambda cfg, source: None)
+    src = _fake_source(tmp_path / "src")
+    assert mod.main(["--from", str(src)]) == 1
+    last = capsys.readouterr().out.strip().splitlines()[-1]
+    assert last == "FAILED: verify — Refused"
