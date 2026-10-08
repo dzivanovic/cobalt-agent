@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-08.md R657
 BRANCH: ops/desk-ops-fixes-1008
 WORKTREE: desk-ops-fixes-1008
 BASE: b8b4f69c
-TIP:
+TIP: d522f6f7
 REPORT: /Users/cobalt/cobalt-wt/desk-ops-fixes-1008/docs/40 - DevDocs/reports/desk-ops-fixes-build-2026-10-08.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-ops-fixes-check-2026-10-08.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R657, 2026-10-08 R658, 2026-10-08 R660
 DB: none
 
