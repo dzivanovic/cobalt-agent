@@ -39,7 +39,7 @@ Read `reports/radar-page-read-2026-10-06.md` and `reports/cards-origin-survey-20
   - `none`: read 1 total is above 0 and read 2 is 0 (the table holds cards the ladder query does not select). State it under `## DECISIONS`, `decisions: 1`.
 
 ## REPORT
-`/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-cards-survey-2026-10-08.md` (absent today: `ls`), per `/Users/cobalt/Vault/Think/6 - Permanent/Memory/topics/writing-rules.md`:
+`/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-cards-survey-2026-10-08-r2.md` (absent today: `ls`), per `/Users/cobalt/Vault/Think/6 - Permanent/Memory/topics/writing-rules.md`:
 - `## §0 Headline` (≤5 lines): cards n, view n, poll failures n, formations n, the cause.
 - `## COUNTS` — each read as rows: read id · key · count.
 - `## DECISIONS` — `ASK DESK: … [<time>]` with the default taken.
