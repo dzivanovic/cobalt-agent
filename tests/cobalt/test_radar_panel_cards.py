@@ -284,6 +284,24 @@ def test_hidden_cards_stay_hidden_by_the_store_where(monkeypatch):
     assert not terminal & set(params[0])
 
 
+def test_hidden_cards_control_rejects_and_instead_of_or(monkeypatch):
+    from cobalt.cards.store import CardStore
+
+    def broken(self, trade_date):
+        with self._connect() as conn:
+            conn.execute(
+                "SELECT * FROM radar_cards_v WHERE state = ANY(%s) "
+                "AND (state_at AT TIME ZONE 'America/New_York')::date = %s "
+                "ORDER BY card_id",
+                (list(self.RADAR_OPEN_STATES), trade_date),
+            )
+        return []
+
+    monkeypatch.setattr(CardStore, "radar_board_cards", broken)
+    with pytest.raises(AssertionError):
+        test_hidden_cards_stay_hidden_by_the_store_where(monkeypatch)
+
+
 @pytest.mark.parametrize("case", ["read", "row", "dot", "rung", "settings"])
 def test_ladder_inputs_fail_loud(evaluated, case):
     rows = copy.deepcopy(evaluated["rows"])

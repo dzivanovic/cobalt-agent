@@ -1268,6 +1268,22 @@ def test_the_ownership_test_fails_when_the_reset_is_bare(monkeypatch):
         test_a_skipped_tick_never_clears_another_fetchs_in_flight_flag()
 
 
+def test_the_stale_line_test_fails_when_the_banner_runs_unconditionally(monkeypatch):
+    broken = panel.PANEL_JS.replace("if(Date.now()-ladderOkAt>3*interval){layer", "if(Date.now()-ladderOkAt>3*interval){}{layer", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_a_paused_ladder_says_so_within_three_intervals()
+
+
+def test_the_stale_line_test_fails_when_the_threshold_is_widened(monkeypatch):
+    broken = panel.PANEL_JS.replace("ladderOkAt>3*interval){", "ladderOkAt>3*interval*1000){", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_a_paused_ladder_says_so_within_three_intervals()
+
+
 def test_a_failed_tick_is_said_on_the_ladder():
     body = _js_body(TICK_HEAD)
     assert "catch(error)" not in body
