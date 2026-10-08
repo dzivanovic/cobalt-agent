@@ -145,7 +145,6 @@ class RadarRunner:
                     continue
                 tickers: list[str] = []
                 metrics = {}
-                source_prices: dict[str, Decimal] = {}
                 for snapshot in snapshots:
                     for row in snapshot.rows:
                         ticker = row["Ticker"].strip().upper()
@@ -159,20 +158,20 @@ class RadarRunner:
                             "market_cap_m": _number(row.get(self.config.export.handicap_headers.market_cap)),
                             "price": _number(row.get(price_header)),
                         }
+                        # Into the scan's prices as the row is read, before
+                        # it is a candidate: a source that fails on a later
+                        # row still floors what it already read (check O1).
                         price = _price(row.get(price_header))
                         if price is None:
                             self._flag_price_unknown(et_now.date(), ticker, source_id)
-                        elif ticker not in source_prices or price < source_prices[ticker]:
-                            source_prices[ticker] = price
+                        elif ticker not in prices or price < prices[ticker]:
+                            prices[ticker] = price
                         candidates[ticker].append(source_id)
                         if is_not_equity(row, self.config.not_equity):
                             excluded.add(ticker)
                 source_sets.append(
                     SourceSet(source=source_id, kind=kind, tickers=list(dict.fromkeys(tickers)), metrics=metrics, note_order=order)
                 )
-                for ticker, price in source_prices.items():
-                    if ticker not in prices or price < prices[ticker]:
-                        prices[ticker] = price
             except Exception as e:
                 logger.error("radar source {} failed: {}", source_id, scrub(str(e)))
                 held = [

@@ -28,3 +28,6 @@ The cycle hands `decide()` `export.handicap_headers` (the dead-column reason nam
 
 ## 2026-10-08 — price-floor-1008
 R692 price floor: `_collect` reads each row's `Price` (`metrics["price"]`, and `_price` as a `Decimal`) and, after every source is gathered, removes every ticker with a readable price at or below `config.price_floor` from every `SourceSet` (healthy and degraded alike), logging one `radar price floor` line per source; an admitted member stays a candidate with `excluded_by=price_floor` so `decide()` LEAVEs it, any other floored ticker is dropped, and a row with no readable price is kept and logged once per ticker per ET day. `cycle()` then expires a floored ticker's radar WATCH card through `card_store` (built once in `build_runner` and shared with S5; the replay tool passes none), stamping a failure `evaluate` and going on.
+
+## 2026-10-08 — price-floor-1008 check
+Check O1: each row's price enters the scan's `prices` as the row is read, before the ticker becomes a candidate, so a source that fails on a later row still floors the rows it already read.
