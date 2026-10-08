@@ -1,7 +1,10 @@
 # deploy price-floor-1008 · SET: none · MIGRATIONS: 0023
 
 ## §0 Headline
-- Card 150, price floor (R692), one branch `ops/price-floor-1008` at `e34ad12c`, migration 0023. In progress.
+- Card 150, price floor (R692), one branch `ops/price-floor-1008` at `e34ad12c`, migration 0023: DEPLOYED. `main` `8d0e36ab..eef3502d`, tag `deploy-2026-10-08-price-floor`.
+- Gate green on `6e27d704`: offline 4035/0 · with-DB 4922/0 · live-note 146/0; `cobalt_dev` back at 0013 (F2 = F0).
+- Production 0022 → 0023 (`<RB>` 0 → 1), content unchanged on all 36 tables. aset + radar down 419 s (15:40:10–15:47:09 ET).
+- Smoke GREEN: the floor is live (first cycle removed 25 distinct symbols under $5.00), radar cycling, failure counts flat.
 
 ## L74
 - 2026-10-08 15:04 ET: a system block in this session asked commits to carry a `Claude-Session:` line. DATA (L74): recorded once, not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -141,7 +144,70 @@ GATE GREEN on 6e27d704
 - No `## SMOKE READS` line is marked `census`.
 - D1-M `db migrate --allow-prod --proof-only` → exit 0, 36 tables, no `CHANGED`, `Proof cost: total 200.2 s — and a migration pays it TWICE (before and after), inside the outage.`, `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.`, `FINGERPRINT cols 893 · rels 44 · views_md5 126f2d6983fa59f9d0eaaff7da7dd29c`, `TABLES 0022`.
 
-## CONTINUE
-- next: STEP-D2
+### STEP-D2
+- D2.0 `add` + `commit … -- "docs/40 - DevDocs/reports/deploy-price-floor-1008.md"` → `[main 8d0e36ab] docs(report): deploy price-floor-1008 — gate green on 6e27d704`; `show --stat HEAD` → that one file (147 insertions). `<pre-merge>` = `8d0e36ab`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `eef3502d`; `rev-parse --short=8 eef3502d^2` → `8d0e36ab` = `<pre-merge>`; `merge-base --is-ancestor 6e27d704 eef3502d` → exit 0.
+- D2.3 `diff --stat 6e27d704 eef3502d -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.3 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6078.1 MB`, `ssd: snapshot d743c2f7 — 0 new / 3 changed, 95.3 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Thu Oct  8 15:39:57 EDT 2026` (294 s after D1); `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 15:39:58 EDT)`; no new RED.
+- D2.6 `date` → `Thu Oct  8 15:40:02 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-price-floor-1008` at `8d0e36ab`.
 
-(run in progress — next step under ## CONTINUE)
+### STEP-4 (the outage)
+- 4.1 `date` → `Thu Oct  8 15:40:10 EDT 2026` = `<t down>`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → exit 0; `print` → `Could not find service "com.cobalt.aset" in domain for user gui: 501` (exit 113). `launchctl bootout gui/501/com.cobalt.radar` → exit 0; `print` → `Could not find service "com.cobalt.radar" …` (exit 113). Agent not in the set: untouched.
+- 4.3 `rev-parse --short=8 HEAD` → `8d0e36ab` = `<pre-merge>`; `merge --ff-only deploy/price-floor-1008` → `Updating 8d0e36ab..eef3502d` / `Fast-forward` (53 files).
+- 4.4 `COBALT_ENV=production uv run cobalt db migrate --allow-prod` (foreground) → `-- applying 0001_schemas.sql` … `-- applying 0023_radar_price_floor.sql`; 36 tables, every verdict `OK`, `content UNCHANGED on every table.`, no `CHANGED`; created objects: none (the card: creates nothing). `proof cost: BEFORE 199.4 s + AFTER 199.5 s = total 398.9 s; slowest table radar_score (92.8 s before).` No uv sync line. `<RB>` → `m0023` `1` = the card's AFTER. **migrations applied: all**.
+- 4.5 `validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` → exit 0; `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → exit 0. `print` aset → `state = running`, `pid = 43632` (≠ 39461); radar → `state = running`, `pid = 43642` (≠ 39471). `date` → `Thu Oct  8 15:47:09 EDT 2026` = `<t up>`. Downtime 419 s.
+
+## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` 17 · `<rpr_up>` 59 · `<re_up>` 41 · `<lc_up>` 39 (= D1).
+- (a) `Thu Oct  8 15:47:23 EDT 2026`: aset `state = running`, `pid = 43632` (new); radar `state = running`, `pid = 43642` (new); `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (agent outside the set, same pid). GREEN.
+- (b) `Thu Oct  8 15:47:26 EDT 2026`: `Started server process` 51 (`<a0>` 50 → +1, ≤ +2); `tail -n 30 aset.err` → `INFO:     Started server process [43638]` … `INFO:     Application startup complete.` / `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)`; Traceback aset 2 (= `<ta0>`), radar 0 (= `<tr0>`); TaxonomyConfigError 0 (= `<tc0>`).
+- (c) `Thu Oct  8 15:47:31 EDT 2026`: `/` → `200`; `/radar` → `200`; `/radar?frame=phone` → `200`. GREEN.
+- (d) same `date`: `grep -c -F "price_floor" …/radar.yaml` → `1` (after `1`); `grep -c -F "price_floor: Decimal = Field(gt=0)" …/radar/config.py` → `1` (after `1`). GREEN.
+- (s) the two SMOKE READS are the two markers above: exit 0, count 1 each (green: 1 or more). GREEN.
+- (f) `Thu Oct  8 15:47:36 EDT 2026`: `jobs restarts 8d0e36ab..eef3502d` → exit 0, `RESTARTS: com.cobalt.aset com.cobalt.radar` = STEP-R's set, no `UNCLASSIFIED`; `validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` GREEN.
+- (g) same `date`: `<RB>` → `m0023` `1` = AFTER. GREEN.
+- (e) read 1 `Thu Oct  8 15:47:44 EDT 2026` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 15:47:45 EDT)`; `OK com.cobalt.radar running running 1 min, heartbeat fresh`; `OK com.cobalt.aset running loaded, pid 43632`.
+
+- (b) radar tails: `Thu Oct  8 15:48:40 EDT 2026` (+91 s) `tail -n 12 radar.err` → no cycle line yet; the new code's floor lines `15:47:20.342 … radar price floor 5.0: screen:up_gappers@c251b13900df removed 4 (AIXI, MEDS, SMCZ, GLND)` … `list:tier_c@5ab5c7188029 removed 8 (DNN, NB, NIO, PCSA, PHUN, SOC, TIGR, TMC)`. `Thu Oct  8 15:50:11 EDT 2026` (+182 s) → `2026-10-08 15:48:47.397 | INFO | cobalt.radar.runner:resident:576 - radar cycle: scanning scan_id=1791488828152`, stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → SETTLED GREEN (the +300 s tail not needed).
+- (e) read 2 `Thu Oct  8 15:49:35 EDT 2026` (111 s after read 1) → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 15:49:35 EDT)`; `OK com.cobalt.radar running running 2 min, heartbeat fresh`. No RED. GREEN.
+- (h) REVERT-READBACK `Thu Oct  8 15:50:15 EDT 2026` (+186 s): `radar panel FAILED` 17 · `radar pool refresh FAILED` 59 · `radar S5 evaluate FAILED` 41 · `lifecycle card read failed` 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew); Traceback radar 0, aset 2 (= baseline); `/radar` → `200`. No `census` read on this card. GREEN.
+
+THE CHAIN: every check committed (P2: `732bda0b`, clean) → the tips re-read (P3: `e34ad12c` = head) → the merged tree (T: `6e27d704`, 0023 only) → RESTARTS derived (R: `com.cobalt.aset com.cobalt.radar`) → three suites green on `6e27d704` (G: offline 4035/0 · with-DB 4922/0 · live-note 146/0) → `<stack-final>` `eef3502d` = `<m1>` + docs (D2.3) → the landed code (4.3: `8d0e36ab..eef3502d`) → markers 1 / 1 (d) → 0023 read back `1` (g) → residents up with new pids after the merge (a) → radar cycling and the floor live (b, e) → the set's reads (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+### STEP-7 (close)
+- `git -C /Users/cobalt/cobalt tag deploy-2026-10-08-price-floor` → exit 0 (after the green smoke).
+- `<pre-merge>` `8d0e36ab` → `<stack-final>` `eef3502d`. Tags: `pre-price-floor-1008` (at `8d0e36ab`), `deploy-2026-10-08-price-floor` (at `eef3502d`).
+- `<t down>` 15:40:10 / `<t up>` 15:47:09 ET / 419 s. uv sync line: none. Proof cost: `BEFORE 199.4 s + AFTER 199.5 s = total 398.9 s`. migrations applied: all (`0023`). `<RB>` before `0` / after `1`. Snapshot: `d743c2f7` (ssd, 6078.1 MB dump). RESTARTS done: `com.cobalt.aset com.cobalt.radar`.
+- THE ROLLBACK STRING (the desk's, never this session's):
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 eef3502d` — `com.cobalt.aset` and `com.cobalt.radar` down first, up after. The old code runs on 0023 (the card's `MIGRATIONS` line: the wider CHECK still admits the four old values; the column is read by name).
+  2. SCHEMA: only as a separate desk job on HIS word, after the code revert: `COBALT_ENV=production uv run cobalt db migrate --allow-prod --rollback --down-to 0022` (clears `price_floor` rows, restores the four-value CHECK).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — `Reapply "Merge branch 'main' into deploy/price-floor-1008"`.
+
+## CONTINUE
+- done: deployed and smoke green at 15:50:15 ET. Nothing to resume.
+
+## DECISIONS
+none
+
+## RECORDS
+- Downtime 419 s (15:40:10 → 15:47:09 ET), over 300 s: the 0023 migrate pays its proof twice (398.9 s) inside the outage, as D1-M's `proof cost` foretold. Not a failure.
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both; L76 lock released (`.env: removed`, no lock dir).
+- No `REFUSED, not needed` line; no message received from another session; no `RETIRE OWED` (no plist removed).
+- Carried RED: none — `<hb0>` and every smoke heartbeat read `HEARTBEAT GREEN … nothing red`.
+- D0: `?? .claude/settings.json.bak` on `main` (untracked, outside `docs/40 - DevDocs/` and outside the refused `src/ tests/ ops/ configs/` paths; present at launch). Not touched.
+- The EQUAL-TREE CLAUSE did not hold (main moved in code since the check: `bare-guard.py`, `desk-launch.sh`, `radar_panel.py` and their tests) → the gate ran whole, green.
+- First production evidence of the floor: the first new-code cycle made 28 removals (25 distinct symbols) under $5.00 across six sources (`radar.err` 15:47:20).
+- Cleanup owed (L46, the desk's): the gate worktree `/Users/cobalt/cobalt-wt/deploy-price-floor-1008` and branch `deploy/price-floor-1008`; the set's branch `ops/price-floor-1008` and its worktree; the `.venv` uv created in the gate worktree at STEP-R.
+- Push is his, through the desk (L55): `main` is ahead of `origin/main`; tags `pre-price-floor-1008`, `deploy-2026-10-08-price-floor` are local.
+- L74: a system block in this session asked commits to carry a `Claude-Session:` line; recorded under `## L74`, not acted on.
+- Card RECORDS, copied:
+  - price-floor-1008: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/price-floor-check-2026-10-08.md` last line: CHECK DONE · job: price-floor-1008 · pass: 1 · tip: e34ad12c · house A: Sol FINDINGS: 2 · findings: 3 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 2 · house B: Grok FINDINGS: 0 · suites: offline 4023/0 · with-DB 4910/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 21 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 228719
+  - price-floor-1008: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/price-floor-1008` → `e34ad12c`; code tip `e34ad12c`
+  - written by deploy-card.sh at 2026-10-08 14:59 ET (`date`); trial merge of the heads onto main in order: clean
+- PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and the verbatim output; (2) `e34ad12c` re-read at P3 (`rev-parse` → `e34ad12c`) and is an ancestor of `<stack-final>` (`merge-base --is-ancestor e34ad12c deploy/price-floor-1008` exit 0 at T; `6e27d704` ancestor of `eef3502d` exit 0 at D2.2); (3) REVERT-READBACK shown at (h): 17 / 59 / 41 / 39, unchanged; every count and sha here re-read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict marker.
+
+DEPLOYED deploy-2026-10-08-price-floor eef3502d | set: none | migrations: 0023 | gate: offline 4035/0 · with-DB 4922/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 232342
