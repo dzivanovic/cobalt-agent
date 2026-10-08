@@ -36,7 +36,10 @@
 # `desk missing — relaunch with desk-launch.sh desk`, go out once each as a Mattermost DM
 # `close-timer: <line>` through cobalt.notify.send_dm: a subshell sources $HOME/.cobalt_key (the
 # ops/run_backup.sh form; the key is never echoed) and runs `uv run --project <repo> python -c …`.
-# A failed send prints `NOTIFY FAILED: exit <n>`; the exit code stays the fire's own.
+# A failed send prints `NOTIFY FAILED: exit <n>`; the exit code stays the fire's own. A send
+# that returns `sent=False` (a disabled channel, mattermost.py:152; card 106 F2) exits 3 from the
+# sender, prints `NOTIFY FAILED: not sent (sent=False)`, and the fire runs on to its own path
+# but exits 1 where it would exit 0.
 # COBALT_NOTIFY, when set, is run as `$COBALT_NOTIFY "close-timer: <line>"` instead (the test's
 # stub sender; no key is read).
 #
@@ -52,7 +55,8 @@ REPORTS="$REPO/docs/40 - DevDocs/reports"
 
 # notify <line>: one Mattermost DM `close-timer: <line>` through cobalt.notify.send_dm (card
 # 2026-10-08 106 G4). The key is sourced in a subshell only, never echoed; a failed send prints
-# one line and changes nothing else.
+# one line and changes nothing else; a `sent=False` (exit 3) also marks the fire unsent (F2).
+unsent=""
 notify() {
     if [ -n "${COBALT_NOTIFY:-}" ]; then
         "$COBALT_NOTIFY" "close-timer: $1"
@@ -60,11 +64,22 @@ notify() {
         (
             [ -f "$HOME/.cobalt_key" ] || exit 78
             . "$HOME/.cobalt_key"
-            uv run --project "$REPO" python -c 'import sys; from cobalt.notify import send_dm; send_dm(sys.argv[1])' "close-timer: $1"
+            uv run --project "$REPO" python -c 'import sys; from cobalt.notify import send_dm; sys.exit(0 if send_dm(sys.argv[1]).sent else 3)' "close-timer: $1"
         )
     fi
     sent=$?
-    [ "$sent" -eq 0 ] || printf 'NOTIFY FAILED: exit %s\n' "$sent"
+    if [ "$sent" -eq 3 ]; then
+        printf 'NOTIFY FAILED: not sent (sent=False)\n'
+        unsent=1
+    elif [ "$sent" -ne 0 ]; then
+        printf 'NOTIFY FAILED: exit %s\n' "$sent"
+    fi
+}
+
+# finish <code>: the fire's exit; an unsent notify turns an exit 0 into 1 (F2)
+finish() {
+    [ "$1" -ne 0 ] || [ -z "$unsent" ] || exit 1
+    exit "$1"
 }
 
 refuse() {
@@ -129,13 +144,13 @@ $rows
 ROWS
 if [ -n "$hub" ]; then
     printf 'DEFERRED: deploy live — %s\n' "$hub"
-    exit 0
+    finish 0
 fi
 
 # 4. the close of that date already done
 if closed "$cday"; then
     printf 'DONE ALREADY: close %s\n' "$cday"
-    exit 0
+    finish 0
 fi
 
 # 5. the launch, once
@@ -146,4 +161,4 @@ printf '%s fire: close %s\n' "$(date '+%Y-%m-%d %H:%M:%S %Z')" "$cday" >> "$log"
 sh "$LAUNCH" close "$cday" >> "$log" 2>&1
 status=$?
 printf 'LAUNCHED: close %s — exit %s — log %s\n' "$cday" "$status" "$log"
-exit "$status"
+finish "$status"

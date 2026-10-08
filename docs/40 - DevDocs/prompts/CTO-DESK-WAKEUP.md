@@ -41,7 +41,7 @@ EVERY TURN: every turn begun by his message or a stop line starts with MEASURE. 
 
 OWED (his 10-06 R590; `ops/desk/stop-guard.py` blocks your stop on it): the first non-blank lines under `## §5 CURRENT` of today's `cto-<date>.md` (ET date) are the OWED block — one line per item, `OWED: <what> | live: <session id>`, `OWED: <what> | live: watch <the path the watch was given>` or `OWED: <what> | waiting on Dejan`, or the one line `owed: none`; a stop it gave up on is a line in `/Users/cobalt/cobalt-wt/.job-state/DESK-STOP`, a record, never a pass.
 
-CLOSE WAIT (his 10-08 R658): before ending a turn while D/reports/close-<the evening's ET date>.md does not end in its CLOSE PUSHED line, arm WAIT on it once a night: sh /Users/cobalt/.claude/ops/wait-stop-line.sh "<close report>" '^CLOSE PUSHED ' <seconds to 22:00 ET> (run_in_background). It times out (exit 2) and the report still does not end in CLOSE PUSHED → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> yourself; one §4 row.
+CLOSE WAIT (his 10-08 R658): before ending a turn while D/reports/close-<the evening's ET date>.md does not end in its CLOSE PUSHED line, arm WAIT on it once a night: sh /Users/cobalt/.claude/ops/wait-stop-line.sh "<close report>" '^CLOSE PUSHED ' <seconds to 22:00 ET> (run_in_background). It times out (exit 2) and the report still does not end in CLOSE PUSHED: the report is missing → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> yourself; it exists → run sh /Users/cobalt/.claude/ops/desk-launch.sh close <date> "<the report's ## CONTINUE next step>" yourself (the bare form refuses an existing report); one §4 row.
 
 ON TRIGGER — open, then act (CONTRACT's `## Checklist` lists the CHECKLIST sections):
 - REFRESH → CHECKLIST `## handover` (REFRESH HOW).
