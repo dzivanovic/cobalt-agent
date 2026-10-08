@@ -7,7 +7,7 @@ TIP:
 REPORT: /Users/cobalt/cobalt-wt/desk-ops-fixes-1008/docs/40 - DevDocs/reports/desk-ops-fixes-build-2026-10-08.md
 CHECK REPORT:
 HOUSE B:
-RULINGS: 2026-10-08 R657, 2026-10-08 R658, 2026-10-08 R660, 2026-10-08 R662, 2026-10-08 R664
+RULINGS: 2026-10-08 R657, 2026-10-08 R658, 2026-10-08 R660
 DB: none
 
 ## ROWS
