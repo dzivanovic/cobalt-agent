@@ -715,6 +715,16 @@ def test_g3_a_keychain_read_behind_a_global_option_is_denied(roots, kind, comman
 
 
 @pytest.mark.parametrize("kind", KINDS)
+def test_g3_a_secret_named_in_another_case_is_denied(roots, kind):
+    """check A4 (Sol): the filesystem here is case-insensitive; Bash and the Read tool."""
+    seat = make_seat(roots, kind)
+    assert_denied(run("cat ~/.COBALT_KEY", seat), G3_SECRET_ROUTE)
+    assert_denied(
+        call("Read", {"file_path": "/Users/cobalt/cobalt/data/.Cobalt_Vault"}, seat), G3_SECRET_ROUTE
+    )
+
+
+@pytest.mark.parametrize("kind", KINDS)
 @pytest.mark.parametrize(
     "command",
     [

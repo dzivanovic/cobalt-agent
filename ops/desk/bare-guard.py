@@ -800,16 +800,31 @@ KEYCHAIN_READS = ("find-generic-password", "find-internet-password", "dump-keych
 
 
 def is_secret(path):
-    """.env, or a path whose basename (of any brace alternative, in any case) is a secret file."""
-    return is_env(path) or any(os.path.basename(alt).lower() in SECRETS for alt in braces(path))
+    """.env, or a path whose basename names a secret file: after brace and glob expansion (a
+    leading dot is matched only by a literal one), in any case — as is_env reads .env (check O1,
+    B3)."""
+    if is_env(path):
+        return True
+    for alt in braces(path):
+        base = os.path.basename(alt).lower()
+        if base.startswith(".") and any(fnmatch.fnmatchcase(name, base) for name in SECRETS):
+            return True
+    return False
 
 
 def keychain_read(ws):
-    """`security` whose next word reads a password or the keychain out."""
+    """`security` whose command, after its global options (`-p` takes a value) and brace
+    expansion, reads a password or the keychain out (check O2, A1, B2)."""
     i = 0
     while i < len(ws) and ASSIGN.match(ws[i]):
         i += 1
-    return i + 1 < len(ws) and os.path.basename(ws[i]) == "security" and ws[i + 1] in KEYCHAIN_READS
+    if i >= len(ws) or os.path.basename(ws[i]) != "security":
+        return False
+    rest = [x for w in ws[i + 1:] for x in braces(w) if x]
+    j = 0
+    while j < len(rest) and rest[j].startswith("-"):
+        j += 2 if not rest[j].startswith("--") and rest[j].endswith("p") else 1
+    return j < len(rest) and rest[j] in KEYCHAIN_READS
 
 
 def env_words(args):
@@ -826,9 +841,11 @@ def env_words(args):
 
 def g3_bash(segs):
     for ws in segs:
-        if verb(ws) in ENV_READERS and any(is_secret(w) for w in env_words(ws[1:])):
+        # bash removes a backslash-newline inside a word; words() keeps its newline (check B3)
+        args = [x for w in env_words(ws[1:]) for x in (w, w.replace("\n", ""))]
+        if verb(ws) in ENV_READERS and any(is_secret(w) for w in args):
             # a .env read keeps G3's own route
-            return ROUTE["G3"] if any(is_env(w) for w in env_words(ws[1:])) else ROUTE["G3 secret"]
+            return ROUTE["G3"] if any(is_env(w) for w in args) else ROUTE["G3 secret"]
         if keychain_read(ws):
             return ROUTE["G3 secret"]
         if verb(ws) == "awk" and awk_reads(ws[1:]) and not awk_writes(ws[1:]):
