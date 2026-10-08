@@ -1,9 +1,11 @@
 """desk-launch.sh install-ops (card prompts/2026-10-02/16-ops-seam-card.md, row P4).
 
 `sh desk-launch.sh install-ops` links every regular `ops/desk/*.sh` and `ops/desk/*.py` of the
-repo root into the link folder as `<link folder>/<name>` -> `<repo>/ops/desk/<name>`. A name
-that already exists there is left untouched and printed KEPT; it never replaces, removes or
-re-points anything.
+repo root into the link folder as `<link folder>/<name>` -> `<repo>/ops/desk/<name>`. A plain
+regular file at the name is replaced by the link (card 2026-10-08 106 G3): `REPLACED: <name>` when
+it differed from the repo copy, no line when identical. A symlink (to the repo, elsewhere or
+dangling) or any other kind at the name is left untouched and printed KEPT; a link is never
+re-pointed.
 
 Every run points the script at a tmp repo (COBALT_REPO_ROOT) and a tmp link folder
 (COBALT_OPS_LINK_DIR). desk-launch.sh runs from a copy under tmp_path with a stub
@@ -60,21 +62,19 @@ def run(launch: Path, env: dict, *args: str) -> subprocess.CompletedProcess:
     )
 
 
-def test_install_ops_links_the_missing_names_and_keeps_the_existing_one(world, tmp_path):
+def test_install_ops_links_the_missing_names_and_replaces_the_stale_plain_one(world, tmp_path):
     repo, links, launch, env = world
     done = run(launch, env)
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines() == [
         "LINKED alpha.sh",
-        "KEPT gamma.sh",
+        "REPLACED: gamma.sh",
         "LINKED beta.py",
-        "install-ops: 2 linked, 1 kept",
+        "install-ops: 2 linked, 1 replaced, 0 kept",
     ]
-    for name in ("alpha.sh", "beta.py"):
+    for name in ("alpha.sh", "beta.py", "gamma.sh"):
         assert (links / name).is_symlink()
         assert os.readlink(links / name) == str(repo / "ops" / "desk" / name)
-    assert not (links / "gamma.sh").is_symlink()
-    assert (links / "gamma.sh").read_text() == KEPT_BYTES
     assert (tmp_path / "guard-calls").read_text() == "--guard\n"
 
 
@@ -88,10 +88,52 @@ def test_a_second_run_links_nothing_and_keeps_all_three(world):
         "KEPT alpha.sh",
         "KEPT gamma.sh",
         "KEPT beta.py",
-        "install-ops: 0 linked, 3 kept",
+        "install-ops: 0 linked, 0 replaced, 3 kept",
     ]
     assert {p.name: os.readlink(p) for p in links.iterdir() if p.is_symlink()} == before
+
+
+def test_a_stale_plain_desk_list_is_replaced_by_the_link(world):
+    """Card 106 G3: the 10-07 close found a stale plain desk-list.sh that install-ops kept."""
+    repo, links, launch, env = world
+    (repo / "ops" / "desk" / "desk-list.sh").write_text("# constructed desk-list.sh\n")
+    (links / "desk-list.sh").write_text(KEPT_BYTES)
+    done = run(launch, env)
+    assert done.returncode == 0, done.stderr
+    assert "REPLACED: desk-list.sh" in done.stdout.splitlines()
+    assert (links / "desk-list.sh").is_symlink()
+    assert os.readlink(links / "desk-list.sh") == str(repo / "ops" / "desk" / "desk-list.sh")
+    assert not (links / ".desk-list.sh.new").exists()
+
+
+def test_an_identical_plain_file_is_replaced_silently(world):
+    repo, links, launch, env = world
+    (links / "alpha.sh").write_text((repo / "ops" / "desk" / "alpha.sh").read_text())
+    done = run(launch, env)
+    assert done.returncode == 0, done.stderr
+    assert [l for l in done.stdout.splitlines() if "alpha.sh" in l] == []
+    assert (links / "alpha.sh").is_symlink()
+    assert os.readlink(links / "alpha.sh") == str(repo / "ops" / "desk" / "alpha.sh")
+    assert done.stdout.splitlines()[-1] == "install-ops: 1 linked, 2 replaced, 0 kept"
+
+
+def test_a_failed_replace_is_refused_and_the_plain_file_stays(world):
+    repo, links, launch, env = world
+    (links / ".gamma.sh.new").write_text("# in the way\n")
+    done = run(launch, env)
+    assert done.returncode == 1
+    assert done.stderr.splitlines()[-1] == f"REFUSED: install-ops: the replace failed: {links}/gamma.sh"
+    assert not (links / "gamma.sh").is_symlink()
     assert (links / "gamma.sh").read_text() == KEPT_BYTES
+
+
+def test_a_directory_at_the_name_stays_kept(world):
+    repo, links, launch, env = world
+    (links / "alpha.sh").mkdir()
+    done = run(launch, env)
+    assert done.returncode == 0, done.stderr
+    assert "KEPT alpha.sh" in done.stdout.splitlines()
+    assert (links / "alpha.sh").is_dir() and not (links / "alpha.sh").is_symlink()
 
 
 def test_an_existing_link_to_elsewhere_is_never_re_pointed(world, tmp_path):
@@ -101,7 +143,7 @@ def test_an_existing_link_to_elsewhere_is_never_re_pointed(world, tmp_path):
     assert done.returncode == 0, done.stderr
     assert "KEPT alpha.sh" in done.stdout.splitlines()
     assert os.readlink(links / "alpha.sh") == str(tmp_path / "elsewhere.sh")
-    assert done.stdout.splitlines()[-1] == "install-ops: 1 linked, 2 kept"
+    assert done.stdout.splitlines()[-1] == "install-ops: 1 linked, 1 replaced, 1 kept"
 
 
 def test_only_regular_sh_and_py_files_are_linked(world):
@@ -113,7 +155,7 @@ def test_only_regular_sh_and_py_files_are_linked(world):
     done = run(launch, env)
     assert done.returncode == 0, done.stderr
     assert sorted(p.name for p in links.iterdir()) == ["alpha.sh", "beta.py", "gamma.sh"]
-    assert done.stdout.splitlines()[-1] == "install-ops: 2 linked, 1 kept"
+    assert done.stdout.splitlines()[-1] == "install-ops: 2 linked, 1 replaced, 0 kept"
 
 
 def test_a_symlink_under_ops_desk_is_not_linked(world):
