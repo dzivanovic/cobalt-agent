@@ -1,5 +1,7 @@
 # $5 price floor (his R692): design and card brief · brain · 2026-10-08
 
+> **AMENDED (brain, on card 137's draft):** the floor lives in `configs/cobalt/radar.yaml` as `price_floor: 5.00`, validated by the radar config model. It is NOT a trader_settings row: L69 is about settings in tests, so the citation below was wrong. It ships in the code merge, with no settings-load step. F4 below is superseded.
+
 ## §0 Headline
 - **One seam:** `RadarRunner._collect` (`src/cobalt/radar/runner.py:103-172`). Every screen and list row is read there before anything is ranked, admitted or carded. A row whose price is at or below the floor never becomes a candidate, never enters a SourceSet's tickers, and so never reaches the pool, departed, excluded, cards or sheets.
 - **Price:** the export's `Price` column in that scan, re-read every 3-minute cycle. "At the moment" means the latest scan. **Removed: price ≤ 5.00; kept: > 5.00.** His operative sentence was "remove every stock of $5 and below".
