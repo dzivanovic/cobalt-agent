@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — his screenshot 2026-10-08 (reports/cto-2026-10-08.md R687
 BRANCH: ops/stt-model-fix-1008
 WORKTREE: stt-model-fix-1008
 BASE: 4f764e79
-TIP:
+TIP: 6db7a75d
 REPORT: /Users/cobalt/cobalt-wt/stt-model-fix-1008/docs/40 - DevDocs/reports/stt-model-fix-build-2026-10-08.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/stt-model-fix-check-2026-10-08.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
 ## ROWS
