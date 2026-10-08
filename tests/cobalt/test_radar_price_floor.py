@@ -224,6 +224,15 @@ def test_a_ticker_floored_by_one_source_is_removed_from_every_source():
     assert runner._floored == {"TWOS": Decimal("4.90")}
 
 
+def test_a_floored_row_read_before_its_source_fails_is_still_removed():
+    """X1: the screen reads PFXA at 4.00, then fails on a malformed row;
+    the price already read still floors PFXA."""
+    runner = _runner(Collector(screen=[_row("PFXA", "4.00"), {"Volume": "2"}]))
+    candidates, source_sets = _collect(runner)
+    assert "PFXA" not in {c.ticker for c in candidates}
+    assert "PFXA" not in _seen(source_sets)
+
+
 def test_the_floor_boundaries_behave_as_before():
     """F4: the shipped config's 5.00 — equal is removed, a cent under is
     removed, a cent over is kept."""
