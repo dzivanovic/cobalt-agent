@@ -156,11 +156,17 @@ def test_a_partial_target_folder_fails_and_deletes_nothing(env, fake_load, tmp_p
 
 def test_a_target_under_the_repo_is_refused(env, fake_load, tmp_path, monkeypatch, capsys):
     mod, _target, calls = env
-    under_docs = vc.REPO_ROOT / "docs" / "voice-models-constructed"
+    under_docs = vc.REPO_ROOT / "docs" / f"voice-models-constructed-{tmp_path.name}"
     monkeypatch.setenv("COBALT_VOICE_MODEL_DIR", str(under_docs))
     assert "COBALT_ENV" not in os.environ
+    # The copy is recorded, never run: a broken refusal must not write into the repo.
+    copies = []
+    monkeypatch.setattr(mod, "_copy", lambda cfg, source: copies.append(cfg.model_dir))
     src = _fake_source(tmp_path / "src")
     assert mod.main(["--from", str(src)]) == 1
-    assert capsys.readouterr().out.strip().splitlines()[-1].startswith("FAILED: ")
+    last = capsys.readouterr().out.strip().splitlines()[-1]
+    assert last.startswith("FAILED: path — VoiceConfigError: model_dir ")
+    assert "sits under docs/" in last
+    assert copies == []
     assert not under_docs.exists()
     assert calls == []

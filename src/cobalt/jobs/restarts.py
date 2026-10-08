@@ -33,7 +33,7 @@ REPO_META = frozenset({".gitignore", ".gitattributes", ".gitmodules"})
 #: `ops/*.sh` would be flatly wrong, because `ops/start_aset.sh` and
 #: `ops/start_mainframe.sh` ARE read — they are what their residents' plists
 #: execute. Living in ops/ says nothing about who reads a file.
-OPS_TOOLS = frozenset({"ops/cto-desk.sh"})
+OPS_TOOLS = frozenset({"ops/cto-desk.sh", "ops/fetch-voice-models.sh", "ops/fetch_voice_models.py"})
 #: Safe to match whole: the desk's and hubs' shell tools and a git hook; no plist executes one.
 OPS_DESK_PREFIX = "ops/desk/"
 
