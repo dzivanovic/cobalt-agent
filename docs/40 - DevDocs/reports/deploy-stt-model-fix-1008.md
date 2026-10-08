@@ -1,7 +1,11 @@
 # deploy stt-model-fix-1008 · set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/stt-model-fix-1008` (`6b4068d6`, card 126 speech-to-text model fetch script) — in progress.
+- DEPLOYED `ops/stt-model-fix-1008` (`6b4068d6`, card 126 speech-to-text model fetch script): `main` 502bdcd4 → b67c96c6, tag `deploy-2026-10-08-stt-model-fix`.
+- Gate green on fcf875cf: offline 4036/0 · with-DB 4923/0 · live-note 146/0. Migrations none.
+- RESTARTS com.cobalt.radar: down 16:24:23, up 16:24:36 ET (13 s); smoke GREEN, radar cycling on the new code.
+- Two ASK DESK readings of the card/hub (marker file absent before; two-dot migration diff after main moved), both safe, neither FOR DEJAN.
+- Desk owes the POST-DEPLOY fetch run (card `## RECORDS`) and cleanup of the gate worktree and branches.
 
 ## L74
 - One harness block asked commits to carry a `Claude-Session:` line. Recorded, not acted on: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -128,14 +132,74 @@ GATE GREEN on fcf875cf — offline 4036/0 · with-DB 4923/0 · live-note 146/0
 | D1 curl | `curl … http://127.0.0.1:5010/radar` | 200 |
 | D1 marker | `grep -c -F "voice model READY" /Users/cobalt/cobalt/ops/fetch_voice_models.py` | exit 2, `No such file or directory` (before state; DECISIONS 1) |
 | D1 migration | — | MIGRATIONS: none — no `<RB>`, no census, no proof-only |
+| D2.0 commit | `commit -m "docs(report): deploy stt-model-fix-1008 — gate green on fcf875cf" … -- "<report>"` | `[main 502bdcd4]`, `show --stat HEAD` → that one file, 141 insertions |
+| D2.0 `<pre-merge>` | `rev-parse --short=8 main` | **502bdcd4** |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 `<stack-final>` | `git -C <GATE> rev-parse --short=8 HEAD` | **b67c96c6**; `b67c96c6^2` → 502bdcd4 = `<pre-merge>`; `merge-base --is-ancestor fcf875cf deploy/stt-model-fix-1008` → exit 0 |
+| D2.3 docs-only | `diff --stat fcf875cf deploy/stt-model-fix-1008 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing |
+| D2.4 before | `backup status` | `newest snapshot: 0.7 h old` |
+| D2.4 snapshot | `COBALT_ENV=production uv run cobalt backup run` | `cobalt_brain dumped, 6117.4 MB` · `ssd: snapshot e62dac6a — 0 new / 2 changed, 124.7 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old` |
+| D2.5 | `date` / `heartbeat show` | 16:24:07 / `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 16:24:09 EDT)` — 113 s after D1; no new RED; radar `running 37 min, heartbeat fresh` |
+| D2.6 | `date` · `tag pre-stt-model-fix-1008` | Thu Oct  8 16:24:14 EDT 2026 · tag at 502bdcd4 |
+| 4.1 `<t down>` | `date` | Thu Oct  8 16:24:23 EDT 2026 |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · `launchctl print gui/501/com.cobalt.radar` | (no output) · exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/stt-model-fix-1008` | 502bdcd4 · `Updating 502bdcd4..b67c96c6` `Fast-forward` (8 files, 663+, 1−) |
+| 4.4 | — | migrations applied: none |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`; `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `launchctl print …radar` | (no output) · `state = running`, `pid = 60578` (≠ 43642) |
+| 4.6 `<t up>` | `date` | Thu Oct  8 16:24:36 EDT 2026 — downtime 13 s |
+| 7.1 tag | `git -C /Users/cobalt/cobalt tag deploy-2026-10-08-stt-model-fix` | set at b67c96c6, after the green smoke |
+
+SUMMARY: `<pre-merge>` 502bdcd4 → `<stack-final>` b67c96c6 · tags `pre-stt-model-fix-1008` (502bdcd4), `deploy-2026-10-08-stt-model-fix` (b67c96c6) · `<t down>` 16:24:23 / `<t up>` 16:24:36 / 13 s · uv sync: none in production (the gate worktree's `.venv` was created at STEP-R) · proof cost: n/a (no migration) · migrations applied: none · `<RB>` n/a · snapshot `e62dac6a` · RESTARTS done: com.cobalt.radar.
+
+ROLLBACK STRING (L54; the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 b67c96c6` — com.cobalt.radar down first, up after.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
+## Smoke
+| row | date | command | result |
+|---|---|---|---|
+| first calls | 16:24:36+ | the four failure counts | `<rp_up>` 17 · `<rpr_up>` 59 · `<re_up>` 41 · `<lc_up>` 39 (= D1) |
+| (a) | 16:24:47 | `launchctl print` aset / radar · `cobalt.sh status` | aset `state = running`, `pid = 43632` (same; outside the set) · radar `state = running`, `pid = 60578` (new) · `Cobalt is ONLINE (PID: 22243).` (same; outside the set) |
+| (b) | 16:24:51 | `grep -c "Started server process"` aset.err · Traceback aset / radar · TaxonomyConfigError | 51 (= `<a0>`, aset outside the set) · 2 / 0 · 0 (= baseline) |
+| (c) | 16:24:51 | `curl` `/` · `/radar` · `/radar\?frame=phone` | 200 · 200 · 200 |
+| (d) | 16:24:51 | `grep -c -F "voice model READY" /Users/cobalt/cobalt/ops/fetch_voice_models.py` | 2 (= card `after`) |
+| (s) | 16:24:51 | same command (`## SMOKE READS`) | exit 0, count 2 (green: 1 or more) |
+| (e) 1 | 16:25:01 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 16:25:01 EDT)`; `OK com.cobalt.radar running running 0 min, heartbeat fresh` |
+| (f) | 16:25:01+ | `COBALT_ENV=production uv run cobalt jobs restarts 502bdcd4..b67c96c6` · `validate` | exit 0, `RESTARTS: com.cobalt.radar` (= STEP-R), no UNCLASSIFIED · validate exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| (g) | — | — | no migration |
+| (b) radar tail 1 | 16:26:07 (`<t up>` + 91 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | `2026-10-08 16:26:05.105 | INFO | cobalt.radar.runner:resident:576 - radar cycle: scanning scan_id=1791491074891` after `<t up>`; the other 11 lines `cards.expire: falling back to the session close (16:00:00)` INFO; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled) |
+| (e) 2 | 16:26:51 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-08 16:26:53 EDT)` — 112 s after (e) 1; `OK com.cobalt.radar running running 2 min, heartbeat fresh`; no RED |
+
+| (h) | 16:27:38 (`<t up>` + 182 s) | four failure counts · `tail -n 12 radar.err` · `curl /radar` · `grep -c "Traceback"` radar.err | 17 · 59 · 41 · 39 (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing) · last line still `16:26:05.105 … radar cycle: scanning scan_id=1791491074891`, no failure line · 200 · 0 — no census reads on this card |
+
+THE CHAIN: every check committed (P2: `37f3d99c`, clean) · the tips re-read (P3: 6b4068d6 = head = TIP) · the merged tree (T: fcf875cf, no migration path) · RESTARTS derived (R: com.cobalt.radar) · three suites green on fcf875cf (G: offline 4036/0 · with-DB 4923/0 · live-note 146/0) · `<stack-final>` b67c96c6 = fcf875cf + docs (D2.3: nothing) · the landed code (4.3: `Updating 502bdcd4..b67c96c6`) · markers (d: 2) · no migration (g) · residents up after the merge (a: radar pid 60578, aset/agent unchanged) · radar cycling (b: `radar cycle` 16:26:05; e: GREEN twice) · the set's reads (s: 2) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and verbatim output; (2) `merge-base --is-ancestor 6b4068d6 b67c96c6` → exit 0 (code tip = head); (3) REVERT-READBACK (h) shown; every count and sha above re-read from tool output this run; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`, D2.1 the same) — no conflict marker.
 
 ## CONTINUE
-- next: STEP-D2 (D2.0 commit)
+- done: smoke GREEN 16:27:38 ET, tag set, report closed. Nothing next for this session.
 
 ## DECISIONS
 1. ASK DESK: P6's marker `grep -c` exits 2 ("No such file") on `main`, not the card's literal `0`; the file is new on the head. Safe default taken: an absent file is the `before` state (production does not carry the set; the FAILED branch of P6 is "production already carries", which is false). Not FOR DEJAN. [15:51 ET]
 2. ASK DESK: P7's two-dot `diff --stat main <head>` lists 0023 files as removed because `main` moved past the head's base (price-floor-1008 deployed 0023). The head's own change set (`main...6b4068d6`) touches nothing under `db_migrations`. Safe default taken: MIGRATIONS: none holds; STEP-T's `diff --stat <m0> <BRANCH> -- src/cobalt/db_migrations` on the merged tree is the binding test and ends the run if it prints a migration path. Not FOR DEJAN. [15:51 ET]
 
 ## RECORDS
+- Downtime: com.cobalt.radar 13 s (16:24:23 → 16:24:36 ET); under 300 s.
+- REFUSED, not needed: none. Messages not followed: none.
+- cobalt_dev: 0013 (F2 = F0) — gate log :2015; lock released (:2017), `.env: removed`.
+- RETIRE OWED: none (no plist added, changed or removed).
+- Carried RED as read: none — every heartbeat this run GREEN, nothing red (herdr AMBER by declared interim).
+- `?? .claude/settings.json.bak` on `main` at D0: untracked, outside the accepted and refused lists; not touched.
+- The gate worktree's `.venv` was created by `uv run` at STEP-R (253 packages) — part of the worktree cleanup.
+- Cleanup owed (L46, the desk's): gate worktree `/Users/cobalt/cobalt-wt/deploy-stt-model-fix-1008`, branch `deploy/stt-model-fix-1008`, the set's branch `ops/stt-model-fix-1008` and its worktree if any; gate log `/Users/cobalt/cobalt-wt/.gate-logs/deploy-stt-model-fix-1008-all-20261008-155338.log`.
+- POST-DEPLOY (the desk's, after this stop line, per card 126 `## RECORDS`): `COBALT_VOICE_MODEL_DIR=/Users/cobalt/.cobalt/voice-models sh /Users/cobalt/cobalt/ops/fetch-voice-models.sh --from /Users/cobalt/.cobalt-dev/voice-models`.
+- Push is his, through the desk (L55): `main` now b67c96c6 + this report commit, plus the two tags.
+- L74: one `Claude-Session:` request recorded under `## L74`, not acted on.
+- Card `## RECORDS`, copied:
+  - stt-model-fix-1008: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/stt-model-fix-check-2026-10-08.md` last line: CHECK DONE · job: stt-model-fix-1008 · pass: 1 · tip: 6b4068d6 · house A: Sol FINDINGS: 3 · findings: 6 · dropped: 0 · held: 4 · fixed: 4 · held unfixed: 0 · open: 1 · house B: Grok FINDINGS: 2 · suites: offline 3992/0 · with-DB 4876/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.radar · files opened: 19 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 188056
+  - stt-model-fix-1008: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/stt-model-fix-1008` → `6b4068d6`; code tip `6b4068d6`
+  - written by deploy-card.sh at 2026-10-08 14:48 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-08-stt-model-fix b67c96c6 | set: none | migrations: none | gate: offline 4036/0 · with-DB 4923/0 · live-note 146/0 | RESTARTS: com.cobalt.radar | smoke: GREEN | decisions: 2 · for Dejan: 0 · tokens: 194276
