@@ -43,6 +43,13 @@ class Refused(RuntimeError):
     """A step that ends the run: `str()` is the FAILED line's text."""
 
 
+class _Parser(argparse.ArgumentParser):
+    """A usage error is a FAILED line like any other, never argparse's exit 2."""
+
+    def error(self, message):
+        raise argparse.ArgumentError(None, message)
+
+
 def _snapshot(cfg: vc.VoiceConfig, cache_dir: Path) -> Path:
     """The pinned snapshot under `cache_dir`. Local lookup only."""
     from faster_whisper.utils import download_model
@@ -89,6 +96,20 @@ def _config() -> vc.VoiceConfig:
     return vc.VoiceConfig.model_construct(**values)
 
 
+def _check_links(repo: Path) -> None:
+    """Every link in the repo folder is relative and stays inside it, so the
+    copy never links back into the source (X2). Reads only."""
+    root = repo.resolve()
+    for dirpath, dirnames, filenames in os.walk(repo):
+        for name in dirnames + filenames:
+            link = Path(dirpath) / name
+            if not link.is_symlink():
+                continue
+            target = os.readlink(link)
+            if os.path.isabs(target) or not (link.parent / target).resolve().is_relative_to(root):
+                raise Refused(f"{link} links outside {repo.name} — nothing copied")
+
+
 def _copy(cfg: vc.VoiceConfig, source: Path) -> None:
     try:
         snapshot = _snapshot(cfg, source)
@@ -97,6 +118,7 @@ def _copy(cfg: vc.VoiceConfig, source: Path) -> None:
     if not (snapshot / "model.bin").exists():
         raise Refused(f"the pinned {cfg.stt_model} {cfg.stt_revision} snapshot is not under {source}")
     repo = snapshot.parents[1]
+    _check_links(repo)
     dest = cfg.model_dir / repo.name
     if dest.exists() or dest.is_symlink():
         raise Refused(f"{dest} exists but does not hold the pinned snapshot — move it aside")
@@ -105,10 +127,14 @@ def _copy(cfg: vc.VoiceConfig, source: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Fill the speech-to-text model_dir with the pinned snapshot.")
+    parser = _Parser(description="Fill the speech-to-text model_dir with the pinned snapshot.")
     parser.add_argument("--from", dest="source", type=Path, default=None,
                         help="a local cache holding the pinned snapshot; never a download")
-    args = parser.parse_args(argv)
+    try:
+        args = parser.parse_args(argv)
+    except argparse.ArgumentError as e:
+        print(f"FAILED: arguments — {type(e).__name__}")
+        return 1
     step = "config"
     try:
         cfg = _config()
@@ -124,7 +150,8 @@ def main(argv: list[str] | None = None) -> int:
             _download(cfg)
         step = "verify"
         if not transcribe.model_present(cfg):
-            raise Refused(f"verify — the pinned {cfg.stt_model} {cfg.stt_revision} is not present under {cfg.model_dir}")
+            print(f"verify: the pinned {cfg.stt_model} {cfg.stt_revision} is not present under {cfg.model_dir}")
+            raise Refused(f"verify — {Refused.__name__}")
         transcribe._load_model(cfg)
         snapshot = _snapshot(cfg, cfg.model_dir)
     except Refused as e:
