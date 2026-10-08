@@ -1109,8 +1109,12 @@ def test_refresh_javascript_preserves_ladder_state_and_cursor_on_failure():
 # ---------------------------------------------------------------------
 
 TICK_HEAD = "async function tickLadder(){"
-TICK_GUARDS = (".tap-strip:not([hidden])", "details.terminal[open]", "activeElement", "tagName==='INPUT'", "defaultValue", "defaultChecked")
+# R685: an open TERMINAL is kept across the swap, never a pause
+TICK_GUARDS = (".tap-strip:not([hidden])", "activeElement", "tagName==='INPUT'", "defaultValue", "defaultChecked")
 TICK_KEEP = "const keep=items().filter(x=>x.classList.contains('open')).map(x=>x.dataset.cardId);"
+#: R685: the tick's `finally` clears its own abort timer, then its own in-flight flag.
+TICK_FINALLY = "finally{clearTimeout(timer); if(owned){ladderInFlight=false;}}"
+TICK_FETCH = "fetch('/radar',{headers:{accept:'text/html'},signal:ctl.signal})"
 #: `refreshLadder` as BASE has it, byte for byte: the tick leaves it alone.
 REFRESH_LADDER_BODY = """
    const keep=openIds();
@@ -1138,13 +1142,18 @@ def _tick_stretches() -> tuple[str, str, str]:
     return body[:fetch_at], body[last_await:swap_at], body[swap_at:]
 
 
+def _first_guard_at(body: str) -> int:
+    """Where the first guard's `if(` opens: the last `if(` before the first `{return;}`."""
+    return body.rindex("if(", 0, body.index("{return;}"))
+
+
 def test_tick_refreshes_the_ladder_on_the_pool_timer_without_reload():
     source = panel.PANEL_JS
     assert "window.setInterval(tickLadder,interval)" in source
     assert source.count("window.setInterval(tickLadder,interval);") == 1
     assert source.count("function tickLadder(") == 1
     body = _js_body(TICK_HEAD)
-    for needed in ("fetch('/radar',{headers:{accept:'text/html'}})", "if(!response.ok){throw new Error('HTTP '+response.status);}",
+    for needed in (TICK_FETCH, "if(!response.ok){throw new Error('HTTP '+response.status);}",
                    "new DOMParser().parseFromString(await response.text(),'text/html')",
                    "getElementById('ladder-layer')", "throw new Error('the /radar page returned no ladder')", "replaceWith("):
         assert needed in body, needed
@@ -1179,6 +1188,86 @@ def test_an_expanded_card_does_not_pause_the_tick():
     assert "classList.toggle('open',keep.indexOf(" in swapped
 
 
+def test_an_open_terminal_does_not_pause_the_tick():
+    before, after, swapped = _tick_stretches()
+    assert "details.terminal[open]" not in before
+    read = "const termOpen=!!now.querySelector('details.terminal[open]');"
+    assert after.count("details.terminal[open]") == 1 and read in after
+    assert after.rindex("{return;}") < after.index(read)
+    assert "if(termOpen){const t=document.querySelector('#ladder-layer details.terminal'); if(t){t.open=true;}}" in swapped
+
+
+def test_the_open_terminal_test_fails_when_the_pause_is_put_back(monkeypatch):
+    broken = panel.PANEL_JS.replace("if(ladderInFlight||", "if(ladderInFlight||layer.querySelector('details.terminal[open]')||", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_an_open_terminal_does_not_pause_the_tick()
+
+
+def test_a_hung_ladder_fetch_is_aborted_within_one_interval():
+    body = _js_body(TICK_HEAD)
+    try_at = body.index("try{")
+    for declared in ("const ctl=new AbortController();", "let timer=null;"):
+        assert body.count(declared) == 1, declared
+        assert body.index(declared) < try_at and body.index(declared) < _first_guard_at(body), declared
+    armed = "timer=setTimeout(()=>ctl.abort(),interval)"
+    assert body.count(armed) == 1 and try_at < body.index(armed) < body.index("fetch('/radar'")
+    assert TICK_FETCH in body
+    closing = body[body.index("finally{") :]
+    assert TICK_FINALLY in closing
+    assert closing.index("clearTimeout(timer)") < closing.index("if(owned){ladderInFlight=false;}")
+
+
+def test_a_ctl_or_timer_declared_inside_the_try_is_caught(monkeypatch):
+    body = _js_body(TICK_HEAD)
+    declared = "const ctl=new AbortController(); let timer=null;"
+    assert body.count(declared) == 1
+    moved = body.replace(declared, "", 1).replace("try{", "try{" + declared, 1)
+    broken = panel.PANEL_JS.replace(body, moved, 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_a_hung_ladder_fetch_is_aborted_within_one_interval()
+
+
+def test_a_paused_ladder_says_so_within_three_intervals():
+    source = panel.PANEL_JS
+    assert source.count("let ladderOkAt=Date.now();") == 1
+    assert " let ladderInFlight=false;\n let ladderOkAt=Date.now();\n" in source
+    body = _js_body(TICK_HEAD)
+    assert body.count("ladderOkAt=Date.now()") == 1
+    assert body.index("now.replaceWith(next)") < body.index("ladderOkAt=Date.now()")
+    head = body[: body.index("{return;}")]
+    for needed in ("Date.now()-ladderOkAt>3*interval", "classList.add('stale-data')", "box.id='ladder-refresh-status'",
+                   '<div class="refresh-failure"><b>LADDER NOT REFRESHED</b> · since \'+new Date(ladderOkAt).toLocaleTimeString()+\' · reload the page</div>'):
+        assert needed in head[: _first_guard_at(body)], needed
+    try_at = body.index("try{")
+    assert try_at < _first_guard_at(body)
+    assert body.index("let owned=false;") < try_at
+    assert "ladderInFlight=true;\n     owned=true;\n" in body
+    assert body.index("owned=true;") < body.index("fetch('/radar'")
+
+
+def test_a_skipped_tick_never_clears_another_fetchs_in_flight_flag():
+    body = _js_body(TICK_HEAD)
+    owned_reset = "if(owned){ladderInFlight=false;}"
+    assert body.count("ladderInFlight=false") == 1 and body.count(owned_reset) == 1
+    assert body.index("finally{") < body.index(owned_reset)
+    caught = body[body.index("catch(failure){") : body.index("finally{")]
+    assert "ladderInFlight" not in caught
+    assert body.count("owned=") == 2 and body.count("let owned=false;") == 1 and body.count("owned=true;") == 1
+    assert body.index("let owned=false;") < body.index("owned=true;")
+
+
+def test_the_ownership_test_fails_when_the_reset_is_bare(monkeypatch):
+    broken = panel.PANEL_JS.replace("if(owned){ladderInFlight=false;}", "ladderInFlight=false;", 1)
+    assert broken != panel.PANEL_JS
+    monkeypatch.setattr(panel, "PANEL_JS", broken)
+    with pytest.raises(AssertionError):
+        test_a_skipped_tick_never_clears_another_fetchs_in_flight_flag()
+
+
 def test_a_failed_tick_is_said_on_the_ladder():
     body = _js_body(TICK_HEAD)
     assert "catch(error)" not in body
@@ -1194,7 +1283,7 @@ def test_one_ladder_fetch_in_flight_and_none_while_a_post_sends():
     body = _js_body(TICK_HEAD)
     first_await = body.index("await ")
     assert body.index("ladderInFlight=true;") < first_await
-    assert "finally{ladderInFlight=false;}" in body
+    assert TICK_FINALLY in body
     before, after, _ = _tick_stretches()
     assert "ladderInFlight" in before and "sending>0" in before and "sending>0" in after
     # the first guard itself skips while a fetch is in flight, not only the assignment below it
