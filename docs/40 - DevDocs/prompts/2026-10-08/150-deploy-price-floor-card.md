@@ -21,6 +21,11 @@ TICKERS: none
 - `grep -c -F "price_floor" /Users/cobalt/cobalt/configs/cobalt/radar.yaml` · before `0` · after `1` (the floor, 5.00)
 - `grep -c -F "price_floor: Decimal = Field(gt=0)" /Users/cobalt/cobalt/src/cobalt/radar/config.py` · before `0` · after `1` (the config model refuses a missing or non-positive floor)
 
+## READ-BACK
+`COBALT_ENV=production uv run cobalt db query --side system --prod "SELECT count(*) AS m0023 FROM pg_catalog.pg_constraint WHERE conname = 'radar_membership_excluded_by_check' AND strpos(pg_catalog.pg_get_constraintdef(oid), 'price_floor') > 0"`
+- BEFORE `0` (the CHECK holds the four old `excluded_by` values, the 0022 level)
+- AFTER `1` (the widened CHECK allows `price_floor`)
+
 ## SMOKE READS
 - the floor in the shipped config · `grep -c -F "price_floor" /Users/cobalt/cobalt/configs/cobalt/radar.yaml` · exit 0, a count of 1 or more
 - the config model field · `grep -c -F "price_floor: Decimal = Field(gt=0)" /Users/cobalt/cobalt/src/cobalt/radar/config.py` · exit 0, a count of 1 or more
