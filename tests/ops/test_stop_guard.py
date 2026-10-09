@@ -744,3 +744,31 @@ def test_g7c_the_brains_id_on_a_brain_item_lets_the_turn_end(tmp_path):
     d.owed("OWED: brain checks card 134 draft | live: f20cc306")
     r = d.run()
     assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g7a_queue_in_the_second_cell_does_not_block(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=("|| QUEUE | — | x card | — | x |",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g7a_an_escaped_pipe_stays_in_the_prompt_cell(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=(r"| QUEUE | — | x \| card | — | x |",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: x \\| card\n")
+
+
+def test_g7a_an_empty_first_cell_is_not_a_queue_row(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=("|| QUEUE | — | x card | — | x |",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g7a_an_empty_third_cell_is_the_prompt_cell(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=("| QUEUE | — ||",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: \n")
