@@ -1,8 +1,9 @@
 """`cobalt strike measure` — the F9 live-feed re-measure (S4-P1 M1).
 
 MEASUREMENT ONLY, the spike's pattern (`docs/30 - Design/LIVE-FEED-SPIKE.md`)
-committed so it can run unattended. Each cycle makes one
-`fetch_bars(ticker, Interval.I1, token)` per name, paced by its own
+committed so it can run unattended. Each cycle makes one i1 `fetch`
+per name (default `archiver.collector.fetch_bars`, injected as
+`radar/poller.py` injects it), paced by its own
 `TokenBucket` at its counted share (names × 60 / cadence rpm).
 
 LAG, the spike's own definition: for each bar start T, the first wall-clock
