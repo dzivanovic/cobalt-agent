@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-08-words.md 2026-10-08 R689
 BRANCH: ops/disarm-one-tap-1008
 WORKTREE: disarm-one-tap-1008
 BASE: 6f55636b
-TIP:
+TIP: f70f3db8
 REPORT: /Users/cobalt/cobalt-wt/disarm-one-tap-1008/docs/40 - DevDocs/reports/disarm-one-tap-build-2026-10-08.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/disarm-one-tap-check-2026-10-09.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R689
 
 ## ROWS
