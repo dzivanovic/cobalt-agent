@@ -253,37 +253,35 @@ def test_arm_on_an_unsized_card_shows_the_store_refusal(world, monkeypatch):
     assert world.calls == []
 
 
-@pytest.mark.parametrize("data", [{}, {"reason": "   "}])
-def test_disarm_without_a_reason_is_refused_by_the_store(gated, data):
+@pytest.mark.parametrize("chip", panel.DISARM_REASONS)
+def test_each_disarm_chip_moves_the_card_to_watch(gated, chip):
+    """R689: one tap on a chip disarms; the chip's word is the reason the store records."""
     cards = gated("ARMED")
-    response = client.post("/radar/card/1/disarm", data=data)
-    assert response.status_code == 409, response.text
-    assert response.json()["reason"].startswith("REFUSED ARMED -> WATCH: a reason is required.")
-    assert cards.calls == []
-
-
-def test_disarm_with_a_reason_moves_the_card_to_watch(gated):
-    cards = gated("ARMED")
-    response = client.post("/radar/card/1/disarm", data={"reason": "spread blew out"})
+    response = client.post("/radar/card/1/disarm", data={"source": "panel", "reason": chip})
     assert response.status_code == 200, response.text
     assert response.json()["state"] == "WATCH"
     assert cards.calls == [("transition", 1, "WATCH", "you", {"via": "panel.disarm"})]
-    assert cards.reasons == ["spread blew out"]
+    assert cards.reasons == [chip]
 
 
-def test_a_disarm_reason_over_80_characters_is_refused(gated):
+#: R689: the route's refusal of any value off the chip list, before the store.
+OFF_LIST = ("REFUSED: a DISARM reason is one of setup broke, no volume, market turned, changed mind, other; "
+            "got {got!r}. Nothing written.")
+
+
+@pytest.mark.parametrize("data", [
+    {}, {"reason": "   "}, {"reason": "spread blew out"}, {"reason": "x" * 81}, {"reason": "Setup broke"},
+])
+def test_a_disarm_reason_off_the_list_is_refused(gated, data):
     cards = gated("ARMED")
-    too_long = client.post("/radar/card/1/disarm", data={"reason": "x" * 81})
-    assert too_long.status_code == 422, too_long.text
-    assert too_long.json()["reason"] == "REFUSED: a DISARM reason is at most 80 characters, got 81. Nothing written."
+    response = client.post("/radar/card/1/disarm", data=data)
+    assert response.status_code == 422, response.text
+    assert response.json()["reason"] == OFF_LIST.format(got=data.get("reason", "").strip())
     assert cards.calls == []
-    at_cap = client.post("/radar/card/1/disarm", data={"reason": "x" * 80})
-    assert at_cap.status_code == 200, at_cap.text
-    assert cards.reasons == ["x" * 80]
 
 
 @pytest.mark.parametrize("state,path,data", [
-    ("WATCH", "/radar/card/1/disarm", {"reason": "spread blew out"}),
+    ("WATCH", "/radar/card/1/disarm", {"reason": "setup broke"}),
     ("TRIGGERED", "/radar/card/1/arm", {}),
 ])
 def test_a_disarm_on_watch_and_an_arm_on_triggered_are_refused_by_the_edge(gated, state, path, data):
@@ -466,7 +464,7 @@ def test_a_reset_on_a_card_with_no_structural_stop_shows_the_writers_refusal(wor
     ("/radar/card/1/stop", {"to_stop": "5.70"}),
     ("/radar/card/1/stop/reset", {}),
     ("/radar/card/1/arm", {}),
-    ("/radar/card/1/disarm", {"reason": "spread blew out"}),
+    ("/radar/card/1/disarm", {"reason": "setup broke"}),
 ])
 def test_market_reset_refuses_every_post_and_writes_nothing(world, monkeypatch, path, data):
     from cobalt.session import store as session_store

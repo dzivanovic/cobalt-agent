@@ -73,6 +73,7 @@ from cobalt.settings.card import CardSettingsReader
 from cobalt.settings.fills import DRIFT_NOT_EVALUATED
 from .prefill import PrefillError, fetch_last_price
 from .radar_panel import (
+    DISARM_REASONS,
     RadarPanelError,
     build_radar_panel,
     parse_since,
@@ -2019,15 +2020,15 @@ async def radar_card_arm(card_id: int, request: Request):
 
 @app.post("/radar/card/{card_id}/disarm")
 async def radar_card_disarm(card_id: int, request: Request):
-    """ARMED -> WATCH, his tap with a free-text reason (R627). An empty
-    reason is the store's refusal (`_assert_reason`), never checked here."""
+    """ARMED -> WATCH, his one tap on a reason chip (R689); a value off the
+    list is refused before the store."""
     def work(form, source):
         reason = form.get("reason", "").strip()
-        if len(reason) > 80:
+        if reason not in DISARM_REASONS:
             raise _TapInputRefused(
-                f"REFUSED: a DISARM reason is at most 80 characters, got {len(reason)}. Nothing written.")
+                f"REFUSED: a DISARM reason is one of {', '.join(DISARM_REASONS)}; got {reason!r}. Nothing written.")
         tid = CardStore().transition(card_id, CardState.WATCH, actor=Actor.YOU,
-                                     evidence={"via": f"{source}.disarm"}, reason=reason or None)
+                                     evidence={"via": f"{source}.disarm"}, reason=reason)
         return ({"state": CardState.WATCH.value, "transition_id": tid},
                 f"card {card_id}: WATCH — disarmed (card_transitions id {tid})")
     return await _card_tap(card_id, request, "aset.radar.disarm", work)
