@@ -1,7 +1,11 @@
 # deploy guard-d1-1009 — set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/guard-d1-1009` (tip `e9655b19`) via gate `deploy/guard-d1-1009`. In progress.
+- DEPLOYED `ops/guard-d1-1009` (tip `e9655b19`, the bare-guard D1 production-word check) to `main`: `c9edcf57` → `65a3c209`, tag `deploy-2026-10-09-guard-d1`.
+- Gate GREEN on `18979f7f`: offline 4045/0 · with-DB 4932/0 · live-note 146/0; `cobalt_dev` 0013, F2 = F0.
+- RESTARTS: none — no resident went down; aset/radar/agent pids unchanged (69822 / 69832 / 22243).
+- Smoke GREEN: markers 3 / 1, curls 200, radar cycling, no failure count grew.
+- Decisions: 1 (ASK DESK on an untracked `.claude/settings.json.bak`), for Dejan: 0.
 
 ## L74
 - The session's attribution reminder (a system reminder, not a tool result) asked for a `Claude-Session:` line on commits. Recorded once; not acted on — commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74, DEPLOY-HUB).
@@ -128,17 +132,83 @@ GATE GREEN on 18979f7f
 - MARKERS: `PROD_OPTION` → 0 · `def prod_word` → 0 (both = before)
 - MIGRATIONS: none → no `<RB>`, no D1-M.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-guard-d1-1009.md"` · `git -C /Users/cobalt/cobalt commit -m "docs(report): deploy guard-d1-1009 — gate green on 18979f7f" …` → `[main c9edcf57] …`; `show --stat HEAD` → one file (`docs/40 - DevDocs/reports/deploy-guard-d1-1009.md | 144 +`). `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `<pre-merge>` = c9edcf57.
+- D2.1 `git -C /Users/cobalt/cobalt-wt/deploy-guard-d1-1009 merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `rev-parse --short=8 HEAD` (gate) → `<stack-final>` = 65a3c209 · `git -C /Users/cobalt/cobalt rev-parse --short=8 65a3c209^2` → c9edcf57 (= `<pre-merge>`) · `merge-base --is-ancestor 18979f7f 65a3c209` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 18979f7f 65a3c209 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only).
+- D2.4 `backup status` → `newest snapshot: 1.6 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain dumped, 6560.1 MB` · `ssd: snapshot 84a6cac7 — 0 new / 3 changed, 132.0 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Fri Oct  9 15:59:45 EDT 2026` · `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-09 15:59:47 EDT)` — 111 s after D1's 15:57:56; no RED; aset pid 69822, radar `running 93 min, heartbeat fresh`. (A fill read at 15:59:41, also GREEN, preceded it.)
+- D2.6 `date` → `Fri Oct  9 15:59:51 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-guard-d1-1009` at c9edcf57 → exit 0.
+
+### STEP-4 (restart set EMPTY — no resident down)
+- 4.1 `date` → `<t down>` = `Fri Oct  9 16:00:03 EDT 2026`
+- 4.2 nothing (set empty): no bootout, no `cobalt.sh stop`.
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → c9edcf57 (= `<pre-merge>`) · `git -C /Users/cobalt/cobalt merge --ff-only deploy/guard-d1-1009` → `Updating c9edcf57..65a3c209` / `Fast-forward` (`ops/desk/bare-guard.py`, `tests/ops/test_bare_guard.py`, `docs/40 - DevDocs/reports/guard-d1-build-2026-10-09.md`; 346 insertions, 2 deletions).
+- 4.4 migrations applied: none.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bootstrap (set empty). `<t up>` = 4.3's `date` = `Fri Oct  9 16:00:03 EDT 2026`. Downtime: none.
+
+### STEP-7 summary
+| item | value |
+|---|---|
+| `<pre-merge>` → `<stack-final>` | c9edcf57 → 65a3c209 (main tip 65a3c209) |
+| tags | `pre-guard-d1-1009` (at c9edcf57) · `deploy-2026-10-09-guard-d1` (at 65a3c209, after the green smoke) |
+| `<t down>` / `<t up>` / seconds | none (restart set empty) |
+| uv sync line | none in production calls (the gate worktree built its own `.venv`: `Installed 253 packages in 786ms`) |
+| proof cost | none (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a (no migration) |
+| snapshot id | `84a6cac7` (ssd) |
+| RESTARTS done | none |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 65a3c209` — ONE revert of the main-into-gate merge; restart set empty, so no resident goes down or up.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` (`Reapply "Merge branch 'main' into deploy/guard-d1-1009"`).
+
 ## Smoke
+`<t up>` = Fri Oct  9 16:00:03 EDT 2026 (4.3's `date`; restart set empty).
+- FIRST CALLS [16:00:16]: `<rp_up>` = 18 · `<rpr_up>` = 60 · `<re_up>` = 42 · `<lc_up>` = 39 (all = D1 baseline).
+- (a) [16:00:20] `launchctl print gui/501/com.cobalt.aset` → `state = running`, pid 69822 (SAME as D1; outside the set) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, pid 69832 (SAME) · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (SAME). GREEN.
+- (b) [16:00:24] `grep -c "Started server process" …/aset.err` → 52 (= `<a0>`; aset outside the set) · `tail -n 30 …/aset.err` → last `INFO:     Started server process [69828]` … `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)` (the 14:26 start, unchanged) · Traceback aset 2 (= `<ta0>`), radar 0 (= `<tr0>`), TaxonomyConfigError 0 (= `<tc0>`).
+- (c) [16:00:28] `curl … http://127.0.0.1:5010/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200`. GREEN.
+- (d) [16:00:28] `grep -c -F "PROD_OPTION" /Users/cobalt/cobalt/ops/desk/bare-guard.py` → `3` (= after) · `grep -c -F "def prod_word" /Users/cobalt/cobalt/ops/desk/bare-guard.py` → `1` (= after). GREEN.
+- (s) the same two reads: `PROD_OPTION` → exit 0, `3` (≥1) · `def prod_word` → exit 0, `1` (≥1). GREEN.
+- (f) [16:00:34] `COBALT_ENV=production uv run cobalt jobs restarts c9edcf57..65a3c209` → exit 0, `RESTARTS: none` (= STEP-R), no UNCLASSIFIED · `validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` GREEN.
+- (g) no migration.
+- (e) read 1 [16:00:39] `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-09 16:00:40 EDT)`; `com.cobalt.radar running running 94 min, heartbeat fresh`; `radar scanning (aftermarket), members 50`.
+- (e) read 2 [16:02:33] `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-09 16:02:34 EDT)` (114 s after read 1); `com.cobalt.radar running running 96 min, heartbeat fresh`. No RED not in `<hb0>`. GREEN. (Clock-fill heartbeat reads between 16:00:56 and 16:03:02 were all `HEARTBEAT GREEN … nothing red`.)
+- (b) radar tails: tail 1 [16:01:38, `<t up>`+95 s] → last `radar cycle: scanning scan_id=1791575835064` at 15:58:42 (before `<t up>`), price-floor lines to 16:00:35, no failure, no traceback — not yet settled · tail 2 [16:03:06, `<t up>`+183 s] → `2026-10-09 16:01:50.862 | INFO | cobalt.radar.runner:resident:576 - radar cycle: scanning scan_id=1791576022872` (after `<t up>`), no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → SETTLED GREEN; the third tail is not needed.
+- (h) [16:03:09, `<t up>`+186 s] four counts 18 / 60 / 42 / 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `curl … /radar` → `200` · radar Traceback 0 · no `census` reads on this card. GREEN.
+
+THE CHAIN: every check committed (P2: `5a98783d`, clean) → the tips (P3: e9655b19 = head) → the merged tree (T: 18979f7f, one merge, no migration) → RESTARTS derived (R: none) → three suites green on 18979f7f (G: 4045/0 · 4932/0 · 146/0) → `<stack-final>` 65a3c209 = 18979f7f + docs (D2.3) → landed code (4.3 fast-forward c9edcf57..65a3c209) → markers 3 / 1 (d) → no migration (g) → residents unchanged and up (a) → radar cycling (b, e) → the set's reads (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and verbatim output; (2) `git -C /Users/cobalt/cobalt merge-base --is-ancestor e9655b19 65a3c209` → exit 0 (code tip = head, re-read at P3); (3) REVERT-READBACK (h) shown; every count, sha and `file:line` here was read from tool output this run; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict marker.
 
 ## CONTINUE
 - STEP-T done (m1 18979f7f); STEP-C done; STEP-R done (set: none).
 - STEP-D0 (gate green at Fri Oct  9 15:57:25 EDT 2026) done; STEP-D1 done.
-- next: STEP-D2
+- STEP-D2 done.
+- OUTAGE STARTING Fri Oct  9 15:59:51 EDT 2026 — residents of none going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- STEP-4 done (nothing down; merged 16:00:03); STEP-4.7 smoke GREEN; STEP-7 done.
 
 ## DECISIONS
 1. ASK DESK: `?? .claude/settings.json.bak` is untracked on `main`; it is outside D0's ACCEPTED list but in none of its REFUSED classes (not staged, not under `src/` `tests/` `ops/` `configs/`), and it was present at session start. Safe default taken: not a stop; left untouched. [Fri Oct  9 15:57:55 EDT 2026]
 
 ## RECORDS
 - REFUSED, not needed: `grep -n -F ".env: removed" /Users/cobalt/cobalt-wt/.gate-logs/deploy-guard-d1-1009-all-20261009-152925.log` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. Not re-spelled; the release is proven by the gate's `.env: removed` line, `ls -la` (No such file) and the absent lock dir.
+- `cobalt_dev: 0013 (F2 = F0)`.
+- Downtime: none (restart set empty; no resident stopped).
+- RETIRE OWED: none (no plist removed).
+- Carried RED: none — `<hb0>` and every later heartbeat were `HEARTBEAT GREEN … nothing red`; `com.cobalt.herdr` AMBER is the declared `launchd_unmanaged` interim, not RED.
+- Messages not followed: none received.
+- L74: one line (see `## L74`).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-guard-d1-1009` and branch `deploy/guard-d1-1009`; the set's branch `ops/guard-d1-1009` and its worktree if any. The gate worktree holds an untracked `.venv` built by `uv run` at STEP-R.
+- Push is his, through the desk (L55): `main` is at 65a3c209 plus this report's commit, unpushed; tags `pre-guard-d1-1009` and `deploy-2026-10-09-guard-d1` are local.
+- Card's `## RECORDS`, copied:
+  - guard-d1-1009: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/guard-d1-check-2026-10-09.md` last line: CHECK DONE · job: guard-d1-1009 · pass: 1 · tip: e9655b19 · house A: Sol FINDINGS: 9 · findings: 15 · dropped: 0 · held: 9 · fixed: 9 · held unfixed: 0 · open: 4 · house B: Grok FINDINGS: 4 · suites: offline 4036/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 12 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 215804
+  - guard-d1-1009: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/guard-d1-1009` → `e9655b19`; code tip `e9655b19`
+  - written by deploy-card.sh at 2026-10-09 15:17 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-09-guard-d1 65a3c209 | set: none | migrations: none | gate: offline 4045/0 · with-DB 4932/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 192383
