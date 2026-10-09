@@ -4,7 +4,7 @@ BRANCH: ops/guard-d1-1009
 WORKTREE: guard-d1-1009
 BASE: 1458693d
 TIP:
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/guard-d1-build-2026-10-09.md
+REPORT: /Users/cobalt/cobalt-wt/guard-d1-1009/docs/40 - DevDocs/reports/guard-d1-build-2026-10-09.md
 CHECK REPORT:
 HOUSE B:
 DB: none

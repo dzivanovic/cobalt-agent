@@ -4,7 +4,7 @@ BRANCH: ops/stop-guard-g7-1009
 WORKTREE: stop-guard-g7-1009
 BASE: 1458693d
 TIP:
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/stop-guard-g7-build-2026-10-09.md
+REPORT: /Users/cobalt/cobalt-wt/stop-guard-g7-1009/docs/40 - DevDocs/reports/stop-guard-g7-build-2026-10-09.md
 CHECK REPORT:
 HOUSE B:
 DB: none
