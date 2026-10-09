@@ -7,7 +7,7 @@ TIP:
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/arm-unsized-build-2026-10-09.md
 CHECK REPORT:
 HOUSE B:
-RULINGS: 2026-10-09 R719
+RULINGS: 2026-10-08 R685
 
 ## ROWS
 

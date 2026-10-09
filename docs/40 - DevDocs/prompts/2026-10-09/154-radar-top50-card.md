@@ -7,7 +7,7 @@ TIP:
 REPORT: /Users/cobalt/cobalt-wt/radar-top50-1009/docs/40 - DevDocs/reports/radar-top50-build-2026-10-09.md
 CHECK REPORT:
 HOUSE B:
-RULINGS: 2026-10-09 R716
+RULINGS: 2026-10-08 R685
 
 ## ROWS
 
