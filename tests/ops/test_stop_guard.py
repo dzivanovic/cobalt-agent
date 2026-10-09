@@ -303,13 +303,15 @@ class Desk:
         ]
         self.transcript.write_text("".join(json.dumps(x) + "\n" for x in lines))
 
-    def owed(self, *block: str, heading: str = "## §5 CURRENT") -> None:
-        """Today's report in the desk's shape: the block under `heading`, then the session table."""
+    def owed(self, *block: str, heading: str = "## §5 CURRENT", rows: tuple[str, ...] = ()) -> None:
+        """Today's report in the desk's shape: the block under `heading`, then the session table;
+        `rows` go under its `| CTO desk |` row (card 164 T0)."""
         self.report.write_text(
             "# CTO desk\n\n## §0 Headline\nx\n\n## §4\n| R | t |\n|---|---|\n\n"
             f"{heading}\n" + "".join(x + "\n" for x in block) + "\n"
             "| session | id | prompt · tab | watch | waits for → then |\n|---|---|---|---|---|\n"
-            "| CTO desk | `0000aaaa` | x | none | x |\n\n## §5 HISTORY\n| x |\n"
+            "| CTO desk | `0000aaaa` | x | none | x |\n" + "".join(x + "\n" for x in rows)
+            + "\n## §5 HISTORY\n| x |\n"
         )
 
     def lister(self, *rows: str, code: int = 0) -> None:
@@ -453,7 +455,7 @@ def test_g2_the_block_before_a_blank_line_and_the_table_is_read_as_the_block(tmp
     d.owed("owed: none")
     assert "owed: none\n\n| session |" in d.report.read_text()
     assert d.run().returncode == 0
-    d.owed("OWED: a | waiting on Dejan", "OWED: b")
+    d.owed("OWED: a (asked R1) | waiting on Dejan", "OWED: b")
     r = d.run()
     assert (r.returncode, r.stderr) == (2, "start it: b\n")
 
@@ -561,7 +563,7 @@ def test_g4_a_settled_block_removes_the_count(tmp_path):
 
 def test_g4_the_first_unsettled_item_is_named(tmp_path):
     d = Desk(tmp_path)
-    d.owed("OWED: w | waiting on Dejan", "OWED: a", "OWED: b")
+    d.owed("OWED: w (asked R1) | waiting on Dejan", "OWED: a", "OWED: b")
     r = d.run()
     assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: a\n")
 
@@ -700,3 +702,73 @@ def test_g5_a_bare_empty_item_fails_open(tmp_path):
     r = d.run()
     assert r.returncode == 0, r
     assert r.stderr.startswith(UNGUARDED) and r.stderr.count("\n") == 1, r.stderr
+
+
+# G7 — what the guard reads (card 164; his 2026-10-09 R724)
+
+BRAIN_ROW = "f20cc306-0000 · brain · ~/cobalt · busy · working"
+
+
+def test_g7a_a_queue_row_in_current_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=("| QUEUE | — | x card | — | x |",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: x card\n")
+
+
+def test_g7b_waiting_on_him_without_a_row_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: build 72 | waiting on Dejan")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: ask him: build 72\n")
+
+
+def test_g7b_waiting_on_him_with_a_row_lets_the_turn_end(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("OWED: Finviz rate D2 (asked R722) | waiting on Dejan")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g7c_the_brains_id_on_a_desk_item_blocks(tmp_path):
+    d = Desk(tmp_path)
+    d.lister(BRAIN_ROW)
+    d.owed("OWED: launch https card | live: f20cc306")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: launch https card\n")
+
+
+def test_g7c_the_brains_id_on_a_brain_item_lets_the_turn_end(tmp_path):
+    d = Desk(tmp_path)
+    d.lister(BRAIN_ROW)
+    d.owed("OWED: brain checks card 134 draft | live: f20cc306")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g7a_queue_in_the_second_cell_does_not_block(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=("|| QUEUE | — | x card | — | x |",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g7a_an_escaped_pipe_stays_in_the_prompt_cell(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=(r"| QUEUE | — | x \| card | — | x |",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: x \\| card\n")
+
+
+def test_g7a_an_empty_first_cell_is_not_a_queue_row(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=("|| QUEUE | — | x card | — | x |",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_g7a_an_empty_third_cell_is_the_prompt_cell(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none", rows=("| QUEUE | — ||",))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: \n")
