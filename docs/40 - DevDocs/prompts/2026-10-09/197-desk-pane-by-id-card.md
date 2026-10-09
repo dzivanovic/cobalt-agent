@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09.md R779
 BRANCH: ops/desk-pane-by-id-1009
 WORKTREE: desk-pane-by-id-1009
 BASE: 044f58b5
-TIP:
+TIP: b7c52e51
 REPORT: /Users/cobalt/cobalt-wt/desk-pane-by-id-1009/docs/40 - DevDocs/reports/desk-pane-by-id-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-pane-by-id-check-2026-10-09.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-08 R685
 
