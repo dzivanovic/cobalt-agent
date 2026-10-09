@@ -18,7 +18,7 @@
 # kind-free rules G1, G3, G6.
 #
 # THE RULES, first hit wins. Bash: G3 .env or a secret named by any word (D2) · G2 production
-# (not deploy), but the one db query read (R686) · G4 git shape
+# by the words bash runs (not deploy; D1), but the one db query read (R686) · G4 git shape
 # (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
 # check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
@@ -110,6 +110,9 @@ WRAPPED = "a wrapper whose command the guard cannot find"
 GIT_DENIED = ("push", "merge", "rebase", "reset", "checkout", "stash", "cherry-pick")
 STOP_HEADS = ("BUILT ·", "CHECK DONE ·", "DEPLOYED")
 PROD = re.compile(r"COBALT_ENV=production|(?<![\w-])--prod(?![\w-])|cobalt_brain")
+# card 162 D1: an option word holding `prod` as a token (`--allow-prod`, `--prod=1`, `-prod`;
+# not `--products`)
+PROD_OPTION = re.compile(r"^-.*(?<![a-z])prod(?![a-z])", re.I)
 ASSIGN = re.compile(r"[A-Za-z_][A-Za-z0-9_]*=")
 DOCS = os.path.join("docs", "40 - DevDocs")
 SED_WRITES = "`sed` with a `w` or `e` command or flag"
@@ -958,6 +961,57 @@ def prod_read(command):
     return not any(PROD.search(w) for w in rest if w != "--prod")
 
 
+def prod_word(ws):
+    """card 162 D1: a word bash runs names production — as it is and with its backslash-newline
+    joined (bash joins it, words() keeps it), a brace alternative of it that PROD matches (the
+    word `COBALT_ENV=production` too) or that is an option naming prod (PROD_OPTION)."""
+    # check O2: inside double quotes shlex keeps the backslash of a backslash-newline; bash drops both
+    return any(
+        PROD.search(alt) or PROD_OPTION.search(alt)
+        for w in ws
+        for x in (w, w.replace("\\\n", "").replace("\n", ""))
+        for alt in braces(x)
+    )
+
+
+def unlocale(segment):
+    """check A7, B1: each $"…" outside quotes read as the "…" it is (bash translates it only when a
+    message catalog holds the text); shlex alone reads the `$` as a letter of the word."""
+    out, i, n, quote = [], 0, len(segment), None
+    while i < n:
+        c = segment[i]
+        if quote == "'":
+            if c == "'":
+                quote = None
+        elif quote == '"':
+            if c == "\\":
+                out.append(segment[i:i + 2])
+                i += 2
+                continue
+            if c == '"':
+                quote = None
+        elif c == "\\":
+            out.append(segment[i:i + 2])
+            i += 2
+            continue
+        elif c == "$" and segment[i + 1:i + 2] == "'":
+            # an ANSI-C quote is copied whole: a `$"` inside it is text
+            j = i + 2
+            while j < n and segment[j] != "'":
+                j += 2 if segment[j] == "\\" else 1
+            out.append(segment[i:j + 1])
+            i = j + 1
+            continue
+        elif c == "$" and segment[i + 1:i + 2] == '"':
+            i += 1
+            continue
+        elif c in "'\"":
+            quote = c
+        out.append(c)
+        i += 1
+    return "".join(out)
+
+
 def bash_rules(command, s):
     found, quote, cuts = scan(command)
     segs = [words(x) for x in segments(command, cuts)]
@@ -969,7 +1023,10 @@ def bash_rules(command, s):
     deny = g3_bash(segs + [bash_words(x) for x in segments(command, cuts)])
     if deny:
         return "G3", deny
-    if kind is not None and kind != "deploy" and PROD.search(command) and not prod_read(command):
+    # check O1, A2, B2: G2 also reads the words bash makes (a `#` inside a word starts no comment),
+    # with each $"…" read as "…" (A7, B1)
+    prod_segs = segs + [bash_words(unlocale(x)) for x in segments(command, cuts)]
+    if kind is not None and kind != "deploy" and (PROD.search(command) or any(prod_word(ws) for ws in prod_segs)) and not prod_read(command):
         return "G2", ROUTE["G2"]
     if kind in GIT_SHAPED and any(git_problem(ws) for ws in segs):
         return "G4", ROUTE["G4"]
