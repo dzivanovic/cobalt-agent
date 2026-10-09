@@ -253,6 +253,53 @@ def test_arm_on_an_unsized_card_shows_the_store_refusal(world, monkeypatch):
     assert world.calls == []
 
 
+def test_a_direct_arm_post_on_an_unsized_card_is_refused_by_the_real_store(world, monkeypatch):
+    """R719 CONTROL: the page greys ARM, the store still guards it. The REAL
+    `CardStore.transition` over a fake connection whose locked row is an
+    unsized WATCH card: one SELECT, then the UNSIZED refusal, rolled back.
+    No DB. Green on BASE and after."""
+    seen = {"execute": [], "commit": 0, "rollback": 0, "close": 0}
+
+    class Cursor:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+        def execute(self, sql, params=None):
+            seen["execute"].append((sql, params))
+
+        def fetchone(self):
+            return ("WATCH", None, None, None, None)
+
+    class Connection:
+        autocommit = True
+
+        def cursor(self):
+            return Cursor()
+
+        def commit(self):
+            seen["commit"] += 1
+
+        def rollback(self):
+            seen["rollback"] += 1
+
+        def close(self):
+            seen["close"] += 1
+
+    monkeypatch.setattr(web_module, "CardStore", CardStore)
+    monkeypatch.setattr(CardStore, "_connect", lambda self, *, allow_prod=False: Connection())
+    response = client.post("/radar/card/1/arm")
+    assert response.status_code == 409, response.text
+    assert response.json()["reason"] == UNSIZED
+    ((sql, params),) = seen["execute"]
+    assert sql == "SELECT state, grade, risk_budget, shares, used_risk FROM aset_sizings WHERE id = %s FOR UPDATE"
+    assert params == (1,)
+    assert (seen["commit"], seen["rollback"], seen["close"]) == (0, 1, 1)
+    assert world.calls == []
+
+
 @pytest.mark.parametrize("chip", panel.DISARM_REASONS)
 def test_each_disarm_chip_moves_the_card_to_watch(gated, chip):
     """R689: one tap on a chip disarms; the chip's word is the reason the store records."""

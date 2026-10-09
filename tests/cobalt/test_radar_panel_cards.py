@@ -950,6 +950,11 @@ ARM_TAP = (
     '<input type="hidden" name="source" value="panel">'
     '<button type="button" data-tap="1" class="arm-key">ARM</button>'
 )
+#: R719: the ARM tap on an unsized card — HTML `disabled`, its reason in the label.
+ARM_UNSIZED_TAP = (
+    '<input type="hidden" name="source" value="panel">'
+    '<button type="button" data-tap="1" class="arm-key" disabled title="tap a key first">ARM · tap a key first</button>'
+)
 #: R689: the DISARM reason chips, literal here; the render test asserts them equal to `panel.DISARM_REASONS`.
 DISARM_CHIPS = ("setup broke", "no volume", "market turned", "changed mind", "other")
 DISARM_CHIP_TAPS = [
@@ -964,6 +969,8 @@ DISARM_CHIPS_CSS = (
     "color:var(--red);border-radius:7px}.tap-strip.disarm-chips{grid-template-columns:repeat(auto-fit,"
     "minmax(120px,1fr));margin-top:6px}"
 )
+#: R719: the inert ARM's one CSS line, the `.45` of `.key-disabled`.
+ARM_UNSIZED_CSS = ".s3-form button.arm-key:disabled{opacity:.45;cursor:not-allowed}"
 #: BASE's (`6f55636b`) render of the ARMED card's `/triggered` block (its inner markup), sha256.
 BASE_ARMED_TRIGGERED_TAP_SHA256 = "f91f7966b24284029c58e8415491d5a526673efdc5eff26dba9cc9e33099b846"
 #: BASE's (`6f55636b`) `PANEL_JS`, sha256: R689 changes not one byte of the script.
@@ -1027,6 +1034,57 @@ def test_radar_arm_and_disarm_taps_render_on_watch_and_armed_only(evaluated, pho
     assert lines[lines.index(ARM_KEY_CSS) - 1].startswith(".s3-form{display:inline-flex;")
     assert lines[lines.index(ARM_KEY_CSS) + 1] == DISARM_CHIPS_CSS
     assert "display" not in DISARM_CHIPS_CSS  # `.tap-strip[hidden]{display:none}` still hides the closed tray
+
+
+#: R719: the store's ARM rule (`cards/store.py:310`), the four sizing columns.
+SIZING_COLUMNS = ("grade", "risk_budget", "shares", "used_risk")
+
+
+def _arm_rows(evaluated):
+    """R719: the fixture's WATCH row (born unsized) and a sized WATCH copy of
+    the ARMED row (sized through `_sized`), card 7."""
+    rows = {row["state"]: row for row in evaluated["rows"]}
+    unsized = copy.deepcopy(rows["WATCH"])
+    sized = copy.deepcopy(rows["ARMED"]) | {"card_id": 7, "state": "WATCH"}
+    return unsized, sized
+
+
+def _arm_block(row):
+    """The one card's view and its `/arm` blocks, rendered alone."""
+    view = _ladder([row])
+    (card,) = view.active
+    return card, _tap_blocks(panel.render_ladder(view), "/arm")
+
+
+def _arm_tag(block):
+    return re.search(r'<button[^>]*class="arm-key"[^>]*>', block).group(0)
+
+
+def test_arm_is_inert_on_an_unsized_watch_card_and_live_once_sized(evaluated):
+    unsized_row, sized_row = _arm_rows(evaluated)
+    assert all(unsized_row[c] is None for c in SIZING_COLUMNS)
+    assert all(sized_row[c] is not None for c in SIZING_COLUMNS)
+    unsized, unsized_blocks = _arm_block(unsized_row)
+    sized, sized_blocks = _arm_block(sized_row)
+    assert unsized.state is CardState.WATCH and sized.state is CardState.WATCH
+    assert unsized_blocks == [(str(unsized.id), ARM_UNSIZED_TAP)]
+    assert sized_blocks == [(str(sized.id), ARM_TAP)]
+    assert unsized.sized is False and sized.sized is True
+    assert re.search(r"\sdisabled(\s|>|=)", _arm_tag(unsized_blocks[0][1]))  # the inverse of the key row's rule
+    assert not re.search(r"\sdisabled(\s|>|=)", _arm_tag(sized_blocks[0][1]))
+    lines = panel.PANEL_CSS.splitlines()
+    assert lines[lines.index(DISARM_CHIPS_CSS) + 1] == ARM_UNSIZED_CSS
+
+
+@pytest.mark.parametrize("column", SIZING_COLUMNS)
+def test_arm_stays_inert_while_any_sizing_column_is_empty(evaluated, column):
+    """R719: the page's rule is the store's four-column list, not `sized_grade` alone."""
+    _, sized_row = _arm_rows(evaluated)
+    row = sized_row | {column: None}
+    card, blocks = _arm_block(row)
+    assert card.sized is False
+    assert row["sized_grade"] is not None
+    assert blocks == [(str(card.id), ARM_UNSIZED_TAP)]
 
 
 def test_the_disarm_chips_ride_the_existing_tray_and_tap_paths():
