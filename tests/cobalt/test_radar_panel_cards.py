@@ -477,6 +477,7 @@ def test_card_panel_escapes_why_and_notices(evaluated):
 # LADDER pin re-captured 2026-09-28 on s3/exits-c3 (was 0ac9b5d0…): C3 adds the TRIGGERED tap (ARMED), the FILLED @ / PASS taps (TRIGGERED) and the IN-TRADE block over the constructed POSITION; healthy bars still add nothing (s3-exits-c3-build-2026-09-28.md E3).
 # LADDER pin re-captured 2026-10-07 on ops/radar-direction-color-1007 (was b018e70e…): R625 adds the strip and title direction class and the strip arrow; healthy bars still add nothing.
 # LADDER pin re-captured 2026-10-07 on ops/radar-arm-disarm-1007 (was b3174d30…): R627 adds the ARM tap (WATCH) and the DISARM tap with its reason (ARMED); healthy bars still add nothing.
+# LADDER pin re-captured 2026-10-08 on ops/disarm-one-tap-1008 (was 9a52577c…): R689 replaces the typed DISARM reason with the DISARM toggle and its five reason chips (ARMED); healthy bars still add nothing.
 PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
 PIN_HEALTHY_LADDER_SHA256 = "9a52577cbe07733c1f933857e2ed14d531a12a911c64bd899be3b48a0e16ff15"
 PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
@@ -949,11 +950,24 @@ ARM_TAP = (
     '<input type="hidden" name="source" value="panel">'
     '<button type="button" data-tap="1" class="arm-key">ARM</button>'
 )
-DISARM_TAP = (
+#: R689: the DISARM reason chips, literal here; the render test asserts them equal to `panel.DISARM_REASONS`.
+DISARM_CHIPS = ("setup broke", "no volume", "market turned", "changed mind", "other")
+DISARM_CHIP_TAPS = [
     '<input type="hidden" name="source" value="panel">'
-    '<input name="reason" type="text" maxlength="80" placeholder="disarm reason (required)" value="">'
-    '<button type="button" data-tap="1" class="arm-key danger">DISARM</button>'
+    f'<input type="hidden" name="reason" value="{chip}">'
+    f'<button type="button" data-tap="1" class="arm-key danger">{chip}</button>'
+    for chip in DISARM_CHIPS
+]
+DISARM_TOGGLE = '<button class="disarm-toggle" type="button" data-dot-toggle="disarm">DISARM</button>'
+DISARM_CHIPS_CSS = (
+    ".disarm-toggle{min-height:44px;padding:0 14px;background:var(--card);border:1px solid var(--red);"
+    "color:var(--red);border-radius:7px}.tap-strip.disarm-chips{grid-template-columns:repeat(auto-fit,"
+    "minmax(120px,1fr));margin-top:6px}"
 )
+#: BASE's (`6f55636b`) render of the ARMED card's `/triggered` block (its inner markup), sha256.
+BASE_ARMED_TRIGGERED_TAP_SHA256 = "f91f7966b24284029c58e8415491d5a526673efdc5eff26dba9cc9e33099b846"
+#: BASE's (`6f55636b`) `PANEL_JS`, sha256: R689 changes not one byte of the script.
+BASE_PANEL_JS_SHA256 = "326400594ef47fdd85fc8d130e75ec2aaaff6558b37204a4873dc9059ff2e67a"
 #: BASE's (`f6350cc4`) render of what R627 does not touch, sha256 of each fragment of
 #: `_ladder(evaluated["rows"])` — the TRIGGERED and FILLED articles and the terminal section.
 BASE_TRIGGERED_ARTICLE_SHA256 = "194886823f9810a554de693cc3e8a8ab128aa503ceee773028cc35cbf79a6e7f"
@@ -977,20 +991,79 @@ def test_radar_arm_and_disarm_taps_render_on_watch_and_armed_only(evaluated, pho
     ids = {card.state: str(card.id) for card in ladder_view.active}
     watch, armed = ids[CardState.WATCH], ids[CardState.ARMED]
     assert _tap_blocks(articles[watch], "/arm") == [(watch, ARM_TAP)]
-    assert _tap_blocks(articles[armed], "/disarm") == [(armed, DISARM_TAP)]
+    # R689: one DISARM toggle and one closed chip tray, siblings in one cell (the toggle's
+    # `parentElement` holds the tray PANEL_JS opens); five chip blocks, in list order.
+    assert articles[armed].count('data-dot-toggle="disarm"') == 1
+    assert panel.DISARM_REASONS == DISARM_CHIPS
+    assert articles[armed].count(f'class="tap-strip disarm-chips" data-card-id="{armed}" hidden') == 1
+    chip_blocks = _tap_blocks(articles[armed], "/disarm")
+    assert chip_blocks == [(armed, tap) for tap in DISARM_CHIP_TAPS]
+    cell = (
+        f'<div class="disarm-cell">{DISARM_TOGGLE}<div class="tap-strip disarm-chips" data-card-id="{armed}" hidden>'
+        + "".join(
+            f'<div class="s3-form" data-card-id="{armed}" data-path="/disarm" data-card-tap="1">{tap}</div>'
+            for tap in DISARM_CHIP_TAPS
+        )
+        + "</div></div>"
+    )
+    assert articles[armed].count(cell) == 1
+    tray = cell[cell.index('<div class="tap-strip disarm-chips"') :]
+    for forbidden in ("data-key", "data-grade", "data-factor"):
+        assert forbidden not in cell, forbidden  # the key, grade and dot handlers never take a chip
+    assert 'type="text"' not in articles[armed] and "<input name=" not in tray
     assert 'data-path="/disarm"' not in articles[watch] and 'data-path="/arm"' not in articles[armed]
     for card_id, body in articles.items():
         if card_id not in (watch, armed):
             assert '"/arm"' not in body and '"/disarm"' not in body, card_id
+            assert 'data-dot-toggle="disarm"' not in body, card_id
     ladder = page[page.index('id="ladder-layer"') : page.index('id="pool-layer"')]
-    assert ladder.count('data-path="/arm"') == 1 and ladder.count('data-path="/disarm"') == 1
+    assert '<input name="reason"' not in ladder and "disarm reason (required)" not in ladder
+    assert ladder.count('data-path="/arm"') == 1 and ladder.count('data-path="/disarm"') == 5
     terminal = ladder[ladder.index('class="terminal"') :]
     assert "/arm" not in terminal and "/disarm" not in terminal
-    for tap in (ARM_TAP, DISARM_TAP):
-        assert "data-key" not in tap  # the [data-key] handler runs before [data-tap]
+    assert "data-key" not in ARM_TAP  # the [data-key] handler runs before [data-tap]
     lines = panel.PANEL_CSS.splitlines()
     assert ARM_KEY_CSS in lines
     assert lines[lines.index(ARM_KEY_CSS) - 1].startswith(".s3-form{display:inline-flex;")
+    assert lines[lines.index(ARM_KEY_CSS) + 1] == DISARM_CHIPS_CSS
+    assert "display" not in DISARM_CHIPS_CSS  # `.tap-strip[hidden]{display:none}` still hides the closed tray
+
+
+def test_the_disarm_chips_ride_the_existing_tray_and_tap_paths():
+    """R689 CONTROL: the two PANEL_JS paths the chips ride, pinned as text, and the
+    script byte-identical to BASE. Green on BASE and after."""
+    source = panel.PANEL_JS
+    assert hashlib.sha256(source.encode()).hexdigest() == BASE_PANEL_JS_SHA256, _sha(source)
+    toggle = ("const dot=target.closest('[data-dot-toggle]');\n"
+              "   if(dot){const tray=dot.parentElement.querySelector('.tap-strip'); if(tray){tray.hidden=!tray.hidden;} return;}")
+    grade = "const grade=target.closest('.tap-strip [data-grade]');"
+    tap = ("if(tap){const block=tap.closest('[data-card-tap]'); const body={}; "
+           "block.querySelectorAll('input[name]').forEach(function(field){if(field.type==='checkbox'&&!field.checked)"
+           "{return;} body[field.name]=field.value;}); post(block.dataset.cardId,block.dataset.path,body); return;}")
+    for text in (toggle, grade, tap):
+        assert source.count(text) == 1, text
+    click = source[source.index("document.addEventListener('click'") :]
+    assert click.index(toggle) < click.index(grade) < click.index("const tap=target.closest('[data-tap]');")
+    assert click.index("const tap=target.closest('[data-tap]');") < click.index(tap)
+    # both tick guards hold while a tray (a chip tray included) is open
+    tick = pool_tests._js_body(pool_tests.TICK_HEAD)
+    assert tick.count("querySelector('.tap-strip:not([hidden])')") == 2
+    assert source.count(".tap-strip:not([hidden])") == 2
+
+
+@pytest.mark.parametrize("phone_frame", [False, True])
+def test_disarm_chips_leave_arm_and_triggered_unchanged(evaluated, phone_frame):
+    """R689 CONTROL: the WATCH card's ARM tap and the ARMED card's TRIGGERED tap
+    are BASE's, byte for byte."""
+    healthy, _ = pool_tests._build()
+    ladder_view = _ladder(evaluated["rows"])
+    articles = _ladder_articles(_page(healthy.pool, ladder_view, phone_frame))
+    ids = {card.state: str(card.id) for card in ladder_view.active}
+    watch, armed = ids[CardState.WATCH], ids[CardState.ARMED]
+    assert _tap_blocks(articles[watch], "/arm") == [(watch, ARM_TAP)]
+    triggered = _tap_blocks(articles[armed], "/triggered")
+    assert [card_id for card_id, _ in triggered] == [armed]
+    assert _sha(triggered[0][1]) == BASE_ARMED_TRIGGERED_TAP_SHA256, _sha(triggered[0][1])
 
 
 def _articles_by_state(view, articles):
