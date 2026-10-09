@@ -1,0 +1,17 @@
+# Guard cards D2 then D1: brain brief · 2026-10-09
+Source: card 120's check (`reports/guard-g2-open-reads-check-2026-10-08.md` `## DECISIONS` D1, D2) and the brain's 10-08 answer (R707). It is re-issued here because the 10-08 brief lived only in a message. Two cards, **D2 first** (secrets are what he cares about), each through the new flow. Each removes a cause rather than adding a variant (the awk lesson). After them there are no more guard variant rounds: what is left is recorded, not chased.
+
+## CARD D2 · G3 by path, not by reader verb (`ops/desk/bare-guard.py`)
+- **Today:** `g3_bash` (`:842-854`) refuses a secret only when the segment's verb is in `ENV_READERS` (`:86`). So `base64 ~/.cobalt_key`, `xxd ~/.cobalt_key`, `cp ~/.cobalt_key /tmp/x` and an interpreter that opens the file all pass.
+- **Row G3-P:** for EVERY segment (the unwrapped ones too, `:938`), whatever its verb, refuse with `ROUTE["G3 secret"]` (or `ROUTE["G3"]` for `.env`) when any word, after `braces()` and the backslash-newline join already in `g3_bash`, either (a) passes `is_secret()` (`:802`) as a path, or (b) holds a secret NAME as a path component inside a longer word: the regex `(^|[/'"\s(=:])\.(env|cobalt_key|cobalt_vault)($|[/'"\s),:])`, any case. Part (b) catches `python3 -c "open('/Users/cobalt/.cobalt_key')"`. `keychain_read` and the awk B9 check stay. `ENV_READERS` stays for the `.env` route sentence only.
+- **Not refused (pin each one):** `sh /Users/cobalt/cobalt/ops/run_backup.sh` and `sh /Users/cobalt/cobalt/ops/desk/close-timer.sh` (their words name no secret); `grep -rn "os.environ" src/` (`.environ` is not `.env` at a component boundary); `grep -rn COBALT_ENV src/`.
+- **Reds (refused after, passing on BASE):** `base64 ~/.cobalt_key` · `xxd /Users/cobalt/.cobalt_key` · `cp ~/.cobalt_key /tmp/k` · `python3 -c "open('/Users/cobalt/.cobalt_key').read()"` · `od -c .env` · `cp ~/{.cobalt_key,x} /tmp`.
+
+## CARD D1 · G2 on parsed words (`ops/desk/bare-guard.py`)
+- **Today:** G2 (`:943`) fires on `PROD.search(command)`, the RAW string. `COBALT_ENV="production"`, `COBALT_ENV=$'production'`, `COBALT_ENV=prod''uction`, `env COBALT_ENV=production …` and `--allow-prod` never show the literal, so a production verb passes for a non-deploy seat.
+- **Row G2-W:** "production" is decided on the words bash runs: the raw `PROD.search(command)` OR, for every segment and every unwrapped segment (`segs` at `:935-938`), any word that after `braces()` matches `PROD`, or equals `COBALT_ENV=production`, or is an option (starts `-`) whose lower case contains `prod`. `words()` already decodes `$'…'` (`unquote_ansi_c`) and strips quotes (shlex), so the five spellings become the plain word. `prod_read()` (`:895-930`) stays the ONE pass for every seat (his R686), and is judged on the same words, unchanged.
+- **Reds:** the five spellings above, each with `uv run cobalt db migrate` for a build seat: refused after, passing on BASE. `COBALT_ENV=production uv run cobalt db query --prod "select 1"` still passes (R686).
+- **Keep green:** a dev command such as `COBALT_ENV=dev uv run pytest` passes; a deploy seat is unaffected.
+
+## RECORDED, NOT CARDED (both cards' `## RECORDS`)
+A seat that writes a script file and then runs it can hide a production verb or a secret read from any word-level guard. The wall for that is structural: production writes run only in the deploy seat, and the secrets are read only by launchd-run scripts. This is L-level and is not a guard row.

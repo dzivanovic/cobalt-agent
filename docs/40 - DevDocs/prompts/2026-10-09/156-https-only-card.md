@@ -1,0 +1,71 @@
+JOB: https-only-1009
+LADDER: OFF-LADDER — reports/cto-2026-10-09-words.md 2026-10-09 R718
+BRANCH: ops/https-only-1009
+WORKTREE: https-only-1009
+BASE: 6f55636b
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/https-only-1009/docs/40 - DevDocs/reports/https-only-build-2026-10-09.md
+CHECK REPORT:
+HOUSE B:
+RULINGS: 2026-10-09 R718
+
+## ROWS
+
+WHY: L80. Voice says "no microphone" on his MSI because `src/cobalt/voice/web.py:271` tests `navigator.mediaDevices`, which a browser gives only to a secure page, and he opens aset over plain http on the Tailscale IP. aset binds `0.0.0.0` because the gitignored `configs/dev/aset.local.yaml:28` says `bind: lan` (`src/cobalt/aset/config.py:81`, `:86`; `__main__.py:28`, `:50`). `tailscale serve` fronts aset on `https://<HOST>/` (MACHINE STEPS M2) before this build launches. Then the plain listener goes to 127.0.0.1 (M5), and the probes read the https URL.
+HOST: «FILL: the MagicDNS name from M0, `cobalt.<tailnet>.ts.net`, proven by M3»
+`<HOST>` below means that value, typed literally into every file a row touches.
+
+| row | what | red first | files |
+|---|---|---|---|
+| A | THE HTTPS URL HAS ONE CONFIG HOME. `VoiceConfig` (`src/cobalt/voice/config.py:41`–`:73`) gains a REQUIRED key `https_url: str`. Its pattern is `^https://[a-z0-9.-]+\.ts\.net/$` (L1: no default). The value in `configs/cobalt/voice.yaml` is `https://<HOST>/`, with a `# source: L80, R718; M3 proof` comment line. The `cfg` fixture (`tests/cobalt/test_voice_web.py:33`–`:39`) loads it unchanged | `test_https_url_is_required_and_https_only` (in `test_voice_web.py` or a voice config test file): a config without `https_url` raises `VoiceConfigError`, and so does `http://…`; the committed file loads with `https_url.startswith("https://")`. RED on BASE: the key is refused as extra (`extra="forbid"`, `:42`) | `src/cobalt/voice/config.py`, `configs/cobalt/voice.yaml`, `tests/cobalt/test_voice_web.py` |
+| B | THE VOICE BANNER NAMES THE HTTPS ADDRESS ON AN INSECURE PAGE. `widget_html()` (`web.py:306`–`:308`) puts `get_config().https_url` into the script as one JSON-encoded constant `HTTPS`. Use `json.dumps`; there is no other string interpolation. In `start()` (`:268`), the FIRST test, before `pickType()` and before `navigator.mediaDevices` (`:270`–`:271`), is `if (!window.isSecureContext){ banner([{level:'red', text:'voice needs the https address: ' + HTTPS.replace(/\/$/, '') + location.pathname}]); return; }`. The on-load line (`:300`) becomes: if `!window.isSecureContext`, then `device.push` that same red line; `else if (!pickType())`, then the existing `no microphone on this device` push. `no microphone on this device` stays at `:271`, `:274` and `:300`, reachable only on a secure page | `test_an_insecure_page_shows_the_https_line` (static pin, as `test_voice_web.py:262`–`:280`; no JS runner). In `start()`'s body, `window.isSecureContext` comes before `pickType()` and before `navigator.mediaDevices`. The widget holds `voice needs the https address: ` and the configured URL JSON-encoded (`json.dumps(cfg.https_url)`). In the on-load block, the `isSecureContext` test comes before the `no microphone` push, and that push sits in its `else` branch. RED on BASE: `isSecureContext` is absent. Every existing widget test stays green: the `no microphone` pins (`:274`, `:310`) and the `fetch('/voice/` only check (`:231`–`:234`). A widget test that has no `cfg` fixture takes it | `src/cobalt/voice/web.py` (`_WIDGET` script and `widget_html` only), `tests/cobalt/test_voice_web.py`, `tests/cobalt/test_radar_panel_cards.py` (only if `:701`–`:703` needs the `cfg` fixture) |
+| C | THE PLAIN LISTENER IS LOOPBACK ONLY. `ServerConfig.bind` (`config.py:81`) becomes `Literal["loopback"]`, and `host` (`:84`–`:86`) returns `"127.0.0.1"`. A file that says `bind: lan` is a loud load error naming L80. `__main__.py` drops the `lan` branch (`:32`–`:48`) and the `local_lan_ip` import (`:24`). It prints the https URL from voice config as the reachable address beside `http://127.0.0.1:<port>`. The comment blocks in `config.py:77`–`:80` and `configs/dev/aset.yaml:32`–`:38` say: loopback only, the tailnet reaches it through `tailscale serve` on https (L80). This row lands only after M5 (DEPLOY ORDER) | `test_lan_bind_is_refused` replaces `test_server_lan_bind_resolves_to_all_interfaces` (`tests/cobalt/test_aset_config.py:117`–`:119`): `ServerConfig(bind="lan")` raises. RED on BASE: it resolves to `0.0.0.0`. `test_server_defaults_to_loopback` (`:108`–`:114`) stays; its comment at `:110` loses the `"lan"` example | `src/cobalt/aset/config.py`, `src/cobalt/aset/__main__.py`, `configs/dev/aset.yaml`, `tests/cobalt/test_aset_config.py` |
+| D | THE PROBES READ THE HTTPS URL. `sheet_http`'s default becomes `https://<HOST>/`, and `sheet_daymode`'s becomes `https://<HOST>/api/health` (`src/cobalt/heartbeat/probes.py:128`, `:154`; called bare at `runner.py:133`, `:138`). Each docstring gets one line: it reads the page as his devices do, so a down `tailscale serve` is red here. The `configs/cobalt/smoke/s2.yaml` K4.1–K4.4 URLs (`:135`, `:142`, `:149`, `:157`) read `https://<HOST>/…` with the same paths. In `ops/desk/deploy-smoke.sh`, the curl shape (header `:12`, case `:135`–`:136`) admits `https://<HOST>/*` only, and the refusal text names it. The character class at `:140` is unchanged | `test_every_probe_reads_the_configured_https_url`: the two probe defaults (via `inspect.signature`), the four K4 URLs, and the `deploy-smoke.sh` case pattern each start with `load_voice_config().https_url`. RED on BASE: each starts with `http://127.0.0.1:5010/`. The pins that move with it: `tests/cobalt/test_smoke.py:1488` and `:1499` (the K4.4 URL), `tests/ops/test_deploy_smoke.py:43` and `:134` (the curl row), plus one new refusal case: `http://127.0.0.1:5010/radar` is RED `not a mapped smoke command`. `tests/cobalt/test_sheet_daymode_probe.py` passes its own URL and is unchanged | `src/cobalt/heartbeat/probes.py`, `configs/cobalt/smoke/s2.yaml`, `ops/desk/deploy-smoke.sh`, `tests/cobalt/test_smoke.py`, `tests/ops/test_deploy_smoke.py`, one new test file `tests/cobalt/test_https_only.py` |
+| E | RUN — asserts nothing. `uv run cobalt jobs restarts <BASE>..HEAD`; quote its output. Expected: `com.cobalt.aset` at least (`## RECORDS` RESTARTS) | — (tool output quoted in the report) | none |
+
+## MACHINE STEPS
+Run outside the build, in this order. Each step's proof is green before the next step. aset is never unreachable: plain http on 127.0.0.1 stays up throughout, and the tailnet loses `:5010` only after https answers there.
+
+| step | who | when | command | proof |
+|---|---|---|---|---|
+| M0 | DESK | before launch | `tailscale status --json` (read `Self.DNSName`), and `tailscale serve status` | the DNS name `cobalt.<tailnet>.ts.net.` is recorded; serve shows `No serve config` |
+| M1 | HIS | before launch, only if M2 says HTTPS certificates are off | in the Tailscale admin console, DNS page: MagicDNS on, HTTPS Certificates on (his login) | M2 succeeds |
+| M2 | DESK | before launch | `tailscale serve --bg --https=443 http://127.0.0.1:5010` (it gets the certificate itself; `tailscale cert <HOST>` is needed only if it reports a cert error, and it may need his login) | `tailscale serve status` lists `https://<HOST>` → `http://127.0.0.1:5010` |
+| M3 | DESK, then HIS | before launch | DESK: `curl -s -o /dev/null -w %{http_code} https://<HOST>/api/health`; DESK: `uv run python -c "import urllib.request; print(urllib.request.urlopen('https://<HOST>/api/health').status)"` (the heartbeat's own TLS path). HIS: open `https://<HOST>/radar` on the MSI, then tap the mic | `200` and `200`; on the MSI the padlock shows, the browser asks for the mic, and `logs/aset.log` shows the MSI's `100.x` address on its `/voice/status` line, not `127.0.0.1` |
+| M4 | DESK | before launch | fill `HOST:` in this card from M0/M3, commit, launch the build | `desk-launch.sh` finds no `«FILL` |
+| M5 | DESK | after the check, BEFORE the deploy | in the gitignored `configs/dev/aset.local.yaml`, set `bind: lan` → `bind: loopback` (`:28`) and fix its comment block (`:22`–`:26`); then `launchctl kickstart -k gui/$(id -u)/com.cobalt.aset` | `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/api/health` → `200`; `https://<HOST>/api/health` → `200`; `curl -s -o /dev/null -w %{http_code} --max-time 3 http://100.70.206.126:5010/` → `000` (refused); `grep -c -F "bind: lan" /Users/cobalt/cobalt/configs/dev/aset.local.yaml` → `0` |
+| M6 | DESK | with the deploy | `DEPLOY-HUB.md:11` allow entry `Bash(curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/*)` → `https://<HOST>/*`, and the reads at `DEPLOY-HUB.md:123`, `:147` → `https://<HOST>/…`; committed on `main` before the deploy hub launches | `grep -c -F "http://127.0.0.1:5010" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/DEPLOY-HUB.md"` → `0` |
+| M7 | HIS | after M5 | replace the MSI's `http://100.70.206.126:5010` bookmarks with `https://<HOST>/…` | his pages open on https |
+
+DEPLOY ORDER: row C refuses `bind: lan` at load, so production must say `loopback` (M5) before the deploy merges, or aset crash-loops under KeepAlive. The deploy card carries the M5 grep as a marker (before `0`, after `0`).
+
+## NOT IN THIS JOB
+- Any call to `tailscale`, `launchctl` or `curl` from code or a test: the MACHINE STEPS are the desk's and his.
+- `configs/dev/aset.local.yaml` (gitignored, M5), `DEPLOY-HUB.md` and every fixed hub file (M6).
+- The voice peer gate (`web.py:70`–`:75`) and `allowed_peers` (`configs/cobalt/voice.yaml:46`).
+- Mattermost `*:8065`, `*:18080`, Postgres `*:5432`, LM Studio: not Cobalt web pages (L80 names aset's pages).
+- Any route, page markup, `radar_panel.py`, `drc_page.py`, or the voice turn path.
+- A red outside these rows goes under `## DECISIONS` as UNPROVEN (L70), with its output. It is never fixed here.
+
+## READ
+- LAWS `### L80 HTTPS only`.
+- `src/cobalt/voice/web.py`: `peer_gate` `:70`–`:75`, `_WIDGET` `:198`–`:303` (`start()` `:268`–`:287`, on-load `:300`), `widget_html` `:306`–`:308`; `src/cobalt/voice/config.py` `VoiceConfig` `:41`–`:73`, `load_voice_config` `:120`–`:166`.
+- `src/cobalt/aset/config.py` `ServerConfig` `:74`–`:86`, `load_config` `:128`; `src/cobalt/aset/__main__.py`.
+- `src/cobalt/heartbeat/probes.py` `:128`–`:189`; `runner.py` `:131`–`:148`.
+- `configs/cobalt/smoke/s2.yaml` `:131`–`:160`; `ops/desk/deploy-smoke.sh` `:1`–`:36`, `:113`–`:143`.
+- `tests/cobalt/test_voice_web.py` `:1`–`:60`, `:225`–`:313`; `tests/cobalt/test_aset_config.py` `:100`–`:129`; `tests/cobalt/test_smoke.py` `:1480`–`:1515`; `tests/ops/test_deploy_smoke.py` `:40`–`:50`, `:125`–`:140`.
+
+## CHECK ASKS
+- X1 On an insecure page, does voice show only the https line, never `no microphone`? On a secure page with no device or a refused permission, does it still show `no microphone on this device`?
+- X2 Does anything still name `http://127.0.0.1:5010` as a probe or smoke URL in `src/`, `configs/` or `ops/desk/`?
+- X3 Is the hostname typed anywhere but `voice.yaml`, the two probe defaults, `s2.yaml` and `deploy-smoke.sh`, and does the row D test pin all of them to `voice.yaml`?
+- X4 Can any committed config still bind aset off loopback?
+
+## RECORDS
+- L80 read at `LAWS.md:391`–`:393`.
+- BIND TODAY: `configs/dev/aset.local.yaml:27`–`:29` is `server: bind: lan port: 5010`, and it is gitignored (`.gitignore:50`, `git check-ignore -v`). `load_config` reads it before the committed file (`config.py:129`). `configs/dev/aset.yaml:40` is `bind: loopback`. The plist runs `ops/start_aset.sh` (`com.cobalt.aset.plist:25`), which runs `exec uv run python -m cobalt.aset` (`start_aset.sh:73`), which calls `uvicorn.run(…, host=host, port=port)` (`__main__.py:50`). `cobalt.sh` names no aset port (only `:1234` and `:8065`, `cobalt.sh:36`, `:52`).
+- PROBES TODAY: heartbeat `probes.py:128`, `:154` (default URLs; `runner.py:133`, `:138` call them bare); smoke `s2.yaml:135`, `:142`, `:149`, `:157`; `deploy-smoke.sh:135`–`:136`; the deploy hub's allow entry at `DEPLOY-HUB.md:11` and its reads at `:123`, `:147`. `~/.claude/ops` holds no `curl` allow entry (`grep -rn` empty).
+- PEER GATE BEHIND SERVE: uvicorn 0.40.0 (`uv.lock:5599`–`:5600`) defaults to `proxy_headers=True` and `forwarded_allow_ips="127.0.0.1"` (`.venv/…/uvicorn/config.py:207`, `:338`, `:474`). Behind `tailscale serve`, `request.client.host` is therefore the `X-Forwarded-For` client, a tailnet IP in `allowed_peers` (`voice.yaml:46`). M3 proves this on the log line.
+- RESTARTS: expected `com.cobalt.aset`, plus whatever reach `restarts.py` derives. Class homes per `src/cobalt/jobs/restarts.py`: `configs/cobalt/voice.yaml` and `configs/dev/aset.yaml` are `resident reads` (`:207`–`:210`; `jobs.yaml:68`, `:84`); `src/cobalt/voice/*`, `src/cobalt/aset/*` and `src/cobalt/heartbeat/probes.py` are `static import reach` (`:216`–`:220`); `com.cobalt.heartbeat` is a one-shot (`jobs.yaml:262`–`:272`) and reads fresh. `configs/cobalt/smoke/s2.yaml` is `operator command (cobalt smoke)` (`:251`–`:256`); `ops/desk/deploy-smoke.sh` is `operator script` (`:230`–`:234`); `tests/` is `test/documentation; no resident` (`:245`–`:246`); the build report is `DOCS` (`:225`–`:228`). The bind itself changes at M5 (a `com.cobalt.aset` restart on the gitignored file).
+- DB: every new test is offline (config loads, static script pins, text reads). `DB` is left out because the `src/` and `tests/cobalt/` rows do not qualify for `none` (`CARD.md` `DB`).
+- BASE at drafting: `6f55636b` (`git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD`, 2026-10-09 11:33 ET). `git -C /Users/cobalt/cobalt diff --stat HEAD -- src tests configs/cobalt/voice.yaml configs/cobalt/smoke configs/dev/aset.yaml ops/desk/deploy-smoke.sh` printed nothing. The desk refills `BASE` if main moves.

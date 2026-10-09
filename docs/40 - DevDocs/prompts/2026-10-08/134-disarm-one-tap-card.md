@@ -2,7 +2,7 @@ JOB: disarm-one-tap-1008
 LADDER: OFF-LADDER — reports/cto-2026-10-08-words.md 2026-10-08 R689
 BRANCH: ops/disarm-one-tap-1008
 WORKTREE: disarm-one-tap-1008
-BASE: 1d5aa3f3
+BASE: 6f55636b
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/disarm-one-tap-1008/docs/40 - DevDocs/reports/disarm-one-tap-build-2026-10-08.md
 CHECK REPORT:
