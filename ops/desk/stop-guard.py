@@ -20,9 +20,13 @@
 # It reads the OWED block: the first non-blank lines under `## §5 CURRENT` of /Users/cobalt/cobalt/docs/40 - DevDocs/reports/
 # cto-<ET date at the stop>.md — `owed: none`, or one line per item `OWED: <what> | live: <id>`,
 # `OWED: <what> | live: watch <path>` or `OWED: <what> | waiting on Dejan`. An item is settled
-# when it waits on Dejan or its live: is proven by one of two read commands, each run at most
-# once per stop: `sh desk-list.sh` (beside this file; a row whose id is <id> or starts with it,
-# <id> 8+ chars of [0-9a-f-], not named cto-desk) and PGREP below (a line containing <path>).
+# when it waits on Dejan and its <what> holds `R<digits>` (else `start it: ask him: <what>`), or
+# its live: is proven by one of two read commands, each run at most once per stop:
+# `sh desk-list.sh` (beside this file; a row whose id is <id> or starts with it, <id> 8+ chars
+# of [0-9a-f-], not named cto-desk; a row named brain settles only a <what> containing brain)
+# and PGREP below (a line containing <path>). Every item settled, the first line under
+# `## §5 CURRENT` before the next `## ` line that starts with `|` and whose first cell starts
+# with QUEUE is unsettled: `start it: <its third cell>` (card 164 G7; his 2026-10-09 R724).
 # Settled -> exit 0. Not settled (or no report, no section, no block) -> stderr ONE line
 # `start it: <what>`, exit 2. THE DESK PATH WRITES: the count of blocks in a row in
 # `<transcript_path>.desk-stop` (reset by a new message, removed when settled); at 3 blocks the
@@ -89,7 +93,12 @@ DESK_STOP = WT_ROOT + "/.job-state/DESK-STOP"
 CURRENT = "## §5 CURRENT"
 ITEM = "OWED: "
 NONE = "owed: none"
+QUEUE = "QUEUE"
 WAITING = "waiting on Dejan"
+# a waiting item settles only with the row it was asked in (card 164 G7 (b))
+ASKED = re.compile(r"\bR\d+\b")
+# the brain seat's session name (prompts/BRAIN-HUB.md `--name brain`; card 164 G7 (c))
+BRAIN = "brain"
 LIVE = "live: "
 WATCH = "watch "
 SESSION_ID = re.compile(r"[0-9a-f-]{8,}")
@@ -195,17 +204,22 @@ def desk_report():
     return Path(REPO + "/docs/40 - DevDocs/reports/cto-%s.md" % day)
 
 
-def owed_block(report):
-    """The OWED block's items as (what, marker) pairs, [] for `owed: none`, or None when the file,
-    the `## §5 CURRENT` line or the block is missing (G2). Raises Unguarded when unparseable."""
+def report_lines(report):
+    """The report's lines, rstripped, or None when the file is missing: the one read of the
+    report (card 164 G7 (a)). Raises Unguarded when it cannot be read."""
     try:
         text = report.read_text(encoding="utf-8")
     except FileNotFoundError:
         return None
     except (OSError, UnicodeDecodeError) as e:
         raise Unguarded("the report cannot be read: %s" % e)
-    lines = [x.rstrip() for x in text.splitlines()]
-    if CURRENT not in lines:
+    return [x.rstrip() for x in text.splitlines()]
+
+
+def owed_block(lines):
+    """The OWED block's items as (what, marker) pairs, [] for `owed: none`, or None when the file,
+    the `## §5 CURRENT` line or the block is missing (G2). Raises Unguarded when unparseable."""
+    if lines is None or CURRENT not in lines:
         return None
     rest = lines[lines.index(CURRENT) + 1 :]
     while rest and not rest[0]:
@@ -241,6 +255,21 @@ def owed_block(report):
     return items
 
 
+def queued(lines):
+    """The first `## §5 CURRENT` table row whose first cell starts with QUEUE, as its third cell
+    (`prompt · tab`), or the whole row when it has fewer than three cells; None when there is
+    none (card 164 G7 (a))."""
+    for line in lines[lines.index(CURRENT) + 1 :]:
+        if line.startswith("## "):
+            break
+        if not line.startswith("|"):
+            continue
+        cells = line.strip().strip("|").split("|")
+        if cells[0].strip().startswith(QUEUE):
+            return cells[2].strip() if len(cells) >= 3 else line.strip()
+    return None
+
+
 def listed():
     """The (id, name) of every row desk-list.sh beside this file prints (G3). A non-zero exit (a
     missing desk-list.sh included) or a timeout raises ListUnreadable (card 106 G2)."""
@@ -267,12 +296,15 @@ def watched():
 
 
 def unsettled(items):
-    """The first item that is neither waiting on Dejan nor live, or None (G2, G3). desk-list.sh
-    and pgrep each run at most once, only when an item needs them."""
+    """The line's text after `start it: ` for the first item that is neither waiting on Dejan with
+    an `R<n>` in its <what> nor live, or None (G2, G3; card 164 G7 (b), (c)). desk-list.sh and
+    pgrep each run at most once, only when an item needs them."""
     seen = {}
     for what, marker in items:
         if marker == WAITING:
-            continue
+            if ASKED.search(what):
+                continue
+            return "ask him: %s" % what
         if marker is not None and marker.startswith(LIVE + WATCH):
             path = marker[len(LIVE + WATCH) :]
             if "watch" not in seen:
@@ -285,8 +317,12 @@ def unsettled(items):
             if SESSION_ID.fullmatch(sid):
                 if "list" not in seen:
                     seen["list"] = listed()
-                # the desk cannot name itself
-                if any(i.startswith(sid) and name != "cto-desk" for i, name in seen["list"]):
+                # the desk cannot name itself; the brain's id settles only a brain item (G7 (c))
+                if any(
+                    i.startswith(sid)
+                    and (name not in ("cto-desk", BRAIN) or (name == BRAIN and BRAIN in what))
+                    for i, name in seen["list"]
+                ):
                     continue
         return what
     return None
@@ -305,7 +341,8 @@ def desk(event):
             raise Unguarded("the count file holds %r" % raw)
         count = int(raw)
     report = desk_report()
-    items = owed_block(report)
+    lines = report_lines(report)
+    items = owed_block(lines)
     if items is None:
         line = "start it: the OWED block under %s of %s" % (CURRENT, report)
     else:
@@ -314,6 +351,8 @@ def desk(event):
         except ListUnreadable:
             line = UNREADABLE
         else:
+            if what is None:
+                what = queued(lines)
             line = None if what is None else "start it: %s" % what
     if line is None:
         count_file.unlink(missing_ok=True)
