@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/desk-idle-answer-2026-10-09.md 2026-10-09 R724
 BRANCH: ops/stop-guard-g7-1009
 WORKTREE: stop-guard-g7-1009
 BASE: 1458693d
-TIP:
+TIP: b8047e79
 REPORT: /Users/cobalt/cobalt-wt/stop-guard-g7-1009/docs/40 - DevDocs/reports/stop-guard-g7-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/stop-guard-g7-check-2026-10-09.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-08 R685
 
