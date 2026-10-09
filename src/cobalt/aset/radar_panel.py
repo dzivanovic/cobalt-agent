@@ -211,6 +211,8 @@ class PoolView(_ViewModel):
     retained_prior_day: bool
     banners: list[BannerView]
     bars_stale_tickers: dict[str, str] = Field(default_factory=dict, exclude=True)
+    #: Open admitted episodes ranked past `cap`; rendered, not serialized.
+    over_cap: list[PoolRow] = Field(default_factory=list, exclude=True)
     churn: ChurnDelta | None
     #: H1 header state (v3 §4): never "live" — H1 cannot rank by the handicap.
     #: Rendered, not serialized: the API's `html` carries it (healthy pins).
@@ -644,6 +646,7 @@ def build_pool_view(
         rows, key=lambda item: (item.last_rank is None, item.last_rank or 10**9, item.id)
     )
     current = [_row(item, "current", since) for item in ordered(current_records)]
+    current, over_cap = current[: pool.cap], current[pool.cap :]
     departed = [_row(item, "departed", since) for item in ordered(departed_records)]
     excluded = [_row(item, "excluded", since) for item in ordered(excluded_records)]
 
@@ -748,6 +751,7 @@ def build_pool_view(
         retained_prior_day=retained,
         banners=banners,
         bars_stale_tickers=bars_stale,
+        over_cap=over_cap,
         churn=churn,
         handicap_state=handicap_state,
         handicap_detail=handicap_detail,
@@ -1068,13 +1072,18 @@ def render_pool(view: PoolView) -> str:
         if view.bars_stale_tickers
         else ""
     )
+    over_cap = (
+        "\n" + _pool_table(view.over_cap, "Over cap — open admitted beyond cap", bars_stale=view.bars_stale_tickers)
+        if view.over_cap
+        else ""
+    )
     return f'''<section id="pool-layer" class="{classes}" data-watermark="{e(view.observed_watermark.isoformat())}"{stale_attr}>
 <div id="refresh-status"></div>{banners}
 <header class="layer-head"><div><span class="eyebrow">POOL VIEW · LIVE</span><h2>{e(view.pool_key.upper())}</h2></div>
 <div class="pool-stats"><b>{view.members}</b> / {view.cap} admitted · clock {e(view.clock_session.value)} · scan {e(view.scan_session.value)} · rank by {e(view.rank_metric)}{handicap}</div></header>
 <div class="pool-meta">Trading day {view.data_date.isoformat()} · last scan {e(_fmt_dt(view.last_scan_at))} · refresh {view.scan_interval}s {churn}</div>
 <div class="override-line">{overrides}</div>
-{_pool_table(view.current, "Current admitted", bars_stale=view.bars_stale_tickers)}
+{_pool_table(view.current, "Current admitted", bars_stale=view.bars_stale_tickers)}{over_cap}
 <details><summary>Departed admitted · {len(view.departed)}</summary>{_pool_table(view.departed, "Departed admitted")}</details>
 <details><summary>Never-admitted exclusions · {len(view.excluded)}</summary>{_pool_table(view.excluded, "Never-admitted exclusions")}</details>
 </section>'''
