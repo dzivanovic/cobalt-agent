@@ -886,6 +886,24 @@ def test_a_full_pool_renders_fifty_and_no_over_cap_section():
     assert "Over cap" not in rendered
 
 
+def test_a_over_cap_test_rejects_moving_the_section_inside_details(monkeypatch):
+    original = panel.render_pool
+
+    def moved_inside_details(view):
+        rendered = original(view)
+        marker = "\n<h3>Over cap — open admitted beyond cap"
+        start = rendered.index(marker)
+        details = rendered.index("\n<details>", start)
+        over_cap = rendered[start:details]
+        rendered = rendered[:start] + rendered[details:]
+        insert = rendered.index("<details>") + len("<details>")
+        return rendered[:insert] + over_cap + rendered[insert:]
+
+    monkeypatch.setattr(panel, "render_pool", moved_inside_details)
+    with pytest.raises(AssertionError):
+        test_a_pool_over_cap_renders_cap_names_and_the_rest_in_their_own_section()
+
+
 def test_hub_cut_pool_and_past_day_slice_fail_loud_as_an_inconsistent_snapshot():
     pool_row = copy.deepcopy(POOL_FIXTURE["pool"])
     with pytest.raises(panel.RadarPanelError, match="open admitted"):
