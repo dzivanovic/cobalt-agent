@@ -661,6 +661,60 @@ def test_d1_the_deploy_hub_and_an_unknown_seat_are_unaffected(roots, kind, comma
     assert_allowed(run(command, make_seat(roots, kind)))
 
 
+# ---- check of card 162 (guard-d1-1009-check) ---------------------------------------------
+
+
+@pytest.mark.parametrize("command", [
+    "uv run cobalt db migrate x#y --allow-prod",
+    'uv run cobalt db migrate x#y --"prod"',
+    'FOO=a#b COBALT_ENV="production" uv run cobalt db migrate',
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_check_d1_o1_a_word_holding_a_hash_hides_no_production_word(roots, kind, command):
+    """check O1: bash starts no comment inside a word; words() does, and G2 read only words()."""
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", [
+    'COBALT_ENV="produc\\\ntion" uv run cobalt db migrate',
+    'uv run cobalt db migrate --allow-"pr\\\nod"',
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_check_d1_o2_a_line_continuation_inside_double_quotes_is_joined(roots, kind, command):
+    """check O2: bash removes a backslash-newline inside double quotes; shlex keeps the backslash."""
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_a_mid_word_hash_before_the_second_assignment_hides_no_production(roots, kind):
+    command = 'FOO=x#y COBALT_ENV="production" uv run cobalt db migrate'
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_a_locale_quoted_production_value_is_denied(roots, kind):
+    command = 'COBALT_ENV=$"production" uv run cobalt db migrate'
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", [
+    'COBALT_ENV=$"production" uv run cobalt db migrate',
+    'FOO=1 COBALT_ENV=$"production" uv run cobalt validate',
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_locale_double_quotes_hide_a_production_assignment(roots, kind, command):
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", [
+    "FOO=1# uv run cobalt db migrate --allow-prod",
+    'FOO=1# COBALT_ENV="production" uv run cobalt db migrate',
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_a_hash_inside_an_earlier_word_hides_the_production_verb(roots, kind, command):
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
 # ---- G3 .env NEVER READ ------------------------------------------------------------------
 
 ENV_READS = [
