@@ -584,7 +584,7 @@ def test_bars_stale_leaves_the_api_json_unchanged(monkeypatch):
     assert "bars_stale_tickers" not in payload["pool"]
     # H1: the handicap header state is rendered, not serialized (the healthy API pin).
     assert set(payload["pool"]) == set(panel.PoolView.model_fields) - {
-        "bars_stale_tickers", "handicap_state", "handicap_detail"}
+        "bars_stale_tickers", "handicap_state", "handicap_detail", "over_cap"}
     badge = f'<td class="ticker">{row_ticker}<span class="bars-stale" title="{_tip(failures[0])}">STALE</span></td>'
     assert badge in payload["html"]
     monkeypatch.setattr(
