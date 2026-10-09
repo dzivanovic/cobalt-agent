@@ -715,6 +715,26 @@ def test_d1_a_hash_inside_an_earlier_word_hides_the_production_verb(roots, kind,
     assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
 
 
+@pytest.mark.parametrize("command", [
+    "uv run cobalt db migrate -prod",
+    "uv run cobalt db migrate --x-prod",
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_check_d1_a5_an_option_naming_prod_as_a_token_is_denied(roots, kind, command):
+    """check A5: PROD_OPTION's single-dash and inner-token spellings are pinned."""
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", [
+    "uv run pytest -q --xprod",
+    "uv run pytest -q --reprod",
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_check_d1_a8_an_option_holding_prod_inside_a_name_passes(roots, kind, command):
+    """check A8: PROD_OPTION's left boundary is pinned; `prod` inside a longer name is no token."""
+    assert_allowed(run(command, unstamped_seat(roots, kind)))
+
+
 # ---- G3 .env NEVER READ ------------------------------------------------------------------
 
 ENV_READS = [

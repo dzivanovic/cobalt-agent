@@ -965,12 +965,51 @@ def prod_word(ws):
     """card 162 D1: a word bash runs names production — as it is and with its backslash-newline
     joined (bash joins it, words() keeps it), a brace alternative of it that PROD matches (the
     word `COBALT_ENV=production` too) or that is an option naming prod (PROD_OPTION)."""
+    # check O2: inside double quotes shlex keeps the backslash of a backslash-newline; bash drops both
     return any(
         PROD.search(alt) or PROD_OPTION.search(alt)
         for w in ws
-        for x in (w, w.replace("\n", ""))
+        for x in (w, w.replace("\\\n", "").replace("\n", ""))
         for alt in braces(x)
     )
+
+
+def unlocale(segment):
+    """check A7, B1: each $"…" outside quotes read as the "…" it is (bash translates it only when a
+    message catalog holds the text); shlex alone reads the `$` as a letter of the word."""
+    out, i, n, quote = [], 0, len(segment), None
+    while i < n:
+        c = segment[i]
+        if quote == "'":
+            if c == "'":
+                quote = None
+        elif quote == '"':
+            if c == "\\":
+                out.append(segment[i:i + 2])
+                i += 2
+                continue
+            if c == '"':
+                quote = None
+        elif c == "\\":
+            out.append(segment[i:i + 2])
+            i += 2
+            continue
+        elif c == "$" and segment[i + 1:i + 2] == "'":
+            # an ANSI-C quote is copied whole: a `$"` inside it is text
+            j = i + 2
+            while j < n and segment[j] != "'":
+                j += 2 if segment[j] == "\\" else 1
+            out.append(segment[i:j + 1])
+            i = j + 1
+            continue
+        elif c == "$" and segment[i + 1:i + 2] == '"':
+            i += 1
+            continue
+        elif c in "'\"":
+            quote = c
+        out.append(c)
+        i += 1
+    return "".join(out)
 
 
 def bash_rules(command, s):
@@ -984,7 +1023,10 @@ def bash_rules(command, s):
     deny = g3_bash(segs + [bash_words(x) for x in segments(command, cuts)])
     if deny:
         return "G3", deny
-    if kind is not None and kind != "deploy" and (PROD.search(command) or any(prod_word(ws) for ws in segs)) and not prod_read(command):
+    # check O1, A2, B2: G2 also reads the words bash makes (a `#` inside a word starts no comment),
+    # with each $"…" read as "…" (A7, B1)
+    prod_segs = segs + [bash_words(unlocale(x)) for x in segments(command, cuts)]
+    if kind is not None and kind != "deploy" and (PROD.search(command) or any(prod_word(ws) for ws in prod_segs)) and not prod_read(command):
         return "G2", ROUTE["G2"]
     if kind in GIT_SHAPED and any(git_problem(ws) for ws in segs):
         return "G4", ROUTE["G4"]
