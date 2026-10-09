@@ -157,3 +157,6 @@ The three radar grade writers each append ONE prediction record (`cards.predicti
 
 ## 2026-10-02 — x5-tap-refresh
 `refresh_radar_card`'s lock SELECT no longer carries the `(SELECT coalesce(max(id), 0) FROM card_dot_taps …)` subquery: it reads `state, conviction, score_suppressed, proposed_key … FOR UPDATE`, and the newest tap id is read as its OWN statement on the same connection right after the `no radar card` refusal. Under READ COMMITTED that statement takes a fresh snapshot after the lock wait, so a tap that committed while the refresh waited is seen: `taps_moved` is true and the tap's conviction and proposed key are kept (before, the subquery kept the pre-wait snapshot and the stage's numbers overwrote the tap's — F15 P1 DECISION 4). The run-row read, both UPDATE arms, the dot upsert, the record and the return value are unchanged. Pinned by `tests/cobalt/test_x5_tap_refresh_db.py` (two real sessions; needs `0022`).
+
+## 2026-10-09 — s4-p1-1009
+`strike_cards()` — one read, no write path: every `origin = 'radar'` card in WATCH or ARMED as a `strike.detector.StrikeCard` (id, ticker, direction, state, slug, md5, entry, `created_at`, and the `at` of its latest ARMED transition), the two values `open_radar_cards` does not carry. The strike detector's only read of cards; its writes go through `transition()`.

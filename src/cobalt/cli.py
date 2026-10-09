@@ -80,6 +80,7 @@ from cobalt.taxonomy import validate as taxonomy_validate  # noqa: E402
 from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
 from cobalt.archiver import cli as archiver_cli  # noqa: E402
 from cobalt.voice import cli as voice_cli  # noqa: E402
+from cobalt.strike import cli as strike_cli  # noqa: E402
 from cobalt.archiver.quiet import QuietRefused  # noqa: E402
 from cobalt.archiver.store import ArchiveLockError  # noqa: E402
 
@@ -468,6 +469,19 @@ def _cmd_validate(args: argparse.Namespace) -> None:
     for line in archiver_lines():
         print(line)
 
+    # S4-P1 T1: the four strike rows (the strike detector and `cobalt strike
+    # measure`). A missing row or a wrong unit fails validate, naming it.
+    from cobalt.strike.config import StrikeConfigError
+    from cobalt.strike.config import validate_command_lines as strike_lines
+
+    try:
+        lines = strike_lines()
+    except StrikeConfigError as e:
+        print(f"\nFAILED: {e}")
+        sys.exit(1)
+    for line in lines:
+        print(line)
+
     # 2026-09-13 tree cleanup: docs/PLACEMENT.md's map, enforced. Captures,
     # per-session dumps and stale in-flight duplicates are what sprawled
     # before this sweep existed — see docs/PLACEMENT.md for the map.
@@ -526,6 +540,7 @@ def main() -> None:
     drc_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
     voice_cli.add_parser(sub)
+    strike_cli.add_parser(sub)
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."

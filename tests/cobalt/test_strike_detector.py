@@ -98,7 +98,9 @@ class Clock:
         return self.t
 
     async def sleep(self, seconds):
-        self.t += seconds
+        # + 1 µs: a fake clock that adds exactly the bucket's deficit can leave
+        # its token at 0.9999… forever (float); real time always moves on.
+        self.t += seconds + 1e-6
 
 
 def detector(store, fetch, *, clock=None, session=Session.RTH, plan=None, stored=None, defs=None):
