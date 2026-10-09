@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09.md R770
 BRANCH: ops/voice-clarify-fix-1009
 WORKTREE: voice-clarify-fix-1009
 BASE: b7d37cdc
-TIP:
+TIP: 9feda305
 REPORT: /Users/cobalt/cobalt-wt/voice-clarify-fix-1009/docs/40 - DevDocs/reports/voice-clarify-fix-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-clarify-fix-check-2026-10-09.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
 ## ROWS
