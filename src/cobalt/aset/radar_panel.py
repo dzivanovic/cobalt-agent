@@ -1177,10 +1177,24 @@ NO_COBALT_STOP = "NULL — no Cobalt stop"
 TRIGGERED_BUTTON = "<button>TRIGGERED</button>"
 #: R627: the ARM and DISARM taps. No `data-key`: the `[data-key]` handler runs before `[data-tap]`.
 ARM_BUTTON = '<button class="arm-key">ARM</button>'
-DISARM_TAP = (
-    '<input name="reason" type="text" maxlength="80" placeholder="disarm reason (required)" value="">'
-    '<button class="arm-key danger">DISARM</button>'
-)
+#: R689: the DISARM chips; one tap, the chip is the reason the store records
+DISARM_REASONS = ("setup broke", "no volume", "market turned", "changed mind", "other")
+
+
+def _disarm_chips(card_id: int) -> str:
+    """R689: the DISARM toggle and its closed chip tray, siblings in one cell
+    (`PANEL_JS` opens the `.tap-strip` in a `[data-dot-toggle]`'s parent); one
+    `/disarm` tap per chip, its word the posted reason. No text, no confirm."""
+    chips = "".join(
+        _card_form(card_id, "/disarm",
+                   _hidden_input("reason", chip) + f'<button class="arm-key danger">{html.escape(chip)}</button>',
+                   source="panel")
+        for chip in DISARM_REASONS
+    )
+    return (
+        '<div class="disarm-cell"><button class="disarm-toggle" type="button" data-dot-toggle="disarm">DISARM</button>'
+        f'<div class="tap-strip disarm-chips" data-card-id="{card_id}" hidden>{chips}</div></div>'
+    )
 
 
 def _shown(value: Any) -> str:
@@ -1431,8 +1445,8 @@ def _card_detail(card: CardView, *, stale: str | None = None) -> str:
             f"<div>key {e(card.grade or '—')} · {card.shares if card.shares is not None else '—'} sh · stop {e(str(card.stop))}</div>"
             # S3 C3 (O7 A): ARMED -> TRIGGERED is his tap until the S4 detector.
             f"{_card_form(card.id, '/triggered', TRIGGERED_BUTTON, source='panel')}"
-            # R627: ARMED -> WATCH, his tap with a reason the store requires.
-            f"{_card_form(card.id, '/disarm', DISARM_TAP, source='panel')}</div>"
+            # R689: ARMED -> WATCH, one tap on DISARM opens the chips; one tap on a chip disarms
+            f"{_disarm_chips(card.id)}</div>"
         )
     elif card.state is CardState.TRIGGERED:
         state_body = _triggered_block(card)
@@ -1530,6 +1544,7 @@ PANEL_CSS = r"""
 .bars-stale{font:9px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--red);padding:1px 3px;color:var(--red);border-radius:3px;margin-left:4px;vertical-align:middle}
 .s3-form{display:inline-flex;gap:4px;align-items:center;margin:4px 6px 4px 0;flex-wrap:wrap}.s3-form input{width:90px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:6px}.s3-form button{min-height:40px;padding:0 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px}.s3-form button.danger{border-color:var(--red);color:var(--red)}.s3-form .confirm{display:inline-flex;gap:3px;align-items:center;font-size:13px}.s3-form .confirm input{width:auto}.yours{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--amber);color:var(--amber);padding:1px 4px;border-radius:3px}.cobalt-stop{color:var(--blue)}.stop-line,.running,.drift{font-size:13px;padding:4px 0}.warn{color:var(--amber);font-size:13px;padding:4px 0}.legs{margin-top:6px}.leg-estimated td{color:var(--amber)}.terminal-legs{padding:4px 18px 8px}
 .s3-form button.arm-key{min-height:44px;padding:0 14px}
+.disarm-toggle{min-height:44px;padding:0 14px;background:var(--card);border:1px solid var(--red);color:var(--red);border-radius:7px}.tap-strip.disarm-chips{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-top:6px}
 """
 
 

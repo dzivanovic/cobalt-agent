@@ -479,7 +479,7 @@ def test_card_panel_escapes_why_and_notices(evaluated):
 # LADDER pin re-captured 2026-10-07 on ops/radar-arm-disarm-1007 (was b3174d30…): R627 adds the ARM tap (WATCH) and the DISARM tap with its reason (ARMED); healthy bars still add nothing.
 # LADDER pin re-captured 2026-10-08 on ops/disarm-one-tap-1008 (was 9a52577c…): R689 replaces the typed DISARM reason with the DISARM toggle and its five reason chips (ARMED); healthy bars still add nothing.
 PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
-PIN_HEALTHY_LADDER_SHA256 = "9a52577cbe07733c1f933857e2ed14d531a12a911c64bd899be3b48a0e16ff15"
+PIN_HEALTHY_LADDER_SHA256 = "1866a7ad92de42fd7552f5e7b39673b3c95060cd5570250e3492695dff92c427"
 PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
 
 # Tonight's `mirrorDegraded` line, byte for byte as main has it (`radar_panel.py:1127`).
