@@ -1,0 +1,88 @@
+"""S4-P1 T1: the strike numbers live in tunables.yaml, unit-checked (offline)."""
+
+from __future__ import annotations
+
+import argparse
+
+import pytest
+import yaml
+
+from cobalt import cli
+from cobalt.taxonomy.loader import TUNABLES_PATH
+
+
+def _copy_without(tmp_path, key, *, unit=None):
+    raw = yaml.safe_load(TUNABLES_PATH.read_text())
+    rows = raw["tunables"] if "tunables" in raw else raw[next(iter(raw))]
+    if unit is None:
+        rows[:] = [row for row in rows if row["key"] != key]
+    else:
+        for row in rows:
+            if row["key"] == key:
+                row["unit"] = unit
+    path = tmp_path / "tunables.yaml"
+    path.write_text(yaml.safe_dump(raw, sort_keys=False))
+    return path
+
+
+def test_the_repo_tunables_pass_and_carry_the_ruled_values():
+    from cobalt.strike.config import STRIKE_TUNABLE_UNITS, check
+
+    settings = check()
+    assert set(STRIKE_TUNABLE_UNITS) == {
+        "strike.poll_interval_min", "strike.max_armed", "strike.alert_criterion_s", "strike.missed_sweep_interval",
+    }
+    assert settings.poll_interval_min == 2
+    assert settings.max_armed == 5
+    assert settings.alert_criterion_s == 5
+    assert settings.missed_sweep_interval == 100
+
+
+def test_no_second_ceiling_and_no_fixed_interval():
+    from cobalt.taxonomy.loader import load_tunables
+
+    keys = set(load_tunables().by_key)
+    assert "strike.finviz_max_rpm" not in keys
+    assert "strike.poll_interval" not in keys
+
+
+def test_a_missing_row_is_named(tmp_path):
+    from cobalt.strike.config import StrikeConfigError, check
+
+    path = _copy_without(tmp_path, "strike.poll_interval_min")
+    with pytest.raises(StrikeConfigError, match="strike.poll_interval_min"):
+        check(path)
+
+
+def test_a_wrong_unit_is_named(tmp_path):
+    from cobalt.strike.config import StrikeConfigError, check
+
+    path = _copy_without(tmp_path, "strike.poll_interval_min", unit="count")
+    with pytest.raises(StrikeConfigError, match="unit count"):
+        check(path)
+
+
+@pytest.fixture
+def _no_db(monkeypatch):
+    for name in ("POSTGRES_HOST", "COBALT_DB_USER", "COBALT_DB_PASSWORD", "POSTGRES_PORT"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(cli.taxonomy_validate, "main", lambda: 0)
+
+
+def test_validate_fails_naming_the_key(monkeypatch, capsys, _no_db):
+    import cobalt.strike.config as strike_config
+
+    def _bad(*_a, **_k):
+        raise strike_config.StrikeConfigError("tunables.yaml: missing strike.poll_interval_min")
+
+    monkeypatch.setattr(strike_config, "check", _bad)
+    with pytest.raises(SystemExit) as exc:
+        cli._cmd_validate(argparse.Namespace(no_db=True))
+    assert exc.value.code == 1
+    assert "strike.poll_interval_min" in capsys.readouterr().out
+
+
+def test_validate_prints_the_strike_block(capsys, _no_db):
+    cli._cmd_validate(argparse.Namespace(no_db=True))
+    out = capsys.readouterr().out
+    assert "Strike (S4-P1): 4 tunables rows resolved." in out
