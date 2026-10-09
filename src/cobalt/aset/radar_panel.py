@@ -400,6 +400,8 @@ class CardView(_ViewModel):
     key_editable: bool
     shares: int | None
     risk_budget: Decimal | None
+    #: R719: the store's ARM rule (cards/store.py:308–318): grade, risk_budget, shares and used_risk all set.
+    sized: bool
     card_score: int | None
     conviction: Decimal | None
     proximity: Decimal | None
@@ -922,6 +924,7 @@ def build_ladder_view(
                 for k in ladder_keys
             ],
             key_editable=r.state in KEY_EDITABLE, shares=r.shares, risk_budget=r.risk_budget,
+            sized=all(v is not None for v in (r.grade, r.risk_budget, r.shares, r.used_risk)),
             card_score=r.card_score, conviction=r.conviction, proximity=r.proximity,
             pool_position=r.pool_position, rank_chip=position.rank_chip, promoted=position.promoted,
             outside_pool=r.outside_pool,
@@ -1177,6 +1180,8 @@ NO_COBALT_STOP = "NULL — no Cobalt stop"
 TRIGGERED_BUTTON = "<button>TRIGGERED</button>"
 #: R627: the ARM and DISARM taps. No `data-key`: the `[data-key]` handler runs before `[data-tap]`.
 ARM_BUTTON = '<button class="arm-key">ARM</button>'
+#: R719: ARM on an unsized card: inert (HTML disabled, as the sheet greys A+), the reason in its label.
+ARM_UNSIZED_BUTTON = '<button class="arm-key" disabled title="tap a key first">ARM · tap a key first</button>'
 #: R689: the DISARM chips; one tap, the chip is the reason the store records
 DISARM_REASONS = ("setup broke", "no volume", "market turned", "changed mind", "other")
 
@@ -1435,8 +1440,8 @@ def _card_detail(card: CardView, *, stale: str | None = None) -> str:
         state_body = (
             f'<div class="state-block watch-state"><b>WATCH</b> · proposed key {e(proposed)} · '
             f"trigger {e(str(card.trigger))} · stop {e(str(card.stop))}</div>"
-            # R627: WATCH -> ARMED, his tap; an unsized card shows the store's refusal.
-            f"{_card_form(card.id, '/arm', ARM_BUTTON, source='panel')}"
+            # R627: WATCH -> ARMED, his tap. R719: inert until a key sizes the card; the store still refuses (store.py:308).
+            f"{_card_form(card.id, '/arm', ARM_BUTTON if card.sized else ARM_UNSIZED_BUTTON, source='panel')}"
         )
     elif card.state is CardState.ARMED:
         state_body = (
@@ -1545,6 +1550,7 @@ PANEL_CSS = r"""
 .s3-form{display:inline-flex;gap:4px;align-items:center;margin:4px 6px 4px 0;flex-wrap:wrap}.s3-form input{width:90px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:5px;padding:6px}.s3-form button{min-height:40px;padding:0 12px;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:7px}.s3-form button.danger{border-color:var(--red);color:var(--red)}.s3-form .confirm{display:inline-flex;gap:3px;align-items:center;font-size:13px}.s3-form .confirm input{width:auto}.yours{font:10px ui-monospace,SFMono-Regular,Menlo,monospace;border:1px solid var(--amber);color:var(--amber);padding:1px 4px;border-radius:3px}.cobalt-stop{color:var(--blue)}.stop-line,.running,.drift{font-size:13px;padding:4px 0}.warn{color:var(--amber);font-size:13px;padding:4px 0}.legs{margin-top:6px}.leg-estimated td{color:var(--amber)}.terminal-legs{padding:4px 18px 8px}
 .s3-form button.arm-key{min-height:44px;padding:0 14px}
 .disarm-toggle{min-height:44px;padding:0 14px;background:var(--card);border:1px solid var(--red);color:var(--red);border-radius:7px}.tap-strip.disarm-chips{grid-template-columns:repeat(auto-fit,minmax(120px,1fr));margin-top:6px}
+.s3-form button.arm-key:disabled{opacity:.45;cursor:not-allowed}
 """
 
 

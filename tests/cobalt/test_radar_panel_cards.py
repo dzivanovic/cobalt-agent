@@ -478,8 +478,9 @@ def test_card_panel_escapes_why_and_notices(evaluated):
 # LADDER pin re-captured 2026-10-07 on ops/radar-direction-color-1007 (was b018e70e…): R625 adds the strip and title direction class and the strip arrow; healthy bars still add nothing.
 # LADDER pin re-captured 2026-10-07 on ops/radar-arm-disarm-1007 (was b3174d30…): R627 adds the ARM tap (WATCH) and the DISARM tap with its reason (ARMED); healthy bars still add nothing.
 # LADDER pin re-captured 2026-10-08 on ops/disarm-one-tap-1008 (was 9a52577c…): R689 replaces the typed DISARM reason with the DISARM toggle and its five reason chips (ARMED); healthy bars still add nothing.
+# LADDER pin re-captured 2026-10-09 on ops/arm-unsized-1009 (was 1866a7ad…): R719 renders ARM inert on the unsized WATCH card; healthy bars still add nothing.
 PIN_HEALTHY_POOL_SHA256 = "f2e79add6bc4d4286b381154b071b04ec9e7887467ffd15b0f499e9d62181552"
-PIN_HEALTHY_LADDER_SHA256 = "1866a7ad92de42fd7552f5e7b39673b3c95060cd5570250e3492695dff92c427"
+PIN_HEALTHY_LADDER_SHA256 = "ab491d045c54a3aeb80af9e6c0f682600ac18bd53782f07c651e4a2a43cadda6"
 PIN_HEALTHY_API_SHA256 = "450b3415c2346c8b13b53932c5175f56ee6af78877ca9fc8086ca824601c5462"
 
 # Tonight's `mirrorDegraded` line, byte for byte as main has it (`radar_panel.py:1127`).
@@ -997,7 +998,7 @@ def test_radar_arm_and_disarm_taps_render_on_watch_and_armed_only(evaluated, pho
     articles = _ladder_articles(page)
     ids = {card.state: str(card.id) for card in ladder_view.active}
     watch, armed = ids[CardState.WATCH], ids[CardState.ARMED]
-    assert _tap_blocks(articles[watch], "/arm") == [(watch, ARM_TAP)]
+    assert _tap_blocks(articles[watch], "/arm") == [(watch, ARM_UNSIZED_TAP)]
     # R689: one DISARM toggle and one closed chip tray, siblings in one cell (the toggle's
     # `parentElement` holds the tray PANEL_JS opens); five chip blocks, in list order.
     assert articles[armed].count('data-dot-toggle="disarm"') == 1
@@ -1028,7 +1029,7 @@ def test_radar_arm_and_disarm_taps_render_on_watch_and_armed_only(evaluated, pho
     assert ladder.count('data-path="/arm"') == 1 and ladder.count('data-path="/disarm"') == 5
     terminal = ladder[ladder.index('class="terminal"') :]
     assert "/arm" not in terminal and "/disarm" not in terminal
-    assert "data-key" not in ARM_TAP  # the [data-key] handler runs before [data-tap]
+    assert "data-key" not in ARM_TAP and "data-key" not in ARM_UNSIZED_TAP  # the [data-key] handler runs before [data-tap]
     lines = panel.PANEL_CSS.splitlines()
     assert ARM_KEY_CSS in lines
     assert lines[lines.index(ARM_KEY_CSS) - 1].startswith(".s3-form{display:inline-flex;")
@@ -1111,14 +1112,14 @@ def test_the_disarm_chips_ride_the_existing_tray_and_tap_paths():
 
 @pytest.mark.parametrize("phone_frame", [False, True])
 def test_disarm_chips_leave_arm_and_triggered_unchanged(evaluated, phone_frame):
-    """R689 CONTROL: the WATCH card's ARM tap and the ARMED card's TRIGGERED tap
-    are BASE's, byte for byte."""
+    """R689 CONTROL: the (unsized) WATCH card's ARM tap is the inert one (R719),
+    and the ARMED card's TRIGGERED tap is BASE's, byte for byte."""
     healthy, _ = pool_tests._build()
     ladder_view = _ladder(evaluated["rows"])
     articles = _ladder_articles(_page(healthy.pool, ladder_view, phone_frame))
     ids = {card.state: str(card.id) for card in ladder_view.active}
     watch, armed = ids[CardState.WATCH], ids[CardState.ARMED]
-    assert _tap_blocks(articles[watch], "/arm") == [(watch, ARM_TAP)]
+    assert _tap_blocks(articles[watch], "/arm") == [(watch, ARM_UNSIZED_TAP)]
     triggered = _tap_blocks(articles[armed], "/triggered")
     assert [card_id for card_id, _ in triggered] == [armed]
     assert _sha(triggered[0][1]) == BASE_ARMED_TRIGGERED_TAP_SHA256, _sha(triggered[0][1])
