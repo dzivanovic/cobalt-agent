@@ -45,3 +45,6 @@ can't think right now (<class>)", RED — FINAL §7's row — not `turn_error`.
 ## Dry run
 `dry_run=True` returns the Plan, the resolution and the exact change and
 writes nothing at all — no row, no pending action, no reap.
+
+## 2026-10-09 — voice-clarify-fix-1009
+A plan clarify's resolution is now `{"clarify": "plan", "candidates": [<candidate ids sent>], "history": <history turns sent>}`, so a stored row shows what the planner was given when it clarified (card 193 row C1).

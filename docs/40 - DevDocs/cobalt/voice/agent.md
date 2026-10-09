@@ -29,3 +29,6 @@ The JSON schema sent with the call (as `response_format` or in the system
 message, per the route), built from the registry entry's tool list at call
 time — nothing is read at import, because the ASET resident imports this
 module through the voice router.
+
+## 2026-10-09 — voice-clarify-fix-1009
+`build_messages`'s system message adds one rule: answer and act always name a tool (never null), and a question no tool answers, such as what voice can do, is clarify with `say` naming what the tools do. The stored `plan_shape` turn was kind answer with no tool; `validate_plan` is unchanged (card 193 row C2).

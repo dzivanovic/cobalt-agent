@@ -201,6 +201,7 @@ _WIDGET = """
   background:#111729;border:1px solid #20283c;border-radius:14px;padding:10px;font-family:system-ui,sans-serif;
   color:#eef5ff;box-shadow:0 8px 24px rgba(0,0,0,.4)}
  #cv-voice .cv-row{display:flex;gap:6px;align-items:center}
+ #cv-voice .cv-row[hidden]{display:none}
  #cv-voice button{padding:8px 10px;border-radius:8px;border:1px solid #28334d;background:#0b1020;color:#8d9bb6;
   font-weight:700;cursor:pointer;margin:0}
  #cv-talk{flex:1;font-size:15px;color:#00e5ff!important;border-color:#00e5ff!important;touch-action:none}

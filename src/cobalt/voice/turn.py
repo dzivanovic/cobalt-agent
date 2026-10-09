@@ -326,7 +326,9 @@ def _plan_and_act(inp: TurnInput, deps: TurnDeps, rec: _Rec, transcript: str) ->
         return _outcome(rec, TurnState.DONE, reply, dry_run=dry)
 
     if plan.kind == "clarify":
-        return done(tools.compose_reply(plan.say, CLARIFY_TEMPLATE), {"clarify": "plan"})
+        # card 193 row C1: what the planner was given, for the rows to settle why it clarified
+        return done(tools.compose_reply(plan.say, CLARIFY_TEMPLATE),
+                    {"clarify": "plan", "candidates": [c.id for c in candidates], "history": len(history)})
 
     if plan.kind == "answer":
         if plan.tool == "cards.open":

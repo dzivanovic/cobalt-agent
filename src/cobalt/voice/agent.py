@@ -99,6 +99,10 @@ def build_messages(inputs: PromptInputs, agent: AgentSpec) -> list[ModelMessage]
         "the trader confirms later), clarify (the target or value is unclear), unsupported (no tool "
         "does this), refuse (an order, a trade, or anything on a trading platform).",
         "tool: one name from the list below, or null for clarify / unsupported / refuse.",
+        # card 193 row C2: the stored plan_shape was kind answer, tool null (validate_plan :134)
+        "answer and act always name one tool from the list; their tool is never null. "
+        "A question no tool answers, such as what you can do, is clarify with tool null, "
+        "and say tells the trader in words what the tools below can do.",
         'args: each value is {"span": "<text copied EXACTLY, character for character, from the '
         'transcript>"} or {"candidate": "<an id from candidates>"}. Never invent, round or '
         "reformat a span.",

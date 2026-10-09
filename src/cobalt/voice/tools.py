@@ -118,8 +118,15 @@ def figures_ok(say: Optional[str], result_text: str) -> bool:
     return all(tok in allowed for tok in _NUM.findall(say))
 
 
+def _fold(text: str) -> str:
+    return " ".join(text.casefold().split())
+
+
 def compose_reply(say: Optional[str], template: str) -> str:
-    if say and say.strip() and figures_ok(say, template):
+    """`say` + the template; `say` is dropped when it fails the figures check
+    or already holds the template (case folded, whitespace collapsed) — the
+    planner echoes its own earlier reply from the history (card 193 row A)."""
+    if say and say.strip() and figures_ok(say, template) and _fold(template) not in _fold(say):
         return f"{say.strip()} {template}"
     return template
 

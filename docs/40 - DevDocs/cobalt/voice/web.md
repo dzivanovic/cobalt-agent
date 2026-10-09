@@ -50,3 +50,6 @@ session id is random per page load. No reply audio exists on the server.
 
 ## 2026-10-01 — voice-peers (check)
 The peer-gate paragraph now names the committed list: localhost plus the five tailnet devices (his ruling 2026-09-28 R95, re-stated 2026-10-01 R14), where it said loopback only; the gate's code is unchanged.
+
+## 2026-10-09 — voice-clarify-fix-1009
+The widget's `<style>` gains `#cv-voice .cv-row[hidden]{display:none}`: the `.cv-row` `display:flex` rule had beaten the browser's `[hidden]` rule, so the Confirm/Cancel row showed on every turn; it now shows only while a change is pending (card 193 row B).
