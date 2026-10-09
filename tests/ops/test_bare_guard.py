@@ -590,6 +590,77 @@ def test_g2_a_brace_word_cannot_hide_a_side_value(roots, which):
     assert_denied(run(command, control_seat(roots, which)), G2_ROUTE)
 
 
+# ---- card 162 guard-d1 (D1): G2 on the words bash runs, not the raw string ----------------
+
+D1_SPELLINGS = [
+    'COBALT_ENV="production" uv run cobalt db migrate',
+    "COBALT_ENV='production' uv run cobalt db migrate",
+    "COBALT_ENV=$'production' uv run cobalt db migrate",
+    "COBALT_ENV=prod''uction uv run cobalt db migrate",
+    'env COBALT_ENV="production" uv run cobalt db migrate',
+    'FOO=1 COBALT_ENV="production" uv run cobalt validate',
+    # bash does not brace-expand an assignment word; env's operand it does
+    "env COBALT_ENV=prod{uction,uction} uv run cobalt db migrate",
+    "COBALT_ENV=product\\\nion uv run cobalt db migrate",
+    'uv run cobalt db migrate --"prod"',
+    "uv run cobalt db migrate --pr{od,od}",
+]
+D1_ALLOW_PROD = [
+    "uv run cobalt db migrate --allow-prod",
+    "uv run cobalt db migrate --allow-prod --rollback --down-to 0010",
+    "nice uv run cobalt db migrate --allow-prod",
+    "uv run cobalt db migrate --allow-{prod,x}",
+]
+
+
+@pytest.mark.parametrize("command", D1_SPELLINGS)
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_a_production_spelling_hidden_from_the_raw_string_is_denied(roots, kind, command):
+    """RED on BASE: PROD.search(command) misses the raw text; no rule fired, (0, '')."""
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", D1_ALLOW_PROD)
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_allow_prod_is_denied(roots, kind, command):
+    """RED on BASE: `--allow-prod` targets cobalt_brain (db_migrations/cli.py) and PROD's
+    `--prod` never matched it."""
+    assert_denied(run(command, unstamped_seat(roots, kind)), G2_ROUTE)
+
+
+@pytest.mark.parametrize("command", PROD_READS + [
+    'COBALT_ENV="production" uv run cobalt db query --prod --side user "SELECT 1"',
+    "COBALT_ENV=production uv run cobalt db query --prod 'select 1'",
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_the_one_production_read_still_passes(roots, kind, command):
+    """CONTROL C1 (R686): prod_read stays the one pass, judged on the same words."""
+    assert_allowed(run(command, unstamped_seat(roots, kind)))
+
+
+@pytest.mark.parametrize("command", [
+    "COBALT_ENV=dev uv run pytest -q",
+    'COBALT_ENV="dev" uv run cobalt db migrate',
+    "uv run cobalt db migrate --rollback --down-to 0010",
+    "uv run cobalt --products",
+    'grep -rn "allow.prod" src/',
+    "grep -rn production src/",
+    "grep -rn COBALT_ENV src/",
+    "uv run pytest -q tests/ops/test_bare_guard.py -k prod",
+])
+@pytest.mark.parametrize("kind", UNSTAMPED_KINDS)
+def test_d1_a_non_production_command_still_passes(roots, kind, command):
+    """CONTROL C2: an ordinary command names no production word."""
+    assert_allowed(run(command, unstamped_seat(roots, kind)))
+
+
+@pytest.mark.parametrize("command", D1_SPELLINGS + D1_ALLOW_PROD)
+@pytest.mark.parametrize("kind", ["deploy", None])
+def test_d1_the_deploy_hub_and_an_unknown_seat_are_unaffected(roots, kind, command):
+    """CONTROL C2: G2 reads no deploy seat and no unknown seat."""
+    assert_allowed(run(command, make_seat(roots, kind)))
+
+
 # ---- G3 .env NEVER READ ------------------------------------------------------------------
 
 ENV_READS = [
