@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-08.md 2026-10-08 R707
 BRANCH: ops/guard-d1-1009
 WORKTREE: guard-d1-1009
 BASE: 53687dea
-TIP:
+TIP: 8182771b
 REPORT: /Users/cobalt/cobalt-wt/guard-d1-1009/docs/40 - DevDocs/reports/guard-d1-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/guard-d1-check-2026-10-09.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-08 R686
 
