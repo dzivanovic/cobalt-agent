@@ -94,6 +94,8 @@ CURRENT = "## §5 CURRENT"
 ITEM = "OWED: "
 NONE = "owed: none"
 QUEUE = "QUEUE"
+# a table cell boundary: a pipe not escaped as `\|`
+CELL = re.compile(r"(?<!\\)\|")
 WAITING = "waiting on Dejan"
 # a waiting item settles only with the row it was asked in (card 164 G7 (b))
 ASKED = re.compile(r"\bR\d+\b")
@@ -264,8 +266,11 @@ def queued(lines):
             break
         if not line.startswith("|"):
             continue
-        cells = line.strip().strip("|").split("|")
-        if cells[0].strip().startswith(QUEUE):
+        # the cells between the edge pipes; an escaped `\|` stays inside its cell (check A1, A3, B2)
+        cells = CELL.split(line.strip())[1:]
+        if cells and not cells[-1]:
+            cells = cells[:-1]
+        if cells and cells[0].strip().startswith(QUEUE):
             return cells[2].strip() if len(cells) >= 3 else line.strip()
     return None
 
