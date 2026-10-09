@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09.md R716
 BRANCH: ops/radar-top50-1009
 WORKTREE: radar-top50-1009
 BASE: 0e84db6f
-TIP: 1ad357a3
+TIP: bdd10f72
 REPORT: /Users/cobalt/cobalt-wt/radar-top50-1009/docs/40 - DevDocs/reports/radar-top50-build-2026-10-09.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-top50-check-2026-10-09.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-top50-check-r2-2026-10-09.md
 HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
