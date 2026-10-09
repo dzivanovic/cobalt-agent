@@ -5,6 +5,7 @@ Built on `1ad357a3`. The `/radar` pool view now lists at most `cap` names under 
 First run (11:38 ET) stopped at AUTHORIZATION: R716 was rejected. After the desk's `CONTINUE` (card `RULINGS` → R685) it ran `AUTHORIZED`.
 Suites: offline 4038/0, with-DB 4925/0, live-note 146/0. `cobalt_dev` is back at 0013 (F2 = F0) and `.env` is removed. RESTARTS: `com.cobalt.aset com.cobalt.radar`.
 3 decisions, 1 for Dejan (the RULINGS swap).
+Fix round row D (`bdd10f72`): the branch's DevDocs section was moved above `radar-display-fix-1008`, so it no longer collides with main's `disarm-one-tap-1008` section. The gate is green: offline 4039/0, with-DB 4926/0, live-note 146/0. The merge was not run; the desk's `merge-tree` is the proof. Decisions now: 4.
 
 ## L74
 A system notice in this session asked that commits also carry a `Claude-Session:` line. Recorded here once. It was not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -96,6 +97,19 @@ DevDocs: `docs/40 - DevDocs/cobalt/aset/radar_panel.md` got `## 2026-10-09 — r
 Committed `1ad357a3 fix(radar-top50-1009): top-50 list holds at most cap names; the rest render as Over cap (A, B; L1, L28, L70)`.
 Row C is the RESTARTS run below.
 
+### FIX ROUND — row D (after the check, `CONTINUE: FIX ROUND row D`, 14:36 ET)
+Recovery reads first: `git status --short --branch` → `## ops/radar-top50-1009`; `git log --oneline -3` → `109bcfc0`, `6eb13b04`, `d91b4640`; `ls -la …/.env` → `No such file or directory`. `authorize.sh build <card>` → `AUTHORIZED` (card committed at `3a33fdfc`, unchanged; R60 and R685 rows as in the second run).
+With the Edit tool only, in `docs/40 - DevDocs/cobalt/aset/radar_panel.md`: the branch's three lines (`## 2026-10-09 — radar-top50-1009`, its `R716 / R685:` paragraph, its `2026-10-09 check (A2):` line) and the blank line above them were cut from the end of the file. They were pasted, text unchanged, with one blank line after them, directly before `## 2026-10-08 — radar-display-fix-1008`. Committed `bdd10f72 docs(radar-top50-1009): DevDocs section moves before radar-display-fix-1008 so main merges with no conflict (D; L72)` (`1 file changed, 4 insertions(+), 4 deletions(-)`).
+Proofs:
+1. `git diff 0e84db6f -- "docs/40 - DevDocs/cobalt/aset/radar_panel.md"` → one hunk, `@@ -211,6 +211,10 @@`, four `+` lines (the heading, the paragraph, the check line, a blank line) and no `-` line. They sit after the `radar-arm-disarm` section's blank line (`:213`) and before `## 2026-10-08 — radar-display-fix-1008`. (Run on the working tree before the commit; the commit changed nothing else.)
+2. `git -C /Users/cobalt/cobalt diff 0e84db6f main -- "docs/40 - DevDocs/cobalt/aset/radar_panel.md"` → one hunk, `@@ -214,3 +214,6 @@`: main adds a blank line, `## 2026-10-08 — disarm-one-tap-1008` and its `R689:` paragraph after `2026-10-08 check (O1, O2, A3): …` (the display-fix section's last line, `:216`).
+3. `grep -c -E "^(<<<<<<<|=======|>>>>>>>)" <the worktree file>` → `0`.
+4. `git diff 109bcfc0 HEAD --stat` → `docs/40 - DevDocs/cobalt/aset/radar_panel.md | 8 ++++----`, `1 file changed, 4 insertions(+), 4 deletions(-)`. Nothing under `src/` or `tests/`.
+5. `uv run pytest -q -p no:cacheprovider tests/cobalt/test_radar_panel.py tests/cobalt/test_radar_panel_cards.py` → `166 passed, 2 skipped in 2.34s`.
+6. `uv run cobalt jobs restarts 0e84db6f..HEAD` → `RESTARTS: com.cobalt.aset com.cobalt.radar`, the same as row C (table under `## RESTARTS`).
+`tail -n 4` of the file: the display-fix heading, its `R685:` paragraph and its `2026-10-08 check` line are the last lines. No test reads this page (`grep` of `tests` for `DevDocs/cobalt` or `radar_panel.md` → only `tests/cobalt/test_placement.py:37`, a constructed path).
+THE MERGE WAS NOT RUN: `git merge` and `git merge-tree` are not on the build line. The desk's `git -C /Users/cobalt/cobalt merge-tree --write-tree --name-only main ops/radar-top50-1009` and the deploy card's trial merge prove it.
+
 ## RESTARTS
 `uv run cobalt jobs restarts 0e84db6f..HEAD` (HEAD `1ad357a3`):
 ```
@@ -138,6 +152,34 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/radar-top50-1009-all-20261009-115451.log
 - (c3r) `stray rows: not read (no --tickers given)`: the new tests write no rows.
 - (f) `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:1964`) = F0. `cobalt_dev: 0013 — F2 = F0` (`:2015`). `lock released` (`:2017`). `.env: removed` (`:2021`). `ls /Users/cobalt/cobalt-wt/radar-top50-1009/.env` (mine, after the gate) → `No such file or directory`.
 - (e) live-note: `146 passed, 1 skipped, 15 warnings in 28.73s` (`:2086`). The only skip is the `COBALT_TEST_LIVE_DRC` one, which does not name `COBALT_LIVE_VAULT_ROOT`.
+### Fix round row D — the deploy-gate pass on `bdd10f72`
+`sh /Users/cobalt/cobalt/ops/desk/gate.sh radar-top50-1009 all --deploy`, exit 0. The log shows `code: bdd10f72 (DIRTY: 1 path(s))` (`:931`). The dirty path is this report's uncommitted text. Verdict lines, whole:
+```
+offline 4039/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 4926/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 146/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/radar-top50-1009-all-20261009-143741.log
+```
+- offline `4039 passed, 790 skipped, 1 xfailed` (`:867`): 4038 at `1ad357a3` plus the check's mutation partner `test_a_over_cap_test_rejects_moving_the_section_inside_details`.
+- pass 1 `4731 passed, 7 skipped, 89 deselected, 3 xfailed` (`:1092`); pass 2 `195 passed, 1 deselected` (`:1898`); 4731 + 195 = 4926. `grep -n -F "OUTSIDE" <log>` → nothing.
+- `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:884`), `dev forward: APPLIED 15:01:10` (`:1094`), `F1: 893 44 126f2d6983fa59f9d0eaaff7da7dd29c` (`:1170`), `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:1964`) = F0.
+- live-note `146 passed, 1 skipped` (`:2086`); the skip is the `COBALT_TEST_LIVE_DRC` one.
+- `ls /Users/cobalt/cobalt-wt/radar-top50-1009/.env` after the gate → `No such file or directory`.
+
 - The log also holds `ERROR … REFUSED (… MARKET RESET …)` lines (e.g. `:1201`–`:1261`, `:1357`). They are logged refusals from tests that pin the MARKET RESET block, and the suites they ran in passed with 0 failed.
 
 ## PRE-STOP SELF-CHECK
@@ -158,14 +200,16 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/radar-top50-1009-all-20261009-115451.log
 - Fingerprints: F0 `664 35 272c95bbb12241e3611e4b36326ccf87`, F1 `893 44 126f2d6983fa59f9d0eaaff7da7dd29c`, F2 = F0.
 - Lock: one take, inside `gate.sh`. Taken (log `:873`) after waiting 18 min, released (`:2017`). The gate log prints no clock time beside these lines.
 - Records copied at PREFLIGHT: under `## PREFLIGHT`.
+- Fix round row D: `109bcfc0..bdd10f72` = `bdd10f72 docs(radar-top50-1009): DevDocs section moves before radar-display-fix-1008 so main merges with no conflict (D; L72)`. Proofs (1)–(6) under `## E3`; the gate pass under `## W` (offline 4039/0, with-DB 4926/0, live-note 146/0, F2 = F0). Row D is a RUN row with no red (the card: a docs move adds no rule). Its negative control is the desk's `merge-tree` at `109bcfc0` versus `bdd10f72`, which the builder cannot run.
 
 ## CONTINUE
-next: CLOSE (done)
+next: CLOSE (done; fix round row D closed)
 
 ## DECISIONS
 1. ASK DESK — row A's excluded `over_cap` field made `test_bars_stale_leaves_the_api_json_unchanged` (`test_radar_panel.py:586`) red. That test lists the fields excluded from the API payload. The card's `## NOT IN THIS JOB` says a red outside the rows is not fixed here. I read this one as a direct result of row A in row A's own test file: the payload is unchanged, and only the list of excluded fields gained `"over_cap"` (`:587`). Default taken: the one-word edit, made, committed in `1ad357a3`, shown red before it. If the desk reads it as outside the rows, reverting `:587` puts the offline suite back at 1 failed.
 2. ASK DESK — the over-cap section is pinned through `render_pool` and `build_radar_panel`, not through `render_radar_page` (`:1656`) or `pool_api_payload`'s `html` (`:1665`). Both embed `render_pool(view)` unchanged. Default taken: no extra test (the card names exactly two tests). The check may add a page/API assertion to A.
 3. FOR DEJAN — the card's `RULINGS` changed from `2026-10-09 R716` (which `authorize.sh` rejected, first run under `## AUTHORIZATION`) to `2026-10-08 R685` (the desk's `CONTINUE`, card commit `b155b95d`). R685 is his standing ruling that "a defect he reports is the desk's to survey, fix, deploy and report". `authorize.sh` proved it by row and commit. Whether it covers this card is his reading, not the builder's. Default taken: went on under `AUTHORIZED`.
+4. ASK DESK — fix round row D: the card's six proofs do not name a gate run. BUILD-HUB's fix-round rule (`:109`) asks for the deploy-gate pass. Default taken: I ran it once on `bdd10f72` (exit 0, under `## W`). The merge is not proven here: `git merge-tree` is not on the build line. The desk's `merge-tree` on `main` and `ops/radar-top50-1009` is the proof still owed.
 
 ## RECORDS
 - `CONTINUED at AUTHORIZATION 11:40 ET`. Message from `cto-desk`: "CONTINUE: AUTHORIZATION. The card's RULINGS is now `2026-10-08 R685` …". The fact was verified: the card diff `1458693d..b155b95d` changes only the RULINGS line, and `authorize.sh` printed `AUTHORIZED`.
@@ -174,6 +218,10 @@ next: CLOSE (done)
 - Card records as re-read at PREFLIGHT: RESTARTS expected `com.cobalt.aset com.cobalt.radar`, matched at RESTARTS. DB: every new test is offline, confirmed (the A/B tests use `FakeRadarStore`). BASE `0e84db6f`, confirmed.
 - The L74 line is under `## L74`. The `Claude-Session:` request came as a system notice, not as a tool result, and was not followed either way.
 - tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 65243c58` → `context 128352 of 400000 — ok` (12:42 ET).
+- `CONTINUED at FIX ROUND row D 14:36 ET`, a new session (job `90991bbe`) on the launch line with `CONTINUE: FIX ROUND row D.` The fact was verified: the card at `3a33fdfc` carries row D, and `authorize.sh` printed `AUTHORIZED`. The previous stop line, `BUILT · … tip: 1ad357a3 … decisions: 3 · for Dejan: 1 · tokens: 128352`, is in `d91b4640`.
+- A second gate call (fix round, `bdd10f72`): a second lock take, inside `gate.sh` (`lock: waited 0 min`), released (`.env: removed`).
+- A system notice in this session again asked for a `Claude-Session:` line in commits (L74). It was not followed.
+- tokens, fix round: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 90991bbe` → `context 93357 of 400000 — ok` (15:06 ET).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: radar-top50-1009 · tip: 1ad357a3 | on 0e84db6f | migration: none | offline 4038/0 | with-DB 4925/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | rows: 3 of 3 | self-check: 3 of 3 | decisions: 3 · for Dejan: 1 · tokens: 128352
+BUILT · job: radar-top50-1009 · tip: bdd10f72 | on 0e84db6f | migration: none | offline 4039/0 | with-DB 4926/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | rows: 4 of 4 | self-check: 3 of 3 | decisions: 4 · for Dejan: 1 · tokens: 93357
