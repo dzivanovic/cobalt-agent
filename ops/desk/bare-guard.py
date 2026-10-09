@@ -797,8 +797,12 @@ def is_env(path):
 
 # card 120 O2 (his 2026-10-08 R686): the secrets beside .env, refused for every seat
 SECRETS = (".cobalt_key", ".cobalt_vault")
-# card 158 D2: a secret NAME as a path component inside a longer word, at a component boundary
-SECRET_PART = re.compile(r"""(^|[/'"\s(=:])\.(env|cobalt_key|cobalt_vault)($|[/'"\s),:])""", re.I)
+# card 158 D2: a secret NAME as a path component inside a longer word, at a component boundary;
+# check O2-O4: a shell operator, curl's `@`, a backtick, or a short option's attached value
+# (`-T.env`) is a boundary too; the trailing one is a lookahead, so every name of a word is found
+SECRET_PART = re.compile(
+    r"""(^|^-[A-Za-z]|[/'"\s(=:@<>`])\.(env|cobalt_key|cobalt_vault)(?=$|[/'"\s),:;|&<>`])""", re.I
+)
 KEYCHAIN_READS = ("find-generic-password", "find-internet-password", "dump-keychain", "export")
 
 
@@ -843,13 +847,20 @@ def env_words(args):
 
 
 def secret_part(word):
-    """D2 part (b): the secret NAME a word holds as a path component inside a longer word (an
-    interpreter's `open('/…/.cobalt_key')`), in any of its brace alternatives; None if none."""
-    for alt in braces(word):
-        m = SECRET_PART.search(alt)
-        if m:
-            return m.group(2).lower()
-    return None
+    """D2 part (b): every secret NAME a word holds as a path component inside a longer word (an
+    interpreter's `open('/…/.cobalt_key')`), over all its brace alternatives (check O5, A1, B1:
+    a later `.env` keeps G3's route); an empty set if none."""
+    return {m.group(2).lower() for alt in braces(word) for m in SECRET_PART.finditer(alt)}
+
+
+def bash_words(segment):
+    """check O1: the words bash makes of a segment. words() ends a word at a `#` inside it and
+    drops the rest (shlex comments); bash starts a comment only at a word's start."""
+    segment = unquote_ansi_c(segment)
+    try:
+        return shlex.split(segment)
+    except ValueError:
+        return segment.split()
 
 
 def g3_bash(segs):
@@ -861,7 +872,7 @@ def g3_bash(segs):
             parts = [secret_part(w) for w in args]
             if any(is_secret(w) for w in args) or any(parts):
                 # a .env read keeps G3's own route
-                env = any(is_env(w) for w in args) or "env" in parts
+                env = any(is_env(w) for w in args) or any("env" in p for p in parts)
                 return ROUTE["G3"] if env else ROUTE["G3 secret"]
         if keychain_read(ws):
             return ROUTE["G3 secret"]
@@ -954,7 +965,8 @@ def bash_rules(command, s):
     # a segment that is not a read-only filter)
     segs += [u for u in (unwrap(ws) for ws in segs if verb(ws) in WRAPPERS) if u]
     kind = s["kind"]
-    deny = g3_bash(segs)
+    # check O1: G3 also reads each segment's words with a `#` inside a word kept, as bash does
+    deny = g3_bash(segs + [bash_words(x) for x in segments(command, cuts)])
     if deny:
         return "G3", deny
     if kind is not None and kind != "deploy" and PROD.search(command) and not prod_read(command):
