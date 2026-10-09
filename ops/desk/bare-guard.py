@@ -17,14 +17,14 @@
 # under the worktree root = worker; anything else is UNKNOWN, and an unknown seat meets only the
 # kind-free rules G1, G3, G6.
 #
-# THE RULES, first hit wins. Bash: G3 .env or secret read · G2 production (not deploy), but the
-# one db query read (R686) · G4 git shape
+# THE RULES, first hit wins. Bash: G3 .env or a secret named by any word (D2) · G2 production
+# (not deploy), but the one db query read (R686) · G4 git shape
 # (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
 # check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
 # read-only; card 06 B2–B4: nor `sort -o`/`--output`/`--compress-program`, a second `uniq`
-# operand or `awk -f`, in a pipe segment or as one command; B1: `sort cut uniq awk` are G3
-# readers too; B9: an awk program with `getline`, `ARGV`, `ARGC`, `@include` or `@load` is G3;
+# operand or `awk -f`, in a pipe segment or as one command; B1: G3 reads every verb's words
+# (D2); B9: an awk program with `getline`, `ARGV`, `ARGC`, `@include` or `@load` is G3;
 # B10: a command led by `time nice env command nohup timeout stdbuf xargs` is judged by every
 # rule as the command it runs, and a wrapper whose command cannot be found is denied; B11: an
 # `awk` pipe segment is not a read-only filter, G11, B3 and B9 stay as defence; check r3: words are
@@ -83,6 +83,7 @@ HUBS = {
 WORKERS = ("build", "check", "devfix", "deploy", "worker")
 GIT_SHAPED = ("build", "check", "devfix", "worker")
 READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc")
+# no rule reads ENV_READERS since D2 (card 158): G3 reads every verb's words
 ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
 LAUNCHERS = ("claude", "codex", "grok", "agy")
 # B10: a wrapper runs the command that follows its options and operands; per wrapper, the
@@ -796,6 +797,12 @@ def is_env(path):
 
 # card 120 O2 (his 2026-10-08 R686): the secrets beside .env, refused for every seat
 SECRETS = (".cobalt_key", ".cobalt_vault")
+# card 158 D2: a secret NAME as a path component inside a longer word, at a component boundary;
+# check O2-O4: a shell operator, curl's `@`, a backtick, or a short option's attached value
+# (`-T.env`) is a boundary too; the trailing one is a lookahead, so every name of a word is found
+SECRET_PART = re.compile(
+    r"""(^|^-[A-Za-z]|[/'"\s(=:@<>`])\.(env|cobalt_key|cobalt_vault)(?=$|[/'"\s),:;|&<>`])""", re.I
+)
 KEYCHAIN_READS = ("find-generic-password", "find-internet-password", "dump-keychain", "export")
 
 
@@ -839,13 +846,34 @@ def env_words(args):
     return out
 
 
+def secret_part(word):
+    """D2 part (b): every secret NAME a word holds as a path component inside a longer word (an
+    interpreter's `open('/…/.cobalt_key')`), over all its brace alternatives (check O5, A1, B1:
+    a later `.env` keeps G3's route); an empty set if none."""
+    return {m.group(2).lower() for alt in braces(word) for m in SECRET_PART.finditer(alt)}
+
+
+def bash_words(segment):
+    """check O1: the words bash makes of a segment. words() ends a word at a `#` inside it and
+    drops the rest (shlex comments); bash starts a comment only at a word's start."""
+    segment = unquote_ansi_c(segment)
+    try:
+        return shlex.split(segment)
+    except ValueError:
+        return segment.split()
+
+
 def g3_bash(segs):
     for ws in segs:
         # bash removes a backslash-newline inside a word; words() keeps its newline (check B3)
-        args = [x for w in env_words(ws[1:]) for x in (w, w.replace("\n", ""))]
-        if verb(ws) in ENV_READERS and any(is_secret(w) for w in args):
-            # a .env read keeps G3's own route
-            return ROUTE["G3"] if any(is_env(w) for w in args) else ROUTE["G3 secret"]
+        args = [x for w in env_words(ws) for x in (w, w.replace("\n", ""))]
+        # D2: every verb's words but bare `ls`, which only shows a file is there
+        if verb(ws) != "ls":
+            parts = [secret_part(w) for w in args]
+            if any(is_secret(w) for w in args) or any(parts):
+                # a .env read keeps G3's own route
+                env = any(is_env(w) for w in args) or any("env" in p for p in parts)
+                return ROUTE["G3"] if env else ROUTE["G3 secret"]
         if keychain_read(ws):
             return ROUTE["G3 secret"]
         if verb(ws) == "awk" and awk_reads(ws[1:]) and not awk_writes(ws[1:]):
@@ -937,7 +965,8 @@ def bash_rules(command, s):
     # a segment that is not a read-only filter)
     segs += [u for u in (unwrap(ws) for ws in segs if verb(ws) in WRAPPERS) if u]
     kind = s["kind"]
-    deny = g3_bash(segs)
+    # check O1: G3 also reads each segment's words with a `#` inside a word kept, as bash does
+    deny = g3_bash(segs + [bash_words(x) for x in segments(command, cuts)])
     if deny:
         return "G3", deny
     if kind is not None and kind != "deploy" and PROD.search(command) and not prod_read(command):
