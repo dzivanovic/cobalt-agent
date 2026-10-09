@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09.md R719
 BRANCH: ops/arm-unsized-1009
 WORKTREE: arm-unsized-1009
 BASE: 90342cfc
-TIP:
+TIP: 676abb60
 REPORT: /Users/cobalt/cobalt-wt/arm-unsized-1009/docs/40 - DevDocs/reports/arm-unsized-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/arm-unsized-check-2026-10-09.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
 ## ROWS
