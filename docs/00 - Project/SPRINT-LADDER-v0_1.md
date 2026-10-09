@@ -852,6 +852,32 @@ OFF-LADDER work of 2026-10-07 (ruled, not on a ladder line; each with the ruling
 | S4-P1 card `72`, S4-P2 card `73` | NOT STARTED (cards ready) | His R598 (10-06): builds wait for the S3 smoke and D2. |
 | Standing rules of the day | RULED | 10-07 R613 (worktree cleanup is the desk's, APPLIED at wake-up 10-08), R644 (DEVFIX-HUB installed). |
 
+### Status 2026-10-08
+S3 status block (ruled 09-19 R14); S3's ninth; the earlier `### Status` blocks above stay as written. Written by close hub `close-1008` for 10-08 alone from `reports/cto-2026-10-08.md` rows R654–R713 (06:55 → 16:28 ET); re-verified against the tree (L35): `git tag --list "deploy-2026-10-08*"` = `-desk-ops-fixes-attempt2`, `-guard-g2-open-reads`, `-price-floor`, `-radar-display-fix`, `-stt-model-fix`. The missed 10-07 close ran 06:59 ET (`CLOSE PUSHED 1f9ac874`, R656). Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| S3 feature | Status | Evidence |
+|---|---|---|
+| F11 Fill recompute + fill/exit capture | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`). First live-morning proof not recorded. |
+| F22 Trade-note auto-creation | DONE-LIVE | Unchanged (`deploy-2026-09-30-2`, `-3`, `-4`). |
+| F14 DRC prefill / reconcile / DRC→mode | DONE-LIVE | Unchanged (K3 `07a4b8fe`, D5 `c8503415`, card 39 `9a29f61e`). Open to him: D5-3 rule question. |
+| F15 Prediction records | DONE-LIVE | Unchanged (P1; P2 `1b1d298e`). |
+| S3 smoke (live morning, tap through DRC and replay) | NOT STARTED | NOT RUN on 10-08. Cards 137 (price floor) and 126 (STT) are DEPLOYED and 118 (display fix) is live; the desk's 16:28 ET note to him says only his `/radar` look remains (§5 CURRENT). Steps: ARM, trigger, fill, ½ off, close; note, DRC, proposal, replay. |
+
+**Stop date: 2026-10-07 (passed). S3: LATE — day 15 (10-08).** Reason: his R653 (10-07) moved the smoke look to 10-08 and recorded S3 ending LATE; the smoke did not run on 10-08 either. All four S3 features are DONE-LIVE; what is open is the smoke alone. S4 (10-08 → 10-14) is open on the ladder; S4-P1 `72` and S4-P2 `73` builds still wait on the smoke and D2 (Finviz rate) (R598, R602). Watch items (not a ruling): STT model missing was found by his reload and fixed by card 126 (R687, R713); the price floor changed the radar lists (R692, R712); guard gaps D2 then D1 are cards after his smoke (R707); X29 fixture error still owed its own card.
+
+OFF-LADDER work of 2026-10-08 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Desk-ops fixes (card 106, G1-G5, F1-F3) | DONE-LIVE | His R657, R658, R660; brain R664, R669 (L79). `deploy-2026-10-08-desk-ops-fixes-attempt2` `c2bda2a4`, offline 3991/0, with-DB 4875/0, RESTARTS none, smoke GREEN (R677); first deploy FAILED PREFLIGHT (R675), recut attempt FAILED resume (R676). |
+| Radar-cards survey (prompts 114, 115) | DONE (read-only) | His R678. Cause `display`: 19 cards, ladder query returns 19 (R684). |
+| Open production reads (card 120) | DONE-LIVE | His R686 (standing). `deploy-2026-10-08-guard-g2-open-reads` `f37e88d8`, smoke GREEN (R706 and §5); LAWS L62 folded. Guard gaps D2, D1: cards after his smoke (R707). |
+| Radar display fix (card 118) | DONE-LIVE | His R685 (standing). `deploy-2026-10-08-radar-display-fix` `752a8ce6`, smoke GREEN (R709, §5). His look: owed. |
+| Global $5 price floor (card 137, deploy card 150) | DONE-LIVE | His R692. `deploy-2026-10-08-price-floor` `eef3502d`, migration 0023 applied, smoke GREEN (R712). |
+| STT model fix (card 126, deploy card 149) | DONE-LIVE | His R685. `deploy-2026-10-08-stt-model-fix` `b67c96c6`, no migration, smoke GREEN; model fetch run once, `voice model READY: tiny.en` (R713). |
+| DISARM one-tap chips (card 134) | NOT STARTED (card drafted) | His R689. Brain checks the draft, then preflight, build after 118, check, deploy (§5 OWED). |
+| Day-open desk check (card 109) | DROPPED | Brain order R664 (L79). |
+| Standing rules of the day | RULED | 10-08 R662 (the brain directs the desk, L79 amended), R685 (a defect he reports is the desk's, APPLIED), R686 (read-only production reads, APPLIED), R689 (radar taps are one-tap, APPLIED), R692 (floor, APPLIED; LAWS fold at the close). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

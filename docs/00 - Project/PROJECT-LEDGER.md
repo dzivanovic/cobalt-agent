@@ -3615,3 +3615,68 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-07*"` = `deploy-2026-10-07-desk-stop-guard`, `deploy-2026-10-07-radar-arm-disarm`, `deploy-2026-10-07-radar-direction-color-attempt2`, `deploy-2026-10-07-worktree-salvage`.
 - STOP LINE (L35), `reports/close-2026-10-06.md`: `CLOSE PUSHED 13d02cc9 · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-07.md` `## 8`.
+
+### 2026-10-08 — Desk-ops fixes, open production reads, radar display fix, $5 price floor and STT model fix deployed; missed 10-07 close run
+- R654 06:55 DESK RECORD: no HANDOVER found, predecessor `02bc7d67` dead; R613 marked APPLIED.
+- R655 06:55 LAUNCHED: missed 10-07 close, hub `1bd9d0d3`.
+- R656 06:59 RECORD: 10-07 close done, `CLOSE PUSHED 1f9ac874`.
+- R657 07:13 HIS RULING: one ops card, rows G1-G4. APPROVED; drafter prompt `105`.
+- R658 07:16 HIS RULING: rows G5 and G6 join card `106`. APPROVED.
+- R659 07:20 RECORD: card `106` DRAFTED, G1-G6.
+- R660 07:41 HIS RULING: D1 = A, D2 = B (G6 leaves for its own card). APPROVED.
+- R661 07:43 LAUNCHED: card `106` AMENDED to G1-G5; preflight on `110`.
+- R662 07:52 HIS RULING: the brain directs the desk, no ask to him (L79 amended). APPLIED.
+- R663 07:44 RECORD: card `109` (day-open C7) DRAFTED; held for the brain.
+- R664 07:45 DESK RECORD (brain): card `106` OK, G4 also notifies when no desk is live; card `109` DROPPED.
+- R665 07:46 LAUNCHED: card `106` AMENDED 2; preflight on `110`.
+- R666 07:49 LAUNCHED: card `106` preflight ready YES (26 checks); build.
+- R667 08:24 LAUNCHED: card `106` BUILT tip `d522f6f7`; check.
+- R668 08:57 RECORD: card `106` CHECK ready NO (1 held: stale test).
+- R669 08:58 DESK RECORD (brain): one fix round, rows drafter on prompt `112`.
+- R670 09:00 LAUNCHED: fix-round rows F1-F3; build `004bc9e2`.
+- R671 09:25 RECORD: fix round BUILT tip `2413dbec`; deploy script refuses (ready NO).
+- R672 09:26 LAUNCHED: DESK RECORD (brain), check hub `ef69bdf9` re-runs S1.
+- R673 09:35 DESK RECORD (brain): radar alive; heartbeat RED known AMBER ticket.
+- R674 09:37 LAUNCHED: card `106` S1 PASS, ready YES; deploy card `113`.
+- R675 10:09 LAUNCHED: deploy `ba955083` FAILED PREFLIGHT (staged file on main); relaunched as `e888aa7c`.
+- R676 10:12 RECORD: RECUT attempt 2 FAILED: resume.
+- R677 10:49 RECORD: card `106` DEPLOYED, tag `deploy-2026-10-08-desk-ops-fixes-attempt2` `c2bda2a4`, smoke GREEN.
+- R678 11:00 HIS RULING: one read-only production read set for the radar-cards survey. APPROVED.
+- R679 11:00 DESK RECORD (brain): page fetches no `/radar` since 14:46Z; he reloads.
+- R680 11:02 LAUNCHED: drafter `f57bab5c` on prompt `114`.
+- R681 11:04 LAUNCHED: drafter done; preflight `316a4632` on `116`.
+- R682 11:05 LAUNCHED: preflight PASS; survey `fdd4f570` on `115`.
+- R683 11:09 RECORD: survey FAILED, guard G2 refused; cell fixed, relaunched.
+- R684 11:09 RECORD: survey DONE, cause `display`, 19 cards.
+- R685 11:23 HIS RULING: a defect he reports is the desk's to survey, fix, deploy and report. APPROVED, APPLIED.
+- R686 11:28 HIS RULING: every seat may run read-only production reads. APPROVED; card `120`.
+- R687 11:35 RECORD: `/radar` lists cards; voice panel reads STT model missing.
+- R688 11:39 LAUNCHED: builds card `118` `84337fb0`, card `120` `f99caa4c`; preflight `8ce5a07f` on card `126`.
+- R689 11:47 HIS RULING: radar taps are one-tap; DISARM chips, card `134`. APPROVED, APPLIED.
+- R690 11:49 LAUNCHED: desk wake-up `763ffbe4`; card `126` preflight r2.
+- R691 11:50 LAUNCHED: card `126` preflight r2 passed; build `abde8717`.
+- R692 11:53 HIS RULING: global $5 price floor after lists are gathered. APPROVED, APPLIED.
+- R693 11:55 LAUNCHED: price floor drafter on prompt `136`.
+- R694 12:05 LAUNCHED: card `137` DRAFTED; preflight `c7225657`.
+- R695 12:06 LAUNCHED: brain (L79): floor in `radar.yaml`; amend drafter.
+- R696 12:10 LAUNCHED: card `137` AMENDED; preflight r1 `8468b25d`.
+- R697 12:17 LAUNCHED: preflight r1 FAIL; amend2 drafter.
+- R698 12:18 LAUNCHED: card `120` BUILT tip `773f39e7`; check `d98c7ca5`.
+- R699 12:20 LAUNCHED: card `137` amended again; preflight r2.
+- R700 12:22 RECORD: card `126` build failed at gate on a leftover test folder; CONTINUE sent.
+- R701 12:25 LAUNCHED: preflight r2 1 fail; amend3 drafter.
+- R702 12:27 LAUNCHED: card `118` BUILT tip `8f42bf2e`; check; preflight r3.
+- R703 12:31 LAUNCHED: preflight r3 1 fail; amend4 drafter.
+- R704 12:34 LAUNCHED: card `137` amend4 done; preflight r4.
+- R705 12:43 LAUNCHED: preflight r4 passed (39 checks); build `caf5c1a5`.
+- R706 12:52 LAUNCHED: card `120` check ready YES; deploy card `147`, hub `48d4d076`.
+- R707 12:55 RECORD (brain, L79): guard gap cards D2 then D1 after his S3 smoke.
+- R708 13:45 LAUNCHED: card `126` BUILT tip `6db7a75d`; check; card `118` ready YES, deploy card `148`.
+- R709 13:50 LAUNCHED: card `137` BUILT tip `f105b82e`; check; deploy hub `9e8a4161` for card `118`.
+- R710 15:01 RECORD: REFRESH, successor `6b951e23`; cards `137`, `126` ready YES; card `118` DEPLOYED.
+- R711 15:04 LAUNCHED: card `150` READ-BACK added `b131b85b`; deploy hub `983d7603`.
+- R712 15:52 RECORD: card `150` DEPLOYED `eef3502d`, tag `deploy-2026-10-08-price-floor`, 0023 applied, smoke GREEN.
+- R713 16:28 RECORD: card `149` DEPLOYED `b67c96c6`, tag `deploy-2026-10-08-stt-model-fix`, smoke GREEN.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-08*"` = `deploy-2026-10-08-desk-ops-fixes-attempt2`, `deploy-2026-10-08-guard-g2-open-reads`, `deploy-2026-10-08-price-floor`, `deploy-2026-10-08-radar-display-fix`, `deploy-2026-10-08-stt-model-fix`.
+- STOP LINE (L35), `reports/close-2026-10-07.md`: `CLOSE PUSHED 1f9ac874 · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-08.md` `## 8`.
