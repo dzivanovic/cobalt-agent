@@ -842,6 +842,50 @@ def test_pool_member_count_mismatch_fails_instead_of_rendering_empty():
         _build(pool_row=pool_row, members=members)
 
 
+def _open_admitted_copies(count, *, members, cap=50):
+    """`count` copies of the small snapshot's current row: tickers T1.., ranks 1.."""
+    pool_row, snapshot = _small_snapshot()
+    rows = []
+    for index in range(count):
+        row = copy.deepcopy(snapshot[0])
+        row["id"] = 10_001 + index
+        row["ticker"] = f"T{index + 1}"
+        row["last_rank"] = index + 1
+        rows.append(row)
+    pool_row.update(members=members, cap=cap)
+    return pool_row, rows
+
+
+def test_a_pool_over_cap_renders_cap_names_and_the_rest_in_their_own_section():
+    # T51 is the held or sticky member past the 50 seats.
+    pool_row, rows = _open_admitted_copies(51, members=51)
+    view, _ = _build(pool_row=pool_row, members=rows)
+
+    assert len(view.pool.current) == 50
+    assert [row.ticker for row in view.pool.over_cap] == ["T51"]
+    assert "T51" not in [row.ticker for row in view.pool.current]
+    assert view.pool.over_cap[0].category == "current"
+
+    rendered = panel.render_pool(view.pool)
+    heading = 'Over cap — open admitted beyond cap <span class="count">1</span>'
+    assert 'Current admitted <span class="count">50</span>' in rendered
+    assert heading in rendered
+    assert rendered.index('<tr data-episode-id="10051"') > rendered.index(heading)
+    assert "<b>51</b> / 50 admitted" in rendered
+
+
+def test_a_full_pool_renders_fifty_and_no_over_cap_section():
+    pool_row, rows = _open_admitted_copies(50, members=50)
+    view, _ = _build(pool_row=pool_row, members=rows)
+
+    assert [row.ticker for row in view.pool.current] == [f"T{n}" for n in range(1, 51)]
+    assert getattr(view.pool, "over_cap", []) == []
+
+    rendered = panel.render_pool(view.pool)
+    assert 'Current admitted <span class="count">50</span>' in rendered
+    assert "Over cap" not in rendered
+
+
 def test_hub_cut_pool_and_past_day_slice_fail_loud_as_an_inconsistent_snapshot():
     pool_row = copy.deepcopy(POOL_FIXTURE["pool"])
     with pytest.raises(panel.RadarPanelError, match="open admitted"):
