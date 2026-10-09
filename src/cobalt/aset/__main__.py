@@ -1,11 +1,9 @@
 """Run the ASET sheet locally: uv run python -m cobalt.aset
 
 Bind host/port are config-driven (configs/dev/aset*.yaml, `server:`
-section) — default is loopback-only. `bind: lan` exposes the sheet on
-the local network (e.g. Dejan's Windows trading PC, same home network,
-NOT Tailscale) at http://<mac-lan-ip>:<port>. LAN bind serves an
-UNAUTHENTICATED page to the local network — see the config comments;
-an access token is a backlog item.
+section). The plain-http listener is loopback only (127.0.0.1); the
+tailnet reaches the sheet through `tailscale serve` on https (L80), at the
+address `configs/cobalt/voice.yaml` `https_url` names.
 """
 
 import os
@@ -21,7 +19,7 @@ os.environ.setdefault("LOGURU_LEVEL", "INFO")
 import uvicorn  # noqa: E402
 
 from cobalt.aset.config import load_config  # noqa: E402
-from cobalt.aset.net import local_lan_ip  # noqa: E402
+from cobalt.voice.config import load_voice_config  # noqa: E402
 
 if __name__ == "__main__":
     cfg = load_config()
@@ -29,22 +27,9 @@ if __name__ == "__main__":
 
     print(f"Cobalt ASET sheet — bind: {cfg.server.bind} ({host}:{port})", flush=True)
     print(f"  reachable at: http://127.0.0.1:{port}", flush=True)
-    if cfg.server.bind == "lan":
-        lan_ip = local_lan_ip()
-        if lan_ip:
-            print(
-                f"  reachable at: http://{lan_ip}:{port}  (LAN, e.g. the Windows trading PC)",
-                flush=True,
-            )
-        else:
-            print(
-                "  LAN bind requested but no LAN IP could be detected — check manually.",
-                flush=True,
-            )
-        print(
-            "  ⚠ UNAUTHENTICATED: anyone on the local network can reach this page. "
-            "Acceptable for now; an access token is a backlog item.",
-            flush=True,
-        )
+    print(
+        f"  reachable at: {load_voice_config().https_url}  (tailnet, through `tailscale serve`, L80)",
+        flush=True,
+    )
 
     uvicorn.run("cobalt.aset.web:app", host=host, port=port)

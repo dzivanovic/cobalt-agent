@@ -35,3 +35,6 @@ banner lines to stdout.
 ## Config it reads
 `AsetConfig.server` (`bind`, `port`) — the rest of `AsetConfig` is read
 per-request by `web.py`, not here.
+
+## 2026-10-09 — https-only-1009
+The `lan` branch and the `local_lan_ip` import are gone; startup prints `http://127.0.0.1:<port>` and the https URL from `configs/cobalt/voice.yaml` `https_url` as the tailnet address (L80).

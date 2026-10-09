@@ -61,6 +61,10 @@ class VoiceConfig(BaseModel):
     #: SOCKET-PEER addresses allowed on `/voice/*` (W11 [F-03]). IP
     #: literals only; a header is never the allow key.
     allowed_peers: list[str] = Field(min_length=1)
+    #: The https address `tailscale serve` fronts aset on (L80): the voice
+    #: banner names it on an insecure page, and the heartbeat and smoke
+    #: probes read it. Its one config home; no default (L1).
+    https_url: str = Field(pattern=r"^https://[a-z0-9.-]+\.ts\.net/$")
 
     @field_validator("allowed_peers")
     @classmethod

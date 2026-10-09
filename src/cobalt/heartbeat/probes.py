@@ -125,8 +125,10 @@ def radar(
 # ---------------------------------------------------------------------
 
 
-def sheet_http(url: str = "http://127.0.0.1:5010/") -> Probe:
+def sheet_http(url: str = "https://cobalt.taild24291.ts.net/") -> Probe:
     """The ASET sheet answers 200.
+
+    It reads the page as his devices do, through `tailscale serve` on https (L80), so a down `serve` is red here.
 
     NOT the same question as "the process exists", and S1-P2 is why this
     is a separate probe: reshaping `configs/cobalt/aset.yaml` took the
@@ -151,8 +153,10 @@ def sheet_http(url: str = "http://127.0.0.1:5010/") -> Probe:
 DAYMODE_ERROR_CHARS = 160
 
 
-def sheet_daymode(url: str = "http://127.0.0.1:5010/api/health") -> Probe:
+def sheet_daymode(url: str = "https://cobalt.taild24291.ts.net/api/health") -> Probe:
     """The sheet is not just SERVING — it is WORKING.
+
+    It reads the page as his devices do, through `tailscale serve` on https (L80), so a down `serve` is red here.
 
     THE THIRTEEN-HOUR GREEN. On 2026-09-09 the ASET sheet answered HTTP
     200 from roughly 19:00 the previous evening until 07:06, while the

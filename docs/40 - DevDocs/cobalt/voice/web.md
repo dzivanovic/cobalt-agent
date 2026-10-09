@@ -50,3 +50,6 @@ session id is random per page load. No reply audio exists on the server.
 
 ## 2026-10-01 — voice-peers (check)
 The peer-gate paragraph now names the committed list: localhost plus the five tailnet devices (his ruling 2026-09-28 R95, re-stated 2026-10-01 R14), where it said loopback only; the gate's code is unchanged.
+
+## 2026-10-09 — https-only-1009
+`widget_html()` puts `https_url` into the script as one JSON-encoded `HTTPS` constant. On a page that is not a secure context (`window.isSecureContext` false) `start()` and the on-load line show the red "voice needs the https address: <url><path>" before any microphone test; "no microphone on this device" is now reachable only on a secure page (L80). A voice-config error now also breaks the sheet and `/radar`, which render the widget.

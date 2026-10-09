@@ -151,3 +151,6 @@ different source; an empty table is a loud `ConfigError` naming
 `load_config()` is unchanged and still reads a YAML: the daily-note
 folder, the bind address and the typo ceilings are INSTALL settings, not
 trading rules.
+
+## 2026-10-09 — https-only-1009
+`ServerConfig.bind` is `Literal["loopback"]` and `host` is always `127.0.0.1`; a file that says `bind: lan` is a loud load error naming L80. The tailnet reaches aset through `tailscale serve` on https.

@@ -44,3 +44,5 @@ voice:
   # localhost + the five tailnet devices: cobalt, badass, dejans-s25, fedora, msi (`tailscale status`, 2026-10-01)
   # source: his ruling cto-2026-09-28 R95 "yes change it as well as fedor. all tailscale machines included" (re-stated 2026-10-01 R14)
   allowed_peers: ["127.0.0.1", "::1", "100.70.206.126", "100.73.178.42", "100.66.219.53", "100.104.48.21", "100.82.85.27"]
+  # source: L80, R718; M3 proof
+  https_url: https://cobalt.taild24291.ts.net/

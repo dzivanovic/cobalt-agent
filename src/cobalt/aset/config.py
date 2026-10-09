@@ -74,16 +74,25 @@ class DailyNoteConfig(BaseModel):
 class ServerConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # "loopback" (127.0.0.1, default) or "lan" (0.0.0.0 — reachable from
-    # other devices on the home network). LAN bind serves this page with
-    # NO authentication to anyone on the local network — acceptable for
-    # now; an access token is a backlog item (see docs/00 - Project/BACKLOG.md).
-    bind: Literal["loopback", "lan"] = "loopback"
+    # Loopback only (127.0.0.1): the plain-http listener never leaves this
+    # machine. The tailnet reaches aset through `tailscale serve` on https
+    # (L80, R718); "lan" (0.0.0.0) is refused at load, loud.
+    bind: Literal["loopback"] = "loopback"
     port: int = Field(default=5010, gt=0, lt=65536)
+
+    @field_validator("bind", mode="before")
+    @classmethod
+    def _loopback_only(cls, v):
+        if v == "lan":
+            raise ValueError(
+                "bind: lan is refused — the plain listener is loopback only; the tailnet "
+                "reaches aset through `tailscale serve` on https (L80)"
+            )
+        return v
 
     @property
     def host(self) -> str:
-        return "127.0.0.1" if self.bind == "loopback" else "0.0.0.0"
+        return "127.0.0.1"
 
 
 class ValidationConfig(BaseModel):
