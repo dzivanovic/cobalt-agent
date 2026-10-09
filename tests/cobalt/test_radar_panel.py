@@ -871,6 +871,10 @@ def test_a_pool_over_cap_renders_cap_names_and_the_rest_in_their_own_section():
     assert 'Current admitted <span class="count">50</span>' in rendered
     assert heading in rendered
     assert rendered.index('<tr data-episode-id="10051"') > rendered.index(heading)
+    # Right after `Current admitted`, never inside a `<details>`.
+    current_at = rendered.index('Current admitted <span class="count">50</span>')
+    assert current_at < rendered.index(heading) < rendered.index("<details>")
+    assert "<details>" not in rendered[current_at : rendered.index(heading)]
     assert "<b>51</b> / 50 admitted" in rendered
 
 
