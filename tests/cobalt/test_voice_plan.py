@@ -75,6 +75,17 @@ def test_the_prompt_carries_the_whitelisted_fields():
     assert AGENT.charter.strip().splitlines()[0] in sys
 
 
+def test_the_system_message_states_the_rule_the_stored_shape_broke():
+    """Card 193 row C2: the stored plan_shape (22:49:40Z, "What can you do?
+    What can I ask you?") was kind answer with tool null (`agent.py:134`).
+    The system message now states that answer and act always name a tool,
+    and where a question no tool answers goes."""
+    sys = ag.build_messages(_inputs(transcript="What can you do? What can I ask you?"), AGENT)[0].content
+    assert ("answer and act always name one tool from the list; their tool is never null. "
+            "A question no tool answers, such as what you can do, is clarify with tool null, "
+            "and say tells the trader in words what the tools below can do.") in sys
+
+
 def test_no_env_value_path_or_key_name_reaches_the_prompt(monkeypatch, tmp_path):
     marker = "constructed-env-value-7f3a9c"
     monkeypatch.setenv("COBALT_TEST_CONSTRUCTED_SECRET", marker)

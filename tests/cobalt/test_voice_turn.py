@@ -183,6 +183,34 @@ def test_history_comes_from_this_sessions_rows(deps):
     assert deps.plan.calls[2].history == []
 
 
+def test_a_clarify_after_a_clarify_is_not_doubled(deps):
+    """Card 193 row A: the planner sees its own earlier clarify reply in the
+    history and copies it into `say`; the template is spoken once."""
+    deps.plan = FakePlanner({"can you hear me": Plan(kind="clarify", say="I can hear you. What would you like to do?")})
+    first = tn.run_turn(_text("can you hear me"), deps)
+    assert first.reply.count(tn.CLARIFY_TEMPLATE) == 1
+    deps.plan.plans["closed nn card"] = Plan(kind="clarify", say=first.reply)
+    out = tn.run_turn(_text("closed nn card"), deps)
+    assert [h.reply for h in deps.plan.calls[1].history] == [first.reply]
+    assert out.reply.count(tn.CLARIFY_TEMPLATE) == 1, out.reply
+
+
+def test_a_plan_clarify_records_the_candidates_and_history_it_was_given(deps):
+    """Card 193 row C1, from the stored transcripts (22:47:17 "closed nn card",
+    22:48:46 "NN short from today", both typed): a plan clarify's resolution
+    names the candidate ids and the number of history turns the planner got."""
+    deps.plan = FakePlanner({"closed nn card": Plan(kind="clarify"), "NN short from today": Plan(kind="clarify")})
+    out = tn.run_turn(_text("closed nn card"), deps)
+    assert deps.store.get(out.turn_id)["resolution"] == {"clarify": "plan", "candidates": ["card-11", "card-12"],
+                                                         "history": 0}
+    out = tn.run_turn(_text("NN short from today"), deps)
+    assert deps.store.get(out.turn_id)["resolution"] == {"clarify": "plan", "candidates": ["card-11", "card-12"],
+                                                         "history": 1}
+    deps.read_cards = lambda: []
+    out = tn.run_turn(_text("closed nn card", session="sess-c"), deps)
+    assert deps.store.get(out.turn_id)["resolution"] == {"clarify": "plan", "candidates": [], "history": 0}
+
+
 def test_radar_pool_read(deps):
     deps.plan = FakePlanner({"what is on radar": Plan(kind="answer", tool="radar.pool")})
     assert tn.run_turn(_text("what is on radar"), deps).reply == "Radar pool: 1 name — XYZ."

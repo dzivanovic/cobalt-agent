@@ -123,6 +123,21 @@ def test_a_failing_say_is_dropped_and_the_template_spoken():
     assert tl.compose_reply(None, "T.") == "T."
 
 
+def test_a_say_that_repeats_the_template_is_dropped():
+    """Card 193 row A: a `say` that equals the template or contains it, after
+    case folding and collapsing whitespace, is dropped — the template is
+    spoken once. A `say` with other words is kept (negative control)."""
+    from cobalt.voice.turn import CLARIFY_TEMPLATE
+
+    for say in ("I need a little more: which card, and what value?",
+                "  i NEED a little more:  which card, and what value? ",
+                "I can hear you. What would you like to do? I need a little more: which card, and what value?"):
+        out = tl.compose_reply(say, CLARIFY_TEMPLATE)
+        assert out.count(CLARIFY_TEMPLATE) == 1, out
+        assert out == CLARIFY_TEMPLATE
+    assert tl.compose_reply("Which card did you mean?", CLARIFY_TEMPLATE) == "Which card did you mean? " + CLARIFY_TEMPLATE
+
+
 # --- hard refusals ------------------------------------------------------------------
 
 

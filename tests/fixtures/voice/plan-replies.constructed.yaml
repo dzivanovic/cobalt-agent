@@ -94,6 +94,14 @@ cases:
     reply: '{"kind": "answer", "tool": null, "args": {}, "say": "You have two."}'
     expect: plan_shape
 
+  - name: answer with no tool for a question about what voice can do
+    # card 193 row C2: the stored plan_shape row's transcript; its
+    # failure_detail "plan_shape: kind answer names no tool" (agent.py:134)
+    transcript: What can you do? What can I ask you?
+    candidates: []
+    reply: '{"kind": "answer", "tool": null, "args": {}, "say": null}'
+    expect: plan_shape
+
   - name: an arg the tool does not take
     transcript: move the stop on XYZ to 4.50
     candidates: [card-1]

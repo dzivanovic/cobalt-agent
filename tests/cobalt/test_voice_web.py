@@ -248,6 +248,18 @@ def _status_block(js: str) -> str:
     return js[start:js.index("\n", start)]
 
 
+def test_a_hidden_widget_row_is_not_displayed():
+    """Card 193 row B: `#cv-voice .cv-row{display:flex}` beats the browser's
+    `[hidden]` rule, so the Confirm/Cancel row showed on every turn. One
+    author rule hides a hidden row. A static pin — there is no JS runner here."""
+    html = vw.widget_html()
+    rule = "#cv-voice .cv-row[hidden]{display:none}"
+    assert rule in html
+    assert html.index("<style>") < html.index(rule) < html.index("</style>")
+    assert '<div id="cv-pending" class="cv-row" hidden>' in html
+    assert "$('cv-pending').hidden = !pendingTurn;" in html
+
+
 def test_the_widget_reads_a_refused_status_as_red_never_all_clear():
     """D3 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 3; FINAL §7 loud
     states, L9): the `/voice/status` fetch tests `r.ok` BEFORE `r.json()`,
