@@ -60,4 +60,4 @@ next: AUTHORIZATION
 - The L74 line is under `## L74`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: authorization mismatch — RULING 2026-10-09 R716 row
+RESUMED: AUTHORIZATION 11:40 ET
