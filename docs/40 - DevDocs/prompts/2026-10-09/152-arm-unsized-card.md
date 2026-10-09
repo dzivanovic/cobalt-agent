@@ -2,7 +2,7 @@ JOB: arm-unsized-1009
 LADDER: OFF-LADDER — reports/cto-2026-10-09.md R719
 BRANCH: ops/arm-unsized-1009
 WORKTREE: arm-unsized-1009
-BASE: 6f55636b
+BASE: 90342cfc
 TIP:
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/arm-unsized-build-2026-10-09.md
 CHECK REPORT:
