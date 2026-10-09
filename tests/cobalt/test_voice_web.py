@@ -213,13 +213,13 @@ def _stub_sheet(monkeypatch):
     monkeypatch.setattr(aset_web, "load_sheet_modes_config", _offline_sheet_modes_config)
 
 
-def test_the_widget_partial_renders_on_the_sheet(monkeypatch):
+def test_the_widget_partial_renders_on_the_sheet(cfg, monkeypatch):
     _stub_sheet(monkeypatch)
     html = aset_web._render()
     assert vw.WIDGET_MARKER in html and html.count(vw.WIDGET_MARKER) == 1
 
 
-def test_the_widget_partial_renders_on_radar(monkeypatch):
+def test_the_widget_partial_renders_on_radar(cfg, monkeypatch):
     import cobalt.aset.web as w
 
     monkeypatch.setattr(w, "build_radar_panel", lambda **kw: object())
@@ -228,13 +228,13 @@ def test_the_widget_partial_renders_on_radar(monkeypatch):
     assert r.status_code == 200 and vw.WIDGET_MARKER in r.text and r.text.index(vw.WIDGET_MARKER) < r.text.index("</body>")
 
 
-def test_the_widget_js_names_only_voice_endpoints():
+def test_the_widget_js_names_only_voice_endpoints(cfg):
     html = vw.widget_html()
     urls = re.findall(r"fetch\(\s*['\"]([^'\"]+)['\"]", html)
     assert urls and all(u.startswith("/voice/") for u in urls), urls
 
 
-def test_speech_synthesis_is_local_voices_only():
+def test_speech_synthesis_is_local_voices_only(cfg):
     """A STRING check, stated as such: every speak() goes through the one
     helper that filters `localService` voices; no voice at all → AMBER."""
     js = vw.widget_html()
@@ -248,7 +248,7 @@ def _status_block(js: str) -> str:
     return js[start:js.index("\n", start)]
 
 
-def test_the_widget_reads_a_refused_status_as_red_never_all_clear():
+def test_the_widget_reads_a_refused_status_as_red_never_all_clear(cfg):
     """D3 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 3; FINAL §7 loud
     states, L9): the `/voice/status` fetch tests `r.ok` BEFORE `r.json()`,
     and its non-OK branch pushes a RED `voice status refused (HTTP <status>)`
@@ -259,7 +259,7 @@ def test_the_widget_reads_a_refused_status_as_red_never_all_clear():
     assert "level:'red', text:'voice status refused (HTTP ' + r.status + ')'" in block
 
 
-def test_a_device_red_line_survives_every_status_callback():
+def test_a_device_red_line_survives_every_status_callback(cfg):
     """D3, fix r2 (voice-v1-fix-r1-check-2026-09-24.md:141, :158; FINAL :175
     §7 "No microphone / permission denied | widget red: \"no microphone on
     this device\"", L9): the device's RED line lives in its own `device`
@@ -280,7 +280,7 @@ def test_a_device_red_line_survives_every_status_callback():
     assert "device" not in block
 
 
-def test_no_local_voice_keeps_the_turns_red_lines_on_the_banner():
+def test_no_local_voice_keeps_the_turns_red_lines_on_the_banner(cfg):
     """D4 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 4; FINAL §2.5 /
     §7, L1): `speak()` takes the turn's degraded lines, and its no-local-voice
     repaint is those lines PLUS the amber line — never the amber line alone.
@@ -292,21 +292,58 @@ def test_no_local_voice_keeps_the_turns_red_lines_on_the_banner():
     assert "speak(j.reply, j.degraded || []);" in js
 
 
-def test_the_widget_carries_no_form_or_focus_stealing_markup():
+def test_the_widget_carries_no_form_or_focus_stealing_markup(cfg):
     """The radar panel's own invariant (test_radar_panel), applied to the partial."""
     low = vw.widget_html().lower()
     for forbidden in ("<form", 'method="post"', "alert(", "prompt(", "confirm(", ".focus(", "autofocus"):
         assert forbidden not in low, forbidden
 
 
-def test_the_widget_sends_no_card_id():
+def test_the_widget_sends_no_card_id(cfg):
     js = vw.widget_html()
     assert "card_id" not in js and "cardId" not in js
 
 
-def test_the_widget_has_hold_and_tap_the_container_chain_and_the_pending_buttons():
+def test_the_widget_has_hold_and_tap_the_container_chain_and_the_pending_buttons(cfg):
     js = vw.widget_html()
     for needle in ("audio/webm;codecs=opus", "audio/ogg;codecs=opus", "audio/mp4", "isTypeSupported",
                    "pointerdown", "pointerup", "Confirm", "Cancel", "no microphone on this device",
                    "mute"):
         assert needle in js, needle
+
+
+def _start_body(js: str) -> str:
+    start = js.index("async function start(){")
+    return js[start:js.index("\n function stop()", start)]
+
+
+def _onload_block(js: str) -> str:
+    start = js.index("\n", js.index("fetch('/voice/status')")) + 1
+    return js[start:js.index("})();", start)]
+
+
+def test_an_insecure_page_shows_the_https_line(cfg):
+    """https-only row B (L80, R718): on a page that is not a secure context
+    the widget names the https address, never "no microphone" — the browser
+    hides `navigator.mediaDevices` there, so the mic test would lie. "no
+    microphone on this device" stays, reachable only on a secure page. A
+    static pin of the widget script — there is no JS runner here."""
+    import json
+
+    js = vw.widget_html()
+    body = _start_body(js)
+    assert "window.isSecureContext" in body
+    secure = body.index("window.isSecureContext")
+    assert secure < body.index("pickType()") and secure < body.index("navigator.mediaDevices")
+    onload = _onload_block(js)
+    assert "window.isSecureContext" in onload
+    mic = onload.index("device.push({level:'red', text:'no microphone on this device'})")
+    assert onload.index("window.isSecureContext") < mic
+    assert "else if (!pickType())" in onload[:mic]
+    assert onload.count("no microphone on this device") == 1
+    line = "'voice needs the https address: ' + HTTPS.replace(/\\/$/, '') + location.pathname"
+    assert f"if (!window.isSecureContext){{ banner([{{level:'red', text:{line}}}]); return; }}" in body
+    assert f"device.push({{level:'red', text:{line}}})" in onload
+    assert "voice needs the https address: " in js
+    assert f"const HTTPS = {json.dumps(cfg.https_url)};" in js
+    assert js.count("no microphone on this device") == 3

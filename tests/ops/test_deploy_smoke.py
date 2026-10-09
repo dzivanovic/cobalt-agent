@@ -40,7 +40,19 @@ print(os.environ.get("UV_ANSWER", "7"))
 """
 
 PLAIN = "sys.exit(0)\n"
-CURL_CMD = r"curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/radar\?frame=phone"
+
+
+def https_url() -> str:
+    """The https address, read from its one config home `configs/cobalt/voice.yaml`
+    (https-only row A, L80). Read as data: tests/ops pins no `COBALT_ENV`, which the
+    full voice loader's vault check needs."""
+    import yaml
+
+    return yaml.safe_load((REPO / "configs" / "cobalt" / "voice.yaml").read_text())["voice"]["https_url"]
+
+
+def curl_cmd() -> str:
+    return rf"curl -s -o /dev/null -w %{{http_code}} {https_url()}radar\?frame=phone"
 
 
 def stub(bin_dir: Path, name: str, body: str) -> None:
@@ -88,7 +100,7 @@ class Box:
             f"- file a · `ls {f}/a.txt` · exit 0, listed\n"
             f'- needle exact · `grep -c -F "needle" {f}/b.txt` · exit 0, `2`\n'
             f'- needle some · `grep -c -F "needle" {f}/b.txt` · exit 0, a count of 1 or more\n'
-            f"- radar phone · `{CURL_CMD}` · exit 0, `200`\n"
+            f"- radar phone · `{curl_cmd()}` · exit 0, `200`\n"
             f"{smoke_extra}\n## RECORDS\n- a desk fact\n"
         )
 
@@ -126,12 +138,12 @@ def test_four_smoke_rows_and_two_markers_are_green_with_every_line(box):
     assert row(done, "file a").endswith(" · GREEN")
     assert row(done, "needle exact") == f'needle exact · grep -c -F "needle" {box.files}/b.txt · 2 · GREEN'
     assert row(done, "needle some").endswith(" · 2 · GREEN")
-    assert row(done, "radar phone") == f"radar phone · {CURL_CMD} · 200 · GREEN"
+    assert row(done, "radar phone") == f"radar phone · {curl_cmd()} · 200 · GREEN"
     assert row(done, "marker 1").endswith(" · GREEN")
     assert row(done, "marker 2").endswith(" · 1 · GREEN")
     curls = [c["argv"] for c in box.calls_list() if c["name"] == "curl"]
     assert len(curls) == 3
-    assert curls[0] == ["-s", "-o", "/dev/null", "-w", "%{http_code}", "http://127.0.0.1:5010/radar?frame=phone"]
+    assert curls[0] == ["-s", "-o", "/dev/null", "-w", "%{http_code}", f"{https_url()}radar?frame=phone"]
     assert list((box.wt / ".deploy-logs").glob("x-set-smoke-*.log"))
 
 
@@ -206,6 +218,8 @@ def test_a_db_query_carrying_a_percent_is_skipped_and_said(box):
         "ls /tmp; rm -rf /tmp/x",
         "curl -s http://example.com/",
         "COBALT_ENV=production uv run cobalt db migrate --allow-prod",
+        # https-only row D (L80): the plain loopback listener is no smoke URL any more
+        "curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/radar",
     ],
 )
 def test_a_command_outside_the_mapped_shapes_is_red_and_never_run(box, command):
@@ -232,7 +246,7 @@ def test_dry_run_calls_nothing_and_prints_every_would_run_line(box):
     assert box.calls_list() == []
     would = [ln for ln in done.stdout.splitlines() if ln.startswith("WOULD RUN: ")]
     assert len(would) == 6
-    assert f"WOULD RUN: {CURL_CMD}" in would
+    assert f"WOULD RUN: {curl_cmd()}" in would
     assert last_line(done).startswith("DRY RUN — nothing run")
     assert not (box.wt / ".deploy-logs").exists()
 

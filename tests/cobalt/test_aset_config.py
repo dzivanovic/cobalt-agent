@@ -106,17 +106,27 @@ def test_non_positive_account_rejected():
 
 
 def test_server_defaults_to_loopback():
-    # Unit-level, independent of whichever bind mode is active in
-    # configs/dev/aset.local.yaml (e.g. Dejan may have it set to "lan").
+    # Unit-level, independent of configs/dev/aset.local.yaml.
     s = ServerConfig()
     assert s.bind == "loopback"
     assert s.host == "127.0.0.1"
     assert s.port == 5010
 
 
-def test_server_lan_bind_resolves_to_all_interfaces():
-    s = ServerConfig(bind="lan")
-    assert s.host == "0.0.0.0"
+def test_lan_bind_is_refused(monkeypatch, tmp_path):
+    """https-only row C (L80, R718): the plain listener is loopback only; the
+    tailnet reaches aset through `tailscale serve` on https. `bind: lan` is a
+    loud load error naming L80, never a bind on 0.0.0.0."""
+    with pytest.raises(Exception) as e:
+        ServerConfig(bind="lan")
+    assert "L80" in str(e.value)
+    lan = tmp_path / "aset.yaml"
+    lan.write_text(COMPLETE + "server:\n  bind: lan\n  port: 5010\n")
+    monkeypatch.setattr(aset_config, "CONFIG_PATH", lan)
+    monkeypatch.setattr(aset_config, "LOCAL_CONFIG_PATH", tmp_path / "absent.yaml")
+    with pytest.raises(ConfigError) as e:
+        load_config()
+    assert "L80" in str(e.value)
 
 
 def test_server_rejects_unknown_bind_value():
