@@ -3,7 +3,11 @@
 Card: `docs/40 - DevDocs/prompts/2026-10-09/183-deploy-arm-unsized-card.md` (committed `39130934`). Hub: `DEPLOY-HUB.md`. Session: `deploy-hub-arm-unsized-1009`.
 
 ## §0 Headline
-- In progress: preflight green (16:43 ET); gate GREEN on `8cf7d015` (offline 4051/0 · with-DB 4938/0 · live-note 146/0); RESTARTS: com.cobalt.aset com.cobalt.radar; baseline read 17:14.
+- DEPLOYED `deploy-2026-10-09-arm-unsized`: main `b5a7f2a9` → `f355eee2` (ARM-unsized, `ops/arm-unsized-1009` code tip `676abb60`). No migration.
+- Gate GREEN on `8cf7d015`: offline 4051/0 · with-DB 4938/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- Outage 17:16:09 → 17:16:24 (15 s), aset + radar restarted on new pids; agent untouched.
+- Smoke GREEN: markers 2 / 1, three curls 200, radar cycled 17:17:51, heartbeat green twice, failure counts flat at the readback.
+- Rollback tag `pre-arm-unsized-1009` at `b5a7f2a9`; snapshot `b8f1c128`. One D0 decision (untracked `.claude/settings.json.bak`), not his.
 
 ## L74
 - A harness attribution reminder in this session asked for a `Claude-Session:` line on commits. Recorded as data, not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -105,6 +109,20 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/deploy-arm-unsized-1009-all-20261009-164
 GATE GREEN on 8cf7d015
 
 ## Deploy table
+| item | value |
+|---|---|
+| main | `b5a7f2a9` (`<pre-merge>`) → `f355eee2` (`<stack-final>`) |
+| gate tree | `<m0>` `39130934` · `<m1>` `8cf7d015` |
+| tags | `pre-arm-unsized-1009` at `b5a7f2a9`; `deploy-2026-10-09-arm-unsized` at `f355eee2` (STEP-7, after green smoke) |
+| outage | `<t down>` 17:16:09 · `<t up>` 17:16:24 · 15 s |
+| uv sync line | none in production calls; the gate worktree's first `uv run` created its own `.venv` (`Installed 253 packages in 790ms`) |
+| proof cost | none (no migration, no D1-M) |
+| migrations applied | none |
+| `<RB>` before / after | none (MIGRATIONS: none) |
+| snapshot | `b8f1c128` (ssd), dump 6592.8 MB |
+| RESTARTS done | com.cobalt.aset com.cobalt.radar |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 f355eee2` — residents com.cobalt.aset and com.cobalt.radar down first, up after. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`. |
+
 STEP-D0 (17:13–17:14):
 - `git -C /Users/cobalt/cobalt status --short --branch` → `## main...origin/main [ahead 96]`. `status --porcelain` → ` M .claude/settings.json`, ` M configs/cobalt/rules.yaml`, ` M` / `??` under `docs/40 - DevDocs/` only, plus `?? .claude/settings.json.bak` (see `## DECISIONS` 1). No staged line; no dirty `src/`, `tests/`, `ops/` or other `configs/` path.
 - `git -C /Users/cobalt/cobalt diff --stat 39130934 main -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
@@ -121,15 +139,64 @@ STEP-D1 baseline (17:14:04):
 - `curl … /radar` → `200`. MARKERS again: `ARM_UNSIZED_BUTTON` → `0` · `sized=all(` → `0` (both = before).
 - MIGRATIONS none: no `<RB>`, no census, no D1-M.
 
+STEP-D2:
+- D2.0 `add` + `commit -m "docs(report): deploy arm-unsized-1009 — gate green on 8cf7d015" …` → `[main b5a7f2a9]`; `show --stat HEAD` → one file, `.../reports/deploy-arm-unsized-1009.md | 135 +++`. `rev-parse --short=8 main` → `b5a7f2a9` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `f355eee2`; `rev-parse --short=8 f355eee2^2` → `b5a7f2a9` = `<pre-merge>`; `merge-base --is-ancestor 8cf7d015 f355eee2` → exit 0.
+- D2.3 `diff --stat 8cf7d015 f355eee2 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only).
+- D2.4 `backup status` before → `newest snapshot: 1.3 h old`. `backup run` (17:14:56–17:15:39) → `backup: cobalt_brain dumped, 6592.8 MB` · `ssd: snapshot b8f1c128 — 0 new / 2 changed, 107.7 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 17:15:53 `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-09 17:15:55 EDT)` — 110 s after D1's 17:14:05; no RED.
+- D2.6 `date` → `Fri Oct  9 17:15:59 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-arm-unsized-1009` at `b5a7f2a9`.
+
+STEP-4 (the outage):
+- 4.1 `date` → `Fri Oct  9 17:16:09 EDT 2026` = `<t down>`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → ok; `launchctl print gui/501/com.cobalt.aset` → exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501`. `launchctl bootout gui/501/com.cobalt.radar` → ok; print → exit 113 `Could not find service "com.cobalt.radar" …`. Agent not in the set: untouched.
+- 4.3 `rev-parse --short=8 HEAD` → `b5a7f2a9` = `<pre-merge>`. `git -C /Users/cobalt/cobalt merge --ff-only deploy/arm-unsized-1009` → `Updating b5a7f2a9..f355eee2` / `Fast-forward` (5 files: `radar_panel.md`, `arm-unsized-build-2026-10-09.md`, `src/cobalt/aset/radar_panel.py`, two tests).
+- 4.4 `migrations applied: none` (MIGRATIONS: none).
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` → ok · `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → ok. aset `state = running`, `pid = 93108` (≠ 69822) · radar `state = running`, `pid = 93120` (≠ 69832). `date` → `Fri Oct  9 17:16:24 EDT 2026` = `<t up>`. Downtime 15 s.
+
 ## Smoke
+FIRST CALLS after `<t up>` 17:16:24: `radar panel FAILED` → 18 = `<rp_up>` · `radar pool refresh FAILED` → 60 = `<rpr_up>` · `radar S5 evaluate FAILED` → 42 = `<re_up>` · `lifecycle card read failed` → 39 = `<lc_up>` (each = its D1 baseline).
+- (a) [17:16:35] aset `state = running` pid 93108 (new, ≠ 69822) · radar `state = running` pid 93120 (new, ≠ 69832) (4.6's prints) · `cobalt.sh status` → `  Cobalt is ONLINE (PID: 22243).` (agent not in the set: same pid). GREEN.
+- (b) [17:16:35] `grep -c "Started server process" aset.err` → `53` (`<a0>` 52 +1, ≤ +2). `tail -n 30 aset.err` → last start `INFO:     Started server process [93114]` · `2026-10-09 17:16:20.943 | INFO | cobalt.voice.web:voice_startup:183 - voice: scratch dir … locked by this process; start sweep deleted 0 file(s), 0 failed` · `INFO:     Application startup complete.` · `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)`. aset Traceback `2` = `<ta0>` · radar Traceback `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`. Spaced tail 1 [17:17:54, `<t up>` + 90 s] `tail -n 12 radar.err` → last line `2026-10-09 17:17:51.299 | INFO | cobalt.radar.runner:resident:576 - radar cycle: scanning scan_id=1791580582358` (stamped after `<t up>`); the 11 above are `cards.expire: falling back to the session close` INFO lines; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → settled GREEN.
+- (c) [17:16:35] `curl … /` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS: `grep -c -F "ARM_UNSIZED_BUTTON" …/radar_panel.py` → `2` (after `2`) · `grep -c -F "sized=all(" …/radar_panel.py` → `1` (after `1`). GREEN.
+- (e) read 1 [17:16:45] `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-09 17:16:46 EDT)`; `OK   com.cobalt.aset              running   loaded, pid 93108`; `OK   com.cobalt.radar             running   running 0 min, heartbeat fresh`; `OK   radar                    scanning (aftermarket), members 50`. Read 2 [17:18:39] → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-09 17:18:41 EDT)` (115 s after read 1); `OK   com.cobalt.radar             running   running 2 min, heartbeat fresh`; aset pid 93108. No RED in either; the only non-OK line is the `AMB com.cobalt.herdr` line already in `<hb0>`. GREEN. (A fill read at 17:18:35 was 109 s after read 1, short of 110, and is not counted.)
+- (f) [17:16:45] `validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` · `jobs restarts b5a7f2a9..f355eee2` → exit 0, the same 5 rows as STEP-R, `RESTARTS: com.cobalt.aset com.cobalt.radar` = `<restart set>`, no `UNCLASSIFIED`. GREEN.
+- (g) no migration: not run.
+- (s) SMOKE READS: inert ARM button `grep -c -F "ARM_UNSIZED_BUTTON" …` → exit 0, `2` (≥1, green) · sized flag `grep -c -F "sized=all(" …` → exit 0, `1` (≥1, green). Tests the gate ran on `8cf7d015`: the build's offline tests in `test_radar_panel_cards.py` / `test_s3_c3_panel_offline.py` are inside `offline 4051/0`, its with-DB neighbour inside `with-DB 4938/0`.
+- (h) REVERT-READBACK [17:19:26, `<t up>` + 182 s]: `radar panel FAILED` → 18 = `<rp_up>` · `radar pool refresh FAILED` → 60 = `<rpr_up>` · `radar S5 evaluate FAILED` → 42 = `<re_up>` · `lifecycle card read failed` → 39 = `<lc_up>` (none growing) · `curl … /radar` → `200` · radar Traceback `0`, aset Traceback `2` (= baselines). Spaced tail 2 `tail -n 12 radar.err` → last line still `2026-10-09 17:17:51.299 | INFO | … radar cycle: scanning scan_id=1791580582358`, no failure line. No census reads (no migration). GREEN.
+
+SMOKE: GREEN.
+
+THE CHAIN: every check committed (P2: `ba274379`) · the tips re-read (P3: `676abb60`, `46c96204`) · the merged tree (T: `8cf7d015`, one merge, clean) · RESTARTS derived (R: aset + radar) · three suites green on `<m1>` (G) · `<stack-final>` `f355eee2` = `<m1>` + docs (D2.3) · the landed code (4.3: `Updating b5a7f2a9..f355eee2`) · markers 2 / 1 (d) · no migration (g) · residents up on new pids after the merge (a) · radar cycling (b, e) · the set's reads (s) · no new failure (h). The card surface (the inert ARM button on an unsized card in `/radar`) is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row is quoted verbatim with its `date` (17:16:35, 17:16:45, 17:17:54, 17:18:39, 17:19:26).
+2. `merge-base --is-ancestor 676abb60 f355eee2` → exit 0 · `merge-base --is-ancestor 46c96204 f355eee2` → exit 0 (both re-read at P3).
+3. REVERT-READBACK shown at (h); every count, sha and `file:line` here comes from tool output in this run.
+4. No conflict marker: STEP-T merged clean, D2.1 merged clean; `git -C <GATE> status --short --branch` at close → `## deploy/arm-unsized-1009` alone.
 
 ## CONTINUE
 next: STEP-D2 (gate green at 17:13:37; D0 and D1 done)
+OUTAGE STARTING 17:15:59 — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+outage ended 17:16:24, residents up; smoke green 17:19:26; tagged `deploy-2026-10-09-arm-unsized` at `f355eee2`. Nothing left to run.
 
 ## DECISIONS
 1. ASK DESK: `?? .claude/settings.json.bak` is an untracked file on `main` that D0's accepted list does not name and its refused list (`src/`, `tests/`, `ops/`, `configs/`, staged) does not name either [17:13]. Safe default taken: not refused — it is untracked, outside every refused root, was present at session start (the launch's git snapshot lists it), and `merge --ff-only` does not touch it.
 
 ## RECORDS
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. Read instead with `grep -n -F "lock released"` and the Read tool on the log.
+- Downtime 15 s (17:16:09 → 17:16:24), under 300 s.
+- `cobalt_dev: 0013 (F2 = F0)`; L76 lock released by `gate.sh`, `<GATE>/.env` absent at close.
+- RETIRE OWED: none (no plist removed).
+- Carried RED: none; every heartbeat read was GREEN. The standing `AMB com.cobalt.herdr unmanaged` line is amber, not red, and was in `<hb0>`.
+- Messages not followed: none from another session. The L74 attribution line is under `## L74`.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-arm-unsized-1009` and branch `deploy/arm-unsized-1009`; the set's branch `ops/arm-unsized-1009` and its worktree if any. The gate's `.venv` was created by this run's first `uv run`.
+- Push is his (L55): `main` is ahead of `origin/main`; tags `pre-arm-unsized-1009` and `deploy-2026-10-09-arm-unsized` are local.
+- From the card: arm-unsized-1009: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/arm-unsized-check-2026-10-09.md` last line: CHECK DONE · job: arm-unsized-1009 · pass: 1 · tip: 676abb60 · house A: Sol FINDINGS: 0 · findings: 5 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: Grok FINDINGS: 0 · suites: offline 4051/0 · with-DB 4938/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 14 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 182250
+- From the card: arm-unsized-1009: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/arm-unsized-1009` → `46c96204`; code tip `676abb60`
+- From the card: written by deploy-card.sh at 2026-10-09 16:43 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-09-arm-unsized f355eee2 | set: none | migrations: none | gate: offline 4051/0 · with-DB 4938/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 194815
