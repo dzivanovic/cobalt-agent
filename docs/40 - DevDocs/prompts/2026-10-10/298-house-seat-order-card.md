@@ -8,7 +8,7 @@ REPORT: /Users/cobalt/cobalt-wt/house-seat-order-1010/docs/40 - DevDocs/reports/
 CHECK REPORT:
 HOUSE B:
 DB: none
-RULINGS: 2026-10-10 R920 R921
+RULINGS: 2026-10-10 R920, 2026-10-10 R921
 
 ## ROWS
 
