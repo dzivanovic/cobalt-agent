@@ -94,7 +94,7 @@ jobs:
       # S4-P2 S4: the sheet's phone-fallback thread sends a DM: notify/mattermost.py:137 (send_dm) calls
       # load_notify_config() (notify/config.py:51) on every send. Moved from no_resident_reads (the schema refuses
       # a path in both); its one-shot reader, provenance kept: heartbeat/runner.py:304 (com.cobalt.heartbeat), and
-      # `cobalt validate` (cli.py:261, an operator command). Ruled there 2026-09-15.
+      # `cobalt validate` (cli.py:285 import, :303 call — an operator command). Ruled there 2026-09-15.
       - "configs/cobalt/notify.yaml"
     imports: [cobalt.aset.__main__, cobalt.aset.web]
     what: "the ASET semi-auto sheet on :5010 — the surface he trades beside"
