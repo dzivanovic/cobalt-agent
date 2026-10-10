@@ -347,3 +347,19 @@ def test_an_insecure_page_shows_the_https_line(cfg):
     assert "voice needs the https address: " in js
     assert f"const HTTPS = {json.dumps(cfg.https_url)};" in js
     assert js.count("no microphone on this device") == 3
+
+
+def test_the_insecure_pin_rejects_a_mic_push_moved_outside_the_else(cfg, monkeypatch):
+    good = (
+        " else if (!pickType()) { "
+        "device.push({level:'red', text:'no microphone on this device'}); banner(); }"
+    )
+    bad = (
+        " else if (!pickType()) { }\n"
+        " device.push({level:'red', text:'no microphone on this device'}); banner();"
+    )
+    mutated = vw._WIDGET.replace(good, bad, 1)
+    assert mutated != vw._WIDGET
+    monkeypatch.setattr(vw, "_WIDGET", mutated)
+    with pytest.raises(AssertionError):
+        test_an_insecure_page_shows_the_https_line(cfg)

@@ -67,3 +67,32 @@ def test_the_curl_refusal_names_the_https_url(monkeypatch):
     assert PLAIN not in DEPLOY_SMOKE.read_text()
     https = vc.load_voice_config().https_url
     assert f'why="curl reads {https} only"' in DEPLOY_SMOKE.read_text()
+
+
+def test_the_curl_pin_rejects_a_second_non_https_arm(monkeypatch):
+    import sys
+
+    import pytest
+
+    text = DEPLOY_SMOKE.read_text()
+    first = re.search(r'case "\$url" in\n\s+(\S+)\) ;;', text)
+    assert first
+    mutated = text.replace(
+        first.group(0),
+        first.group(0)
+        + "\n                http://other.example0000.invalid/*) ;;",
+        1,
+    )
+
+    class ConstructedScript:
+        def read_text(self):
+            return mutated
+
+    monkeypatch.setattr(
+        sys.modules[__name__],
+        "DEPLOY_SMOKE",
+        ConstructedScript(),
+    )
+    with pytest.raises(AssertionError):
+        test_every_probe_reads_the_configured_https_url(monkeypatch)
+        test_the_curl_refusal_names_the_https_url(monkeypatch)
