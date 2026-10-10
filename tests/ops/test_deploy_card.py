@@ -542,6 +542,25 @@ def test_a_fix_report_outside_the_reports_folder_is_refused(tmp_path):
                  f"alpha: --fix-report path is not {desk.reports}/<name>.md: {stray}")
 
 
+@pytest.mark.parametrize("value, reason", [
+    ("alpha", "--fix-report 'alpha' must be <job>=<fix report path>"),
+    ("Alpha={reports}/a.md", "--fix-report job 'Alpha' must be [a-z0-9-]"),
+    ("alpha={reports}/../a.md", "alpha: --fix-report path holds '..'"),
+    ("alpha={reports}/a.md\nbeta={reports}/b.md", "--fix-report holds a line break"),
+    ("alpha={reports}/a.txt", "alpha: --fix-report path is not"),
+])
+def test_a_fix_report_value_outside_its_shape_is_refused(tmp_path, value, reason):
+    desk = Desk(tmp_path)
+    _fix_refused(desk, ("--fix-report", value.format(reports=desk.reports)), reason)
+
+
+def test_a_fix_report_naming_one_job_twice_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    fixed, head, report = fix_round(desk)
+    _fix_refused(desk, ("--fix-report", f"alpha={report}", "--fix-report", f"alpha={report}"),
+                 "--fix-report names job 'alpha' twice")
+
+
 def test_a_fix_report_round_trips_through_the_launchers_ships_checked(tmp_path):
     """The card written for a fix round passes desk-launch.sh's `ships_checked` (P2, P3): the
     code tip is the fix report's `tip:`, the check's tip its ancestor. RED on BASE: the option
