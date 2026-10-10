@@ -5,8 +5,9 @@ Every run copies ops/desk/desk-launch.sh into tmp_path/ops/ beside two stubs: de
 COBALT_REPO_ROOT points the script at a tmp repo whose OPS-HAND.md is a constructed fixed file
 (the shape of H3's line, its Read path the tmp file); COBALT_WT_ROOT at a tmp worktree root, so
 the seat's dir is <wt>/.ops-hand. `claude` is a stub on PATH that records its cwd and arguments
-(`claude agents --json` answers `[]`). Two tests run the tree's own OPS-HAND.md through the same
-script (H3). Nothing here reads a real session list or launches a seat.
+(`claude agents --json` answers `[]`). One test runs the tree's own OPS-HAND.md through the same
+script (H3); two more read its launch line and its installed title. Nothing here reads a real
+session list or launches a seat.
 """
 
 from __future__ import annotations
