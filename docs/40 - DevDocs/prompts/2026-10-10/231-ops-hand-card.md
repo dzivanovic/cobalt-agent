@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R855
 BRANCH: ops/ops-hand-1010
 WORKTREE: ops-hand-1010
 BASE: 1eb47b59
-TIP:
+TIP: 2cb7a9ad
 REPORT: /Users/cobalt/cobalt-wt/ops-hand-1010/docs/40 - DevDocs/reports/ops-hand-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/ops-hand-check-2026-10-10.md
+HOUSE B: as needed
 RULINGS: 2026-10-10 R855
 
 ## ROWS
