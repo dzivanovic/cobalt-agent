@@ -20,7 +20,8 @@
 # THE RULES, first hit wins. Bash: G3 .env or a secret named by any word (D2) · G2 production
 # by the words bash runs (not deploy; D1), but the one db query read (R686) · G4 git shape
 # (build, check, devfix, worker) · G7 a second session (any worker kind, deploy too; G9: the
-# check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes) ·
+# check's house call, a whole command opening with a CHECK-HUB.md line 10 house string, passes;
+# R877: so does a design-tribunal hub's, its prompt `prompts/20*/<n>-<name>-tribunal[-r<n>].md`) ·
 # G1 one command or a read-only pipe (G11: an `awk` program with `system(`, `>` or `|` is not
 # read-only; card 06 B2–B4: nor `sort -o`/`--output`/`--compress-program`, a second `uniq`
 # operand or `awk -f`, in a pipe segment or as one command; B1: G3 reads every verb's words
@@ -750,7 +751,10 @@ def seat(event):
     else:
         kind = None
     card = read_card(card_path) if kind in HUBS.values() and card_path else read_card(None)
-    return {"kind": kind, "cwd": cwd, "wt": card["worktree"] or wt, "cwd wt": wt, "card": card, "first": text}
+    # G9 (R877): a design-tribunal hub, `<n>-<name>-tribunal[-r<n>].md` under prompts/20*/ (not a
+    # drafter, an Opus seat, a derive or a preflight prompt)
+    tribunal = bool(re.search(r"(^|/)prompts/20[^/]*/[0-9]+-(?!draft)[a-z0-9-]*-tribunal(-r[0-9]+)?\.md$", prompt))
+    return {"kind": kind, "cwd": cwd, "wt": card["worktree"] or wt, "cwd wt": wt, "card": card, "first": text, "tribunal": tribunal}
 
 
 # ---- the Bash rules ------------------------------------------------------------------------
@@ -1031,8 +1035,8 @@ def bash_rules(command, s):
     if kind in GIT_SHAPED and any(git_problem(ws) for ws in segs):
         return "G4", ROUTE["G4"]
     launches = [k for k, ws in enumerate(segs) if verb(ws) in LAUNCHERS]
-    if kind == "check" and launches == [0] and HOUSE.match(command):
-        launches = []  # G9: the check's one house call, typed as CHECK-HUB.md line 10 lists it
+    if (kind == "check" or s["tribunal"]) and launches == [0] and HOUSE.match(command):
+        launches = []  # G9: the check's (or a tribunal hub's) one house call, as CHECK-HUB.md line 10 lists it
     if kind in WORKERS and launches:
         return "G7", ROUTE["G7"]
     deny = g1(command)
