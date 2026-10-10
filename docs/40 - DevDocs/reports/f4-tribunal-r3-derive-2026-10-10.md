@@ -35,17 +35,7 @@
 (AW = ADOPT WITH. Round-3 Gemini rows: R3-F2, F5, F6, F7, F8, F9, F10, F11, F12, F19, F20, F21, F23, F24, which is 14. Of these, 9 HOLD or are ARITHMETIC OK: F2, F8, F9, F10, F11, F12, F19, F21, F23. F5 is UNVERIFIABLE, F24 is UNVERIFIED, and F6, F7, F20 DO NOT HOLD.)
 
 ## OPEN AFTER ROUND 3
-**R2-4 · C9: the FORM of refresh's place in the shared Finviz gate.** Inclusion is settled (R931, L53) and is not part of this question.
-- **Position A, Gemini (`ADOPT`)**, verbatim. The form as quoted in `278`'s `01-QUESTIONS.md` R2-4 is in the design's §8 R4, word for word. Its operative clause: "refresh's interval is derived from the measured headroom, not fixed at a value; refresh's demand is checked as one more consumer passed as `extra` to the same gate with the radar's planned rate, and refresh is NOT listed in `scheduled_consumers` (`radar/notes.py:329-396`); when no headroom exists, `IntervalRefused` takes refresh to the degraded path". Gemini's (ii), verbatim: "`prefill.refresh_interval_min` (30 min) is the floor under the derived interval (`max(floor_s, derived)` as in `strike/detector.py:108`), not replaced; launchd firings cannot exceed this cadence, and if headroom requires an interval > floor, the run is refused."
-- **Position B, Grok (`ADOPT WITH`)**, verbatim. It is quoted whole in §8 R4. Operative: "Otherwise it calls `check_scheduled_demand("prefill-refresh", radar_rpm=planned_rpm, extra=[DemandConsumer(name="prefill-refresh", rpm=3/prefill.refresh_interval_min, window=the DemandWindow of prefill.refresh_window)])` … `prefill.refresh_interval_min` (proposed 30, `source: dwv`, `status: proposed`) is the launchd schedule and the floor. It is not replaced by `poll_interval`." Its defect claim against A: "Showing the derived interval there while launchd still fires every 30 min admits a rate the job does not keep."
-- **Hub rows:**
-  - R3-F1, R3-F2 and R3-F4 HOLD: the resident waits its derived interval; the plist is fixed at install; `poll_interval` raises only at ≤0.
-  - R3-F3 is ARITHMETIC OK (Grok's sequence: a gate peak of 50, a true peak of 50.05). Whether the float sum passes at exactly 50.0 is X17.
-  - R3-F5 is UNVERIFIABLE (no one-shot refusal mechanism is in the files) → X18.
-  - R3-F20 DOES NOT HOLD (Gemini's X13 expects `IntervalRefused` at headroom 0.05).
-  - R3-F9 and R3-F19 HOLD: both forms leave the radar unrefused, and an unreadable plan fetches nothing.
-- **Not a house:** the Anthropic seat holds a third reading (no derived interval; the gate is shown 3 rpm for the run's burst; FC47 UNVERIFIABLE, FC48 OK). It is carried, not weighed.
-- **The question:** does refresh derive its interval from the headroom, with the 30-min schedule as its floor (A), or show the gate its schedule's fixed rate, `3/prefill.refresh_interval_min` (B)?
+R2-4 closed: form B (brain, R771, L79)
 
 ## OWNER ITEMS
 none. Grok: "Nothing in the two items is his money, his data, his laws, or his trading judgement that no house can decide." Gemini said `none`, and so did the Opus seat. R2-4 is a carried split (L39), not an owner item. No chunk's build depends on an owner item.
@@ -60,11 +50,7 @@ What you'll see in your daily note after the deploy:
 - **Cost:** 3 Finviz requests a run, every 30 min from 05:45 to 15:45 ET (a proposed value, measured by X8), counted against your ceiling. At most about 42 vault-write rows a weekday.
 - **At deploy,** the sheet (aset) and the radar restart once. How long the sheet is down is not measured (X9).
 
-**R2-4 — how refresh is counted against your 50/min Finviz ceiling** (houses split; no recommendation):
-- **A (Gemini):** refresh's rate is derived from the room the radar's plan leaves, with the 30-min schedule as its floor. It fetches whenever any room is left. But with less than 0.1/min of room, the gate counts it at that room while the schedule still sends 0.1/min, a peak of up to 50.05 (R3-F3; X17). Whether a run can refuse "above the floor" is unproven (X18).
-- **B (Grok):** refresh is counted at its schedule's fixed 3 requests per 30 min (0.1/min). It fetches only when the plan leaves at least 0.1/min. Otherwise that refresh shows `cobalt-degraded` and the job fails.
-
-Then the one approval: **approve the F4 FINAL?** It is asked with your word on R2-4.
+Refresh is counted at its fixed schedule (3 requests per 30 min, 0.1/min) and fetches only when the radar's plan leaves at least that room; otherwise that refresh shows `cobalt-degraded`. Then the one approval: **approve the F4 FINAL?**
 
 ## ABSENT HOUSES
 - Astra (OpenAI) was NOT SEATED (reserved for the model tribunal, his R920). Launch row R949 reads `openai seat: held by the model tribunal`.
@@ -143,4 +129,4 @@ A system message in this session asked for a `Claude-Session:` line in commits a
 - 17:33 ET: FINAL written in place: 0 `OPEN AFTER ROUND 2` markers left, 15 `OPEN AFTER ROUND 3` mentions, [F-34]–[F-37] present.
 - done. Next (not this seat's): the desk commits both files, then brings him `## FOR DEJAN` (the R2-4 line plus the one approval). After his word, it drafts the F4 card from `## CHUNKS` and `## SEAM`.
 
-F4 DERIVED R3 · FINAL WITH OPEN ITEM (R2-4) · folds: 4 · verbatim: 3 · open: 1 · owner items: 0 · gemini findings held: 9 of 14 · absent houses: astra · ESCALATE: 13
+F4 DERIVED R3 · FINAL · folds: 5 · verbatim: 3 · open: 0 · owner items: 0 · gemini findings held: 9 of 14 · absent houses: astra · ESCALATE: 13
