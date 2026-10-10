@@ -12,7 +12,8 @@
 # R810): `--fix-report "<job>=<path>"` names that job's fix report under $REPORTS, read at the
 # branch head (`git show <head>:<rel>`, never a copy on main); its last line `BUILT · … tip: <hex>`
 # gives the row's code tip, the check's tip its ancestor, and the path fills the `fix report`
-# cell. REFUSED: a job no card names, a path outside $REPORTS/*.md, a report absent at the head,
+# cell. REFUSED: an empty value, a job no card names, a path outside $REPORTS/*.md or holding
+# '|' or a backtick (the cell's own characters), a report absent at the head,
 # a last line not `BUILT ·` with a `tip:`, a check tip not an ancestor of the fix tip; the head
 # rules above then read against the fix tip. Also refused: an --out path that exists, a worktree
 # outside $WT/<one directory name>, a value outside its character set.
@@ -59,6 +60,7 @@ while [ "$#" -gt 0 ]; do
         --tickers) [ "$#" -ge 2 ] || refuse "$usage"; tickers=$2; shift 2 ;;
         --fix-report) [ "$#" -ge 2 ] || refuse "$usage"
             case "$2" in *"$nl"*) refuse "--fix-report holds a line break" ;; esac
+            [ -n "$2" ] || refuse "--fix-report '' must be <job>=<fix report path>"
             fixes="$fixes$2$nl"; shift 2 ;;
         --) shift; break ;;
         -*) refuse "unknown option '$1'; $usage" ;;
@@ -109,6 +111,8 @@ while IFS= read -r fx; do
     esac
     case "$fpath" in
         *..*) refuse "$fjob: --fix-report path holds '..': $fpath" ;;
+        # the path is a backticked cell of the SHIPS row: '|' or '`' would split or reshape it
+        *'|'*|*'`'*) refuse "$fjob: --fix-report path holds '|' or a backtick: $fpath" ;;
         "$REPORTS"/*.md) ;;
         *) refuse "$fjob: --fix-report path is not $REPORTS/<name>.md: $fpath" ;;
     esac
