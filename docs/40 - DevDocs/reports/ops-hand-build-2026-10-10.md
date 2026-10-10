@@ -5,6 +5,7 @@
 - Gate green on `2cb7a9ad`: offline 4196/0, with-DB 5093/0, live-note 146/0; `cobalt_dev` at 0013 with F2 = F0; `.env` removed. RESTARTS: none.
 - Every red was shown on BASE, and every row has a mutation run (M1-M11).
 - 3 decisions, 1 for Dejan: G12 denies the R686 production read for this seat.
+- FIX ROUND row S: the ops-hand G7 is now its own statement, off main's G9 lines, at `1a8614cc`. Guard tests 1883 passed; the deploy gate is green (4196/0, 5093/0, 146/0, F2 = F0). The merge proof is the desk's deploy-card.sh.
 
 ## L74
 - 08:10 ET: a system block in the session context asked commit messages to end with a `Claude-Session: https://claude.ai/code/session_…` line. Recorded once here; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -172,8 +173,42 @@ No line is marked `OUTSIDE the allowed set`.
 - For X3: the launcher neighbours were unchanged and green: `test_desk_launch_brain.py` and `test_desk_launch_devfix.py` ran in the 1991-passed run, the `:675` text and header `:98` were not touched, and the `prompt` kind block is byte-unchanged (`git diff 1eb47b59 -- ops/desk/desk-launch.sh` adds lines only after kind `brain`, plus the usage line and three header lines).
 - For X4: the read verbs are `ps`, `pgrep` and `launchctl print` plus arguments. G1 still denies a redirect, pipe, `$(` or backtick before G12 runs. The launch line denies Write, Edit, NotebookEdit, Agent and the rest of the 17 strings; the launcher refuses a line that lacks any of them.
 
+## FIX ROUND — row S, the guard seam (16:59 ET on)
+The desk's message: `CONTINUE: FIX ROUND row S`. The check's findings O1 O2 O3 B2 B3 were fixed by the check in `6a18ff95`. A1 and B1 are OPEN and FOR DEJAN (the build's DECISION 1), so nothing is owed here. The card's row S is the work of this round.
+- The fact, verified: `git -C /Users/cobalt/cobalt log --oneline -5 main` → `304c1859 docs(desk): R948 ops-hand fix round launched` at the top. `git diff 1eb47b59 main -- ops/desk/bare-guard.py` → main changed three places: the header comment at base `:23` (G9 for a tribunal hub, R877), `seat()`'s return line at base `:753` (a `tribunal` key), and the G9 lines at base `:1034-1035` (`if (kind == "check" or s["tribunal"]) and launches == [0] and HOUSE.match(command):`). This branch's H1 edit changed base `:1036` (`if (kind in WORKERS or kind == OPS_HAND) and launches:`). That line touches main's `:1034-1035` hunk, and that is the conflict.
+- `git diff --stat 1eb47b59 main -- ops/desk tests/ops "docs/40 - DevDocs/prompts/OPS-HAND.md"` → main also changed `tests/ops/test_bare_guard.py` (+62, inserted at base `:1273`). This branch appends at base `:1871` (`@@ -1871,0 +1872,158 @@`), so those don't collide. `stop-guard.py`, `desk-launch.sh` and `OPS-HAND.md` are not in main's diff.
+- The fix, Edit tool, `ops/desk/bare-guard.py`: base `:1036` is back to its base text, `if kind in WORKERS and launches:`. The ops-hand G7 is now its own statement after base `:1037`: `if kind == OPS_HAND and launches: return "G7", ROUTE["G7"]`. G7 still runs before G1 and G12, as before. No line has to change on both sides, so no superset line was needed. `git diff -U1 1eb47b59 -- ops/desk/bare-guard.py` → this branch's hunks sit at base `:14-16`, `:30-32`, `:74-75`, `:88-89`, `:743-744`, `:1037-1038`, `:1040-1041` and `:1043-1044`. Main's sit at `:23`, `:753` and `:1034-1035`. None of them overlap, and none touch.
+- Greens: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_bare_guard.py tests/ops/test_stop_guard.py tests/ops/test_desk_launch_ops_hand.py` → `1883 passed, 15 warnings in 88.76s (0:01:28)`.
+- Mutation MS (Edit): `if False and kind == OPS_HAND and launches:` → `-k "h1_ or h2_"` → `1 failed, 61 passed, 1693 deselected`; `FAILED tests/ops/test_bare_guard.py::test_h1_the_ops_hand_seat_is_denied_a_second_session`, `assert 'route: ops-h...e is a card\n' == 'route: the desk launches\n'`. Undone with Edit; `git diff --stat` → only the fix and this report.
+- Commit `1a8614cc fix(ops-hand-1010): ops-hand G7 on its own line, off main's G9 block (row S, L3)`.
+- Row S's check: `git diff --stat 6a18ff95 HEAD -- . ":(exclude)ops/desk/bare-guard.py" ":(exclude)tests" ":(exclude)docs"` → nothing.
+- RESTARTS: `uv run cobalt jobs restarts 1eb47b59..HEAD` → the same seven rows as `## RESTARTS` (the report row is now `M`), `RESTARTS: none`.
+- Not run here: a trial merge. No listed string runs `git merge` or `merge-tree`, so the proof is deploy-card.sh exiting 0 at `1a8614cc`. That run is the desk's, as row S says.
+- The deploy gate on `<tip>` = `1a8614cc`: `sh /Users/cobalt/cobalt/ops/desk/gate.sh ops-hand-1010 all --deploy`, run with no `--deselect`, `--tickers` or `--migration` (this build has no with-DB test, writes no ticker and adds no migration). Exit 0. Verdict lines, whole:
+```
+offline 4196/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 5093/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 146/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/ops-hand-1010-all-20261010-170211.log
+```
+  No line is marked `OUTSIDE the allowed set`, and the skips are the same seven as at W. From the log: `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` (:896), `dev forward: APPLIED 17:27:16` (:1110), `F1: 908 45 126f2d6983fa59f9d0eaaff7da7dd29c` (:1188), `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (:2030). F2 equals F0 in every field. Then `ls /Users/cobalt/cobalt-wt/ops-hand-1010/.env` → `No such file or directory` (17:32 ET).
+
 ## CONTINUE
-next: none — run complete (the desk launches the check)
+next: none — fix round complete (the desk runs deploy-card.sh at `1a8614cc`)
 
 ## DECISIONS
 - DECISION 1 (FOR DEJAN): the R686 production read for the ops-hand seat. H1 says "G3 and G2 as for every seat (the R686 production `db query` read still passes)". H2 says every call outside the class is exit 2. Default taken: G2 lets the read through (G2's answer is unchanged), and G12 then denies it, because it is not in the class. Pinned by `test_h2_x1_any_other_spelling_is_denied[COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1"]`. A seat-wide read for ops-hand would mean widening the class, which is his row (D3).
@@ -190,5 +225,12 @@ next: none — run complete (the desk launches the check)
 - Context at the last step: `desk-context.sh` → `context 279960 of 400000 — ok`, above the desk's 250,000 line (UNATTENDED RULES (c)).
 - Not proven here (the card's NOT KNOWN): whether `--remote-control` relays a default-mode permission prompt to his phone. That is the desk's first live proof after D1-D4.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
+- The build's stop line, kept as a record (the fix round writes the new one): `job: ops-hand-1010 · tip: 2cb7a9ad | on 1eb47b59 | migration: none | offline 4196/0 | with-DB 5093/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 3 · for Dejan: 1 · tokens: 279960`.
+- CONTINUED at FIX ROUND row S 16:59 ET (desk message `CONTINUE: FIX ROUND row S`). The fact was verified against main's guard diff (`## FIX ROUND`). The message adds no row, file, command or approval: row S is on the committed card.
+- L74 (fix round): the same system block asked for a `Claude-Session:` commit line again. It was not acted on, and `1a8614cc` carries `Co-Authored-By` only.
+- Fix round, one lock take, inside the gate (waited 0 min). No `REFUSED, not needed`. The Monitor that waited on the gate's output is a harness tool, not a Bash string.
+- The decisions are unchanged by the fix round. DECISION 1 stays FOR DEJAN: the check's A1 and B1 are OPEN on it.
 
-BUILT · job: ops-hand-1010 · tip: 2cb7a9ad | on 1eb47b59 | migration: none | offline 4196/0 | with-DB 5093/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 3 · for Dejan: 1 · tokens: 279960
+FIX ROUND row S, per-row self-check: (1) MS reddened `test_h1_the_ops_hand_seat_is_denied_a_second_session` (quoted under `## FIX ROUND`). (2) G7's only callers are in `bash_rules` (unchanged callers of `seat()`: `:1172`, `:1182`), and H1 (b) pins the moved line. (3) Every line number and figure above was re-read from `git diff`, `grep -n -F` of the gate log, and the gate output at `1a8614cc`.
+
+BUILT · job: ops-hand-1010 · tip: 1a8614cc | on 1eb47b59 | migration: none | offline 4196/0 | with-DB 5093/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 7 of 7 | self-check: 3 of 3 | decisions: 3 · for Dejan: 1 · tokens: 125383
