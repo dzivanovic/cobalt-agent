@@ -223,6 +223,57 @@ def test_a_house_overrule_is_proved_like_a_ruling(desk):
     assert last_line(done) == "FAILED: authorization mismatch — HOUSE A overruled 2026-01-02 R7 row"
 
 
+def test_an_openai_house_line_with_its_approved_row_is_authorized(desk):
+    """Card 298 S4 (his 2026-10-10 R920): the line that lets Sol be probed spends his OpenAI
+    meter, so it is proved like a ruling — row, committed, at HEAD."""
+    repo, card, env = desk
+    recommit(repo, card, card_text(extra="HOUSE A: OpenAI — his 2026-01-02 R2"))
+    done = authorize(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "AUTHORIZED"
+    for rule in ("row", "committed", "at HEAD"):
+        assert f"HOUSE A OpenAI 2026-01-02 R2 {rule} · " in done.stdout, (rule, done.stdout)
+
+
+@pytest.mark.parametrize(
+    ("extra", "proposed", "failed"),
+    [
+        ("HOUSE A: OpenAI — his 2026-01-02 R7", False, "HOUSE A OpenAI 2026-01-02 R7 row"),
+        ("HOUSE A: OpenAI — his 2026-01-02 R2", True, "HOUSE A OpenAI 2026-01-02 R2 row"),
+        ("HOUSE A: OpenAI — his 2026-01-02 R2 and more", False, "HOUSE A OpenAI"),
+        ("HOUSE A: OpenAI", False, "HOUSE A OpenAI"),
+        (
+            "HOUSE A: none — overruled 2026-01-02 R3\nHOUSE A: OpenAI — his 2026-01-02 R7",
+            False,
+            "HOUSE A OpenAI 2026-01-02 R7 row",
+        ),
+    ],
+    ids=["no-such-row", "proposed", "tail", "openai-alone", "second-house-a-line"],
+)
+def test_an_openai_house_line_without_its_row_fails(desk, extra, proposed, failed):
+    repo, card, env = desk
+    if proposed:
+        reports = repo / "docs" / "40 - DevDocs" / "reports"
+        (reports / "cto-2026-01-02.md").write_text(
+            "| row |\n" + R2.replace("HIS RULING · APPROVED", "HIS RULING · PROPOSED") + R3
+        )
+    recommit(repo, card, card_text("none", extra=extra))
+    done = authorize(env, "check", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done).startswith(f"FAILED: authorization mismatch — {failed}"), done.stdout
+
+
+@pytest.mark.parametrize("extra", ["", "HOUSE A: none — overruled 2026-01-02 R3"], ids=["plain", "none-overruled"])
+def test_a_card_without_an_openai_line_prints_no_openai_row(desk, extra):
+    repo, card, env = desk
+    if extra:  # the plain card is the fixture's own, already committed
+        recommit(repo, card, card_text(extra=extra))
+    done = authorize(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "AUTHORIZED"
+    assert "HOUSE A OpenAI" not in done.stdout
+
+
 def test_the_deploy_kind_reads_the_first_row_of_its_own_title(desk):
     repo, card, env = desk
     done = authorize(env, "deploy", card)
