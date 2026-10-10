@@ -1051,8 +1051,10 @@ def bash_rules(command, s):
     launches = [k for k, ws in enumerate(segs) if verb(ws) in LAUNCHERS]
     if kind == "check" and launches == [0] and HOUSE.match(command):
         launches = []  # G9: the check's one house call, typed as CHECK-HUB.md line 10 lists it
-    if (kind in WORKERS or kind == OPS_HAND) and launches:
+    if kind in WORKERS and launches:
         return "G7", ROUTE["G7"]
+    if kind == OPS_HAND and launches:
+        return "G7", ROUTE["G7"]  # card 231 H1: the ops-hand seat is denied a launch as a worker is
     deny = g1(command)
     if deny:
         return "G1", deny
