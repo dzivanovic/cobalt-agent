@@ -49,3 +49,12 @@ and the `BarStore` write).
 ## Config it reads
 None directly — reads the Finviz API token from VaultManager
 (`finviz.com::api_token`) via `FinvizApiClient`, same as `aset/prefill.py`.
+
+## 2026-10-10 — archiver-429-1009
+
+A 429 is a typed error: `finviz_get` raises `FinvizRateLimited(message,
+*, retry_after=None)`, a `CollectorError` subclass, carrying `Retry-After`
+as non-negative delta-seconds (absent, an HTTP-date or unparseable →
+`None`); `fetch_bars` re-raises it with the same `retry_after`. Message
+texts and every other status are unchanged, so every `except
+CollectorError` behaves as before.

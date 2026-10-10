@@ -107,3 +107,12 @@ shape (9 pipes vs 15).
 - `job_result()` — today's five keys, `shadow` when the pre-write
   comparison ran, `append` in append mode. The `upsert` key set is
   pinned by a runner test.
+
+## 2026-10-10 — archiver-429-1009
+
+`RunSummary` names its 429 retries (R812): `record_retry(ticker,
+interval, attempt, wait)`, `retries`, `retry_count`, `retry_wait_s` and
+`retry_line()` (`retried: <T>/<i> waited <w>s[+<w>s] (<ok|failed>); …`,
+`failed` when a `failures` entry starts `<T>/<i>:`, else `""`).
+`record_retry` does not touch `requests`; the runner counts the retry
+GET. The run-report row and `job_result()` are unchanged.

@@ -58,6 +58,31 @@ class CollectorError(RuntimeError):
     """Fetch or shape-validation failure — never store, never guess."""
 
 
+class FinvizRateLimited(CollectorError):
+    """HTTP 429 from Finviz (archiver-429, 2026-10-09).
+
+    A subclass, so every `except CollectorError` behaves exactly as
+    before; only a caller that names this class can tell a throttle from
+    a bad export. `retry_after` is the server's `Retry-After` as
+    non-negative delta-seconds, or `None` when it is absent, an
+    HTTP-date or unparseable — never a guessed number (L1).
+    """
+
+    def __init__(self, message: str, *, retry_after: float | None = None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+def _retry_after_seconds(value: str | None) -> float | None:
+    """`Retry-After` delta-seconds (RFC 9110: 1*DIGIT), else `None`."""
+    if value is None:
+        return None
+    value = value.strip()
+    if not (value.isascii() and value.isdigit()):
+        return None
+    return float(int(value))
+
+
 class FetchMetrics(BaseModel):
     """Observable facts for one Finviz request, with no URL or credential."""
 
@@ -212,7 +237,13 @@ async def finviz_get(
     try:
         response.raise_for_status()
     except httpx.HTTPStatusError as e:
-        raise CollectorError(f"Finviz HTTP failed: {scrub(str(e))}") from e
+        message = f"Finviz HTTP failed: {scrub(str(e))}"
+        if response.status_code == 429:
+            raise FinvizRateLimited(
+                message,
+                retry_after=_retry_after_seconds(response.headers.get("retry-after")),
+            ) from e
+        raise CollectorError(message) from e
     return response
 
 
@@ -231,6 +262,11 @@ async def fetch_bars(
         response = await finviz_get(
             "/export/stock", params, token, on_metrics=on_metrics
         )
+    except FinvizRateLimited as e:
+        raise FinvizRateLimited(
+            f"Fetch failed for {ticker}/{interval.value}: {scrub(str(e))}",
+            retry_after=e.retry_after,
+        ) from e
     except Exception as e:
         raise CollectorError(
             f"Fetch failed for {ticker}/{interval.value}: {scrub(str(e))}"
@@ -243,6 +279,7 @@ __all__ = [
     "CollectorError",
     "EXPECTED_COLUMNS",
     "FetchMetrics",
+    "FinvizRateLimited",
     "fetch_bars",
     "finviz_get",
     "parse_csv_response",
