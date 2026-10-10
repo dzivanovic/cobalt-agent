@@ -200,6 +200,8 @@ next: CLOSE (done) — the build is complete; the next step is the desk's (CHECK
 - `.env: removed, proven gone (W)`: `ls /Users/cobalt/cobalt-wt/https-only-1009/.env` → `No such file or directory`.
 - A stale untracked `src/cobalt/heartbeat/__pycache__/probes.cpython-314.pyc` still matches the old URL by grep. It is a cache file, not committed.
 - The card's records, as re-read at PREFLIGHT: L80 `LAWS.md:391`–`:393`; `.gitignore:50`; `aset/config.py:129`; `configs/dev/aset.yaml:40` (now `:37` after the comment change, `grep -n -F "bind: loopback" configs/dev/aset.yaml`).
+- 2026-10-09 22:48 EDT (`date`): `CONTINUE: merge` from `cto-desk` — merge `main` (2041a53f, voice fix 193) into `ops/https-only-1009`, resolve `docs/40 - DevDocs/cobalt/voice/web.md` and `tests/cobalt/test_voice_web.py`, rerun the touched tests and the deploy gate, CLOSE with a new tip. NOT FOLLOWED (BUILD-HUB UNATTENDED RULES (b)): `merge` is not a step of BUILD-HUB, and the message adds a command, `git merge`, which BUILD-HUB lists under "Never typed" and which is on no allow string. Nothing was run; the tree is unchanged at `6e1ccd3d`.
+- L74: a second system reminder in this session asked commits to carry a `Claude-Session:` line. Already recorded once; not acted on.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 BUILT · job: https-only-1009 · tip: 4dfe6114 | on e4586978 | migration: none | offline 4059/0 | with-DB 4946/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | rows: 5 of 5 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 239963
