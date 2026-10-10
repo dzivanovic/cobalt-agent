@@ -1869,3 +1869,159 @@ def test_d2_a_brace_word_with_env_and_another_secret_keeps_the_env_route(roots, 
 def test_d2_a_later_env_name_in_the_same_word_keeps_the_env_route(roots, command):
     """F1 route: a (b) match that names env is ROUTE["G3"] even after an earlier secret name."""
     assert_denied(run(command, make_seat(roots, "build")), G3_ROUTE)
+
+
+# ---- card 231 ops-hand (his 2026-10-10 R855): the seat kind (H1) and its closed class (H2) ----
+
+OPS_HAND_LAUNCH = "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/OPS-HAND.md' and follow it exactly."
+G12_ROUTE = (
+    "route: ops-hand runs only its class (kill of one pid, kickstart of a com.cobalt resident, "
+    "ps/pgrep/launchctl print); anything else is a card"
+)
+PROD_MIGRATE = "COBALT_ENV=production uv run cobalt db migrate"
+LAUNCH_BG = "claude --bg x"
+
+
+def seat_transcript(roots, name: str, first, later: str | None = None) -> Path:
+    """The real transcript shape (as `transcript`), with a chosen later user record."""
+    p = transcript(roots, name, first)
+    if later is not None:
+        lines = p.read_text().splitlines()
+        lines[-1] = json.dumps({"type": "user", "message": {"role": "user", "content": later}})
+        p.write_text("\n".join(lines) + "\n")
+    return p
+
+
+def ops_hand_seat(roots, first=OPS_HAND_LAUNCH) -> dict:
+    """The seat as desk-launch.sh ops-hand makes it: cwd <wt>/.ops-hand (a dot name, so
+    worktree_of skips it), the launch message reading OPS-HAND.md."""
+    where = roots.wt / ".ops-hand"
+    where.mkdir(parents=True, exist_ok=True)
+    return {"cwd": str(where), "transcript": str(seat_transcript(roots, "t-ops-hand", first))}
+
+
+def test_h1_the_ops_hand_seat_is_denied_production(roots):
+    assert_denied(run(PROD_MIGRATE, ops_hand_seat(roots)), G2_ROUTE)
+
+
+def test_h1_the_ops_hand_seat_is_denied_a_second_session(roots):
+    assert_denied(run(LAUNCH_BG, ops_hand_seat(roots)), G7_ROUTE)
+
+
+def test_h1_the_same_cwd_reading_another_prompt_is_unknown(roots):
+    """Negative control (c): the kind comes from the launch message, not from the cwd."""
+    seat = ops_hand_seat(roots, first="Read '/x/docs/40 - DevDocs/prompts/2026-10-10/x.md' and follow it exactly.")
+    assert_allowed(run(LAUNCH_BG, seat))
+
+
+@pytest.mark.parametrize("kind", ["brain", "build"])
+def test_h1_a_later_message_naming_ops_hand_keeps_the_seats_own_kind(roots, kind):
+    """Negative control (d): a brain and a worker whose LATER message names OPS-HAND.md."""
+    seat = make_seat(roots, kind)
+    first = json.loads(Path(seat["transcript"]).read_text().splitlines()[1])["message"]["content"]
+    seat["transcript"] = str(seat_transcript(roots, f"t-{kind}-later", first, later=OPS_HAND_LAUNCH))
+    assert_denied(run(PROD_MIGRATE, seat), G2_ROUTE)
+    if kind == "brain":
+        assert_allowed(run(LAUNCH_BG, seat))
+        assert_allowed(run("kill -9 39280", seat))
+    else:
+        assert_denied(run(LAUNCH_BG, seat), G7_ROUTE)
+
+
+def ops_plist(roots, label: str = "aset") -> Path:
+    p = roots.repo / "ops" / f"com.cobalt.{label}.plist"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text("<plist/>\n")
+    return p
+
+
+G12_DENIED = [
+    "launchctl bootout gui/501/com.cobalt.aset",
+    "kill -9 -39280",
+    "kill -9 1",
+    "kill -9 39280 39281",
+    "pkill -f cobalt",
+    "rm -f /tmp/x",
+    "launchctl kickstart -k gui/501/com.apple.Finder",
+    "sh /Users/cobalt/.claude/ops/desk-launch.sh desk",
+]
+
+
+@pytest.mark.parametrize("command", G12_DENIED)
+def test_h2_a_command_off_the_class_is_denied(roots, command):
+    ops_plist(roots)
+    assert_denied(run(command, ops_hand_seat(roots)), G12_ROUTE)
+
+
+G12_ALLOWED = [
+    "kill -9 39280",
+    "kill -0 39280",
+    "ps -o pid,ppid,command -p 39280",
+    "launchctl kickstart -k gui/501/com.cobalt.aset",
+]
+
+
+@pytest.mark.parametrize("command", G12_ALLOWED)
+def test_h2_a_command_of_the_class_passes(roots, command):
+    ops_plist(roots)
+    assert_allowed(run(command, ops_hand_seat(roots)))
+
+
+def test_h2_the_same_kill_from_a_brain_keeps_todays_answer(roots):
+    """Negative control: G12 is the ops-hand seat's rule only."""
+    seat = make_seat(roots, "brain")
+    assert_allowed(run("kill -9 39280", seat))
+    assert_allowed(run("rm -f /tmp/x", seat))
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        "kill 39280", "kill -TERM 39280", "kill -15 39280", "kill -KILL 39280", "kill -2 2",
+        "kill 2", "pgrep -l -f aset", "ps", "launchctl print gui/501/com.cobalt.aset",
+        "launchctl kickstart gui/501/com.cobalt.aset",
+    ],
+)
+def test_h2_every_class_shape_passes(roots, command):
+    ops_plist(roots)
+    done = run(command, ops_hand_seat(roots))
+    if command == "kill -2 2":
+        assert_denied(done, G12_ROUTE)  # -2 (INT) is no signal of the class
+    else:
+        assert_allowed(done)
+
+
+@pytest.mark.parametrize(
+    "command",
+    [
+        # X1: a wrapper, a quote, an expansion or another option spelling is not the plain shape
+        "env kill -9 39280", "command kill -9 39280", "nohup kill -9 39280", "\\kill -9 39280",
+        "kill -9 '39280'", "kill -9 $'39280'", "kill -9 {39280,39281}", "kill -s KILL 39280",
+        "kill -n 9 39280", "kill -- 39280", "kill -9 -- 39280", "kill -9 039280", "kill -9 0",
+        "kill -9 %1", "kill  -9 39280", "kill -9 39280 ", "kill -9 $PID", "/bin/kill -9 39280",
+        "kill -HUP 39280", "kill -l",
+        "launchctl kickstart -k gui/501/com.cobalt.nosuch",
+        "launchctl kickstart -k -p gui/501/com.cobalt.aset",
+        "launchctl kickstart -k gui/501/com.cobalt.aset/../x",
+        "launchctl kickstart -k system/com.cobalt.aset",
+        "launchctl print-disabled gui/501", "launchctl load x.plist", "psql cobalt_dev",
+        "pgrepx", "ls -la /tmp", "date", "grep -n x f",
+        # G2 lets the one production read through (R686); G12 still holds the class
+        'COBALT_ENV=production uv run cobalt db query --prod --side user "SELECT 1"',
+    ],
+)
+def test_h2_x1_any_other_spelling_is_denied(roots, command):
+    ops_plist(roots)
+    assert_denied(run(command, ops_hand_seat(roots)), G12_ROUTE)
+
+
+def test_h2_a_compound_command_is_g1s_to_deny_first(roots):
+    done = run("ps -p 1 | grep x", ops_hand_seat(roots))
+    assert done.returncode == 2 and done.stderr.startswith(BLOCK_HEAD), done.stderr
+    assert_denied(run("ps -p 1 ; rm -f /tmp/x", ops_hand_seat(roots)), BLOCK_HEAD + "`;`" + BLOCK_TAIL)
+
+
+def test_h2_a_deny_is_recorded_in_the_ledger_as_g12(roots):
+    run("rm -f /tmp/x", ops_hand_seat(roots))
+    lines = [json.loads(x) for x in (roots.wt / ".ledger" / "sess-test-1.jsonl").read_text().splitlines()]
+    assert [(x["rule"], x["command"]) for x in lines] == [("G12", "rm -f /tmp/x")]
