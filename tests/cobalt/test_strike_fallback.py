@@ -297,3 +297,17 @@ def test_b5_one_recovered_line_then_silence():
         ("ERROR", FAILED + "RuntimeError: database down (failed passes: 1)"),
         ("INFO", "strike fallback: recovered after 1 failed passes"),
     ]
+
+
+def test_o1_a_pass_whose_exception_cannot_be_printed_never_stops_the_thread():
+    from cobalt.aset.strike import FallbackThread
+
+    class Unprintable(Exception):
+        def __str__(self):
+            raise ValueError("no text")
+
+    clock = [0.0]
+    thread = FallbackThread(ScriptTail([Unprintable(), "ok"]), interval_s=1, monotonic=lambda: clock[0])
+    thread.step()
+    clock[0] = 1.0
+    thread.step()
