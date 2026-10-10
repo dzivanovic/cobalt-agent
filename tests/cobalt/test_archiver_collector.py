@@ -20,8 +20,10 @@ import pytest
 from cobalt.archiver.collector import (
     CollectorError,
     FetchMetrics,
+    FinvizRateLimited,
     _parse_finviz_datetime,
     _parse_finviz_wall_clock,
+    fetch_bars,
     parse_csv_response,
     finviz_get,
     scrub,
@@ -187,6 +189,63 @@ def test_finviz_transport_reports_followed_redirect_before_status(monkeypatch):
     assert response.status_code == 200
     assert seen[0].redirect_statuses == (302,)
     assert seen[0].bytes == 2
+
+
+def _transport_answering(monkeypatch, status, headers=None):
+    """The `MockTransport` seam above, answering every GET with `status`."""
+    import httpx
+    import cobalt.archiver.collector as module
+
+    async_client = httpx.AsyncClient
+
+    def handler(request):
+        return httpx.Response(status, text="", headers=headers or {})
+
+    monkeypatch.setattr(
+        module.httpx,
+        "AsyncClient",
+        lambda **kwargs: async_client(transport=httpx.MockTransport(handler), **kwargs),
+    )
+
+
+def test_a_429_with_retry_after_is_a_typed_rate_limit(monkeypatch):
+    """archiver-429 A1: the 10-09 night's 18 failures were 429s that
+    reached the runner as a plain `CollectorError`, indistinguishable
+    from an empty export. A 429 is now `FinvizRateLimited`, carrying the
+    server's `Retry-After` in seconds; the message text is unchanged."""
+    _transport_answering(monkeypatch, 429, {"Retry-After": "7"})
+    with pytest.raises(FinvizRateLimited) as e:
+        asyncio.run(fetch_bars("TESTARCH", Interval.I5, "synthetic-token"))
+    assert e.value.retry_after == 7.0
+    assert isinstance(e.value, CollectorError)
+    message = str(e.value)
+    assert message.startswith("Fetch failed for TESTARCH/i5: Finviz HTTP failed: ")
+    assert "429" in message
+    assert "synthetic-token" not in message
+
+
+@pytest.mark.parametrize("headers", [
+    {},
+    {"Retry-After": "Fri, 09 Oct 2026 20:40:00 GMT"},
+    {"Retry-After": "-5"},
+    {"Retry-After": "soon"},
+])
+def test_a_429_without_a_usable_retry_after_carries_none(monkeypatch, headers):
+    """Absent, an HTTP-date, negative or unparseable → `None`: the runner
+    then uses its own backoff, never a guessed number (L1)."""
+    _transport_answering(monkeypatch, 429, headers)
+    with pytest.raises(FinvizRateLimited) as e:
+        asyncio.run(fetch_bars("TESTARCH", Interval.I5, "synthetic-token"))
+    assert e.value.retry_after is None
+
+
+def test_a_500_stays_a_plain_collector_error(monkeypatch):
+    """Negative control: only 429 is the typed rate limit."""
+    _transport_answering(monkeypatch, 500)
+    with pytest.raises(CollectorError) as e:
+        asyncio.run(fetch_bars("TESTARCH", Interval.I5, "synthetic-token"))
+    assert not isinstance(e.value, FinvizRateLimited)
+    assert str(e.value).startswith("Fetch failed for TESTARCH/i5: Finviz HTTP failed: ")
 
 
 def test_scrub_redacts_auth_query():

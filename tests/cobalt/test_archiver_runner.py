@@ -29,7 +29,7 @@ import pytest
 
 from cobalt.archiver import runner as runner_mod
 from cobalt.archiver import shadow as shadow_mod
-from cobalt.archiver.collector import CollectorError
+from cobalt.archiver.collector import CollectorError, FinvizRateLimited
 from cobalt.archiver.models import Bar, Interval
 from cobalt.archiver.reconcile import BarValues, IncidentKind, TargetStatus, bar_values
 from cobalt.archiver.settings import ArchiverSettings
@@ -922,3 +922,223 @@ def test_the_premarket_bound_is_read_from_the_session_tunables():
     assert window.describe() == (
         f"{tunables['session.premarket_open'].value}-{tunables['session.rth_open'].value} ET"
     )
+
+
+# =====================================================================
+# archiver-429 (card 206, R808 / R812) — A BOUNDED 429 RETRY
+#
+# 10-09: 18 targets failed on `429 Too Many Requests` from an outside
+# burst on the shared Finviz login. A 429 is now retried on the SAME
+# target, at most `RETRY_429_MAX` times, every wait at least
+# `GENTLE_SLEEP_SECONDS` (the archiver's declared pacing bound) and the
+# run's retry waits summed at most `RETRY_429_BUDGET_SECONDS`.
+# =====================================================================
+
+
+def rate_limited(ticker="TESTARCH", interval="i5", retry_after=None):
+    return FinvizRateLimited(
+        f"Fetch failed for {ticker}/{interval}: Finviz HTTP failed: "
+        "Client error '429 Too Many Requests'",
+        retry_after=retry_after,
+    )
+
+
+def sequenced(mapping):
+    """A fake fetch answering each target from its own list, in order."""
+    queues = {key: list(values) for key, values in mapping.items()}
+    calls: list[tuple] = []
+
+    async def _fetch(ticker, interval, token, **kwargs):
+        key = (ticker, getattr(interval, "value", interval))
+        calls.append(key)
+        value = queues[key].pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return list(value)
+
+    _fetch.calls = calls
+    return _fetch
+
+
+@pytest.fixture
+def slept(monkeypatch, _no_sleep_no_token):
+    """Every `asyncio.sleep` the runner awaits, in order (none really waits)."""
+    waits: list[float] = []
+
+    async def _record(seconds):
+        waits.append(seconds)
+
+    monkeypatch.setattr(runner_mod.asyncio, "sleep", _record)
+    return waits
+
+
+@pytest.fixture
+def log_records():
+    from loguru import logger
+
+    records: list[dict] = []
+    handler = logger.add(lambda message: records.append(message.record), level="DEBUG")
+    yield records
+    logger.remove(handler)
+
+
+def _retry_waits(waits):
+    """The helper's waits, told apart from the between-target sleep."""
+    return [w for w in waits if w != runner_mod.GENTLE_SLEEP_SECONDS]
+
+
+def test_a_429_is_retried_until_the_target_succeeds(wired, slept):
+    store = wired(FakeStore())
+    fetch = sequenced({("TESTARCH", "i5"): [rate_limited(), rate_limited(), NIGHT_1]})
+    summary = run([("TESTARCH", Interval.I5)], store=store, fetch=fetch,
+                  cfg=settings(shadow_compare="off"))
+    assert summary.failures == []
+    assert store.upserted == [NIGHT_1]
+    assert summary.requests == 3, "each retry GET is a request"
+    assert slept == [15, 30]
+
+
+def test_a_429_past_the_retry_max_fails_the_target(wired, slept):
+    store = wired(FakeStore())
+    fetch = sequenced({("TESTARCH", "i5"): [rate_limited()] * (runner_mod.RETRY_429_MAX + 1)})
+    summary = run([("TESTARCH", Interval.I5)], store=store, fetch=fetch,
+                  cfg=settings(shadow_compare="off"))
+    assert len(fetch.calls) == runner_mod.RETRY_429_MAX + 1 == 4
+    # Exactly what `_archive_nightly` joins into its RuntimeError, so the
+    # job row lands on `failed` and `main` exits 1.
+    assert len(summary.failures) == 1
+    assert summary.failures[0].startswith("TESTARCH/i5:")
+    assert "429" in summary.failures[0]
+    assert summary.requests == 4
+    assert store.upserted == []
+
+
+@pytest.mark.parametrize("retry_after,expected", [
+    (7.0, [7.0]),
+    (0.0, [1.2]),       # clamped UP to GENTLE_SLEEP_SECONDS
+    (900.0, [60]),      # clamped DOWN to RETRY_AFTER_CAP_SECONDS
+])
+def test_retry_after_is_clamped_to_the_pacing_bound_and_the_cap(wired, slept, retry_after, expected):
+    """ONE target, so no between-target sleep: every recorded wait is the
+    helper's."""
+    store = wired(FakeStore())
+    fetch = sequenced({("TESTARCH", "i5"): [rate_limited(retry_after=retry_after), NIGHT_1]})
+    summary = run([("TESTARCH", Interval.I5)], store=store, fetch=fetch,
+                  cfg=settings(shadow_compare="off"))
+    assert summary.failures == []
+    assert slept == expected
+    assert min(slept) >= runner_mod.GENTLE_SLEEP_SECONDS
+
+
+def test_the_run_retry_budget_bounds_the_sum_of_waits(wired, slept):
+    """15+30+60 = 105 s per always-429 target: five targets use 525 s.
+    The sixth waits 15 (540) and 30 (570); its 60 would pass 600 and is
+    NOT taken — it fails after 3 fetches, not 4. The seventh and eighth
+    still fit a 15 (585, 600); the ninth's 15 would pass 600."""
+    tickers = [f"TEST{c}" for c in "ABCDEFGHI"]
+    targets = [(t, Interval.I5) for t in tickers]
+    fetch = sequenced({(t, "i5"): [rate_limited(t)] * 4 for t in tickers})
+    store = wired(FakeStore())
+    summary = run(targets, store=store, fetch=fetch, cfg=settings(shadow_compare="off"))
+    retry_waits = _retry_waits(slept)
+    assert sum(retry_waits) <= runner_mod.RETRY_429_BUDGET_SECONDS == 600
+    assert sum(retry_waits) == 600
+    assert fetch.calls.count(("TESTF", "i5")) == 3
+    assert any(f.startswith("TESTF/i5:") for f in summary.failures)
+    assert fetch.calls.count(("TESTI", "i5")) == 1
+    assert len(summary.failures) == len(tickers)
+
+
+def test_a_backfill_never_retries_a_429(wired, slept):
+    """A backfill's declared window is len(targets) x GENTLE_SLEEP_SECONDS:
+    its retry budget is 0."""
+    store = wired(FakeStore())
+    fetch = sequenced({("TESTARCH", "i5"): [rate_limited(retry_after=7.0), NIGHT_1]})
+    summary = run([("TESTARCH", Interval.I5)], store=store, fetch=fetch,
+                  cfg=settings(shadow_compare="off"), mode="backfill:TESTARCH", now=BACKFILL_AT)
+    assert len(summary.failures) == 1
+    assert len(fetch.calls) == 1
+    assert slept == []
+
+
+def test_a_non_429_collector_error_is_never_retried(wired, slept):
+    """Negative control: an empty export fails the target as today."""
+    store = wired(FakeStore())
+    fetch = sequenced({("TESTARCH", "i5"): [CollectorError("No data rows for TESTARCH/i5.")]})
+    summary = run([("TESTARCH", Interval.I5)], store=store, fetch=fetch,
+                  cfg=settings(shadow_compare="off"))
+    assert len(summary.failures) == 1
+    assert len(fetch.calls) == 1
+    assert slept == []
+
+
+def test_an_append_night_retries_a_429_without_an_empty_export_incident(wired, slept):
+    store = wired(FakeStore())
+    fetch = sequenced({("TESTARCH", "i5"): [rate_limited(), NIGHT_1]})
+    summary = run([("TESTARCH", Interval.I5)], store=store, fetch=fetch,
+                  cfg=settings(write_mode="append"))
+    assert summary.failures == []
+    assert store.written_incidents == []
+    assert store.inserted, "the retried export was appended"
+    assert summary.requests == 2
+
+
+def test_each_retry_logs_one_warning_naming_target_attempt_and_wait(wired, slept, log_records):
+    store = wired(FakeStore())
+    fetch = sequenced({("TESTARCH", "i5"): [rate_limited(retry_after=7.0), NIGHT_1]})
+    run([("TESTARCH", Interval.I5)], store=store, fetch=fetch, cfg=settings(shadow_compare="off"))
+    warnings = [r for r in log_records if r["level"].name == "WARNING"]
+    assert len(warnings) == 1, [r["message"] for r in warnings]
+    message = warnings[0]["message"]
+    assert "TESTARCH/i5" in message
+    assert "attempt 1/3" in message
+    assert "7.0s" in message
+    assert not [r for r in log_records if r["level"].name == "ERROR"]
+
+
+def _run_full_with(monkeypatch, tmp_path, summary):
+    from cobalt.archiver import report as report_mod
+
+    monkeypatch.setattr(report_mod, "REPORT_PATH", tmp_path / "archiver-runs.md")
+
+    class _Cfg:
+        def archive_targets(self):
+            return [("TESTARCH", Interval.I5)]
+
+    async def _targets(targets, mode):
+        return summary
+
+    monkeypatch.setattr(runner_mod, "load_config", lambda: _Cfg())
+    monkeypatch.setattr(runner_mod, "_run_targets", _targets)
+    asyncio.run(runner_mod.run_full())
+
+
+def _run_complete(log_records):
+    (line,) = [r["message"] for r in log_records if r["message"].startswith("Run complete:")]
+    return line
+
+
+def test_run_complete_says_retried_zero_on_a_night_without_a_429(monkeypatch, tmp_path, log_records):
+    from cobalt.archiver.report import RunSummary
+
+    summary = RunSummary(mode="full")
+    summary.record_success("TESTARCH", 3)
+    _run_full_with(monkeypatch, tmp_path, summary)
+    line = _run_complete(log_records)
+    assert "retried 0 (waited 0.0 s)" in line
+    assert "retried:" not in line
+
+
+def test_run_complete_names_the_retried_targets(monkeypatch, tmp_path, log_records):
+    from cobalt.archiver.report import RunSummary
+
+    summary = RunSummary(mode="full")
+    summary.record_retry("DKNG", "i2", 1, 15.0)
+    summary.record_retry("DKNG", "i2", 2, 30.0)
+    summary.record_success("DKNG", 10)
+    summary.record_retry("META", "i5", 1, 60.0)
+    summary.record_failure("META", "i5", "Fetch failed for META/i5: Finviz HTTP failed: 429")
+    _run_full_with(monkeypatch, tmp_path, summary)
+    line = _run_complete(log_records)
+    assert "retried 3 (waited 105.0 s)" in line
+    assert "retried: DKNG/i2" in line
