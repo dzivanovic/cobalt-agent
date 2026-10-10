@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R937
 BRANCH: ops/kill-hub-row-1010
 WORKTREE: kill-hub-row-1010
 BASE: 6fe8d690
-TIP: 91c48f36
+TIP: b4d82ad6
 REPORT: /Users/cobalt/cobalt-wt/kill-hub-row-1010/docs/40 - DevDocs/reports/kill-hub-row-build-2026-10-10.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/kill-hub-row-check-2026-10-10.md
 HOUSE B: as needed
