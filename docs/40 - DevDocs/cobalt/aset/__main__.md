@@ -15,6 +15,12 @@ import. That specific leak has since been fixed at the source
 (`cobalt_agent/config.py`, 2026-08-24), but this guard is cheap
 insurance and is left in place deliberately.
 
+## 2026-10-09 — https-only-1009
+The `lan` branch and the `local_lan_ip` import are gone; startup prints `http://127.0.0.1:<port>` and the https URL from `configs/cobalt/voice.yaml` `https_url` as the tailnet address (L80).
+
+## 2026-10-09 — https-only-1009 check
+The body below no longer describes the removed LAN branch (check B2).
+
 ## Key functions/classes
 No functions — this is a script module (`if __name__ == "__main__":`
 guard), not a library. Body, in order:
@@ -35,9 +41,3 @@ banner lines to stdout.
 ## Config it reads
 `AsetConfig.server` (`bind`, `port`) — the rest of `AsetConfig` is read
 per-request by `web.py`, not here.
-
-## 2026-10-09 — https-only-1009
-The `lan` branch and the `local_lan_ip` import are gone; startup prints `http://127.0.0.1:<port>` and the https URL from `configs/cobalt/voice.yaml` `https_url` as the tailnet address (L80).
-
-## 2026-10-09 — https-only-1009 check
-The body above no longer describes the removed LAN branch (check B2).
