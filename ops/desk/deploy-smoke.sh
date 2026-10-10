@@ -9,7 +9,7 @@
 # command`, and not run:
 #   ls <path> | ls "<path>"
 #   grep -c -F "<fixed string>" <path>
-#   curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/<path>   (L80; `\?` read as `?`; three
+#   curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/<path>   (`\?` read as `?`; three
 #        tries, DEPLOY_SETTLE seconds apart; GREEN on `200`)
 #   COBALT_ENV=production uv run cobalt db query <options> "<sql>"   (`\"` inside the SQL read as
 #        `"`) — run only when the card's MIGRATIONS is not `none` and the SQL carries no `%`;
@@ -132,8 +132,8 @@ shape() {
         "$CURLQ"*)
             url=${c#"$CURLQ"}
             case "$url" in
-                https://cobalt.taild24291.ts.net/*) ;;
-                *) why="curl reads https://cobalt.taild24291.ts.net/ only"; return 1 ;;
+                http://127.0.0.1:5010/*) ;;
+                *) why="curl reads http://127.0.0.1:5010/ only"; return 1 ;;
             esac
             url=$(printf '%s' "$url" | sed 's/\\?/?/g')
             case "$url" in

@@ -102,34 +102,7 @@ def test_every_tunable_names_its_source_in_the_committed_file():
             i -= 1
         assert any("# source:" in l for l in block), key
         checked.append(key)
-    assert checked == list(GOOD_VOICE["voice"]) and len(checked) == 15
-
-
-#: A constructed tailnet name — not his host (L32); the committed value is pinned below.
-CONSTRUCTED_HTTPS = "https://box.example0000.ts.net/"
-
-
-def test_https_url_is_required_and_https_only(tmp_path, dirs, monkeypatch):
-    """https-only row A (L80, R718): `https_url` is the https address's one
-    config home. REQUIRED (L1: no default) and https on a `*.ts.net` name
-    only; the committed file carries it."""
-    s, m = dirs
-    p = _voice(tmp_path, s, m, https_url=CONSTRUCTED_HTTPS)
-    assert vc.load_voice_config(p).https_url == CONSTRUCTED_HTTPS
-    d = yaml.safe_load(p.read_text())
-    del d["voice"]["https_url"]
-    p.write_text(yaml.safe_dump(d))
-    with pytest.raises(vc.VoiceConfigError) as e:
-        vc.load_voice_config(p)
-    assert "https_url" in str(e.value)
-    for bad in ("http://box.example0000.ts.net/", "https://box.example0000.ts.net", "https://192.168.1.5/"):
-        p = _voice(tmp_path, s, m, https_url=bad)
-        with pytest.raises(vc.VoiceConfigError) as e:
-            vc.load_voice_config(p)
-        assert "https_url" in str(e.value), bad
-    monkeypatch.delenv(vc.SCRATCH_ENV, raising=False)
-    monkeypatch.delenv(vc.MODEL_ENV, raising=False)
-    assert vc.load_voice_config().https_url.startswith("https://")
+    assert checked == list(GOOD_VOICE["voice"]) and len(checked) == 14
 
 
 # --- W7: a missing key crashes ---------------------------------------------

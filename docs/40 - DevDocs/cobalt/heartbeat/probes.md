@@ -141,6 +141,3 @@ freshness and has never had a database, so an autouse fixture pins
 `_read_archive_incidents` to "no incidents" there. The incident
 behaviour, including the unreadable case, lives in
 `test_heartbeat_archiver_incidents.py`.
-
-## 2026-10-09 — https-only-1009
-`sheet_http` and `sheet_daymode` default to the https address (`https://<HOST>/`, `https://<HOST>/api/health`), read as his devices read the page, so a down `tailscale serve` is red (L80). `test_https_only.py` pins both defaults to `configs/cobalt/voice.yaml` `https_url`.

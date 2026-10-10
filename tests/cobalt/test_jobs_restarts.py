@@ -268,34 +268,6 @@ EXPECTED_BACKUP_YAML_READERS = frozenset({
     "cobalt.voice.turn.default_deps",
     "cobalt.voice.cli.cmd_turn",
     "cobalt.voice.cli._run",
-    # https-only-1009 rows B and C (L80): the widget names the https address
-    # from voice config (`widget_html` → `get_config`), so every sheet and
-    # /radar render reaches the loader; `__main__` prints that address at
-    # start. All run inside com.cobalt.aset, already this file's resident.
-    "cobalt.voice.web.widget_html",
-    "cobalt.aset.__main__.<module>",
-    "cobalt.aset.web._card_tap",
-    "cobalt.aset.web._render",
-    "cobalt.aset.web._tap_reply",
-    "cobalt.aset.web.attest",
-    "cobalt.aset.web.card_move",
-    "cobalt.aset.web.card_stop",
-    "cobalt.aset.web.fill",
-    "cobalt.aset.web.index",
-    "cobalt.aset.web.radar",
-    "cobalt.aset.web.radar_card_arm",
-    "cobalt.aset.web.radar_card_correct",
-    "cobalt.aset.web.radar_card_disarm",
-    "cobalt.aset.web.radar_card_exit",
-    "cobalt.aset.web.radar_card_fill",
-    "cobalt.aset.web.radar_card_held",
-    "cobalt.aset.web.radar_card_pass",
-    "cobalt.aset.web.radar_card_stop",
-    "cobalt.aset.web.radar_card_stop_reset",
-    "cobalt.aset.web.radar_card_triggered",
-    "cobalt.aset.web.settings_daily",
-    "cobalt.aset.web.settings_daily_apply",
-    "cobalt.aset.web.size",
 })
 
 
@@ -522,30 +494,6 @@ def test_backup_yaml_readers_are_pinned_and_derive_the_aset_restart(monkeypatch)
         "cobalt.voice.web.voice_status",
         "cobalt.voice.web.voice_startup",
         "cobalt.voice.cli.cmd_turn",
-        # https-only-1009 (L80): every sheet / /radar route that renders the
-        # voice widget (`widget_html` → `get_config`), all served by
-        # com.cobalt.aset, and `python -m cobalt.aset`'s start block, which
-        # prints the https address (`__main__.py`, under `if __name__ == "__main__":`).
-        "cobalt.aset.__main__.<module>",
-        "cobalt.aset.web.attest",
-        "cobalt.aset.web.card_move",
-        "cobalt.aset.web.card_stop",
-        "cobalt.aset.web.fill",
-        "cobalt.aset.web.index",
-        "cobalt.aset.web.radar",
-        "cobalt.aset.web.radar_card_arm",
-        "cobalt.aset.web.radar_card_correct",
-        "cobalt.aset.web.radar_card_disarm",
-        "cobalt.aset.web.radar_card_exit",
-        "cobalt.aset.web.radar_card_fill",
-        "cobalt.aset.web.radar_card_held",
-        "cobalt.aset.web.radar_card_pass",
-        "cobalt.aset.web.radar_card_stop",
-        "cobalt.aset.web.radar_card_stop_reset",
-        "cobalt.aset.web.radar_card_triggered",
-        "cobalt.aset.web.settings_daily",
-        "cobalt.aset.web.settings_daily_apply",
-        "cobalt.aset.web.size",
     }, sorted(entrypoints)
     assert referrers == {
         "cobalt.backup.cli.add_parser",
@@ -555,27 +503,16 @@ def test_backup_yaml_readers_are_pinned_and_derive_the_aset_restart(monkeypatch)
         "cobalt.voice.web.<module>",
         "cobalt.aset.web.<module>",
         "cobalt.voice.cli.add_parser",
-        # https-only-1009: `_result_card`'s parameter `fill` shares its name
-        # with the route `fill`, now a reader; the walker reads the name as
-        # that function (no call, no read).
-        "cobalt.aset.web._result_card",
     }, sorted(referrers)
     # No import-time read: nothing reads the file at module scope, so no
     # resident's static import reach (the classifier's own walk) can read it
-    # by importing. ONE named exception (https-only-1009, L80):
-    # `cobalt.aset.__main__` reads it inside its `if __name__ == "__main__":`
-    # block — run only as `python -m cobalt.aset`, the program of
-    # com.cobalt.aset, whose `reads:` already holds this file (the row above).
+    # by importing. Vacuous today; a real guard the day someone does.
     import_time = {r.removesuffix(".<module>") for r in readers if r.endswith(".<module>")}
-    assert import_time == {"cobalt.aset.__main__"}, sorted(import_time)
-    main_src = (Path(restarts.REPO_ROOT) / "src" / "cobalt" / "aset" / "__main__.py").read_text()
-    guarded = main_src.split('\nif __name__ == "__main__":\n', 1)
-    assert len(guarded) == 2 and "load_voice_config(" not in guarded[0], "the read must sit under the __main__ guard"
+    assert not import_time
     graph, unknown = restarts.import_graph()
     for job in load_job_registry().jobs:
         if job.kind is JobKind.RESIDENT and job.imports:
-            hit = restarts.reachable(job.imports, graph, unknown)[0] & import_time
-            assert not hit or job.label == "com.cobalt.aset", (job.label, sorted(hit))
+            assert not restarts.reachable(job.imports, graph, unknown)[0] & import_time, job.label
 
     # The schema refuses a path both in a resident's `reads:` and under
     # `no_resident_reads` (jobs/config.py:393-397): the resident row is it.

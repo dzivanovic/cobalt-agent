@@ -1481,18 +1481,11 @@ def _k4_4():
     return {c.id: c for c in load_suite(SUITES_DIR / "s2.yaml").checks}["K4.4"]
 
 
-def _https_url() -> str:
-    """The https address's one config home (https-only row A, L80)."""
-    from cobalt.voice.config import load_voice_config
-
-    return load_voice_config().https_url
-
-
 def test_k4_4_asks_the_pool_api_with_the_cutoff_as_since():
     """The endpoint REQUIRES `since` (P3 plan R2-1: missing values are
     rejected, never defaulted); the check was written without it."""
     check = _k4_4()
-    assert check.url == _https_url() + "api/radar/pool?since={cutoff}"
+    assert check.url == "http://127.0.0.1:5010/api/radar/pool?since={cutoff}"
 
 
 def test_render_url_percent_encodes_each_value_and_the_api_parses_it_back():
@@ -1503,7 +1496,7 @@ def test_render_url_percent_encodes_each_value_and_the_api_parses_it_back():
     check = _k4_4()
     for cutoff, encoded in F2_CUTOFFS:
         url = checks.render_url(check.url, ctx(cutoff=cutoff))
-        assert url == f"{_https_url()}api/radar/pool?since={encoded}"
+        assert url == f"http://127.0.0.1:5010/api/radar/pool?since={encoded}"
         assert parse_since(unquote(url.split("?since=", 1)[1]), now=NOW) == cutoff
         # the printed hand fallback carries the same encoded value
         assert f"?since={encoded}" in checks.command_for(check, ctx(cutoff=cutoff))

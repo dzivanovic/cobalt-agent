@@ -132,21 +132,21 @@ checks:
   - id: K4.1
     title: sheet /api/health
     kind: http
-    url: https://cobalt.taild24291.ts.net/api/health
+    url: http://127.0.0.1:5010/api/health
     status: 200
     expect_text: HTTP 200
 
   - id: K4.2
     title: sheet GET /
     kind: http
-    url: https://cobalt.taild24291.ts.net/
+    url: http://127.0.0.1:5010/
     status: 200
     expect_text: HTTP 200
 
   - id: K4.3
     title: sheet GET /radar with value column
     kind: http
-    url: https://cobalt.taild24291.ts.net/radar
+    url: http://127.0.0.1:5010/radar
     status: 200
     contains: ["<th>value</th>"]
     expect_text: "HTTP 200 and the body contains `<th>value</th>`"
@@ -154,7 +154,7 @@ checks:
   - id: K4.4
     title: sheet /api/radar/pool
     kind: http
-    url: https://cobalt.taild24291.ts.net/api/radar/pool?since={cutoff}
+    url: http://127.0.0.1:5010/api/radar/pool?since={cutoff}
     status: 200
     expect_text: "HTTP 200 (since = the deploy cutoff: a past, tz-aware instant — the API's ruled contract, P3 plan R2-1)"
 

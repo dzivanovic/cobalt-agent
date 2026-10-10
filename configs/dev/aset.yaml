@@ -29,10 +29,13 @@ daily_note:
   # had to be stopped. Default true.
   write_enabled: true
 
-# Server bind: loopback only (127.0.0.1, this machine only). The tailnet
-# reaches the sheet through `tailscale serve` on https (L80), at
-# configs/cobalt/voice.yaml `https_url`; both URLs print on startup.
-# "lan" (0.0.0.0) is refused at load, loud (L80).
+# Server bind. "loopback" (default) = 127.0.0.1 only, this machine only.
+# "lan" = 0.0.0.0, reachable from other devices on the home network (e.g.
+# Dejan's Windows trading PC — same home network, NOT Tailscale) at
+# http://<mac-lan-ip>:<port>; the reachable URL(s) print on startup.
+# WARNING: "lan" exposes this page with NO authentication to anyone on
+# the local network. Acceptable for now — an access token is a backlog
+# item (docs/00 - Project/BACKLOG.md).
 server:
   bind: loopback
   port: 5010
