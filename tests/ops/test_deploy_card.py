@@ -434,6 +434,139 @@ def test_n8_card_md_row_and_deploy_hub_phrase():
     assert grep_c(hub, HUB_OLD) == 0
 
 
+# ---- launcher-1010 row A: --fix-report fills a fix-round row (R810; CARD.md :48) ---------------
+
+LAUNCH = REPO / "ops" / "desk" / "desk-launch.sh"
+
+
+def fix_round(desk: Desk, *, last: str | None = None, on_head: bool = True,
+              name: str = "alpha") -> tuple[str, str, Path]:
+    """A small fix moves `name`'s code past its checked tip (R376, L75); its fix report is
+    committed on the branch head only (card 63 N6), unless `on_head` is False (the head is then
+    the fix commit). `last` is the report's last line, `FIXED` standing for the fix tip.
+    Returns (fix tip, head, report path)."""
+    git(desk.repo, "checkout", "-q", f"ops/{name}")
+    (desk.repo / "src" / f"{name}.py").write_text(f"{name} = 2\n")
+    git(desk.repo, "commit", "-q", "-am", f"{name} small fix")
+    fixed = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    report = desk.reports / f"{name}-fix.md"
+    if on_head:
+        line = (last or "BUILT · job: x · tip: FIXED | rows: 1 of 1").replace("FIXED", fixed)
+        report.write_text(f"# {name} fix round\n\n{line}\n\n")
+        git(desk.repo, "add", "-A")
+        git(desk.repo, "commit", "-q", "-m", f"{name} fix report")
+    head = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+    git(desk.repo, "checkout", "-q", "main")
+    assert not report.exists()
+    return fixed, head, report
+
+
+def ships_row(text: str, n: int) -> str:
+    return next(line for line in section(text, "SHIPS").splitlines() if line.startswith(f"| {n} |"))
+
+
+def test_a_fix_report_fills_the_ships_row_cell_and_code_tip(tmp_path):
+    """RED on BASE: `unknown option '--fix-report'` (exit 1)."""
+    desk = Desk(tmp_path)
+    fixed, head, report = fix_round(desk)
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+    text = desk.out.read_text()
+    assert header(text)["TIP"] == f"{head} {desk.head['beta']}"
+    alpha = ships_row(text, 1)
+    cells = [c.strip() for c in alpha.split("|")]
+    assert cells[3] == f"`{fixed}`", alpha  # code tip: the fix report's tip
+    assert cells[4] == f"`{head}`", alpha
+    assert cells[5] == f"`{desk.check['alpha']}`", alpha
+    assert cells[6] == "`held unfixed: 0` and `ready: YES`", alpha
+    assert cells[7] == f"`{report}`", alpha
+    assert ships_row(text, 2).endswith("| `held unfixed: 0` and `ready: YES` | |")
+    assert f"code tip `{fixed}`" in section(text, "RECORDS")
+
+
+def test_no_fix_report_leaves_every_cell_empty(tmp_path):
+    """Green on BASE and after: a row with no --fix-report is the `:147` row of today."""
+    desk = Desk(tmp_path)
+    done = desk.run()
+    assert done.returncode == 0, done.stderr
+    text = desk.out.read_text()
+    for n, name in enumerate(("alpha", "beta"), start=1):
+        assert ships_row(text, n) == (
+            f"| {n} | `ops/{name}` | `{desk.tip[name]}` | `{desk.head[name]}` | `{desk.check[name]}` "
+            "| `held unfixed: 0` and `ready: YES` | |"
+        )
+
+
+def _fix_refused(desk: Desk, extra: tuple[str, ...], reason: str) -> None:
+    before = desk.state()
+    done = desk.run(*extra)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert f"REFUSED: {reason}" in done.stderr, done.stderr
+    assert not desk.out.exists()
+    assert desk.state() == before
+
+
+def test_a_fix_report_absent_at_the_head_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    fixed, head, report = fix_round(desk, on_head=False)
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: the fix report is absent at the branch head {head}: {report}")
+
+
+def test_a_fix_report_whose_last_line_is_not_built_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    fixed, head, report = fix_round(desk, last="FAILED: W — x · tip: FIXED")
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: the fix report's last line is not 'BUILT ·' with a 'tip:': FAILED: W — x · tip: {fixed}")
+
+
+def test_a_fix_tip_not_past_the_check_tip_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    base = git(desk.repo, "merge-base", "main", "ops/alpha")[:8]
+    fixed, head, report = fix_round(desk, last=f"BUILT · job: x · tip: {base} | rows: 1 of 1")
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: the check's tip {desk.tip['alpha']} is not an ancestor of the fix tip {base}")
+
+
+def test_a_fix_report_for_an_unknown_job_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    fixed, head, report = fix_round(desk)
+    _fix_refused(desk, ("--fix-report", f"gamma={report}"),
+                 "--fix-report names job 'gamma', which is no JOB of the job cards given")
+
+
+def test_a_fix_report_outside_the_reports_folder_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    fixed, head, report = fix_round(desk)
+    stray = desk.prompts / "alpha-fix.md"
+    _fix_refused(desk, ("--fix-report", f"alpha={stray}"),
+                 f"alpha: --fix-report path is not {desk.reports}/<name>.md: {stray}")
+
+
+def test_a_fix_report_round_trips_through_the_launchers_ships_checked(tmp_path):
+    """The card written for a fix round passes desk-launch.sh's `ships_checked` (P2, P3): the
+    code tip is the fix report's `tip:`, the check's tip its ancestor. RED on BASE: the option
+    is refused, so no card exists to launch."""
+    proof = "\n## DEPLOY PROOF\n- `grep -c -F \"alpha = 2\" /x/src/alpha.py` · before `0` · after `1`\n"
+    desk = Desk(tmp_path, proof=proof)
+    hub = desk.prompts.parent / "DEPLOY-HUB.md"
+    hub.write_text((REPO / "docs" / "40 - DevDocs" / "prompts" / "DEPLOY-HUB.md").read_text())
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "the fixed deploy file")
+    fixed, head, report = fix_round(desk)
+    done = desk.run("--fix-report", f"alpha={report}", cards=("alpha",))
+    assert done.returncode == 0, done.stderr
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "deploy card")
+    launch = subprocess.run(
+        ["sh", str(LAUNCH), "deploy", str(desk.out)], env=dict(desk.env, DESK_LAUNCH_DRY="1"),
+        capture_output=True, text=True, timeout=120,
+    )
+    assert launch.returncode == 0, launch.stderr
+    assert "REFUSED" not in launch.stderr, launch.stderr
+    assert f"git -C {desk.repo} worktree add -b deploy/x-set {desk.wt}/x-gate main" in launch.stdout
+
+
 @pytest.mark.parametrize("bad", ["../x-gate", "/abs/x-gate", "a/b", ".hidden", "agy-trial", ""])
 def test_a_worktree_outside_the_pattern_is_refused(tmp_path, bad):
     desk = Desk(tmp_path)
