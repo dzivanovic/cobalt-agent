@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09.md R810
 BRANCH: ops/launcher-1010
 WORKTREE: launcher-1010
 BASE: eed03ce8
-TIP:
+TIP: b71837f2
 REPORT: /Users/cobalt/cobalt-wt/launcher-1010/docs/40 - DevDocs/reports/launcher-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-check-2026-10-10.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
 ## ROWS
