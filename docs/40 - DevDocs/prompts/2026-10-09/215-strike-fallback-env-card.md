@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R828
 BRANCH: ops/strike-fallback-env-1010
 WORKTREE: strike-fallback-env-1010
 BASE: 8f4bbe28
-TIP:
+TIP: b3d59b5f
 REPORT: /Users/cobalt/cobalt-wt/strike-fallback-env-1010/docs/40 - DevDocs/reports/strike-fallback-env-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/strike-fallback-env-check-2026-10-10.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
 ## ROWS
