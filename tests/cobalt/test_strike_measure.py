@@ -187,12 +187,24 @@ def test_overnight_makes_no_get(tmp_path):
 # -- (f) the real token path is DB-free ----------------------------------------------------
 
 
-@pytest.mark.skipif(not Path("data/.cobalt_vault").exists(),
-                    reason="no Finviz vault on this host — real token path not proven DB-free here")
-def test_the_real_token_path_opens_no_database(monkeypatch):
+def test_the_real_token_path_opens_no_database(tmp_path, monkeypatch):
+    """The REAL `resolve_token()` (FinvizApiClient → VaultManager) on a
+    throwaway vault in tmp_path: a constructed key, a constructed token, no
+    real secret (brain 10-09, W-1)."""
     import psycopg
+    from cryptography.fernet import Fernet
 
     from cobalt.archiver.collector import resolve_token
+    from cobalt_agent.security.vault import VaultManager
+
+    key = Fernet.generate_key().decode()
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / "data").mkdir()
+    vault = VaultManager()
+    assert vault.unlock(key)
+    assert vault.set_secret(key, "finviz.com::api_token", "constructed-throwaway-token")
+    assert Path("data/.cobalt_vault").exists()
+    monkeypatch.setenv("COBALT_MASTER_KEY", key)
 
     called: list[str] = []
 
@@ -203,8 +215,44 @@ def test_the_real_token_path_opens_no_database(monkeypatch):
     monkeypatch.setattr(psycopg, "connect", _refuse)
     monkeypatch.setattr(psycopg.AsyncConnection, "connect", _refuse)
     token = asyncio.run(resolve_token())
-    assert token
+    assert token == "constructed-throwaway-token"
     assert called == []
+
+
+# -- measure.command's exit codes (S-1) --------------------------------------------------
+
+
+def test_command_exit_codes(monkeypatch, capsys, tmp_path):
+    from types import SimpleNamespace
+
+    from cobalt.strike.measure import MeasureResult
+
+    args = SimpleNamespace(names="ZZMA,ZZMB", cadence=3, minutes=1, out=str(tmp_path))
+    seen = []
+
+    async def refused(names, cadence, minutes, out):
+        seen.append((names, cadence, minutes, out))
+        raise MeasureRefused("constructed refusal")
+
+    monkeypatch.setattr(measure, "run_measure", refused)
+    with pytest.raises(SystemExit) as exc:
+        measure.command(args)
+    assert exc.value.code == 2 and "REFUSED: constructed refusal" in capsys.readouterr().out
+    assert seen == [(["ZZMA", "ZZMB"], 3, 1, tmp_path)]
+
+    def result(code):
+        async def run(*_a):
+            return MeasureResult(exit_code=code, verdict="THROTTLED at 3 s" if code else "CRITERION ≤5 s HOLDS at 3 s",
+                                 gets=7, jsonl_path=tmp_path / "a.jsonl", md_path=tmp_path / "a.md")
+        return run
+
+    monkeypatch.setattr(measure, "run_measure", result(1))
+    with pytest.raises(SystemExit) as exc:
+        measure.command(args)
+    assert exc.value.code == 1 and "THROTTLED at 3 s" in capsys.readouterr().out
+    monkeypatch.setattr(measure, "run_measure", result(0))
+    assert measure.command(args) is None
+    assert capsys.readouterr().out.rstrip().splitlines()[-1] == "CRITERION ≤5 s HOLDS at 3 s"
 
 
 # -- the verdict, the Charter's rule ----------------------------------------------------------

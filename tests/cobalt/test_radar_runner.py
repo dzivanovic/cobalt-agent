@@ -579,6 +579,19 @@ def test_the_kill_phrase_stops_the_strike_thread_within_one_cadence(monkeypatch)
     assert _wall.monotonic() - stopped_at <= 1.5
 
 
+def test_make_strike_loop_builds_the_strike_detector(monkeypatch):
+    import cobalt.radar.runner as r
+    import cobalt.strike.detector as detector
+
+    built = object()
+
+    async def fake_build():
+        return built
+
+    monkeypatch.setattr(detector, "build_detector", fake_build)
+    assert asyncio.run(r.make_strike_loop()) is built
+
+
 def test_scan_starts_no_strike_loop(monkeypatch):
     import threading
 
