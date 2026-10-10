@@ -313,3 +313,43 @@ def test_h3_the_real_file_passes_once_his_row_fills_the_title(desk):
     assert done.stdout.splitlines() == [f"cd {desk.hand}", line_for(str(desk.fixed))]
     assert "--permission-mode default" in done.stdout
     assert "--remote-control ops-hand --name ops-hand" in done.stdout
+
+
+def test_check_o1_a_second_command_after_the_line_is_refused(desk):
+    marker = desk.tmp / "o1-ran"
+    desk.set_line(desk.line + f" ; touch {marker}")
+    done = desk.run(dry=False)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: " in done.stderr
+    assert not marker.exists()
+
+
+def test_check_o2_a_command_substitution_in_a_deny_string_is_refused(desk):
+    marker = desk.tmp / "o2-ran"
+    desk.set_line(desk.line + f' "Bash($(touch {marker}))"')
+    done = desk.run(dry=False)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: " in done.stderr
+    assert not marker.exists()
+
+
+@pytest.mark.parametrize("extra", ["--settings '{\"disableAllHooks\":true}'", "--add-dir /Users"])
+def test_check_o3_a_flag_outside_the_shape_is_refused(desk, extra):
+    desk.set_line(desk.line.replace(" --allowedTools ", f" {extra} --allowedTools ", 1))
+    done = desk.run()
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: " in done.stderr
+
+
+def test_a_second_mode_spelled_with_a_backslash_is_refused(desk):
+    desk.set_line(line_for(str(desk.fixed)) + " --permission-\\mode bypass\\Permissions")
+    done = desk.run(dry=False)
+    recorded = desk.calls.read_text() if desk.calls.is_file() else ""
+    assert done.returncode == 1 and "bypassPermissions" not in recorded, (done.returncode, recorded)
+
+
+def test_a_skip_permissions_flag_spelled_with_a_backslash_is_refused(desk):
+    desk.set_line(line_for(str(desk.fixed)) + " --dangerously-skip-\\permissions")
+    done = desk.run(dry=False)
+    recorded = desk.calls.read_text() if desk.calls.is_file() else ""
+    assert done.returncode == 1 and "--dangerously-skip-permissions" not in recorded, (done.returncode, recorded)
