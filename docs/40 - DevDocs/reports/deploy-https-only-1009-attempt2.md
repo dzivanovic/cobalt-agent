@@ -1,7 +1,10 @@
 # deploy https-only-1009 (attempt 2) — SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- (in progress)
+- FAILED at 4.6, then rolled back. Gate GREEN on `da0ee609` (offline 4203/0 · with-DB 5100/0 · live-note 146/0); merged 1a13bd1d → 86f8e308 at 07:28; reverted by one `revert -m 2` → `7f6b63fd`; the tree equals `<pre-merge>` outside docs.
+- The new aset never started: `ScratchLocked` — the OLD aset's python child (pid 39280, `python -m cobalt.aset`) outlived the bootout (the plist has `abandon process group`) and holds `/Users/cobalt/.cobalt/voice-scratch`. The reverted code hits the same lock.
+- NOW: **aset DOWN** (every https page 502, sheet probe RED); radar UP on the reverted tree; agent ONLINE. launchd retries aset every ~10 s; it comes up on its own once pid 39280 is stopped (DECISIONS 2, FOR DEJAN).
+- The https code is not proven wrong (L70): the failure is the orphan, and every deploy that restarts aset will hit it until that is fixed (DECISIONS 3).
 
 ## L74
 - A system reminder arriving mid-session asked commits to end with a `Claude-Session:` line. Recorded once; not acted on (L74). Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -150,15 +153,80 @@ STEP-D1 (baseline, read-only):
 - `curl … https://cobalt.taild24291.ts.net/radar` → `200`. MARKERS again → 0 · 0 · 0 · 0 · 0 · 0 · 0 (each its `before`).
 - MIGRATIONS: none → no `<RB>`, no census, no D1-M.
 
+STEP-D2:
+- D2.0 `add` + `commit -m "docs(report): deploy https-only-1009 — gate green on da0ee609"` → `[main 1a13bd1d] … 1 file changed, 164 insertions(+)`; `show --stat HEAD` → that one file. `<pre-merge>` = `1a13bd1d`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `86f8e308`; `rev-parse --short=8 86f8e308^2` → `1a13bd1d` = `<pre-merge>`; `merge-base --is-ancestor da0ee609 86f8e308` → exit 0.
+- D2.3 `git diff --stat da0ee609 86f8e308 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 2.2 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6694.3 MB` · `ssd: snapshot e871251e — 0 new / 2 changed, 27.4 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Sat Oct 10 07:27:46 EDT 2026`; `heartbeat show` (07:27:50, 121 s after D1's 07:25:49) → same three REDs as `<hb0>` (archiver ×2, replay), aset `pid 39274`, radar `running 132 min, heartbeat fresh`, sheet HTTP 200; no new RED.
+- D2.6 `date` → `Sat Oct 10 07:27:55 EDT 2026`; `git tag pre-https-only-1009` at `1a13bd1d`.
+
+STEP-4 (the outage):
+- 4.1 `date` → `Sat Oct 10 07:28:12 EDT 2026` = `<t down>`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → ok; `print` → still loaded, `state = SIGTERMed`, `pid = 39274`; `date` → `07:28:19`; `print` → exit 113 `Could not find service "com.cobalt.aset"`. `bootout gui/501/com.cobalt.radar` → ok; `print` → exit 113 `Could not find service "com.cobalt.radar"`.
+- 4.3 `rev-parse --short=8 HEAD` → `1a13bd1d` = `<pre-merge>`; `merge --ff-only deploy/deploy-2026-10-09-https-only-attempt2` → `Updating 1a13bd1d..86f8e308` · `Fast-forward` (22 files, 635 insertions, 86 deletions).
+- 4.4 `migrations applied: none` (MIGRATIONS: none).
+- 4.5 `validate` → exit 0, `13 trade_def(s) validated OK`, `Placement … tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>`.
+- 4.6 `bootstrap … com.cobalt.aset.plist` → ok; `bootstrap … com.cobalt.radar.plist` → ok. `print` aset → `state = spawn scheduled`, `last exit code = 3` (loaded, not running); radar → `state = running`, `pid = 60803`. `tail -n 30 aset.err` → `RED voice scratch dir /Users/cobalt/.cobalt/voice-scratch locked by pid 39280 — start sweep deleted nothing` · `cobalt.voice.scratch.ScratchLocked: voice scratch dir /Users/cobalt/.cobalt/voice-scratch is locked by pid 39280 — the start sweep deleted NOTHING. A process still owns this directory (X-X22: an orphan can outlive its job); find it and stop it before this process may serve voice turns.` · `ERROR:    Application startup failed. Exiting.` `ps -p 39280` → `39280 ?? 1:42.81 …/Python -m cobalt.aset` — the OLD aset's python child, alive after the bootout (the aset plist carries `abandon process group`; the bootout signalled `start_aset.sh` pid 39274 only). `kickstart -k gui/501/com.cobalt.aset` once → `print` → `state = spawn scheduled`, `runs = 4`, `last exit code = 3`. Still not running → STEP-5.
+
+STEP-5 (rollback):
+- (0) `date` → `Sat Oct 10 07:29:19 EDT 2026`.
+- (1) `bootout gui/501/com.cobalt.aset` → ok, `print` → exit 113 `Could not find service`; `bootout gui/501/com.cobalt.radar` → ok, `print` → exit 113. Agent not in the set (untouched). Counts: `<rp5>` 18 · `<rpr5>` 60 · `<re5>` 43 · `<lc5>` 39 (= D1's baselines).
+- (2) `log --oneline -1` → `86f8e308 Merge branch 'main' into deploy/deploy-2026-10-09-https-only-attempt2` = `<stack-final>`. `revert --no-edit -m 2 86f8e308` → `[main 7f6b63fd] Revert "Merge branch 'main' into deploy/deploy-2026-10-09-https-only-attempt2"` · `22 files changed, 86 insertions(+), 635 deletions(-)`. PROOF: `git diff --stat 1a13bd1d HEAD -- . ":(exclude)docs"` → nothing: the tree is `<pre-merge>`'s.
+- (3) `bootstrap … com.cobalt.aset.plist` → ok; `bootstrap … com.cobalt.radar.plist` → ok. aset → `state = spawn scheduled`, `last exit code = 3` (the same lock: the old code runs the same voice startup); `kickstart -k gui/501/com.cobalt.aset` once → `state = spawn scheduled`, `runs = 3`, `last exit code = 3`; `ps -p 39280` → alive (`1:45.51`). radar → `state = running`, `pid = 61093`. `date` → `Sat Oct 10 07:30:02 EDT 2026`.
+- (4) re-reads on the reverted tree:
+  - (a) aset NOT running (`spawn scheduled`, exit 3); radar running, pid 61093 (new); `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (agent outside the set, same pid).
+  - (b) `Started server process` 65 (> `<a0>` 60: five failed starts) · aset `Traceback` 7 (`<ta0>` 2: the five ScratchLocked startups) · radar `Traceback` 0 · `TaxonomyConfigError` 0. `tail -n 12 radar.err` → `2026-10-10 07:29:40.454 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, after the restore, no traceback, no S5 / lifecycle failure → radar GREEN.
+  - (c) `curl … https://cobalt.taild24291.ts.net/` → `502`, `502` · `/radar` → `502` · `/radar\?frame=phone` → `502`. RED (aset down).
+  - (e) `date` `07:30:17` · `heartbeat show` (07:30:18) → `HEARTBEAT RED — 3 job(s) and 3 probe(s)`: NEW against `<hb0>`: `RED sheet HTTP http://127.0.0.1:5010/ unreachable: URLError: <urlopen error [Errno 61] Connection refused>`, `?? sheet daymode … unreachable`, `RED com.cobalt.aset failed loaded, not running (last exit 3)`; carried: archiver ×2, replay. `OK com.cobalt.radar running running 1 min, heartbeat fresh`.
+  - (f) `validate` → exit 0 (`13 trade_def(s) validated OK`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.`, `Placement … tree clean.`); `jobs restarts 1a13bd1d..86f8e308` → exit 0, `RESTARTS: com.cobalt.aset com.cobalt.radar`, no `UNCLASSIFIED`.
+  - (g) no migration.
+  - (c) again, three attempts per URL: `/` `502` ×3 · `/radar` `502` ×3 · `/radar\?frame=phone` `502` ×3.
+  - (e) second read: `date` `07:32:09` · `heartbeat show` (07:32:12, 114 s after 07:30:18) → same as the first: sheet HTTP RED (connection refused), `com.cobalt.aset failed loaded, not running (last exit 3)`, carried archiver ×2 / replay; `com.cobalt.radar running running 3 min, heartbeat fresh`. `tail -n 12 radar.err` → `07:31:20.482 … radar cycle: idle:overnight scan_id=None`.
+  - Between the reads: `print` aset → `state = spawn scheduled`, `runs = 10`, `last exit code = 3` (KeepAlive retries); `ps -p 39274` → header only (the old `start_aset.sh` is gone); `ps -p 39280` → alive at `1:48.95` CPU (07:31); `Started server process` 75, aset `Traceback` 17 at 07:31:50 (each a ScratchLocked start).
+  - REVERT-READBACK: after the settled radar tail, `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 = `<rp5>` `<rpr5>` `<re5>` `<lc5>`; no count grew.
+
+THE ROLLBACK STRING (L54):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 86f8e308` — DONE by this run at STEP-5 (2) → `7f6b63fd`.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit 7f6b63fd` — git titles it `Reapply "Merge branch 'main' into deploy/deploy-2026-10-09-https-only-attempt2"` — only after the orphan pid 39280 is stopped (DECISIONS 2).
+
+TABLE: `<pre-merge>` `1a13bd1d` → `<stack-final>` `86f8e308` → reverted `7f6b63fd` · tags: `pre-https-only-1009` at `1a13bd1d`; `deploy-2026-10-09-https-only-attempt2` NOT set (no green smoke) · `<t down>` 07:28:12 · `<t up>` none for aset (still down at 07:32:12); radar up 07:28:40-ish (4.6) and again from 07:29:40 (STEP-5 (3), first cycle line) · uv sync: none in production · proof cost: none (no migration) · `migrations applied: none` · `<RB>` none · snapshot `e871251e` · RESTARTS attempted: `com.cobalt.aset com.cobalt.radar`.
+
 ## Smoke
+4.7 was never reached: 4.6 failed (aset not running after one `kickstart -k`) and sent the run to STEP-5. STEP-5 (4)'s reads are under `## Deploy table`.
+THE CHAIN, as far as it holds: every check committed (P2) ✓ · the tips (P3) ✓ · the merged tree (T) ✓ · RESTARTS derived (R) ✓ · three suites green on `da0ee609` (G) ✓ · `86f8e308` = `da0ee609` + docs (D2.3) ✓ · the landed code (4.3) ✓ · residents up after the merge ✗ (aset: ScratchLocked by orphan pid 39280) → rolled back; the reverted tree proven equal to `<pre-merge>` (STEP-5 (2)); radar cycling on it; no failure count grew; aset still down for the same orphan.
 
 ## CONTINUE
-next: STEP-D2 (gate green at 07:25:03 EDT; D0 and D1 done)
+next: none — the run ended FAILED with rollback used. The desk's next steps: stop pid 39280 (DECISIONS 2); confirm aset comes up on `7f6b63fd`; fix the orphan in a build (DECISIONS 3); then RE-LAND by a new deploy.
+OUTAGE STARTING 07:27:55 EDT — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+OUTAGE ENDED by STEP-5 at 07:30:02 EDT — radar UP, aset DOWN (orphan lock); STEP-5 is never entered twice.
 
 ## DECISIONS
-1. P7's two-dot `git diff --stat main <head>` lists main's `0024_strike_alerts` files as DELETIONS (main moved past the branch's base). Read as: the head adds no migration — the three-dot `main...16559ba4` prints nothing, and STEP-T's `<m0>..<BRANCH>` stat is the decisive check. Safe default taken: go on; STEP-T fails the run if any migration path enters.
+1. P7's two-dot `git diff --stat main <head>` lists main's `0024_strike_alerts` files as DELETIONS (main moved past the branch's base). Read as: the head adds no migration — the three-dot `main...16559ba4` prints nothing, and STEP-T's `<m0>..<BRANCH>` stat is the decisive check. Safe default taken: go on; STEP-T fails the run if any migration path enters. (STEP-T's stat printed nothing.)
+2. **DECISION 0 · FOR DEJAN — production aset is DOWN now.** Every https page returns 502; the sheet probe is RED. The cause is pid 39280 (`…/Python -m cobalt.aset`), the old aset's python child. It is still alive after the bootout and holds the voice scratch lock `/Users/cobalt/.cobalt/voice-scratch`. Neither tree can start while it lives. This line has no kill string. The fix is to stop pid 39280 (SIGTERM, then SIGKILL if it hangs). launchd KeepAlive is retrying (`runs = 10` at 07:31), so aset should come up on the reverted tree `7f6b63fd` by itself within ~10 s of the kill; then `launchctl print gui/501/com.cobalt.aset` should show `state = running`, and `curl … /radar` should return `200`. Safe default taken: residents left as STEP-5 (3) left them, and nothing outside the line was touched. Market closed (Saturday).
+3. **The root cause belongs to a build, before any re-land.** The aset plist carries `abandon process group`, so `launchctl bootout` signals only `start_aset.sh`; the `python -m cobalt.aset` child is orphaned. Since voice fix 193's `DirectoryLock` (X-X22), that orphan blocks the next aset start. Every deploy with aset in `<restart set>` will fail at 4.6 the same way until one of these is in place: `start_aset.sh` `exec`s python, the plist drops `AbandonProcessGroup`, or the hub stops the child. A plist change goes on strings he approves (STEP-C). Safe default: no re-land from this run. The ROLLBACK STRING's RE-LAND waits for this fix.
 
 ## RECORDS
 - D0: `?? .claude/settings.json.bak` is untracked on main — not in D0's accepted list and not a refused `src/` `tests/` `ops/` `configs/` path; recorded, not a stop. Cleanup is the desk's.
+- DOWNTIME: aset down from `<t down>` 07:28:12 and STILL DOWN at the stop line (≥ 240 s at 07:32:12; over 300 s by the time this is read) — DECISIONS 2. radar down 07:28:12 → ~07:28:40 (4.6) and 07:29:19 → 07:29:40 (STEP-5). Agent untouched (ONLINE, pid 22243 throughout).
+- ORPHAN: pid 39280 `python -m cobalt.aset` (old code) alive after bootout; parent `start_aset.sh` pid 39274 gone. aset.err at 07:31:50: `Started server process` 75 (`<a0>` 60), `Traceback` 17 (`<ta0>` 2) — every one a `ScratchLocked` start.
+- `cobalt_dev: 0013 (F2 = F0)` — the gate's (log :2082); lock released (`lock released`, :2084), `.env: removed`.
+- CARRIED RED, as read at D1, D2.5 and STEP-5 (4): `RED archiver last run FAILED — … exit 1`, `RED com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2: … '429 Too Many Requests' …`, `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. Not this deploy's.
+- No `RETIRE OWED` (no plist removed). No `REFUSED` call. No message from another session.
+- CLEANUP OWED (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-https-only-1009-attempt2` and branch `deploy/deploy-2026-10-09-https-only-attempt2` (holds `86f8e308`, needed for the RE-LAND or a recut); the gate's `.venv`; tag `pre-https-only-1009` stays at `1a13bd1d`.
+- L74: one system reminder mid-session asked for a `Claude-Session:` commit line; recorded under `## L74`, not acted on.
+- The card's `## RECORDS`, copied:
+  - https-only-1009: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/https-only-check-2026-10-09.md` last line: CHECK DONE · job: https-only-1009 · pass: 1 · tip: 6e1ccd3d · house A: Sol FINDINGS: 4 · findings: 10 · dropped: 0 · held: 3 · fixed: 3 · held unfixed: 0 · open: 2 · house B: Grok FINDINGS: 2 · suites: offline 4061/0 · with-DB 4948/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 17 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 180198
+  - https-only-1009: head `ops/https-only-1009` → `16559ba4`; code tip `a1b99495`; check tip `6e1ccd3d` is an ancestor of `a1b99495`; `git diff --stat a1b99495 16559ba4 -- . ':(exclude)docs'` prints nothing (the head adds docs only).
+  - FIX ROUND (his R376, L75; no new check): the check passed at `6e1ccd3d`; the build's first attempt was gated on `4dfe6114`; the fix round `a1b99495` moved the card's hunks off the lines voice fix 193 (main `2041a53f`) changed, after S4-P1. The fix report (read at `16559ba4`) ends with `BUILT · job: https-only-1009 · tip: a1b99495 …`. No deploy attempt of this job had run.
+  - RULINGS `2026-10-09 R718` (card 156, L80 HTTPS only). The deploy runs when READY at any hour (L43, R389).
+  - Shipped files, `git diff --stat main...16559ba4` (22 files, 635 insertions, 86 deletions) — listed in the card.
+  - MACHINE STEPS (card 156): M0–M3 done 2026-10-09; M5 his, before this deploy (read done: `25:  bind: loopback`); M6, M7 follow. The deploy hub's STEP rewrites the pinned `Uvicorn running on http://0.0.0.0:5010` line to `http://127.0.0.1:5010`.
+  - Marker counts: BEFORE read on main, AFTER at `a1b99495`; no `## DEPLOY PROOF` section in card 156.
+  - Written by hand by the drafter `https-deploy-fixround` on the fix-round path; trial merge not run by the drafter.
 
-(run in progress — next step under ## CONTINUE)
+PRE-STOP SELF-CHECK: (1) every smoke row reached is quoted verbatim with its `date` (STEP-5 (4) under `## Deploy table`); 4.7 itself was not reached. (2) `a1b99495` and `16559ba4` re-read at P3 and ancestors of `<BRANCH>` (STEP-T) and so of `86f8e308` (D2.2). (3) REVERT-READBACK shown at STEP-5 (4): 18 · 60 · 43 · 39 = `<rp5>` `<rpr5>` `<re5>` `<lc5>`; every count and sha above was read from tool output this run. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); no conflict marker. THE RELEASE: the lock was released by the gate at STEP-G; `<GATE>/.env` absent.
+
+FAILED: 4.6 — aset not running after one kickstart: ScratchLocked, the voice scratch dir held by orphan pid 39280 (the old aset's python child, left by the bootout) · rollback: used — migrations applied: none — aset: DOWN — radar: UP · decisions: 3 · for Dejan: 1 · tokens: 188560
