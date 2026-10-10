@@ -42,3 +42,6 @@ no in-process sweep can fire mid-transcribe.)
 
 ## 2026-10-01 — voice-peers
 The committed `allowed_peers` in `configs/cobalt/voice.yaml` is localhost plus the five tailnet devices' IP literals (cobalt, badass, dejans-s25, fedora, msi), per his ruling 2026-09-28 R95, re-stated 2026-10-01 R14; no code changed, and the resident `com.cobalt.aset` re-reads it only at a restart.
+
+## 2026-10-09 — https-only-1009
+`VoiceConfig` gains the REQUIRED key `https_url` (pattern `^https://[a-z0-9.-]+\.ts\.net/$`, no default; L80, R718): the https address `tailscale serve` fronts aset on, its one config home — the voice banner names it and the heartbeat and smoke probes are pinned to it.

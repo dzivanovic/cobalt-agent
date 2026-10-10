@@ -32,6 +32,7 @@ widget sends NO card id ([F-10]). No reply audio exists on the server.
 from __future__ import annotations
 
 import asyncio
+import json
 import re
 from typing import Optional
 
@@ -225,6 +226,7 @@ _WIDGET = """
 <script>
 (function(){
  const $ = id => document.getElementById(id);
+ const HTTPS = __HTTPS__;
  const SESSION = 'w-' + (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + String(Math.random()).slice(2));
  const TYPES = ['audio/webm;codecs=opus', 'audio/ogg;codecs=opus', 'audio/mp4'];
  let rec = null, chunks = [], pendingTurn = null, muted = false, downAt = 0, lines = [], device = [];
@@ -268,6 +270,7 @@ _WIDGET = """
  }
  async function start(){
    if (rec) return;
+   if (!window.isSecureContext){ banner([{level:'red', text:'voice needs the https address: ' + HTTPS.replace(/\\/$/, '') + location.pathname}]); return; }
    const type = pickType();
    if (!type || !navigator.mediaDevices){ banner([{level:'red', text:'no microphone on this device'}]); return; }
    let stream;
@@ -298,15 +301,20 @@ _WIDGET = """
  $('cv-confirm').addEventListener('click', () => { if (!pendingTurn) return; const fd = new FormData(); fd.append('turn_id', pendingTurn); post('/voice/confirm', fd); });
  $('cv-cancel').addEventListener('click', () => { if (!pendingTurn) return; const fd = new FormData(); fd.append('turn_id', pendingTurn); post('/voice/cancel', fd); });
  fetch('/voice/status').then(r => { if (!r.ok) { lines = [{level:'red', text:'voice status refused (HTTP ' + r.status + ')'}]; banner(); return null; } return r.json(); }).then(j => { if (!j) return; lines = j.lines || []; banner(); }).catch(() => { lines = [{level:'red', text:'voice status unreadable'}]; banner(); });
- if (!pickType()) { device.push({level:'red', text:'no microphone on this device'}); banner(); }
+ // L80: an insecure page has no navigator.mediaDevices — name the https address, never "no microphone"
+ if (!window.isSecureContext) { device.push({level:'red', text:'voice needs the https address: ' + HTTPS.replace(/\\/$/, '') + location.pathname}); banner(); }
+ else if (!pickType()) { device.push({level:'red', text:'no microphone on this device'}); banner(); }
 })();
 </script>
 """
 
 
 def widget_html() -> str:
-    """The partial `_render` (the sheet) and `/radar` place on the page."""
-    return _WIDGET
+    """The partial `_render` (the sheet) and `/radar` place on the page.
+
+    The configured https address (L80) is its one value: JSON-encoded into
+    the script's `HTTPS` constant, no other interpolation."""
+    return _WIDGET.replace("__HTTPS__", json.dumps(get_config().https_url), 1)
 
 
 __all__ = ["WIDGET_MARKER", "get_config", "get_deps", "peer_gate", "router", "status_lines",

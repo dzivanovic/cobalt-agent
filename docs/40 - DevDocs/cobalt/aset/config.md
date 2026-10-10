@@ -40,11 +40,10 @@ imports nothing from `config.py`.
   itself is deliberately not configurable here, that's the one
   resolver's job), `filename_pattern` (default `%Y-%m-%d.md`). Consumed
   by `daily_note.py`.
-- `ServerConfig` — `bind: "loopback" | "lan"` (default `"loopback"`),
-  `port` (default `5010`, `1–65535`). `.host` property resolves
-  `"loopback"` → `127.0.0.1`, `"lan"` → `0.0.0.0`. `"lan"` is documented
-  in-line as exposing the sheet **unauthenticated** to the local network
-  — acceptable for now, access token is a backlog item.
+- `ServerConfig` — `bind: "loopback"` only (default `"loopback"`),
+  `port` (default `5010`, `1–65535`). `.host` is always `127.0.0.1`;
+  `bind: lan` is refused at load, loud, naming L80 (the tailnet reaches
+  the sheet through `tailscale serve` on https).
 - `AsetConfig` — the top-level schema: `account_size` (`Decimal > 0`,
   reserved for the future computed mode, unused today), `db_name`
   (default `"cobalt_dev"`), `daily_note: DailyNoteConfig` (required),
@@ -151,3 +150,9 @@ different source; an empty table is a loud `ConfigError` naming
 `load_config()` is unchanged and still reads a YAML: the daily-note
 folder, the bind address and the typo ceilings are INSTALL settings, not
 trading rules.
+
+## 2026-10-09 — https-only-1009
+`ServerConfig.bind` is `Literal["loopback"]` and `host` is always `127.0.0.1`; a file that says `bind: lan` is a loud load error naming L80. The tailnet reaches aset through `tailscale serve` on https.
+
+## 2026-10-09 — https-only-1009 check
+The `ServerConfig` entry above no longer describes `"lan"` → `0.0.0.0` (check B2).
