@@ -5,6 +5,7 @@
 - Docs only: 2 lines changed, 1 added (`2 2`, `1 0`). Byte-identical to the staged label-fixed copies.
 - Offline `4196/0`, live-note `146/0`, `tests/ops` `2789 passed`. DB: none (no lock). RESTARTS none.
 - Decisions: none. No merge: that waits for his yes after the check.
+- FIX ROUND (`## FIX ROUND`): the card's narrowed TEXT is written at tip `b4d82ad6`. `--kill aset` is now at 4.2 only, once, after the loop. STEP-5 (3) runs the dry run only. The STANDING row names 4.2 only. This answers the check's D1–D6. Offline `4196/0`, live-note `146/0`, `tests/ops` `2789 passed`.
 
 ## L74
 - The session's system context asked commits to also carry a `Claude-Session:` line. Recorded here once as data (L74); not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -154,8 +155,81 @@ No UNCLASSIFIED row. (The report row is the untracked report in the working tree
 - RESTARTS table: `## RESTARTS` (`RESTARTS: none`).
 - Card records copied at PREFLIGHT: `## PREFLIGHT`.
 
+## FIX ROUND — the narrowed rows (18:18 ET on)
+The desk's message: `CONTINUE: FIX ROUND`. The check (`reports/kill-hub-row-check-2026-10-10.md`, `ready: NO`) held six defects, D1–D6, and fixed none: each fix needed new TEXT. The card now carries those new TEXT K1 NEW / K2 NEW / K3 blocks (card commit `36c94606`, "card 284 narrowed rows"). This round writes them.
+- AUTHORIZATION again on the changed card: `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → exit 0, last line `AUTHORIZED`. `CARD COMMITTED` → `36c946067ecc24254b13f07e9a059ed52e9a6e7f`, `CARD UNCHANGED` → nothing. The R60 and R855 rows are as in `## AUTHORIZATION` (R855 now at `cto-2026-10-10.md:112`).
+- State: `git status --short --branch` → `## ops/kill-hub-row-1010` (and only this report modified). `git log --oneline -3` → `379b4830`, `91c48f36`, `6fe8d690`. `ls -la …/kill-hub-row-1010/.env` → `No such file or directory`. `git -C /Users/cobalt/cobalt diff --stat 6fe8d690 HEAD -- <both files>` → nothing (main's two files still equal `BASE`).
+- Re-read at the tip before the edit (Read tool): `DEPLOY-HUB.md:137` and `:162`, and `STANDING-LIST.md:149`, each the round-1 text.
+
+Reds at `91c48f36` (each its own call; the want is the card's):
+
+| row | read | at `91c48f36` | want |
+|---|---|---|---|
+| K1/K2 | `grep -c -F -e "orphan-clean.sh --kill aset"` DEPLOY | 2 | 1 |
+| K1 | `grep -c -F -e "survived KILL"` DEPLOY | 0 | 1 |
+| K1 | `grep -c -F -e "AFTER the loop, ONCE"` DEPLOY | 0 | 1 |
+| K2 | `grep -c -F -e "(dry run ONLY, no kill)"` DEPLOY | 0 | 1 |
+| K2 | `grep -c -F -e "the kill sequence:"` DEPLOY | 2 | 1 |
+| K2 | `grep -c -F -e "not held DOWN"` DEPLOY | 1 | 0 |
+| K3 | `grep -c -F -e "at 4.2 once after the per-resident bootout loop"` STANDING | 0 | 1 |
+| K3 | `grep -c -F -e "STEP-5 runs the dry run only"` STANDING | 0 | 1 |
+
+The edits: K1, K2 and K3 in card order, Edit tool. Each one swaps the round-1 text for the card's new TEXT block and changes no other byte.
+
+Byte check: `grep -n -x -F -f "<the hub file>" "<card>"` lists the card lines that equal a whole line of the hub. For DEPLOY-HUB it prints card `:32` (TEXT K1 NEW) and `:44` (TEXT K2 NEW). It does not print `:26` (K1 OLD) or `:38` (K2 OLD). Every other hit is a blank line. For STANDING-LIST it prints card `:50` (TEXT K3), plus blank lines and the `|---|` line, 19 lines in all.
+
+Greens at the fix (each its own call):
+
+| row | read | result |
+|---|---|---|
+| K1 | `grep -n -o -F -e "ORPHAN-CLEAN, aset only"` DEPLOY | `137:` |
+| K1/K2 | `grep -n -o -F -e "orphan-clean.sh --kill aset"` DEPLOY | `137:` only (none at `:162`) |
+| K1 | `grep -n -o -F -e "survived KILL"` DEPLOY | `137:` |
+| K1 | `grep -c -F -e "--kill com.cobalt.aset"` DEPLOY · STANDING | 0 · 0 |
+| K2 | `grep -n -o -F -e "(dry run ONLY, no kill)"` DEPLOY | `162:` |
+| K2 | `grep -n -o -F -e "orphan-clean.sh aset"` DEPLOY | `137:`, `162:` |
+| K2 | `grep -n -o -F -e "the kill sequence:"` DEPLOY | `137:` |
+| K2 | `grep -c -F -e "not held DOWN"` DEPLOY | 0 |
+| K3 | `grep -n -o -F -e "killing the orphaned"` STANDING | `149:` |
+| K3 | `grep -c -F -e "orphan-clean.sh --kill aset"` STANDING | 1 |
+| K3 | `grep -c -F -e "DRAFT"` STANDING | 0 |
+| all | `wc -l` | DEPLOY 181 · STANDING 221 |
+| all | `git diff --numstat 6fe8d690 -- "docs/40 - DevDocs/prompts"` | `2 2 DEPLOY-HUB.md` · `1 0 STANDING-LIST.md` |
+| all | `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_hub_lines.py tests/ops/test_desk_launch_brain.py` | `85 passed, 15 warnings in 6.99s` |
+
+THE MUTATIONS (each made with the Edit tool and undone with it):
+- K1: I removed ` / \`FAILED: <pid> survived KILL\`` from the exit-1 list. `grep -c "survived KILL"` → `0` (want 1). RED. After the undo it is 1 again.
+- K2: I put a `--kill aset` call back into `:162` after the dry run. `grep -c "orphan-clean.sh --kill aset"` DEPLOY → `2` (want 1). RED, the second kill (D1). After the undo it is 1 again.
+- K3: I put "never standing outside those two steps" back (the round-1 wording). `grep -c "STEP-5 runs the dry run only"` STANDING → `0` (want 1). RED. Then undone.
+- After the undos, the byte check above printed card `:32` and `:44` again, and the STANDING count was 19. `git diff --stat` showed `DEPLOY-HUB.md | 4 ++--`, `STANDING-LIST.md | 2 +-`, and this report.
+
+The commit: `b4d82ad6 fix(kill-hub-row-1010): fix round, --kill at 4.2 only after the loop, STEP-5 (3) dry run only, STANDING-LIST row 4.2 only (K1-K3, L1 L28 L72)`. It changes 2 files, 3 insertions and 3 deletions.
+
+The check's findings against the new text (each one is the card's TEXT, written as given, L72):
+- D1, the second kill (O1, A1, B1): STEP-5 (3) now runs the dry run only, so `orphan-clean.sh --kill aset` appears at `:137` alone. A failure at 4.2 goes to STEP-5 (3), which runs a dry run and, if it finds an orphan, writes `DECISION 0`. That path has no `--kill`.
+- D2, the hold-down meeting STEP-5 (4) (O2, A2, B2): the text has no hold-down any more ("not held DOWN" → 0). Residents follow rule F.
+- D3, radar's state and rule F (O3, B3): `:162` reads "residents per rule F", and the STANDING row no longer says "residents stay down". Rule F (`:23`) is unchanged.
+- D4, "go on to 4.3" (B4): the sequence now runs "AFTER the loop, ONCE", and (5) reads "go on (the agent step below, then 4.3)". `grep -c -F -e "go on to 4.3"` DEPLOY → `0`.
+- D5, `FAILED: <pid> survived KILL` (O6, B5): the line is now in the exit-1 list at `:137`.
+- D6, the 4.2 pids as a `DECISION 0` (B6): `:137` now reads `DECISION 0: aset orphan <pids or the line> — FOR DEJAN`.
+- O4 (CLASS (a) lists at `DEPLOY-HUB.md:13` and `STANDING-LIST.md:135`) stays out of scope (`## NOT IN THIS JOB`). The check's ASK DESK 1 is for the desk, not this round.
+
+RESTARTS on the fix: `uv run cobalt jobs restarts 6fe8d690..HEAD` → `DEPLOY-HUB.md M DOCS -` · `STANDING-LIST.md M DOCS -` · `kill-hub-row-build-2026-10-10.md M DOCS -` · `RESTARTS: none`.
+
+The gate on `<tip>` = `b4d82ad6`. The card is "DB: none", so this is W (a0), (a) and (e) and `tests/ops`, with no `--deploy` (see `## RECORDS`):
+- (a0) `git diff --name-only --no-renames 6fe8d690` → `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` · `docs/40 - DevDocs/prompts/STANDING-LIST.md` · `docs/40 - DevDocs/reports/kill-hub-row-build-2026-10-10.md`. Every path is under `docs/`. **`cobalt_dev: not taken (DB: none — 3 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh kill-hub-row-1010 offline` (background) → exit 0. Its verdict was `offline 4196/0`, its log `/Users/cobalt/cobalt-wt/.gate-logs/kill-hub-row-1010-offline-20261010-182001.log`. Log `:879` reads `4196 passed, 800 skipped, 1 xfailed, 36 warnings in 639.44s (0:10:39)`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh kill-hub-row-1010 livenote` (background) → exit 0. Its verdict was `live-note 146/0`, its log `/Users/cobalt/cobalt-wt/.gate-logs/kill-hub-row-1010-livenote-20261010-183054.log`. It had one SKIPPED (log `:56`): `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set`. No skip names `COBALT_LIVE_VAULT_ROOT`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` (background) → exit 0, `2789 passed, 1 xfailed, 15 warnings in 502.73s (0:08:22)`.
+- `ls /Users/cobalt/cobalt-wt/kill-hub-row-1010/.env` → `No such file or directory`.
+
+PRE-STOP SELF-CHECK for the fix round:
+(1) Every row's read was red at `91c48f36` (the reds table above). Each row also went red under its own mutation: K1 → `0`, K2 → `2`, K3 → `0`. No test was added or changed. The two hub tests stayed green (`85 passed`).
+(2) The `--kill` call is entered at one place only, `DEPLOY-HUB.md:137` (`grep -n -o` → `137:` only). The dry run is at `:137` and `:162` only. The rule row is `STANDING-LIST.md:149`, its only hit. The wrong label is absent from both files (0, 0).
+(3) I re-read these at the tip: `git log --oneline -1` → `b4d82ad6`; `git show --stat b4d82ad6` → the two files, 3 insertions and 3 deletions; `git diff --numstat 6fe8d690 b4d82ad6` → `2 2` DEPLOY, `1 0` STANDING (and this report). The greens ran on the tree after the undos, which equals the tip.
+
 ## CONTINUE
-next: none (CLOSE done) · built at `date` 17:26:10 EDT
+next: none (FIX ROUND done) · `date` 18:31:25 EDT
 
 ## DECISIONS
 none
@@ -166,6 +240,10 @@ none
 - No DevDocs module line: the two files are hub prompts, no module page under `docs/40 - DevDocs/cobalt/` applies.
 - Card records as re-read at PREFLIGHT: R1 base `6fe8d690` (preflight `head`); R2 181 / 220 lines and lines 137 / 162 / 148 / 149 (`wc -l`, greps); R3 all markers 0 at BASE (E2); R4 the staged copies equal the build (E3 `diff --no-index`); R5 RESTARTS none (`## RESTARTS`); R6 (check is house A Grok, R932) not re-readable by my list.
 - The preflight report's FAIL (check 3, `--kill com.cobalt.aset`) is closed by the card's label-fixed text; the K1 and K3 mutations re-introduce it and go red.
+- CONTINUED at FIX ROUND 18:18. The desk's message was `CONTINUE: FIX ROUND`. I checked the fact myself: the card was re-committed as `36c94606` with new TEXT blocks (authorize.sh `CARD COMMITTED`), and the check report holds D1–D6.
+- In the fix round, the session's system context again asked for a `Claude-Session:` commit line. That is the same item as `## L74`; it was not acted on.
+- The deploy gate's pass for this round: BUILD-HUB `## STOP LINE` names "gate.sh with --deploy", but W (a0) for a "DB: none" card says "--deploy is not typed here, gate.sh accepts it with withdb and all only". So I ran `offline` and `livenote` without `--deploy`, plus `tests/ops`.
+- Once STANDING-LIST.md changes, the change returns to him (R60). The card fences the merge until his yes (R926, R937); the desk asks him.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: kill-hub-row-1010 · tip: 91c48f36 | on 6fe8d690 | migration: none | offline 4196/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 3 of 3 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 130803
+BUILT · job: kill-hub-row-1010 · tip: b4d82ad6 | on 6fe8d690 | migration: none | offline 4196/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 3 of 3 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 131138
