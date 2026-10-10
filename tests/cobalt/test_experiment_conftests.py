@@ -36,3 +36,24 @@ def test_a2_the_check_sees_at_least_five_dev_db_tx_reexports():
     folders = [path.parent.name for path in _conftests_with_dev_db_tx()]
     assert len(folders) >= 5, f"only {folders} re-export dev_db_tx"
     assert "f15_p2" in folders
+
+
+def test_a1_rejects_a_non_fixture_offline_skip_guard_assignment(monkeypatch):
+    import pytest
+
+    victim = _EXPERIMENTS / "stale_score" / "conftest.py"
+    real_read_text = Path.read_text
+
+    def mutated_read_text(path, *args, **kwargs):
+        source = real_read_text(path, *args, **kwargs)
+        if path == victim:
+            return source.replace(
+                "offline_skip_guard = _conftest.offline_skip_guard",
+                "offline_skip_guard = None",
+                1,
+            )
+        return source
+
+    monkeypatch.setattr(Path, "read_text", mutated_read_text)
+    with pytest.raises(AssertionError):
+        test_a1_every_dev_db_tx_reexport_carries_offline_skip_guard()
