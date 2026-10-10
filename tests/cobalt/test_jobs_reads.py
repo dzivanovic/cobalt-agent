@@ -97,7 +97,7 @@ class TestTheDerivedRows:
         """`uv run` syncs the environment from pyproject.toml / uv.lock when
         the process starts, so a change to either reaches a resident only by
         restart. Three residents start that way: the sheet
-        (ops/start_aset.sh:73), the radar (ops/com.cobalt.radar.plist) and
+        (ops/start_aset.sh:77, `uv sync --inexact` before its exec), the radar (ops/com.cobalt.radar.plist) and
         the old-tree agent (cobalt.sh:59, via ops/com.cobalt.agent.plist:25).
         Stack seam check 2026-09-25, claim 1 — the agent was missing."""
         agent = load_job_registry().spec("com.cobalt.agent")
