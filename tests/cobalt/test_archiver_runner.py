@@ -1000,10 +1000,12 @@ def test_a_429_is_retried_until_the_target_succeeds(wired, slept):
 
 def test_a_429_past_the_retry_max_fails_the_target(wired, slept):
     store = wired(FakeStore())
-    fetch = sequenced({("TESTARCH", "i5"): [rate_limited()] * (runner_mod.RETRY_429_MAX + 1)})
+    # Literal inputs, so on a tree without A2 this is red on the row's
+    # reason (fetched once, not 4 times), not on a missing name (check B1).
+    fetch = sequenced({("TESTARCH", "i5"): [rate_limited()] * 4})
     summary = run([("TESTARCH", Interval.I5)], store=store, fetch=fetch,
                   cfg=settings(shadow_compare="off"))
-    assert len(fetch.calls) == runner_mod.RETRY_429_MAX + 1 == 4
+    assert len(fetch.calls) == 4
     # Exactly what `_archive_nightly` joins into its RuntimeError, so the
     # job row lands on `failed` and `main` exits 1.
     assert len(summary.failures) == 1
@@ -1011,6 +1013,7 @@ def test_a_429_past_the_retry_max_fails_the_target(wired, slept):
     assert "429" in summary.failures[0]
     assert summary.requests == 4
     assert store.upserted == []
+    assert runner_mod.RETRY_429_MAX + 1 == 4
 
 
 @pytest.mark.parametrize("retry_after,expected", [
@@ -1041,12 +1044,14 @@ def test_the_run_retry_budget_bounds_the_sum_of_waits(wired, slept):
     store = wired(FakeStore())
     summary = run(targets, store=store, fetch=fetch, cfg=settings(shadow_compare="off"))
     retry_waits = _retry_waits(slept)
-    assert sum(retry_waits) <= runner_mod.RETRY_429_BUDGET_SECONDS == 600
+    # The bound is the literal 600 first (check B2): a tree without A2 is
+    # red on the sum, not on a missing name.
     assert sum(retry_waits) == 600
     assert fetch.calls.count(("TESTF", "i5")) == 3
     assert any(f.startswith("TESTF/i5:") for f in summary.failures)
     assert fetch.calls.count(("TESTI", "i5")) == 1
     assert len(summary.failures) == len(tickers)
+    assert runner_mod.RETRY_429_BUDGET_SECONDS == 600
 
 
 def test_a_backfill_never_retries_a_429(wired, slept):

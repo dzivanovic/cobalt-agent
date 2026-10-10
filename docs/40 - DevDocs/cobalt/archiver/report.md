@@ -113,6 +113,7 @@ shape (9 pipes vs 15).
 `RunSummary` names its 429 retries (R812): `record_retry(ticker,
 interval, attempt, wait)`, `retries`, `retry_count`, `retry_wait_s` and
 `retry_line()` (`retried: <T>/<i> waited <w>s[+<w>s] (<ok|failed>); …`,
-`failed` when a `failures` entry starts `<T>/<i>:`, else `""`).
+`failed` when a `failures` entry starts `<T>/<i>:`, else `ok`; `""`
+when the run took no retry).
 `record_retry` does not touch `requests`; the runner counts the retry
 GET. The run-report row and `job_result()` are unchanged.

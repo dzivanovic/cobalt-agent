@@ -58,3 +58,5 @@ as non-negative delta-seconds (absent, an HTTP-date or unparseable →
 `None`); `fetch_bars` re-raises it with the same `retry_after`. Message
 texts and every other status are unchanged, so every `except
 CollectorError` behaves as before.
+
+2026-10-10 (check O1, A4): an all-digit `Retry-After` too large for a float now maps to `None`, so the 429 stays `FinvizRateLimited`. Before, an `OverflowError` turned it into a plain `CollectorError`.

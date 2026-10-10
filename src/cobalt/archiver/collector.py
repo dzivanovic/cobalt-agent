@@ -80,7 +80,12 @@ def _retry_after_seconds(value: str | None) -> float | None:
     value = value.strip()
     if not (value.isascii() and value.isdigit()):
         return None
-    return float(int(value))
+    try:
+        return float(int(value))
+    except (OverflowError, ValueError):
+        # Digits no float holds (or past int's str-digit limit): unusable,
+        # so `None` — the 429 stays typed and the runner backs off (check O1).
+        return None
 
 
 class FetchMetrics(BaseModel):
