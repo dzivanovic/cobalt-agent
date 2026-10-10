@@ -86,3 +86,81 @@ def test_validate_prints_the_strike_block(capsys, _no_db):
     cli._cmd_validate(argparse.Namespace(no_db=True))
     out = capsys.readouterr().out
     assert "Strike (S4-P1): 4 tunables rows resolved." in out
+
+
+# ---------------------------------------------------------------------
+# S4-P2 S5 — the delivery config (`configs/cobalt/strike.yaml`) and the hotkey
+# ---------------------------------------------------------------------
+
+
+def test_the_repo_delivery_file_loads_with_the_carded_values():
+    from cobalt.strike.delivery_config import CONFIG_PATH, load_delivery_config
+
+    assert CONFIG_PATH.exists()
+    settings = load_delivery_config()
+    assert (settings.stream_tail_ms, settings.keepalive_s, settings.dm_after_s) == (500, 15, 10)
+    assert settings.hotkey_template == "{DAYMODE}-{KEY}-{SIDE}"
+
+
+def test_the_delivery_file_is_registered_as_the_sheets_read():
+    from cobalt.jobs.config import load_job_registry
+
+    readers = load_job_registry().readers_of("configs/cobalt/strike.yaml")
+    assert [r.label for r in readers] == ["com.cobalt.aset"]
+
+
+def test_an_extra_key_is_refused_by_name(tmp_path):
+    from cobalt.strike.delivery_config import DeliveryConfigError, load_delivery_config
+
+    path = tmp_path / "strike.yaml"
+    path.write_text("stream_tail_ms: 500\ndm_after_seconds: 10\n")
+    with pytest.raises(DeliveryConfigError, match="dm_after_seconds"):
+        load_delivery_config(path)
+
+
+def test_a_missing_file_gives_the_model_defaults_and_one_logged_line(tmp_path):
+    from loguru import logger
+
+    from cobalt.strike.delivery_config import DeliverySettings, load_delivery_config
+
+    lines: list[str] = []
+    sink = logger.add(lines.append, format="{message}")
+    try:
+        settings = load_delivery_config(tmp_path / "absent.yaml")
+    finally:
+        logger.remove(sink)
+    assert settings == DeliverySettings()
+    assert len([line for line in lines if "absent.yaml" in line]) == 1
+
+
+def test_a_missing_key_takes_its_default(tmp_path):
+    from cobalt.strike.delivery_config import load_delivery_config
+
+    path = tmp_path / "strike.yaml"
+    path.write_text("keepalive_s: 20\n")
+    settings = load_delivery_config(path)
+    assert settings.keepalive_s == 20 and settings.dm_after_s == 10
+
+
+def test_a_template_naming_an_unknown_field_is_refused(tmp_path):
+    from cobalt.strike.delivery_config import DeliveryConfigError, load_delivery_config
+
+    path = tmp_path / "strike.yaml"
+    path.write_text('hotkey_template: "{DAYMODE}-{GRADE}"\n')
+    with pytest.raises(DeliveryConfigError, match="hotkey_template"):
+        load_delivery_config(path)
+
+
+def test_the_hotkey_is_the_template_filled_upper_cased():
+    from cobalt.strike.delivery_config import hotkey
+
+    assert hotkey("{DAYMODE}-{KEY}-{SIDE}", sheet_mode="half", sized_grade="B", direction="long") == "HALF-B-LONG"
+    assert hotkey("{DAYMODE}-{KEY}-{SIDE}", sheet_mode="full", sized_grade="a+", direction="short") == "FULL-A+-SHORT"
+
+
+@pytest.mark.parametrize("mode, grade", [(None, "B"), ("half", None), ("", "B")])
+def test_an_unsized_card_says_so_and_never_guesses(mode, grade):
+    from cobalt.strike.delivery_config import UNSIZED, hotkey
+
+    assert UNSIZED == "n/a — unsized"
+    assert hotkey("{DAYMODE}-{KEY}-{SIDE}", sheet_mode=mode, sized_grade=grade, direction="long") == UNSIZED

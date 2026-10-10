@@ -32,6 +32,11 @@ from cobalt.jobs.config import REPO_ROOT, JobRegistry, JobSpec, load_job_registr
 SHEET = "com.cobalt.aset"
 TUNABLES = "configs/cobalt/taxonomy/tunables.yaml"
 NOTIFY = "configs/cobalt/notify.yaml"
+# S4-P2 S4 NAMED REVERSAL: NOTIFY stopped standing for a one-shot-only file
+# when the sheet's fallback thread began to send a DM (it is now in
+# com.cobalt.aset `reads:`). The one-shot-only cases moved to this template,
+# read only by com.cobalt.prefill-daily (jobs.yaml no_resident_reads).
+ONE_SHOT_ONLY = "configs/cobalt/templates/daily.md.j2"
 UNLISTED = "configs/cobalt/no-row-names-this.yaml"
 
 
@@ -148,7 +153,14 @@ class TestReadersOf:
         assert load_job_registry().readers_of(UNLISTED) == []
 
     def test_a_one_shot_only_path_has_no_resident_reader(self):
-        assert load_job_registry().readers_of(NOTIFY) == []
+        assert load_job_registry().readers_of(ONE_SHOT_ONLY) == []
+
+    def test_notify_yaml_is_read_by_the_sheet_alone(self):
+        # S4-P2 S4: the sheet's fallback thread calls send_dm (notify/mattermost.py:137 →
+        # load_notify_config, notify/config.py:51), so a change to it restarts the sheet.
+        readers = load_job_registry().readers_of(NOTIFY)
+        assert [r.label for r in readers] == [SHEET]
+        assert load_job_registry().no_resident_read(NOTIFY) is None, "a path sits in one list only"
 
 
 class TestNoResidentReads:
@@ -156,19 +168,19 @@ class TestNoResidentReads:
     unknown — one-shots re-read every run, so it derives no restart, and
     the declaration is what separates that from "nobody has looked"."""
 
-    def test_notify_yaml_is_declared_with_one_shot_readers_only(self):
+    def test_the_daily_template_is_declared_with_one_shot_readers_only(self):
         registry = load_job_registry()
-        entry = registry.no_resident_read(NOTIFY)
+        entry = registry.no_resident_read(ONE_SHOT_ONLY)
         assert entry is not None and entry.because.strip()
         assert entry.readers
         assert all(registry.spec(label).kind.value == "one-shot" for label in entry.readers)
 
     def test_a_leading_dot_slash_is_the_same_file(self):
-        assert load_job_registry().no_resident_read("./" + NOTIFY) is not None
+        assert load_job_registry().no_resident_read("./" + ONE_SHOT_ONLY) is not None
 
     def _raw(self, **entry):
         raw = yaml.safe_load((REPO_ROOT / "configs" / "cobalt" / "jobs.yaml").read_text())
-        raw["no_resident_reads"] = [{"path": NOTIFY, "readers": ["com.cobalt.heartbeat"],
+        raw["no_resident_reads"] = [{"path": ONE_SHOT_ONLY, "readers": ["com.cobalt.prefill-daily"],
                                      "because": "test", **entry}]
         return raw
 
@@ -212,10 +224,10 @@ class TestTheCommand:
         assert TUNABLES in proc.stderr, "it lists what IS covered"
 
     def test_a_one_shot_only_path_exits_zero_with_RESTARTS_none(self):
-        proc = self._run(NOTIFY)
+        proc = self._run(ONE_SHOT_ONLY)
         assert proc.returncode == 0, proc.stderr
         assert "RESTARTS: none" in proc.stdout
-        assert "com.cobalt.heartbeat" in proc.stdout
+        assert "com.cobalt.prefill-daily" in proc.stdout
 
 
 class TestTheDeployChecklistIsWrittenDown:
