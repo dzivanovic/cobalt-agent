@@ -155,6 +155,49 @@ def test_a_failed_upsert_is_read_again_next_pass():
     assert send.calls == [TEXT]
 
 
+def test_check_o2_a_seam_row_committed_after_a_higher_id_is_still_dmd():
+    """X1: the tail's cursor must not skip a lower id that becomes visible late."""
+
+    class LateCommit(FakeStore):
+        reads = 0
+
+        def seam_rows(self, after_id, day):
+            self.reads += 1
+            visible = [_row(52, via="panel.triggered")]
+            if self.reads > 1:
+                visible = [_row(51)] + visible
+            return [r for r in visible if after_id is None or r.transition_id > after_id]
+
+    store, send, clock = LateCommit([]), Sender(), [T0 + timedelta(seconds=10)]
+    tail = _tail(store, send, clock)
+    tail.pass_once()
+    tail.pass_once()
+    assert send.calls == [TEXT]
+
+
+def test_a_transient_result_write_failure_is_retried_without_sending_twice():
+    class FlakyResultStore(FakeStore):
+        result_writes = 0
+
+        def record_dm_result(self, transition_id, result):
+            self.result_writes += 1
+            if self.result_writes == 1:
+                raise RuntimeError("database down")
+            super().record_dm_result(transition_id, result)
+
+    store = FlakyResultStore([_row(5)])
+    send = Sender()
+    clock = [T0 + timedelta(seconds=10)]
+    tail = _tail(store, send, clock)
+
+    with pytest.raises(RuntimeError, match="database down"):
+        tail.pass_once()
+    tail.pass_once()
+
+    assert send.calls == [TEXT]
+    assert store.records[5]["dm_result"] == "DM sent — post constructed-id to @constructed"
+
+
 def test_the_thread_logs_a_failed_pass_and_goes_on():
     from cobalt.aset.strike import FallbackThread
 

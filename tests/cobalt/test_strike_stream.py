@@ -148,6 +148,22 @@ def test_his_own_tap_and_any_other_actor_send_no_event():
     assert [c.split("\n")[0] for c in chunks] == ["id: 24"]
 
 
+def test_check_o1_a_seam_row_committed_after_a_higher_id_still_reaches_the_stream():
+    """X1: a lower id that becomes visible after a higher one was read (two writers, one sequence)."""
+
+    class LateCommit(FakeStore):
+        def seam_rows(self, after_id, day):
+            self.reads.append((after_id, day))
+            visible = [_row(52, via="panel.triggered", actor="you")]
+            if len(self.reads) > 1:
+                visible = [_row(51)] + visible
+            return [r for r in visible if after_id is None or r.transition_id > after_id]
+
+    deps, _ = _deps(LateCommit([]), polls=2)
+    chunks = _collect(deps)
+    assert any(c.startswith("id: 51\n") for c in chunks), chunks
+
+
 def test_a_keepalive_is_sent_after_keepalive_s_with_no_rows():
     deps, clock = _deps(FakeStore([]), keepalive_s=15, polls=40)
     chunks = _collect(deps)
@@ -204,6 +220,13 @@ def _page():
     from cobalt.strike.delivery_config import DeliverySettings
 
     return render_strike_page(DeliverySettings())
+
+
+def test_the_offline_row_source_drops_a_row_from_another_day():
+    from datetime import date
+
+    store = FakeStore([_row(11)])
+    assert store.seam_rows(None, date(2001, 1, 3)) == []
 
 
 def test_the_page_is_served_apart_from_radar():
