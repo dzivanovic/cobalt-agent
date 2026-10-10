@@ -685,6 +685,24 @@ if [ "$kind" = "ops-hand" ]; then
         "claude --bg \"$pre$stamp\" "*) ;;
         *) refuse "the launch line types text after 'follow it exactly.' other than the launcher's stamp '$stamp' (his 2026-10-06 R511)" ;;
     esac
+    # check O1-O3, B2, B3: what eval acts on is H3's shape and nothing else. No character that
+    # eval reads inside or outside "…" (a backslash, `$`, a backtick, `;`, `&`, `|`); every deny
+    # word one "…" string; the words outside the two lists exactly H3's (no --settings, --add-dir)
+    case "$line" in
+        *'\'*|*'$'*|*'`'*|*';'*|*'&'*|*'|'*) refuse "ops-hand: the line holds a character eval acts on (a backslash, \$, a backtick, ;, & or |)" ;;
+    esac
+    deny_loose=$(tool_list "$line" deny | awk -F'"' '{
+        for (i = 1; i <= NF; i += 2) if ($i !~ /^ *(--disallowedTools *)*$/) print $i
+    }')
+    [ -z "$deny_loose" ] || refuse "ops-hand: the line's --disallowedTools holds a word that is not one \"…\" string"
+    rest=$(tool_list "$line" rest)
+    model=${rest#" claude --bg \"$pre\" --model "}
+    model=${model%" --permission-mode default --remote-control ops-hand --name ops-hand"}
+    case "$model" in
+        ""|*[!A-Za-z0-9._-]*) refuse "ops-hand: the line holds words outside OPS-HAND.md's shape:$rest" ;;
+    esac
+    [ "$rest" = " claude --bg \"$pre\" --model $model --permission-mode default --remote-control ops-hand --name ops-hand" ] \
+        || refuse "ops-hand: the line holds words outside OPS-HAND.md's shape:$rest"
     hand="$WT/.ops-hand"
     [ ! -e "$hand/.claude/settings.local.json" ] \
         || refuse "ops-hand: a persisted permission rule exists (D4): $hand/.claude/settings.local.json — he removes it before the next launch"
