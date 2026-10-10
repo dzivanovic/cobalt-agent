@@ -21,6 +21,7 @@ _spec = importlib.util.spec_from_file_location("cobalt_tests_conftest_f15_p1", _
 _conftest = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_conftest)
 
+offline_skip_guard = _conftest.offline_skip_guard
 mock_postgres_memory = _conftest.mock_postgres_memory
 dev_env = _conftest.dev_env
 dev_db_tx = _conftest.dev_db_tx
