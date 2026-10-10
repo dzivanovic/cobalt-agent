@@ -1,10 +1,10 @@
 # deploy strike-fallback-env-1010 · set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/strike-fallback-env-1010` (tip `f47ad2f0`) onto `main`, card 217, off-ladder (cto-2026-10-10 R828).
-- Started 2026-10-10 05:07:53 EDT. Stopped 05:09:46 EDT at STEP-D0 with `FAILED PREFLIGHT`: `main` has a staged change (`M  "docs/40 - DevDocs/reports/deploy-s4-p2-1009.md"`).
-- Every step through the gate passed: authorization, preflight, the tree, restarts (`com.cobalt.aset com.cobalt.radar`), and `GATE GREEN on ca56ce65`. Nothing in production changed. No resident went down, nothing merged to `main`, and no tag was set. `rollback: not used`.
-- Next: the desk unstages that file or commits it, then runs `desk-launch.sh recut "<card>"`.
+- DEPLOYED on attempt 2. `ops/strike-fallback-env-1010` (tip `f47ad2f0`) landed on `main` at 05:15 EDT: `c59f788d` → `d0a5fbb8`, tag `deploy-2026-10-10-strike-fallback-env`. Card 217, off-ladder (cto-2026-10-10 R828).
+- Attempt 1 (05:07–05:09) stopped at STEP-D0 on a staged file on `main`. The desk cleared it, and attempt 2 resumed at `CONTINUE: STEP-D0` at 05:12.
+- aset and radar were down 26 s (05:15:15–05:15:41) and came back on new pids. The live aset log shows `strike fallback: first pass OK` at 05:15:35, where the old code logged `DbConfigError: Missing Postgres settings …`.
+- Smoke is GREEN on every row. No migration, no new RED, and failure counts flat.
 
 ## L74
 - One harness system reminder in this session asked for a `Claude-Session:` trailer on commits. Recorded as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -110,27 +110,27 @@ GATE GREEN on ca56ce65
 - `git -C /Users/cobalt/cobalt diff --stat 13430db7 main -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
 - Not run: the allowlist probe, the tag-name checks, D1, D2 and STEP-4. The report commit below uses STEP-7's path-limited commit (`-- "<REPORT>"`), so the staged file stays out of it.
 
-## Deploy table
+## Deploy table (attempt 1)
 - not reached. `<pre-merge>` none · `<stack-final>` none · tags none · `<t down>` / `<t up>`: none (no resident went down) · `migrations applied: none` · snapshot: none taken · RESTARTS done: none (derived set `com.cobalt.aset com.cobalt.radar`, not acted on). Nothing merged, so there is no rollback string.
 - Residents untouched since P8: aset pid `85816`, radar pid `85833`, agent `Cobalt is ONLINE (PID: 22243).`
 
-## Smoke
+## Smoke (attempt 1)
 - not reached.
 
-## Self-check (K25)
+### Self-check, attempt 1 (K25)
 1. Smoke rows: none ran (stopped before the outage).
 2. Tips: `f47ad2f0` re-read at P3 (`rev-parse` → `f47ad2f0`; branch head `f47ad2f0`). There is no `<stack-final>`. It is an ancestor of `ca56ce65` (`merge-base --is-ancestor f47ad2f0 deploy/strike-fallback-env-1010` → exit 0).
 3. Revert-readback: not applicable, nothing merged. Every sha and count in this report was read from tool output this run.
 4. No conflict marker: STEP-T merged cleanly; `git -C <GATE> status --short --branch` at 05:09 → `## deploy/strike-fallback-env-1010` alone.
 - THE RELEASE: no lock held. The equal-tree clause meant this run never ran `gate.sh` and never took the lock. `ls -la <GATE>/.env` → `No such file or directory`.
 
-## CONTINUE
+### CONTINUE, attempt 1
 - stopped at STEP-D0 MAIN. Per RECUT, this run is not resumed: the desk clears the staged line on `main`, then runs `desk-launch.sh recut "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-09/217-deploy-strike-fallback-env-card.md"`.
 
-## DECISIONS
+### DECISIONS, attempt 1
 1. ASK DESK: `main` has `docs/40 - DevDocs/reports/deploy-s4-p2-1009.md` staged from before this launch. Should it be committed, or unstaged? [05:09:46 EDT] The default I took was to stop under the hub's literal rule and touch nothing. The staged file is not mine to commit or unstage, because this run's only commits are its own report. This is the desk's to decide, not Dejan's.
 
-## RECORDS
+### RECORDS, attempt 1
 - downtime: none (no resident went down).
 - cobalt_dev: not touched by this run. The check's gate left it at `0013 — F2 = F0` (log line 2082).
 - RETIRE OWED: none (no plist change).
@@ -193,7 +193,76 @@ STEP-D1 (baseline):
 - `curl … http://127.0.0.1:5010/radar` → `200`. MARKER → `0` (before).
 - No migration: `<RB>`, census and D1-M not run.
 
-## CONTINUE
-- next: STEP-D2 (D2.0 report commit) after D1 at 05:13.
+STEP-D2:
+- D2.0 `git -C /Users/cobalt/cobalt add "<REPORT>"` · `commit -m "docs(report): deploy strike-fallback-env-1010 — gate green on ca56ce65" … -- "<REPORT>"` → `[main c59f788d] … 1 file changed, 55 insertions(+), 1 deletion(-)` · `show --stat HEAD` → the one report file · `rev-parse --short=8 main` → `c59f788d` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (3 docs files: `cto-2026-10-10.md`, `deploy-s4-p2-1009.md`, this report).
+- D2.2 `git -C <GATE> rev-parse --short=8 HEAD` → `d0a5fbb8` = `<stack-final>` · `rev-parse --short=8 d0a5fbb8^2` → `c59f788d` = `<pre-merge>` · `d0a5fbb8^1` → `ca56ce65` = `<m1>` · `merge-base --is-ancestor ca56ce65 d0a5fbb8` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat ca56ce65 d0a5fbb8 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing. DOCS-ONLY holds.
+- D2.4 `backup status` → `newest snapshot: 2.0 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain dumped, 6694.4 MB` · `ssd: snapshot ab6cd977 — 0 new / 3 changed, 27.5 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `05:14:50` · `heartbeat show` → `(2026-10-10 05:14:52 EDT)`, 110 s after D1's 05:13:02. Same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver`, `com.cobalt.replay`). aset, sheet and radar probes OK. No new RED.
+- D2.6 `date` → `Sat Oct 10 05:14:57 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-strike-fallback-env-1010` → `rev-parse --short=8 pre-strike-fallback-env-1010` → `c59f788d`.
 
-(run in progress — next step under ## CONTINUE)
+## Deploy table (attempt 2)
+| item | value |
+|---|---|
+| `<m0>` · `<m1>` | `13430db7` · `ca56ce65` |
+| `<pre-merge>` → `<stack-final>` | `c59f788d` → `d0a5fbb8` |
+| rollback tag | `pre-strike-fallback-env-1010` at `c59f788d` |
+| snapshot | ssd `ab6cd977` (05:14:40) |
+| `<restart set>` | `com.cobalt.aset com.cobalt.radar` |
+| migrations | none |
+| 4.1 `<t down>` | `Sat Oct 10 05:15:15 EDT 2026` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` → ok; print → `Could not find service "com.cobalt.aset"` (exit 113) · `launchctl bootout gui/501/com.cobalt.radar` → ok; print → `Could not find service "com.cobalt.radar"` (exit 113). Agent not in the set. |
+| 4.3 | `rev-parse --short=8 HEAD` → `c59f788d` = `<pre-merge>` · `merge --ff-only deploy/strike-fallback-env-1010` → `Updating c59f788d..d0a5fbb8` / `Fast-forward` (7 files, 416+/12-: `src/cobalt/aset/__main__.py`, `src/cobalt/aset/strike.py`, two tests, three docs) |
+| 4.4 | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` → ok · `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → ok · print aset → `state = running`, pid `25652` (≠ 85816) · print radar → `state = running`, pid `25666` (≠ 85833) |
+| `<t up>` · downtime | `Sat Oct 10 05:15:41 EDT 2026` · 26 s |
+| tags | `pre-strike-fallback-env-1010` at `c59f788d` · `deploy-2026-10-10-strike-fallback-env` at `d0a5fbb8` (set after the green smoke) |
+| uv sync · proof cost | no `uv` sync lines in this attempt's production calls · no proof-only (no migration) |
+| `<RB>` before / after | none (no migration) |
+| RESTARTS done | `com.cobalt.aset com.cobalt.radar` |
+| ROLLBACK STRING (the desk's) | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 d0a5fbb8`, with aset and radar booted out first and bootstrapped after. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
+## Smoke (attempt 2)
+- FIRST CALLS after `<t up>`: `<rp_up>` = 18 · `<rpr_up>` = 60 · `<re_up>` = 43 · `<lc_up>` = 39 (all equal D1's baselines).
+- (a) `date` 05:15:59 · `launchctl print` aset → `state = running`, pid `25652` (new; D1 `85816`) · radar → `state = running`, pid `25666` (new; D1 `85833`) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (agent outside the set, same pid). GREEN.
+- (b) `grep -c "Started server process" aset.err` → `59` (`<a0>` 58; > 58 and ≤ 60) · `tail -n 30 aset.err` → `2026-10-10 05:15:35.175 | INFO | cobalt.aset.strike:step:569 - strike fallback: first pass OK` · `INFO: Started server process [25658]` · `… Application startup complete.` · `INFO: Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)` · Traceback aset `2` (= `<ta0>`) · Traceback radar `0` (= `<tr0>`) · TaxonomyConfigError `0` (= `<tc0>`). For contrast, the same tail shows the old code's line at the 03:24 start: `strike fallback: pass failed — the thread goes on: DbConfigError: Missing Postgres settings for the APP credential …`. The radar tails are spaced; see below.
+- (c) `curl …/` → `200` · `curl …/radar` → `200` · `curl …/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKER `grep -c -F "strike fallback: first pass OK" …/strike.py` → `1` = after. GREEN.
+- (e) first read: `date` 05:16:12 · `heartbeat show` → `(2026-10-10 05:16:13 EDT)`. Same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver`, `com.cobalt.replay`). `com.cobalt.aset running loaded, pid 25652` · `com.cobalt.radar running running 1 min, heartbeat fresh` · `radar idle (overnight)`.
+- (f) `COBALT_ENV=production uv run cobalt jobs restarts c59f788d..d0a5fbb8` → exit 0, the same 7 rows as STEP-R, `RESTARTS: com.cobalt.aset com.cobalt.radar` = `<restart set>`, no `UNCLASSIFIED` · `validate` → exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>`. GREEN.
+- (g) no migration.
+- (s) `date` 05:16:25 · `grep -c -F "strike fallback: first pass OK" /Users/cobalt/cobalt/src/cobalt/aset/strike.py` → exit 0, `1` (green = a count of 1 or more). GREEN. The live aset log also carries the line at 05:15:35 (b).
+- (b) radar tails: `date` 05:17:14 (`<t up>` + 93 s) · `tail -n 12 radar.err` → the only cycle line is `2026-10-10 05:15:38.303 … radar cycle: idle:overnight scan_id=None`, stamped 3 s BEFORE `<t up>` (radar started during 4.6, before its closing `date`), so this tail did not settle it. `date` 05:18:43 (`<t up>` + 182 s) · `tail -n 12 radar.err` → ends `2026-10-10 05:17:18.337 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`. That is a cycle after `<t up>`, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback (radar Traceback count `0`). GREEN.
+- (e) second read: `date` 05:18:02 · `heartbeat show` → `(2026-10-10 05:18:05 EDT)`, 112 s after the first. Same three REDs as `<hb0>` and nothing new · `com.cobalt.radar running running 2 min, heartbeat fresh` · `com.cobalt.aset running loaded, pid 25652`. GREEN.
+- (h) REVERT-READBACK at `date` 05:18:43 (≥ `<t up>` + 180 s): `radar panel FAILED` `18` · `radar pool refresh FAILED` `60` · `radar S5 evaluate FAILED` `43` · `lifecycle card read failed` `39`. Each equals `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`; no count grew · `curl …/radar` → `200`. No census reads on the card. GREEN.
+- THE CHAIN: every check committed (P2: `c754ba22`, `held unfixed: 0`, `ready: YES`) → the tips (P3: `f47ad2f0` = head) → the merged tree (T: `ca56ce65`, one merge) → RESTARTS derived (R: `com.cobalt.aset com.cobalt.radar`) → three suites green on `<m1>` (G: equal-tree clause, `offline 4196/0 · with-DB 5093/0 · live-note 146/0`) → `<stack-final>` `d0a5fbb8` = `<m1>` + docs (D2.3: nothing outside docs) → the landed code (4.3: `Updating c59f788d..d0a5fbb8`, Fast-forward) → markers (d: `0` → `1`) → no migration (g) → residents up after the merge (a: new pids `25652`, `25666`) → radar cycling (b: 05:17:18; e: heartbeat fresh) → the set's read (s: `1`) → no new failure (h: counts flat). The card surface is not readable here; the desk confirms it with him (L70).
+
+## Self-check (K25), attempt 2
+1. Every smoke row is quoted verbatim with its `date`: (a) 05:15:59, (c)/(d) after it, (e) 05:16:12 and 05:18:02, (f) after (e), (s) 05:16:25, the (b) tails 05:17:14 and 05:18:43, and (h) 05:18:43.
+2. Tips: `f47ad2f0` was re-read at P3 (`rev-parse` → `f47ad2f0`, the same as the branch head). `git -C /Users/cobalt/cobalt merge-base --is-ancestor f47ad2f0 d0a5fbb8` → exit 0.
+3. REVERT-READBACK (h) is shown above. Every count and sha in attempt 2 was read from tool output in this session.
+4. No conflict marker: STEP-T merged clean in attempt 1, and D2.1 merged clean (`Merge made by the 'ort' strategy.`).
+- THE RELEASE: no lock held (the equal-tree clause, `gate.sh` not run). `ls -la <GATE>/.env` → `No such file or directory`.
+
+## CONTINUE
+- OUTAGE STARTING 05:14:57 EDT — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- outage ended 05:15:41 EDT, residents up on `d0a5fbb8`.
+- smoke GREEN 05:18:43, tag set. Done. Push is his, through the desk (L55).
+
+## DECISIONS
+1. ASK DESK: I read resume check (a) as true. The old last line began `FAILED PREFLIGHT:`, not literally `FAILED:`. The RECUT paragraph also says a `rollback: not used` run "is not resumed", yet the desk launched `CONTINUE: STEP-D0`. Default taken: `FAILED PREFLIGHT` is the STEP-D0 form of a FAILED ending (the stop-line list names it so), and a D0 preflight stop with the gate green is the case THE ONE RESUME exists for. So I resumed and did not re-run T, C, R or G. If the desk meant a recut, the gate evidence still holds: `<m1>` `ca56ce65` is unchanged, and D2.3 shows the landed tree is that tree plus docs. [05:12:29 EDT] The desk's call, not Dejan's.
+
+## RECORDS
+- downtime: 26 s (05:15:15 → 05:15:41), under 300 s.
+- cobalt_dev: not touched by this deploy. The check's gate left it at `0013 — F2 = F0` (gate log line 2082).
+- RETIRE OWED: none (no plist change).
+- carried RED, as read at D1, D2.5 and smoke (e), unchanged throughout: `RED archiver last run FAILED — last run 2026-10-10 00:54 UTC …, exit 1` · `RED com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2: … '429 Too Many Requests' …` · `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. None is the aset, sheet or radar probe. The radar probe read `OK idle (overnight)`.
+- cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-strike-fallback-env-1010` (with its `.venv`) and branch `deploy/strike-fallback-env-1010` at `d0a5fbb8`. The set's branch `ops/strike-fallback-env-1010` at `f47ad2f0` and its worktree, if any.
+- messages not followed: none. `REFUSED, not needed`: none. Both resume-session commits (the D2.0 report commit and this close) carry `Co-Authored-By` only.
+- L74: this session's harness system reminder again asked for a `Claude-Session:` commit trailer. Recorded as data; not acted on.
+- `desk-context.sh` was first called with the claude.ai session id → `no transcript for 01JWuKnsGZShyCfnwTkNyoaY` (exit 2). It was re-run with the local transcript id `ac7bfe57-d189-4429-b70b-9c241bff9718` → `context 167076 of 400000 — ok`.
+- the card's `## RECORDS`: copied under `### RECORDS, attempt 1` above, unchanged.
+
+DEPLOYED deploy-2026-10-10-strike-fallback-env d0a5fbb8 | set: none | migrations: none | gate: offline 4196/0 · with-DB 5093/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 167076
