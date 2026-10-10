@@ -601,3 +601,63 @@ def test_scan_starts_no_strike_loop(monkeypatch):
     assert len(calls) == 1
     assert loop.attempts == 0
     assert not [t for t in threading.enumerate() if t.name == "strike"]
+
+
+# -- s4-p1-1009 check: findings O1, A3 -----------------------------------------
+
+
+def test_check_o1_the_strike_loop_ticks_every_interval_not_interval_plus_tick(monkeypatch):
+    import cobalt.radar.runner as r
+
+    starts: list[float] = []
+
+    class SlowLoop:
+        async def tick(self):
+            starts.append(_wall.monotonic())
+            await asyncio.sleep(0.6)  # the tick's own GETs, paced through the bucket
+
+        def interval_s(self):
+            return 1
+
+    async def make():
+        return SlowLoop()
+
+    monkeypatch.setattr(r, "should_keep_running", lambda _label: True)
+    thread = r.start_strike_thread(r.JOB_LABEL, make_loop=make)
+    _wall.sleep(4.5)
+    thread.stop()
+    thread.join(timeout=5)
+    gaps = [b - a for a, b in zip(starts, starts[1:])]
+    assert gaps and max(gaps) <= 1.25, gaps
+
+
+def test_the_strike_thread_waits_only_the_remainder_of_the_derived_interval(monkeypatch):
+    import cobalt.radar.runner as r
+
+    timeline = {"now": 0.0}
+    waits = []
+
+    class SlowLoop:
+        async def tick(self):
+            timeline["now"] += 0.6
+
+        def interval_s(self):
+            return 1
+
+    loop = SlowLoop()
+
+    async def make():
+        return loop
+
+    thread = r.StrikeThread(r.JOB_LABEL, make)
+
+    async def fake_wait(seconds):
+        waits.append(seconds)
+        thread.stop()
+
+    monkeypatch.setattr(r, "should_keep_running", lambda _label: True)
+    monkeypatch.setattr(r.time, "monotonic", lambda: timeline["now"])
+    monkeypatch.setattr(thread, "_wait", fake_wait)
+    asyncio.run(thread._main())
+
+    assert waits == [pytest.approx(0.4)]

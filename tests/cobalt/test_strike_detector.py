@@ -318,3 +318,43 @@ def test_negative_controls_short_of_entry_and_armed_never_missed():
     asyncio.run(d.tick())
     assert store.calls == []
     assert d.stored_calls == ["ZZD7"]
+
+
+# -- s4-p1-1009 check: findings O3, A2 ----------------------------------------
+
+
+def test_check_o3_seen_at_is_the_polls_wall_clock_not_the_ticks_start():
+    store = FakeStore([card(1), card(2, armed_minute=1)])
+    clock = Clock(T0 + 5 * MIN)
+
+    class AdvancingFetch(FakeFetch):
+        async def __call__(self, ticker, interval, token):
+            clock.at = clock.at + timedelta(seconds=7)
+            return await super().__call__(ticker, interval, token)
+
+    fetch = AdvancingFetch({"ZZD1": [bar("ZZD1", 1, high="10.20")], "ZZD2": [bar("ZZD2", 2, high="10.20")]})
+    asyncio.run(detector(store, fetch, clock=clock).tick())
+    seen = {c["card_id"]: c["evidence"]["seen_at"] for c in store.calls}
+    assert seen == {1: (T0 + 5 * MIN + timedelta(seconds=7)).isoformat(),
+                    2: (T0 + 5 * MIN + timedelta(seconds=14)).isoformat()}
+
+
+def test_seen_at_and_transition_time_are_the_polls_wall_clock():
+    class AdvancingClock(Clock):
+        def now(self):
+            return self.at + timedelta(seconds=self.t)
+
+    clock = AdvancingClock(T0 + 5 * MIN)
+    store = FakeStore([card(1), card(2)])
+    fetch = FakeFetch({
+        "ZZD1": [bar("ZZD1", 1, high="9.99")],
+        "ZZD2": [bar("ZZD2", 1, high="10.10")],
+    })
+
+    report = asyncio.run(detector(store, fetch, clock=clock).tick())
+
+    assert report.triggered == [2]
+    assert clock.t > 0
+    call = store.calls[0]
+    assert datetime.fromisoformat(call["evidence"]["seen_at"]) == clock.now()
+    assert call["now"] == clock.now()
