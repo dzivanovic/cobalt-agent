@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09-words.md 2026-10-09 R718
 BRANCH: ops/https-only-1009
 WORKTREE: https-only-1009
 BASE: e4586978
-TIP:
+TIP: 4dfe6114
 REPORT: /Users/cobalt/cobalt-wt/https-only-1009/docs/40 - DevDocs/reports/https-only-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/https-only-check-2026-10-09.md
+HOUSE B: as needed
 RULINGS: 2026-10-09 R718
 
 ## ROWS
