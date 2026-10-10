@@ -3,10 +3,10 @@ LADDER: S4-P1 · F9
 BRANCH: ops/s4-p1-1009
 WORKTREE: s4-p1-1009
 BASE: e4586978
-TIP:
+TIP: 2433078f
 REPORT: /Users/cobalt/cobalt-wt/s4-p1-1009/docs/40 - DevDocs/reports/s4-p1-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/s4-p1-check-2026-10-09.md
+HOUSE B: as needed
 RULINGS: 2026-10-06 R598
 
 ## ROWS
