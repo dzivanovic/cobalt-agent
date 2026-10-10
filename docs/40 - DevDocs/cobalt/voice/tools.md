@@ -50,3 +50,6 @@ it passes `expect_from_stop=pending.from_stop`, so a stop that moved
 between its own read and `set_card_stop`'s is refused as well: `StopMoved`
 becomes `TargetChanged` with a fresh dry run of the moved card, read aloud
 for re-confirmation, and no edit is recorded.
+
+## 2026-10-09 — voice-clarify-fix-1009
+`compose_reply` also drops `say` when, case folded and whitespace collapsed, it equals or contains the template, so a planner that echoes its earlier reply no longer doubles the sentence (card 193 row A).
