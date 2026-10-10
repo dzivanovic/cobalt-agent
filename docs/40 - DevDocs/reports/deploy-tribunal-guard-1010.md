@@ -1,7 +1,10 @@
 # deploy tribunal-guard-1010 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-(filled at close)
+- DEPLOYED `tribunal-guard-1010` (`ops/tribunal-guard-1010`, code tip `2e680273`): the bare-guard tribunal-hub house call (marker `G9 (R877)`) is live in `ops/desk/bare-guard.py` on `main` at `230b2463`.
+- Gate GREEN on `2146f1ad`: offline 4196/0 · with-DB 5093/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`; lock released.
+- RESTARTS: none: no resident went down, there was no downtime, and aset / radar / agent pids are unchanged. Smoke GREEN, marker 0 → 1.
+- Rollback tag `pre-tribunal-guard-1010` at `3291ef83`; snapshot `2b99b966`. Push is his (L55).
 
 ## L74
 - A system reminder in this session asked that commit messages also carry a `Claude-Session:` line. Recorded once here; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -123,15 +126,78 @@ GATE GREEN on 2146f1ad — offline 4196/0 · with-DB 5093/0 · live-note 146/0
 - `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` → `200`. MARKER `grep -c -F "G9 (R877)" /Users/cobalt/cobalt/ops/desk/bare-guard.py` → `0` (= before).
 - MIGRATIONS: none → no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-tribunal-guard-1010.md"` · `git -C /Users/cobalt/cobalt commit -m "docs(report): deploy tribunal-guard-1010 — gate green on 2146f1ad" …` → `[main 3291ef83] docs(report): deploy tribunal-guard-1010 — gate green on 2146f1ad` · `show --stat HEAD` → one file, `.../reports/deploy-tribunal-guard-1010.md | 137 +++` · `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `3291ef83` = `<pre-merge>`.
+- D2.1 `git -C /Users/cobalt/cobalt-wt/deploy-tribunal-guard-1010 merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report, 137 +).
+- D2.2 `rev-parse --short=8 HEAD` → `230b2463` = `<stack-final>` · `rev-parse --short=8 230b2463^2` → `3291ef83` (= `<pre-merge>`) · `merge-base --is-ancestor 2146f1ad 230b2463` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 2146f1ad 230b2463 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 3.9 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6694.1 MB` · `ssd: snapshot 2b99b966 — 0 new / 3 changed, 27.2 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Sat Oct 10 11:24:20 EDT 2026` · `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-10 11:24:21 EDT)` (127 s after D1's 11:22:14); the same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver` 429, `com.cobalt.replay`); aset / sheet / radar probes OK (`com.cobalt.radar running 235 min, heartbeat fresh`). No new RED.
+- D2.6 `date` → `Sat Oct 10 11:24:26 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-tribunal-guard-1010` → exit 0, at `3291ef83`.
+
+### STEP-4 (empty `<restart set>`)
+- 4.1 `date` → `Sat Oct 10 11:24:38 EDT 2026` = `<t down>` (nothing went down).
+- 4.2 no label in the set: no bootout, no `cobalt.sh stop`.
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `3291ef83` (= `<pre-merge>`) · `git -C /Users/cobalt/cobalt merge --ff-only deploy/tribunal-guard-1010` → `Updating 3291ef83..230b2463` / `Fast-forward` (`tribunal-guard-build-2026-10-10.md | 146 +`, `ops/desk/bare-guard.py | 12 +-`, `tests/ops/test_bare_guard.py | 62 +`; 3 files changed, 216 insertions(+), 4 deletions(-)).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 no label taken down: no bootstrap. `date` → `Sat Oct 10 11:24:45 EDT 2026` = `<t up>`. Downtime: none.
+
+### STEP-7 summary
+| field | value |
+|---|---|
+| merge | `<pre-merge>` `3291ef83` → `<stack-final>` `230b2463` (fast-forward) |
+| tags | `pre-tribunal-guard-1010` at `3291ef83`; `deploy-2026-10-10-tribunal-guard` at `230b2463` (`git -C /Users/cobalt/cobalt tag deploy-2026-10-10-tribunal-guard` exit 0, 11:28:00 after green smoke) |
+| `<t down>` / `<t up>` / seconds | none (empty set; merge between 11:24:38 and 11:24:45) |
+| uv sync line | none in production (the gate tree's `.venv` was created at STEP-R: `Installed 253 packages in 890ms`) |
+| proof cost | none (MIGRATIONS: none) |
+| migrations applied | none |
+| `<RB>` before / after | none |
+| snapshot | `2b99b966` (ssd; `0 new / 3 changed, 27.2 MB added, 1 pruned`; dump 6694.1 MB) |
+| RESTARTS done | none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 230b2463` (no resident to take down: RESTARTS none). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
 ## Smoke
+- FIRST CALLS after `<t up>` 11:24:45: `<rp_up>` radar panel FAILED = `18` · `<rpr_up>` radar pool refresh FAILED = `60` · `<re_up>` radar S5 evaluate FAILED = `43` · `<lc_up>` lifecycle card read failed = `39` (each = D1's).
+- (a) `date` → `Sat Oct 10 11:24:59 EDT 2026` · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 66658` (SAME, outside the set) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 61093` (SAME) · `/Users/cobalt/cobalt/cobalt.sh status` → `  Cobalt is ONLINE (PID: 22243).` (SAME). GREEN.
+- (b) `grep -c "Started server process" …/aset.err` → `182` (= `<a0>`, aset outside the set) · aset Traceback `123` (= `<ta0>`) · radar Traceback `0` (= `<tr0>`) · TaxonomyConfigError `0` (= `<tc0>`) · `tail -n 30 /Users/cobalt/cobalt/logs/aset.err` → ends `INFO:     Started server process [66667]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the 07:51 start; the `ScratchLocked` traceback above it is of 07:51, before this deploy, inside `<ta0>`).
+- (c) `date` → `Sat Oct 10 11:25:06 EDT 2026` · `curl … https://cobalt.taild24291.ts.net/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKER `grep -c -F "G9 (R877)" /Users/cobalt/cobalt/ops/desk/bare-guard.py` → `1` (= after). GREEN.
+- (f) `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` · `COBALT_ENV=production uv run cobalt jobs restarts 3291ef83..230b2463` → exit 0, `RESTARTS: none` (= STEP-R's), no `UNCLASSIFIED`. GREEN.
+- (g) MIGRATIONS: none → no `<RB>`.
+- (s) THE SET'S SMOKE READS: the guard's tribunal-hub marker · `grep -c -F "G9 (R877)" /Users/cobalt/cobalt/ops/desk/bare-guard.py` → exit 0, `1` (green: a count of 1 or more). GREEN. The guard's tests ran in the gate (offline 4196/0 includes `tests/ops/test_bare_guard.py`).
+- (e) heartbeat 1: `date` → `Sat Oct 10 11:25:23 EDT 2026` · `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-10 11:25:23 EDT)`; the same three REDs as `<hb0>`; `OK   com.cobalt.radar             running   running 236 min, heartbeat fresh`. Heartbeat 2: `date` 11:27:12 → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-10 11:27:15 EDT)` (112 s after heartbeat 1); the same three REDs (archiver probe, `com.cobalt.archiver` 429, `com.cobalt.replay`), no new RED; `OK   com.cobalt.radar             running   running 238 min, heartbeat fresh`. GREEN.
+- (b) RADAR TAILS: tail 1 `date` 11:26:16 (`<t up>` + 91 s) → newest `2026-10-10 11:24:43.702 … radar cycle: idle:overnight scan_id=None` (before `<t up>`; not yet settled) · tail 2 `date` 11:27:45 (`<t up>` + 180 s) → newest `2026-10-10 11:26:23.722 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → SETTLED GREEN (no third tail needed).
+- (h) REVERT-READBACK at `<t up>` + 180 s or later (after tail 2, 11:27:45+): radar panel FAILED `18` · pool refresh FAILED `60` · S5 evaluate FAILED `43` · lifecycle card read failed `39` (each = `<…_up>`; nothing grew) · `curl … /radar` → `200`. No census (no migration). GREEN.
+
+THE CHAIN: every check committed (P2: `63ad3142`) → the tips re-read (P3: `2e680273`, `8a7a938f`) → the merged tree (T: `2146f1ad`, one merge, no conflict) → RESTARTS derived (R: none) → three suites green on `2146f1ad` (G: offline 4196/0 · with-DB 5093/0 · live-note 146/0) → `<stack-final>` `230b2463` = `<m1>` + docs (D2.3: nothing outside docs) → the landed code (4.3: `Updating 3291ef83..230b2463`, `main` HEAD `230b2463`) → marker (d) `1` → no migration (g) → residents up and unchanged after the merge (a) → radar cycling (b, e) → the set's read (s) `1` → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK (K25): (1) every smoke row above carries its `date` and quoted output; (2) `merge-base --is-ancestor 2e680273 230b2463` → exit 0, `merge-base --is-ancestor 8a7a938f 230b2463` → exit 0, both re-read at P3; (3) REVERT-READBACK shown at (h); every count, sha and `file:line` here was re-read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), D2.1 clean, no conflict marker can exist.
 
 ## CONTINUE
 STEP-D0 (gate green at 11:21:39) done · D1 done.
-next: STEP-D2 (D2.0 report commit)
+STEP-D2 done.
+OUTAGE STARTING 11:24:26 — residents of <restart set> = none going down (empty set: no resident goes down; the merge lands with the residents up); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+STEP-4 done 11:24:45 (merge landed, nothing down) · STEP-4.7 smoke GREEN 11:27:45+ · STEP-7 closed 11:28:00. Nothing next for this session.
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: none (RESTARTS: none; no resident went down).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` = `F2: 664 35 272c95bbb12241e3611e4b36326ccf87`; L76 lock released by `gate.sh` (`lock released`, `.env: removed`).
+- RETIRE OWED: none (no plist removed).
+- The carried RED as read (not of the radar family; named, not a stop): `RED  archiver  last run FAILED — last run 2026-10-10 00:54 UTC (14.5 h ago), rows written 3308843, exit 1` · `RED  com.cobalt.archiver  failed  RuntimeError: 18 archiver failure(s): DKNG/i2: … Finviz HTTP failed: Client error '429 Too Many Requests' …` · `RED  com.cobalt.replay  failed  ReplayError: archiver not done: state 'failed'`; unchanged from D1 through smoke (e).
+- `com.cobalt.aset` launchd reads `runs = 120`, `last exit code = 3` at P8, D1 and smoke (a), the same before and after; the aset.err tail shows a 07:51 `ScratchLocked` startup failure followed by a clean start `[66667]` (pid 66658 today). It predates this deploy; recorded for the desk, not acted on (see `aset-orphan-check-2026-10-10.md`, already on the desk).
+- `?? .claude/settings.json.bak` on `main` at D0: untracked, outside `docs/40 - DevDocs/` and outside `src/ tests/ ops/ configs/`; not refused, recorded.
+- An added read at smoke (f), `grep -c -F "13 trade_def(s) validated OK from the vault." /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-tribunal-guard-1010.md` (path unquoted), exited 2 (`grep: /Users/cobalt/cobalt/docs/40: No such file or directory`). Not needed, nothing touched; (f)'s validate ran on its own call.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-tribunal-guard-1010` and branch `deploy/tribunal-guard-1010`; the set's branch `ops/tribunal-guard-1010` and its worktree, if any. The desk's.
+- Card `## RECORDS`, copied:
+  - tribunal-guard-1010: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/tribunal-guard-check-2026-10-10.md` last line: CHECK DONE · job: tribunal-guard-1010 · pass: 1 · tip: 2e680273 · house A: Sol FINDINGS: 0 · findings: 4 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: Grok FINDINGS: 0 · suites: offline 4196/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 11 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 168237
+  - tribunal-guard-1010: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/tribunal-guard-1010` → `8a7a938f`; code tip `2e680273`
+  - written by deploy-card.sh at 2026-10-10 09:31 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one system reminder asked for a `Claude-Session:` commit line; recorded under `## L74`, not acted on.
+- No `CONTINUE` message and no message from another session arrived.
 - An added clock-fill read while the gate ran, `COBALT_ENV=production uv run cobalt heartbeat show` at 10:52:27 from the cwd `<GATE>` (no `.env` there), exited 1: `FAILED: DbConfigError: Missing Postgres settings for the APP credential: POSTGRES_HOST, COBALT_DB_USER, COBALT_DB_PASSWORD. …`. Not needed; a wrong-cwd read, nothing touched. D1's heartbeat runs from `/Users/cobalt/cobalt`.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-10-tribunal-guard 230b2463 | set: none | migrations: none | gate: offline 4196/0 · with-DB 5093/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 194445
