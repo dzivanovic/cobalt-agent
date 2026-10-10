@@ -131,6 +131,39 @@ class RunSummary:
         self.shadow_records: list = []
         self.shadow_errors = 0
         self.shadow: dict | None = None
+        # --- 429 retries (archiver-429, R812) -------------------------
+        #: One (ticker, interval, attempt, wait_s) per retry taken. The
+        #: runner counts the retry GET in `requests`; this never does.
+        self.retries: list[tuple[str, str, int, float]] = []
+
+    def record_retry(self, ticker: str, interval: str, attempt: int, wait: float) -> None:
+        self.retries.append((ticker, interval, attempt, float(wait)))
+
+    @property
+    def retry_count(self) -> int:
+        return len(self.retries)
+
+    @property
+    def retry_wait_s(self) -> float:
+        return sum(wait for _, _, _, wait in self.retries)
+
+    def retry_line(self) -> str:
+        """`retried: <T>/<i> waited <w>s[+<w>s] (<ok|failed>); …`, or "".
+
+        The outcome is `failed` when a `failures` entry names the target
+        (`<T>/<i>:`), else `ok` — `record_retry` carries no outcome.
+        """
+        waits: dict[str, list[float]] = {}
+        for ticker, interval, _, wait in self.retries:
+            waits.setdefault(f"{ticker}/{interval}", []).append(wait)
+        if not waits:
+            return ""
+        parts = []
+        for target, target_waits in waits.items():
+            failed = any(f.startswith(f"{target}:") for f in self.failures)
+            joined = "+".join(f"{w:.1f}s" for w in target_waits)
+            parts.append(f"{target} waited {joined} ({'failed' if failed else 'ok'})")
+        return "retried: " + "; ".join(parts)
 
     def record_success(self, ticker: str, rows: int) -> None:
         self.tickers.add(ticker)

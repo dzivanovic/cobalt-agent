@@ -77,6 +77,32 @@ def test_every_row_names_its_database(tmp_path, monkeypatch):
     assert "| cobalt_brain |" in path.read_text()
 
 
+def test_the_summary_names_its_429_retries():
+    """archiver-429 B (R812): a retried target is named with every wait
+    and its outcome; `record_retry` never touches `requests` — the
+    runner counts the retry GET itself."""
+    s = RunSummary(mode="full")
+    s.record_retry("DKNG", "i2", 1, 15.0)
+    s.record_retry("DKNG", "i2", 2, 30.0)
+    s.record_success("DKNG", 10)
+    s.record_retry("META", "i5", 1, 60.0)
+    s.record_failure("META", "i5", "Fetch failed for META/i5: Finviz HTTP failed: 429")
+    assert s.retry_count == 3
+    assert s.retry_wait_s == 105.0
+    assert s.requests == 2
+    assert s.retry_line() == (
+        "retried: DKNG/i2 waited 15.0s+30.0s (ok); META/i5 waited 60.0s (failed)"
+    )
+
+
+def test_a_summary_without_retries_has_an_empty_retry_line():
+    s = RunSummary(mode="full")
+    s.record_success("AAPL", 10)
+    assert s.retry_count == 0
+    assert s.retry_wait_s == 0.0
+    assert s.retry_line() == ""
+
+
 def test_pre_ruling9_file_gets_one_schema_break_not_misaligned_rows(tmp_path, monkeypatch):
     """A markdown table cannot change its column count in place. An
     existing 7-column log gets a second table, once — never a silent

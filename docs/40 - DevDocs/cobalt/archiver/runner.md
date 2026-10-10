@@ -221,3 +221,16 @@ the ceiling and the cadence are Dejan's (L53).
 fast in the premarket window with a message naming the window, the run's
 own window and the ruling, instead of reaching the demand gate and
 failing there with a total that blamed 04:00 whatever the clock said.
+
+## 2026-10-10 — archiver-429-1009
+
+A `FinvizRateLimited` (429) is retried on the SAME target by
+`_fetch_retrying_429`, in both write modes: at most `RETRY_429_MAX = 3`
+times; wait = `Retry-After` clamped to `[GENTLE_SLEEP_SECONDS,
+RETRY_AFTER_CAP_SECONDS = 60]`, else `RETRY_429_BACKOFF_SECONDS = (15,
+30, 60)`; a retry whose wait would take the run's used waits past
+`RETRY_429_BUDGET_SECONDS = 600` is not taken (budget 0 for a
+backfill). Each retry GET counts in `requests`, logs one WARNING
+`[i/total] T/i: 429, attempt n/3, retry after <w>s`, and `Run complete:`
+always carries `retried <n> (waited <s> s)` then the summary's
+`retry_line()`. Any other error is never retried.

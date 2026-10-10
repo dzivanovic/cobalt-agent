@@ -19,7 +19,7 @@ import sys
 from loguru import logger
 
 from . import incidents, progress, shadow
-from .collector import CollectorError, fetch_bars, resolve_token
+from .collector import CollectorError, FinvizRateLimited, fetch_bars, resolve_token
 from .config import load_config
 from .models import Interval
 from .reconcile import IncidentDraft, IncidentKind, TargetStatus, plan_candidates, reconcile
@@ -28,6 +28,18 @@ from .settings import WriteMode, load_archiver_settings
 from .store import BarStore
 
 GENTLE_SLEEP_SECONDS = 1.2
+
+#: archiver-429 (2026-10-09, R808): a 429 is retried on the SAME target,
+#: bounded. Constants, not tunables — the bound is part of the archiver's
+#: declared L53 demand, not a knob. Every wait is clamped to at least
+#: `GENTLE_SLEEP_SECONDS`, so no retry sends faster than the declared
+#: 60 / GENTLE_SLEEP_SECONDS rpm; the run's retry waits sum to at most
+#: `RETRY_429_BUDGET_SECONDS`, so a full run stays inside its 20:30 +
+#: `timeout_s` window (10-09: 24m13s + 600 s < 2400 s).
+RETRY_429_MAX = 3
+RETRY_429_BACKOFF_SECONDS = (15, 30, 60)
+RETRY_AFTER_CAP_SECONDS = 60
+RETRY_429_BUDGET_SECONDS = 600
 
 #: The two tunables that name the premarket window R34 closed to the
 #: backfill. Read, never hardcoded (L10): if Dejan moves the session, the
@@ -169,6 +181,53 @@ async def _default_fetch(ticker, interval, token):
     return await fetch_bars(ticker, interval, token)
 
 
+class _RetryBudget:
+    """The run's 429 retry-wait budget. Lives in the runner, never in the
+    summary: the summary only names the retries it is told about."""
+
+    def __init__(self, limit_s: float):
+        self.limit_s = limit_s
+        self.used_s = 0.0
+
+
+def _retry_wait(error: FinvizRateLimited, attempt: int) -> float:
+    """`Retry-After` clamped to [GENTLE_SLEEP_SECONDS, RETRY_AFTER_CAP_SECONDS],
+    else the backoff for this attempt (1-based)."""
+    if error.retry_after is not None:
+        return float(min(max(error.retry_after, GENTLE_SLEEP_SECONDS), RETRY_AFTER_CAP_SECONDS))
+    return float(RETRY_429_BACKOFF_SECONDS[attempt - 1])
+
+
+async def _fetch_retrying_429(fetch, ticker, interval, token, *, summary, budget, label):
+    """`fetch`, with a 429 retried on the same target.
+
+    A retry is NOT taken past `RETRY_429_MAX`, nor when its wait would
+    take the run's used retry waits past the budget: the 429 is then
+    raised and the target fails as before. Any other error is raised at
+    once. Each retry GET is counted in `summary.requests` here, once —
+    `record_retry` names the retry and does not count it.
+    """
+    attempt = 0
+    while True:
+        try:
+            return await fetch(ticker, interval, token)
+        except FinvizRateLimited as e:
+            attempt += 1
+            if attempt > RETRY_429_MAX:
+                raise
+            wait = _retry_wait(e, attempt)
+            if budget.used_s + wait > budget.limit_s:
+                raise
+            budget.used_s += wait
+            summary.record_retry(ticker, interval.value, attempt, wait)
+            logger.warning(
+                f"{label} {ticker}/{interval.value}: 429, attempt "
+                f"{attempt}/{RETRY_429_MAX}, retry after {wait}s"
+            )
+            await asyncio.sleep(wait)
+            summary.requests += 1
+
+
 class _Withheld(Exception):
     """A target the comparison refused. Raised INSIDE the target's
     transaction so the `with` rolls it back; the evidence is persisted
@@ -213,6 +272,9 @@ async def _run_targets(
     clock = now if now is not None else _now
 
     summary = RunSummary(mode=mode, write_mode=cfg.write_mode.value)
+    # A backfill's declared window is len(targets) x GENTLE_SLEEP_SECONDS
+    # (`_backfill_window`): a retry would run past it, so its budget is 0.
+    budget = _RetryBudget(RETRY_429_BUDGET_SECONDS if mode == "full" else 0)
 
     # §9: the run-level advisory lock, in BOTH write modes. A second
     # archiver or a repair refuses loudly rather than interleaving.
@@ -224,17 +286,17 @@ async def _run_targets(
         if cfg.write_mode is WriteMode.APPEND:
             await _append_targets(
                 targets, store=store, fetch=fetch_fn, token=token,
-                summary=summary, clock=clock,
+                summary=summary, clock=clock, budget=budget,
             )
         else:
             await _upsert_targets(
                 targets, store=store, fetch=fetch_fn, token=token,
-                summary=summary, settings=cfg, clock=clock,
+                summary=summary, settings=cfg, clock=clock, budget=budget,
             )
     return summary
 
 
-async def _upsert_targets(targets, *, store, fetch, token, summary, settings, clock) -> None:
+async def _upsert_targets(targets, *, store, fetch, token, summary, settings, clock, budget) -> None:
     """TODAY'S NIGHT, unchanged: the whole export through `upsert_bars`.
 
     No completeness filter, no range cut, no comparison gate, no
@@ -246,7 +308,10 @@ async def _upsert_targets(targets, *, store, fetch, token, summary, settings, cl
     total = len(targets)
     for i, (ticker, interval) in enumerate(targets, start=1):
         try:
-            bars = await fetch(ticker, interval, token)
+            bars = await _fetch_retrying_429(
+                fetch, ticker, interval, token, summary=summary, budget=budget,
+                label=f"[{i}/{total}]",
+            )
             if settings.shadow_enabled:
                 _shadow_target(store, summary, ticker, interval, bars, settings, clock)
             rows = store.upsert_bars(bars)
@@ -300,13 +365,16 @@ def _shadow_target(store, summary, ticker, interval, bars, settings, clock) -> N
         )
 
 
-async def _append_targets(targets, *, store, fetch, token, summary, clock) -> None:
+async def _append_targets(targets, *, store, fetch, token, summary, clock, budget) -> None:
     """THE APPEND NIGHT (§6, §7). One transaction per target (§4)."""
     total = len(targets)
     for i, (ticker, interval) in enumerate(targets, start=1):
         fetch_started_at = clock()
         try:
-            bars = await fetch(ticker, interval, token)
+            bars = await _fetch_retrying_429(
+                fetch, ticker, interval, token, summary=summary, budget=budget,
+                label=f"[{i}/{total}]",
+            )
         except CollectorError as e:
             # Today's behaviour, kept: the collector fails a whole target
             # on an empty response, a header-only response or one bad
@@ -435,9 +503,14 @@ async def run_full() -> RunSummary:
     logger.info(f"Bar Archiver full run: {len(targets)} (ticker, interval) targets")
     summary = await _run_targets(targets, mode="full")
     path = append_run_report(summary)
+    # archiver-429 B (R812): the line always says how many 429 retries
+    # the night took and how long they waited, then names them.
+    retried = f"retried {summary.retry_count} (waited {summary.retry_wait_s:.1f} s)"
+    retry_line = summary.retry_line()
     logger.info(
         f"Run complete: {len(summary.tickers)} tickers, {summary.rows_written} rows, "
-        f"{len(summary.failures)} failures, {summary.duration_str()}. Report: {path}"
+        f"{len(summary.failures)} failures, {retried}, {summary.duration_str()}. Report: {path}"
+        + (f" — {retry_line}" if retry_line else "")
     )
     return summary
 
