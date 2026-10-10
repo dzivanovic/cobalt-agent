@@ -1,12 +1,12 @@
 JOB: https-only-1009
 LADDER: OFF-LADDER — reports/cto-2026-10-09-words.md 2026-10-09 R718
-BRANCH: deploy/deploy-2026-10-09-https-only
-WORKTREE: deploy-https-only-1009
+BRANCH: deploy/deploy-2026-10-09-https-only-attempt2
+WORKTREE: deploy-https-only-1009-attempt2
 BASE: main
 TIP: 16559ba4
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-https-only-1009.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-https-only-1009-attempt2.md
 RULINGS: 2026-10-09 R718
-TAG: deploy-2026-10-09-https-only
+TAG: deploy-2026-10-09-https-only-attempt2
 MIGRATIONS: none
 SET: none
 TICKERS: none
