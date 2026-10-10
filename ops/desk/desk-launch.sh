@@ -34,6 +34,9 @@
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh close <YYYY-MM-DD> [<step>]            (the nightly close
 #        of that day: after the 21:00 ET pause on the day itself, or any time later for a missed
 #        night — the morning desk's first act; <step> = a NEW worker at that CONTINUE step)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh ops-hand                               (the default-mode
+#        seat on OPS-HAND.md, in /Users/cobalt/cobalt-wt/.ops-hand; card 2026-10-10 231 H4: its
+#        refusals are in its block, after kind `brain`)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh install-ops                            (links the ops
 #        scripts into /Users/cobalt/.claude/ops; the desk runs it after a deploy; launches nothing)
 # The desk types no `cd`, no `git worktree add` and no `claude --bg`: its own `claude --bg`
@@ -305,7 +308,7 @@ tool_list() {
 }'
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | ops-hand"
 kind=$1
 # recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
 # 10-03, ASK DESK 13: an ignored argument is a guess)
@@ -616,6 +619,88 @@ if [ "$kind" = "brain" ]; then
     done)
     [ -z "$live" ] || refuse "a session named brain is live (${live% }): a brain is stopped only on his word (2026-09-30 R76); launch its successor after he has stopped it"
     run_launch "$REPO" "$line" "reminder: the tab and the §5 row are the desk's; the brain is stopped only on his word (R76)"
+fi
+
+# ---- kind ops-hand: the default-mode seat on OPS-HAND.md (card 2026-10-10 231 H4, his R855) ---
+# The one launch whose mode is `default`: every Bash call of the seat waits on his tap, and the
+# guard's G12 holds it to its class. Its line is checked word for word against OPS-HAND.md's
+# shape before the `eval` in run_launch; the three gates copied from kind `prompt` keep their text.
+if [ "$kind" = "ops-hand" ]; then
+    [ "$#" -eq 1 ] || refuse "ops-hand takes no argument"
+    fixed="$PROMPTS/OPS-HAND.md"
+    [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
+    committed "the fixed file" "$fixed"
+    if grep -q '«INSTALL' "$fixed"; then
+        refuse "OPS-HAND.md still carries its «INSTALL token (his approval row, D2, is not filled): $fixed"
+    fi
+    n=$(grep -c '^claude --bg ' "$fixed")
+    [ "$n" -eq 1 ] || refuse "OPS-HAND.md must hold exactly one launch line; found $n in $fixed"
+    line=$(grep '^claude --bg ' "$fixed")
+    pm_n=$(printf '%s\n' "$line" | grep -o -e '--permission-mode' | wc -l | tr -d ' ')
+    [ "$pm_n" -eq 1 ] || refuse "ops-hand: the line states --permission-mode $pm_n times, not once"
+    pm=$(printf '%s\n' "$line" | sed -n 's/.*--permission-mode[ =]*\([^ ]*\).*/\1/p' | tr -d "\"'")
+    case "$line" in
+        *bypassPermissions*|*dangerously-skip-permissions*) refuse "ops-hand: bypassPermissions or --dangerously-skip-permissions (L55)" ;;
+    esac
+    [ "$pm" = "default" ] || refuse "ops-hand: permission mode '$pm' is not default"
+    nm_n=$(printf '%s\n' "$line" | grep -o -e '--name' | wc -l | tr -d ' ')
+    rc_n=$(printf '%s\n' "$line" | grep -o -e '--remote-control' | wc -l | tr -d ' ')
+    case "$line" in
+        *"--remote-control ops-hand --name ops-hand "*) [ "$nm_n" -eq 1 ] && [ "$rc_n" -eq 1 ] ;;
+        *) false ;;
+    esac || refuse "ops-hand: the line does not name the seat ops-hand once (--remote-control ops-hand --name ops-hand)"
+    deny=" $(tool_list "$line" deny) "
+    for t in '"AskUserQuestion"' '"EnterWorktree"' '"Write"' '"Edit"' '"NotebookEdit"' '"Agent"' \
+        '"Monitor"' '"CronCreate"' '"RemoteTrigger"' '"ScheduleWakeup"' '"Skill"' '"WebFetch"' \
+        '"mcp__*"' '"Artifact*"' '"Bash(git *)"' '"Bash(claude *)"' '"Bash(sudo *)"'; do
+        case "$deny" in
+            *" $t "*) ;;
+            *) refuse "ops-hand: the line does not deny $t" ;;
+        esac
+    done
+    # the four allow strings, in any order, each once, and nothing else (no other flag spelling)
+    allow_bad="ops-hand: the line's --allowedTools holds other than the four strings of OPS-HAND.md"
+    case "$line" in
+        *--allowed-tools*|*--allowedTools=*) refuse "$allow_bad" ;;
+    esac
+    # each "…" span one string (a word outside quotes but the flag itself is kept, marked),
+    # sorted, then compared
+    allow_set=$(tool_list "$line" allow | awk -F'"' '{
+        for (i = 1; i <= NF; i++)
+            if (i % 2 == 0) print $i
+            else if ($i !~ /^ *(--allowedTools *)*$/) print "UNQUOTED:" $i
+    }' | sort | tr '\n' '|')
+    [ "$allow_set" = "Bash(launchctl print *)|Bash(pgrep *)|Bash(ps *)|SendMessage|" ] || refuse "$allow_bad"
+    # copied from kind `prompt` (the Read sentence, an unfilled token, text after the sentence)
+    case "$line" in
+        *"Read '$fixed' and follow it exactly."*) ;;
+        *) refuse "the launch line does not read this prompt file by its absolute path" ;;
+    esac
+    case "$line" in
+        *"<"*|*">"*) refuse "the launch line holds an unfilled token" ;;
+    esac
+    pre="Read '$fixed' and follow it exactly."
+    stamp=""
+    case "$line" in
+        "claude --bg \"$pre$stamp\" "*) ;;
+        *) refuse "the launch line types text after 'follow it exactly.' other than the launcher's stamp '$stamp' (his 2026-10-06 R511)" ;;
+    esac
+    hand="$WT/.ops-hand"
+    [ ! -e "$hand/.claude/settings.local.json" ] \
+        || refuse "ops-hand: a persisted permission rule exists (D4): $hand/.claude/settings.local.json — he removes it before the next launch"
+    check_paths "$line"
+    # one seat at a time; the session list is desk-list.sh beside this script (as kind `brain`)
+    list="$(dirname "$0")/desk-list.sh"
+    rows=$(sh "$list" 2>/dev/null) || refuse "ops-hand: the session list is unreadable ($list); the seat never launches beside one it cannot rule out"
+    live=$(printf '%s\n' "$rows" | while IFS= read -r row; do
+        rest=${row#* · }
+        if [ "$rest" != "$row" ] && [ "${rest%% · *}" = "ops-hand" ]; then
+            printf '%s ' "${row%% · *}"
+        fi
+    done)
+    [ -z "$live" ] || refuse "ops-hand: a session named ops-hand is live (${live% }): one seat at a time"
+    [ "${DESK_LAUNCH_DRY:-0}" = "1" ] || [ -d "$hand" ] || mkdir "$hand" || refuse "ops-hand: cannot make $hand"
+    run_launch "$hand" "$line" "reminder: the desk hands it one command per SendMessage; his tap is the approval; stop it with claude stop / claude rm"
 fi
 
 # ---- kind install-ops: link the ops scripts into the link folder; launches nothing (card 16) --

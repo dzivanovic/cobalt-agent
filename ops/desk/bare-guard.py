@@ -12,7 +12,8 @@
 #
 # THE SEAT (its kind): the first user record of the transcript is the launch message. A
 # `Read '<…>/BUILD-HUB.md'` (CHECK-, DEPLOY-, DEVFIX-) names the kind, and its `CARD: '<path>'`
-# is read for WORKTREE, REPORT, CHECK REPORT and the `## ROWS` files. Otherwise the cwd: the repo
+# is read for WORKTREE, REPORT, CHECK REPORT and the `## ROWS` files. A `Read '<…>/OPS-HAND.md'`
+# names the kind ops-hand whatever the cwd (card 231 H1). Otherwise the cwd: the repo
 # with CTO-DESK-WAKEUP.md = desk, the repo with a prompt under prompts/20*/ = brain, a worktree
 # under the worktree root = worker; anything else is UNKNOWN, and an unknown seat meets only the
 # kind-free rules G1, G3, G6.
@@ -28,7 +29,9 @@
 # B10: a command led by `time nice env command nohup timeout stdbuf xargs` is judged by every
 # rule as the command it runs, and a wrapper whose command cannot be found is denied; B11: an
 # `awk` pipe segment is not a read-only filter, G11, B3 and B9 stay as defence; check r3: words are
-# read with `$'…'` decoded, and B2–B4 read them brace-expanded, `{a..b}` too). Read: G3.
+# read with `$'…'` decoded, and B2–B4 read them brace-expanded, `{a..b}` too) · G12 the
+# ops-hand seat runs only its closed class, read from the raw text (card 231 H2; G7 binds it as
+# a worker, G4 does not). Read: G3.
 # Write / Edit: G6 stop line while dirty · G5 the fence (G10: a check's fence adds its own <S>,
 # the card's JOB naming it).
 # G8: every deny appends one JSON line to <worktree root>/.ledger/<session_id>.jsonl; a ledger
@@ -72,6 +75,10 @@ ROUTE = {
     ),
     "G6": "route: release the lock (W (f)), then the stop line",
     "G7": "route: the desk launches",
+    "G12": (
+        "route: ops-hand runs only its class (kill of one pid, kickstart of a com.cobalt resident, "
+        "ps/pgrep/launchctl print); anything else is a card"
+    ),
 }
 
 HUBS = {
@@ -86,6 +93,15 @@ READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc")
 # no rule reads ENV_READERS since D2 (card 158): G3 reads every verb's words
 ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
 LAUNCHERS = ("claude", "codex", "grok", "agy")
+# card 231 (his 2026-10-10 R855): the default-mode seat the desk hands one command at a time
+OPS_HAND = "ops-hand"
+OPS_HAND_FILE = "OPS-HAND.md"
+# G12, its closed class, read from the raw text so no quote, expansion or wrapper reaches it:
+# kill of one pid >= 2 with TERM, KILL or 0 (by name or number, or none); a kickstart of a
+# com.cobalt label whose ops/<label>.plist exists; and the reads ps, pgrep, launchctl print
+KILL = re.compile(r"kill(?: -(?:TERM|15|KILL|9|0))? (?:[2-9]|[1-9][0-9]+)")
+KICKSTART = re.compile(r"launchctl kickstart(?: -k)? gui/[0-9]+/com\.cobalt\.([A-Za-z0-9._-]+)")
+OPS_READS = ("ps", "pgrep", "launchctl print")
 # B10: a wrapper runs the command that follows its options and operands; per wrapper, the
 # options that stand alone and those that take a value (the next word, `=value` or attached)
 WRAPPERS = ("time", "nice", "env", "command", "nohup", "timeout", "stdbuf", "xargs")
@@ -741,6 +757,8 @@ def seat(event):
     wt = worktree_of(cwd)
     if hub in HUBS:
         kind = HUBS[hub]
+    elif hub == OPS_HAND_FILE:
+        kind = OPS_HAND  # card 231 H1: the first message's Read names it, whatever the cwd
     elif in_repo and hub == "CTO-DESK-WAKEUP.md":
         kind = "desk"
     elif in_repo and re.search(r"(^|/)prompts/20[^/]*/[^/]+\.md$", prompt):
@@ -1033,12 +1051,25 @@ def bash_rules(command, s):
     launches = [k for k, ws in enumerate(segs) if verb(ws) in LAUNCHERS]
     if kind == "check" and launches == [0] and HOUSE.match(command):
         launches = []  # G9: the check's one house call, typed as CHECK-HUB.md line 10 lists it
-    if kind in WORKERS and launches:
+    if (kind in WORKERS or kind == OPS_HAND) and launches:
         return "G7", ROUTE["G7"]
     deny = g1(command)
     if deny:
         return "G1", deny
+    if kind == OPS_HAND and not ops_class(command):
+        return "G12", ROUTE["G12"]
     return None
+
+
+def ops_class(command):
+    """G12: the command is one of the ops-hand seat's class, as typed (KILL, KICKSTART with
+    its plist under REPO_ROOT/ops, or a read of OPS_READS); the guard runs nothing."""
+    if KILL.fullmatch(command):
+        return True
+    m = KICKSTART.fullmatch(command)
+    if m:
+        return os.path.isfile(os.path.join(REPO_ROOT, "ops", "com.cobalt.%s.plist" % m.group(1)))
+    return any(command == r or command.startswith(r + " ") for r in OPS_READS)
 
 
 # ---- the Write / Edit rules ----------------------------------------------------------------

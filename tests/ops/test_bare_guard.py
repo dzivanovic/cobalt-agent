@@ -1921,6 +1921,8 @@ def test_h1_a_later_message_naming_ops_hand_keeps_the_seats_own_kind(roots, kind
     first = json.loads(Path(seat["transcript"]).read_text().splitlines()[1])["message"]["content"]
     seat["transcript"] = str(seat_transcript(roots, f"t-{kind}-later", first, later=OPS_HAND_LAUNCH))
     assert_denied(run(PROD_MIGRATE, seat), G2_ROUTE)
+    # an off-class command: allowed for both kinds, G12 for an ops-hand seat
+    assert_allowed(run("rm -f /tmp/x", seat))
     if kind == "brain":
         assert_allowed(run(LAUNCH_BG, seat))
         assert_allowed(run("kill -9 39280", seat))
