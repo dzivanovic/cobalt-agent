@@ -1,6 +1,6 @@
 #!/bin/sh
 # deploy-card.sh --job <name> --set <word> --worktree <dir> --tag <tag> --out "<new card path>" [--tickers "<A,B,…>"]
-#                [--rulings "<list>"] "<job card>" …
+#                [--rulings "<list>"] [--fix-report "<job>=<fix report path>"]… "<job card>" …
 # Writes ONE new file, the deploy card at --out, in the format of prompts/CARD.md, from checked
 # job cards, in the order given (card 18 desk-tools-b, row B1; DEPLOY-HUB.md STEP-0 P2 and P3).
 # Per job card it reads JOB, LADDER, BRANCH and CHECK REPORT; the code tip is the `tip:` of that
@@ -8,7 +8,13 @@
 # REFUSED (exit 1, nothing written), naming the job and the reason, when: the check report is
 # absent, not committed, or modified since its commit; its last line lacks `held unfixed: 0` or
 # `ready: YES`, or names no tip; the code tip is not an ancestor of the head; the head adds
-# anything outside docs/ past the code tip. Also refused: an --out path that exists, a worktree
+# anything outside docs/ past the code tip. A fix round (R376, L75; CARD.md :48; launcher-1010 row A,
+# R810): `--fix-report "<job>=<path>"` names that job's fix report under $REPORTS, read at the
+# branch head (`git show <head>:<rel>`, never a copy on main); its last line `BUILT · … tip: <hex>`
+# gives the row's code tip, the check's tip its ancestor, and the path fills the `fix report`
+# cell. REFUSED: a job no card names, a path outside $REPORTS/*.md, a report absent at the head,
+# a last line not `BUILT ·` with a `tip:`, a check tip not an ancestor of the fix tip; the head
+# rules above then read against the fix tip. Also refused: an --out path that exists, a worktree
 # outside $WT/<one directory name>, a value outside its character set.
 # It then TRIAL-MERGES the heads onto main in order with `git merge-tree --write-tree` (git
 # objects only: no branch, worktree, ref, index or working-tree change); a conflict exits 3 with
@@ -40,8 +46,8 @@ refuse() {
     exit 1
 }
 
-usage="usage: deploy-card.sh --job <name> --set <word> --worktree <dir> --tag <tag> --out \"<new card path>\" [--rulings \"<list>\"] [--tickers \"<A,B,…>\"] \"<job card>\" …"
-name="" set="" wt="" tag="" out="" rulings="none" tickers="none"
+usage="usage: deploy-card.sh --job <name> --set <word> --worktree <dir> --tag <tag> --out \"<new card path>\" [--rulings \"<list>\"] [--tickers \"<A,B,…>\"] [--fix-report \"<job>=<fix report path>\"]… \"<job card>\" …"
+name="" set="" wt="" tag="" out="" rulings="none" tickers="none" fixes=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --job) [ "$#" -ge 2 ] || refuse "$usage"; name=$2; shift 2 ;;
@@ -51,6 +57,9 @@ while [ "$#" -gt 0 ]; do
         --out) [ "$#" -ge 2 ] || refuse "$usage"; out=$2; shift 2 ;;
         --rulings) [ "$#" -ge 2 ] || refuse "$usage"; rulings=$2; shift 2 ;;
         --tickers) [ "$#" -ge 2 ] || refuse "$usage"; tickers=$2; shift 2 ;;
+        --fix-report) [ "$#" -ge 2 ] || refuse "$usage"
+            case "$2" in *"$nl"*) refuse "--fix-report holds a line break" ;; esac
+            fixes="$fixes$2$nl"; shift 2 ;;
         --) shift; break ;;
         -*) refuse "unknown option '$1'; $usage" ;;
         *) break ;;
@@ -85,6 +94,28 @@ case "$tickers" in
     none) ;;
     ""|,*|*,|*,,*|*[!A-Z0-9.,]*) refuse "--tickers '$tickers' must be none or A,B,… of [A-Z0-9.]" ;;
 esac
+# launcher-1010 row A: each --fix-report is <job>=<a report under $REPORTS>, one per job
+fixjobs=""
+while IFS= read -r fx; do
+    [ -n "$fx" ] || continue
+    fjob=${fx%%=*}
+    fpath=${fx#*=}
+    [ "$fjob" != "$fx" ] || refuse "--fix-report '$fx' must be <job>=<fix report path>"
+    case "$fjob" in
+        ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*|-*) refuse "--fix-report job '$fjob' must be [a-z0-9-]" ;;
+    esac
+    case " $fixjobs " in
+        *" $fjob "*) refuse "--fix-report names job '$fjob' twice" ;;
+    esac
+    case "$fpath" in
+        *..*) refuse "$fjob: --fix-report path holds '..': $fpath" ;;
+        "$REPORTS"/*.md) ;;
+        *) refuse "$fjob: --fix-report path is not $REPORTS/<name>.md: $fpath" ;;
+    esac
+    fixjobs="${fixjobs:+$fixjobs }$fjob"
+done <<FIXES
+$fixes
+FIXES
 { [ -e "$out" ] || [ -L "$out" ]; } && refuse "--out exists: $out (this script writes a new card only)"
 [ -d "$(dirname "$out")" ] || refuse "--out's folder does not exist: $(dirname "$out")"
 git -C "$REPO" rev-parse --verify --quiet "refs/heads/main^{commit}" >/dev/null || refuse "no branch main in $REPO"
@@ -102,6 +133,7 @@ markers=""
 smokes=""
 records=""
 migs=""
+jobs=""
 n=0
 for card in "$@"; do
     n=$((n + 1))
@@ -139,12 +171,30 @@ for card in "$@"; do
     [ -n "$tip" ] || refuse "$job: the check's last line names no tip: $last"
     ctip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$tip^{commit}") || refuse "$job: code tip '$tip' is not a commit in $REPO"
     head=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "refs/heads/$branch^{commit}") || refuse "$job: no branch '$branch' in $REPO"
+    jobs="$jobs $job"
+    # a fix round: the code tip is the fix report's `tip:`, read at the head; the check's tip its ancestor
+    frep=$(printf '%s' "$fixes" | sed -n "s/^$job=//p" | sed -n '1p')
+    fixcell=""
+    if [ -n "$frep" ]; then
+        fblob=$(git -C "$REPO" show "$head:${frep#"$REPO"/}" 2>/dev/null) || refuse "$job: the fix report is absent at the branch head $head: $frep"
+        flast=$(printf '%s\n' "$fblob" | grep -v '^[[:space:]]*$' | tail -n 1)
+        ftip=""
+        case "$flast" in
+            "BUILT ·"*) ftip=$(printf '%s\n' "$flast" | grep -o -E '(^| )tip: [0-9a-f]{8,40}' | sed -n '1p' | sed 's/.*tip: //') ;;
+        esac
+        [ -n "$ftip" ] || refuse "$job: the fix report's last line is not 'BUILT ·' with a 'tip:': $flast"
+        fixtip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$ftip^{commit}") || refuse "$job: fix tip '$ftip' is not a commit in $REPO"
+        git -C "$REPO" merge-base --is-ancestor "$ctip" "$fixtip" || refuse "$job: the check's tip $ctip is not an ancestor of the fix tip $fixtip"
+        ctip=$fixtip
+        fixcell=" \`$frep\`"
+        records="$records- $job: fix report \`$frep\` at \`$head\` last line: $flast$nl"
+    fi
     git -C "$REPO" merge-base --is-ancestor "$ctip" "$head" || refuse "$job: code tip $ctip is not an ancestor of the head $head of $branch"
     past=$(git -C "$REPO" diff --name-only "$ctip" "$head" -- . ':(exclude)docs')
     [ -z "$past" ] || refuse "$job: the head $head adds paths outside docs/ past the code tip $ctip: $(printf '%s' "$past" | tr '\n' ' ')"
 
     heads="${heads:+$heads }$head"
-    ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: 0\` and \`ready: YES\` | |$nl"
+    ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: 0\` and \`ready: YES\` |$fixcell |$nl"
     records="$records- $job: check \`$creport\` last line: $last$nl- $job: head \`git -C $REPO rev-parse --short=8 $branch\` → \`$head\`; code tip \`$ctip\`$nl"
     # what the head changes since it left main (three dots): a migration main gained is not the head's
     changed=$(git -C "$REPO" diff --name-only "main...$head" -- src/cobalt/db_migrations)
@@ -161,6 +211,12 @@ for card in "$@"; do
         if [ -n "$m" ]; then markers="$markers$m$nl"; else markers="$markers- «FILL: markers for $job (its ## DEPLOY PROOF holds none)»$nl"; fi
         if [ -n "$s" ]; then smokes="$smokes$s$nl"; else smokes="$smokes- «FILL: smoke reads for $job (its ## DEPLOY PROOF holds none)»$nl"; fi
     fi
+done
+for fjob in $fixjobs; do
+    case "$jobs " in
+        *" $fjob "*) ;;
+        *) refuse "--fix-report names job '$fjob', which is no JOB of the job cards given" ;;
+    esac
 done
 
 # ---- the trial merge onto main, in order: git objects only, nothing else moves ---------------

@@ -529,9 +529,8 @@ def test_a_fix_tip_not_past_the_check_tip_is_refused(tmp_path):
 
 
 def test_a_fix_report_for_an_unknown_job_is_refused(tmp_path):
-    desk = Desk(tmp_path)
-    fixed, head, report = fix_round(desk)
-    _fix_refused(desk, ("--fix-report", f"gamma={report}"),
+    desk = Desk(tmp_path)  # alpha and beta clean: only the unknown job can refuse
+    _fix_refused(desk, ("--fix-report", f"gamma={desk.reports / 'gamma-fix.md'}"),
                  "--fix-report names job 'gamma', which is no JOB of the job cards given")
 
 
@@ -547,7 +546,8 @@ def test_a_fix_report_round_trips_through_the_launchers_ships_checked(tmp_path):
     """The card written for a fix round passes desk-launch.sh's `ships_checked` (P2, P3): the
     code tip is the fix report's `tip:`, the check's tip its ancestor. RED on BASE: the option
     is refused, so no card exists to launch."""
-    proof = "\n## DEPLOY PROOF\n- `grep -c -F \"alpha = 2\" /x/src/alpha.py` · before `0` · after `1`\n"
+    proof = ("\n## DEPLOY PROOF\n- `grep -c -F \"alpha = 2\" /x/src/alpha.py` · before `0` · after `1`\n"
+             "- alpha read · `ls /x/src/alpha.py` · listed\n")
     desk = Desk(tmp_path, proof=proof)
     hub = desk.prompts.parent / "DEPLOY-HUB.md"
     hub.write_text((REPO / "docs" / "40 - DevDocs" / "prompts" / "DEPLOY-HUB.md").read_text())
