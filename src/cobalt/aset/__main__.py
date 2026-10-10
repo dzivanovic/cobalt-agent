@@ -47,4 +47,11 @@ if __name__ == "__main__":
             flush=True,
         )
 
+    # S4-P2 S4: the phone fallback's one daemon thread, synchronous end to
+    # end, before the server; it never touches uvicorn's event loop.
+    from cobalt.aset.strike import start_fallback_thread
+
+    start_fallback_thread()
+    print("  strike fallback: tail thread started (DM after strike.yaml dm_after_s)", flush=True)
+
     uvicorn.run("cobalt.aset.web:app", host=host, port=port)

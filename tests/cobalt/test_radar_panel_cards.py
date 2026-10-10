@@ -1207,6 +1207,7 @@ POST_ALLOWLIST = {
     "/radar/card/{card_id}/exit", "/radar/card/{card_id}/held", "/radar/card/{card_id}/correct",
     "/radar/card/{card_id}/stop", "/radar/card/{card_id}/stop/reset",
     "/radar/card/{card_id}/arm", "/radar/card/{card_id}/disarm",  # R627: ARM / DISARM, after /stop/reset
+    "/strike/ack",  # S4-P2 S3: the pinned tab's ack (the server stamps shown_at), after the trade taps
 }
 GET_ONLY = {"/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill", "/drc"}
 

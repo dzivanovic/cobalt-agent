@@ -111,6 +111,9 @@ CREATED_TABLES: dict[str, Side] = {
     # grade records (L32). Declared USER by ADR-0008 D2; it leaves DECLARED
     # now that it is built.
     "prediction_records": Side.USER,
+    # db_migrations/0024_strike_alerts.sql — S4-P2 S3 (DECISION E4): when one
+    # trader's strike alert was pushed, shown and DM'd (L32).
+    "strike_alerts": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table

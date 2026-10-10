@@ -98,6 +98,10 @@
 `0023_radar_price_floor.rollback.sql` — clears `price_floor` on admitted
                          rows (the reason is lost, `left_at` stays) and
                          restores 0004's four-value CHECK.
+`0024_strike_alerts.sql` — S4-P2 S3 (DECISION E4): `"user".strike_alerts`,
+                         one row per strike seam transition (pushed / shown /
+                         DM times, the DM's result). Additive.
+`0024_strike_alerts.rollback.sql` — drops that one table (its COST line).
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
@@ -161,10 +165,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0021_legs.sql",
     MIGRATIONS_DIR / "0022_prediction_records.sql",
     MIGRATIONS_DIR / "0023_radar_price_floor.sql",
+    MIGRATIONS_DIR / "0024_strike_alerts.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0024_strike_alerts.rollback.sql",
     MIGRATIONS_DIR / "0023_radar_price_floor.rollback.sql",
     MIGRATIONS_DIR / "0022_prediction_records.rollback.sql",
     MIGRATIONS_DIR / "0021_legs.rollback.sql",

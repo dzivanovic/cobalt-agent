@@ -278,3 +278,6 @@ name `0021_legs.rollback.sql` first in every rollback list.
 
 ## 2026-10-08 — price-floor-1008
 `FORWARD` gains `0023_radar_price_floor.sql` (last) and `REVERSE` its rollback (first). No table: the forward finds the one `system.radar_membership` CHECK holding `'config_cap'` in `pg_constraint` (raising unless exactly one), and replaces it with `radar_membership_excluded_by_check` over the four values plus `price_floor` (a no-op when already there); the rollback clears `price_floor` on admitted rows (COST: the reason is lost, `left_at` stays) and restores the four-value CHECK, a no-op without the table. The registry pins in the suite gain the one 0023 entry each (R692).
+
+## 2026-10-09 — s4-p2-1009
+`FORWARD` gains `0024_strike_alerts.sql` (last) and `REVERSE` its rollback (first): `"user".strike_alerts` (S4-P2 S3, DECISION E4), one row per strike seam transition — `transition_id` unique (FK `card_transitions`), `seam_at`, `pushed_at`, `shown_at`, `dm_at`, `dm_result`, `user_id` with the tenant GUC default; the rollback drops that one table (its COST line). Every head pin in the suite moved one place out with a `# S4-P2 (E4)` comment.

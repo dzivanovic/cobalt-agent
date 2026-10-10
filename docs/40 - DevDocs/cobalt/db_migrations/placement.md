@@ -79,3 +79,7 @@ holds the state of his own DRC runs (L32).
 ## 2026-10-08 — price-floor-1008
 
 One comment line for `0023_radar_price_floor`: no table; it widens `radar_membership.excluded_by` (SYSTEM) by `price_floor` (R692). The map is unchanged.
+
+## 2026-10-09 — s4-p2-1009
+
+`CREATED_TABLES` gains `strike_alerts: Side.USER` after `prediction_records` (0024, S4-P2 S3): one trader's strike alert records.

@@ -101,6 +101,7 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
     newest four are named explicitly: P4's 0008/0009 and the archiver's
     0010/0011 both reverse before 0007."""
     newest_four = [
+        "0024_strike_alerts.rollback.sql",  # S4-P2 (E4) (the list is now the newest fourteen)
         "0023_radar_price_floor.rollback.sql",  # the price floor (R692) (the name stays; the list is the newest thirteen)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
@@ -116,17 +117,17 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
         "0010_archive_progress.rollback.sql",
     ]
     reverse_names = [p.name for p in REVERSE]
-    assert reverse_names[:13] == newest_four
+    assert reverse_names[:14] == newest_four
     assert (
         reverse_names.index("0006_radar_score.rollback.sql")
         == reverse_names.index("0007_radar_cards.rollback.sql") + 1
     )
-    assert [p.name for p in _rollback_paths("0005")][:13] == newest_four
+    assert [p.name for p in _rollback_paths("0005")][:14] == newest_four
     assert [p.name for p in _rollback_paths("0005")][-2:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
-    assert [p.name for p in _rollback_paths("0006")][:13] == newest_four
+    assert [p.name for p in _rollback_paths("0006")][:14] == newest_four
     assert [p.name for p in _rollback_paths("0006")][-1:] == [
         "0007_radar_cards.rollback.sql"
     ]

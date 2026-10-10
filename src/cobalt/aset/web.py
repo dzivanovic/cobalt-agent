@@ -85,6 +85,7 @@ from .store import AsetStore
 from .account_mode import AccountModeUnresolved, resolve as resolve_account_mode
 from .card_stop import set_card_stop
 from cobalt.voice import web as voice_web
+from . import strike as strike_web
 
 app = FastAPI(title="Cobalt ASET Sheet", docs_url=None, redoc_url=None)
 
@@ -94,6 +95,8 @@ app = FastAPI(title="Cobalt ASET Sheet", docs_url=None, redoc_url=None)
 app.include_router(voice_web.router)
 app.add_event_handler("startup", voice_web.voice_startup)
 app.add_event_handler("shutdown", voice_web.voice_shutdown)
+# S4-P2 S1-S3: `/strike` (the pinned tab), `/strike/stream` (SSE), `/strike/ack`.
+app.include_router(strike_web.router)
 
 
 class DevEntryRefused(RuntimeError):

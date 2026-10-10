@@ -23,12 +23,14 @@ def test_0022_is_registered_second_last_and_placed_user_side():
     from cobalt.db_migrations import FORWARD, REVERSE
     from cobalt.db_migrations.placement import CREATED_TABLES, DECLARED_TABLES
 
-    # The price floor's 0023 (R692) now follows it.
-    assert FORWARD[-1].name == "0023_radar_price_floor.sql"
-    assert REVERSE[0].name == "0023_radar_price_floor.rollback.sql"
-    assert FORWARD[-2].name == "0022_prediction_records.sql"
-    assert REVERSE[1].name == "0022_prediction_records.rollback.sql"
-    assert FORWARD[-2].exists() and REVERSE[1].exists()
+    # The price floor's 0023 (R692) now follows it, and S4-P2's 0024 that.  # S4-P2 (E4)
+    assert FORWARD[-1].name == "0024_strike_alerts.sql"
+    assert REVERSE[0].name == "0024_strike_alerts.rollback.sql"
+    assert FORWARD[-2].name == "0023_radar_price_floor.sql"
+    assert REVERSE[1].name == "0023_radar_price_floor.rollback.sql"
+    assert FORWARD[-3].name == "0022_prediction_records.sql"
+    assert REVERSE[2].name == "0022_prediction_records.rollback.sql"
+    assert FORWARD[-3].exists() and REVERSE[2].exists()
     assert CREATED_TABLES["prediction_records"] is Side.USER
     assert "prediction_records" not in DECLARED_TABLES, "built now: it leaves DECLARED"
 

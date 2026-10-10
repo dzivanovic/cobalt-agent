@@ -200,16 +200,20 @@ def test_an_unknown_dotfile_still_escalates(monkeypatch):
     assert row.restarts  # the conservative set: every resident
 
 
-def test_a_declared_one_shot_only_config_derives_no_restart(monkeypatch):
-    # Ruled 2026-09-15: notify.yaml has no resident reader; declared in
-    # jobs.yaml `no_resident_reads`, so it no longer escalates.
+def test_notify_yaml_derives_the_aset_restart(monkeypatch):
+    # Ruled 2026-09-15: notify.yaml had no resident reader and was declared in
+    # jobs.yaml `no_resident_reads`. S4-P2 S4 NAMED REVERSAL (was
+    # `test_a_declared_one_shot_only_config_derives_no_restart`): the sheet's
+    # phone-fallback thread sends a DM (send_dm → load_notify_config), so the
+    # file moved into com.cobalt.aset `reads:` — a change to it now derives the
+    # aset restart, never escalates.
     monkeypatch.setattr(restarts, "changes", lambda _range: [
         Change("configs/cobalt/notify.yaml", "M"),
     ])
     (row,) = classify("HEAD...HEAD")
     assert row.escalate is False
-    assert row.restarts == ()
-    assert "no resident" in row.rule
+    assert row.restarts == ("com.cobalt.aset",)
+    assert row.rule == "resident reads"
 
 
 

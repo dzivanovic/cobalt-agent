@@ -1,0 +1,15 @@
+# F9 strike delivery (S4-P2 S5) — read by the ASET sheet (com.cobalt.aset):
+# src/cobalt/strike/delivery_config.py load_delivery_config. A change here
+# reaches the sheet only by restart (jobs.yaml `reads:`). The detector's own
+# numbers are tunables.yaml `strike.*` rows (S4-P1), not here.
+
+# How often the stream and the phone-fallback tail read the seam rows.
+stream_tail_ms: 500
+# A keepalive event when nothing else was sent for this long; the tab shows
+# STREAM DOWN after 2 x keepalive_s of silence.
+keepalive_s: 15
+# A TRIGGERED nobody was shown this long after the seam row's `at` → one DM.
+dm_after_s: 10
+# The hotkey label (Charter §5 #4): the card's sheet_mode, sized_grade and
+# direction, upper-cased. DECISION E6: his .htk labels are unproven against it.
+hotkey_template: "{DAYMODE}-{KEY}-{SIDE}"

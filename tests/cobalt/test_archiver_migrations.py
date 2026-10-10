@@ -81,7 +81,7 @@ def test_forward_ends_0008_0009_0010_0011():
     """The tail after the P4 rebase: P4's pair, then this branch's pair,
     in numeric order. The invariant is unchanged — 0010 and 0011 are the
     LAST two registered, and nothing of this branch's was displaced."""
-    assert [p.name for p in FORWARD[-13:]] == [
+    assert [p.name for p in FORWARD[-14:]] == [  # S4-P2 (E4): one place further out
         "0010_archive_progress.sql",
         "0011_archive_incidents.sql",
         "0013_tunables_slug_nullable.sql",  # the setups one build (R2-3 = B); 0012 is bars/chunk-2-0920's
@@ -95,13 +95,15 @@ def test_forward_ends_0008_0009_0010_0011():
         "0021_legs.sql",  # S3 exits C1 (M1); 0016/0018-0020 are the DRC lane's (L68)
         "0022_prediction_records.sql",  # F15 P1 (M1)
         "0023_radar_price_floor.sql",  # the price floor (R692)
+        "0024_strike_alerts.sql",  # S4-P2 (E4)
     ]
 
 
 def test_reverse_begins_0011_0010_0009_0008():
     """The exact mirror of the tail above: this branch's pair reverses
     FIRST, then P4's."""
-    assert [p.name for p in REVERSE[:13]] == [
+    assert [p.name for p in REVERSE[:14]] == [
+        "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
@@ -133,6 +135,7 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
     because selection is by numeric prefix and P4 now sits between.
     Both are pinned so neither can drift."""
     assert [p.name for p in _rollback_paths("0009")] == [
+        "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
@@ -148,6 +151,7 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
         "0010_archive_progress.rollback.sql",
     ]
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)
         "0021_legs.rollback.sql",  # S3 exits C1 (M1)
@@ -185,10 +189,10 @@ def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
     # the gap as they land (L68 seam).
     # DRC D2 fix r1 adds 0019 (R64 (5)); DRC D3 adds 0020 (R64 (5)).
     # S3 exits C1 adds 0021, above the DRC lane's 0016 and 0018-0020 (L68 seam).
-    # F15 P1 adds 0022 (FINAL `## SEAM`); the price floor adds 0023 (R692).
-    assert numbers == [*range(1, 12), *range(13, 24)], f"1…11 then 13–23, got {numbers}"
-    assert numbers[-13:-11] == [10, 11], "this branch's pair is still in place"
-    assert numbers[-1] == 23, "the price floor's 0023 is the tail"
+    # F15 P1 adds 0022 (FINAL `## SEAM`); the price floor adds 0023 (R692); S4-P2 adds 0024 (E4).
+    assert numbers == [*range(1, 12), *range(13, 25)], f"1…11 then 13–24, got {numbers}"  # S4-P2 (E4)
+    assert numbers[-14:-12] == [10, 11], "this branch's pair is still in place"
+    assert numbers[-1] == 24, "S4-P2's 0024 is the tail"
     reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
     assert reverse_numbers == sorted(reverse_numbers, reverse=True)
     assert reverse_numbers == [n for n in reversed(numbers) if n != 1], (
@@ -511,7 +515,8 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
             if name not in NEW_TABLES
             and name not in P4_TABLES
             and name not in DRC_D1_TABLES
-            and name not in ("voice_turns", "legs", "prediction_records")
+            # S4-P2 (E4): 0024's strike_alerts likewise sits above both bounds.
+            and name not in ("voice_turns", "legs", "prediction_records", "strike_alerts")
             and _regclass(conn, name)
         }
 

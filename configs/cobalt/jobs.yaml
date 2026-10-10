@@ -87,6 +87,15 @@ jobs:
       - "ops/start_aset.sh"                        # ops/com.cobalt.aset.plist:25 (the program); its exports (start_aset.sh:35, :37 COBALT_VOICE_*) reach the process only at a restart
       - "pyproject.toml"                           # ops/start_aset.sh:73 (exec uv run python -m cobalt.aset): uv syncs the environment from it when the process starts
       - "uv.lock"                                  # ops/start_aset.sh:73 (exec uv run python -m cobalt.aset): uv syncs the environment from it when the process starts
+      # S4-P2 S5: the strike delivery numbers and the hotkey template. strike/delivery_config.py CONFIG_PATH +
+      # load_delivery_config, called from aset/strike.py (the /strike page, each /strike/stream connect, and the
+      # fallback thread's start in aset/__main__.py, which holds it for the life of the process) — L42.
+      - "configs/cobalt/strike.yaml"
+      # S4-P2 S4: the sheet's phone-fallback thread sends a DM: notify/mattermost.py:137 (send_dm) calls
+      # load_notify_config() (notify/config.py:51) on every send. Moved from no_resident_reads (the schema refuses
+      # a path in both); its one-shot reader, provenance kept: heartbeat/runner.py:304 (com.cobalt.heartbeat), and
+      # `cobalt validate` (cli.py:285 import, :303 call — an operator command). Ruled there 2026-09-15.
+      - "configs/cobalt/notify.yaml"
     imports: [cobalt.aset.__main__, cobalt.aset.web]
     what: "the ASET semi-auto sheet on :5010 — the surface he trades beside"
 
@@ -316,13 +325,8 @@ jobs:
 # ESCALATE to `cobalt jobs restarts`). The schema refuses a resident as a
 # reader: a resident reader belongs in that job's own `reads`.
 no_resident_reads:
-  - path: configs/cobalt/notify.yaml
-    readers: [com.cobalt.heartbeat]
-    because: >
-      load_notify_config() is called only by notify/mattermost.py:137
-      (send_dm, reached from heartbeat/runner.py:304 — the one-shot
-      heartbeat) and by `cobalt validate` (cli.py:261, an operator
-      command, not a job). No resident sends a DM. Ruled 2026-09-15.
+  # configs/cobalt/notify.yaml LEFT this list in S4-P2 S4: the sheet's phone-fallback
+  # thread sends a DM inside com.cobalt.aset — it is now in that job's `reads:`.
   - path: configs/cobalt/templates/daily.md.j2
     readers: [com.cobalt.prefill-daily]
     because: >

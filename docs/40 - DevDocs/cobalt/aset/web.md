@@ -399,3 +399,6 @@ R627: two radar taps, appended after `/radar/card/{id}/stop/reset`, both through
 
 ## 2026-10-08 — disarm-one-tap-1008
 R689: `POST /radar/card/{id}/disarm` takes the posted `reason` (stripped) only if it is one of `radar_panel.DISARM_REASONS`, imported in the existing `from .radar_panel import (` block. Any other value (missing, blank, off the list, wrong case, over-long) is refused before the store: 422 `REFUSED: a DISARM reason is one of setup broke, no volume, market turned, changed mind, other; got '<value>'. Nothing written.`. The 80-character check is gone, since the list caps the value. A chip reaches `CardStore.transition` as `reason=<chip>`, so `card_transitions.reason` holds the chip word. `_assert_reason` stays as the store's backstop. The sheet's `/card/{id}/move` and `askReason` are unchanged. Tests: `test_each_disarm_chip_moves_the_card_to_watch`, `test_a_disarm_reason_off_the_list_is_refused` in `tests/cobalt/test_s3_c3_panel_offline.py`.
+
+## 2026-10-09 — s4-p2-1009
+S4-P2 S1-S3: `from . import strike as strike_web` and `app.include_router(strike_web.router)` beside voice's, serving `/strike`, `/strike/stream` and `/strike/ack` (`aset/strike.md`). Nothing else changed.
