@@ -1,7 +1,10 @@
 # deploy voice-clarify-fix-1009 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/voice-clarify-fix-1009` (code tip `9feda305`, head `4465b758`) on `deploy/voice-clarify-fix-1009`. In progress.
+- `ops/voice-clarify-fix-1009` (code tip `9feda305`, head `4465b758`) is live on `main` at `f4f0af50` and tagged `deploy-2026-10-09-voice-clarify-fix`.
+- Gate green on `13698c03`: offline 4060/0 · with-DB 4947/0 · live-note 146/0. `cobalt_dev` is back at 0013 with F2 = F0, and the lock is released.
+- aset and radar were restarted. Downtime was 15 s (22:42:34 → 22:42:49 EDT). No migration ran.
+- Smoke GREEN: both markers read 1, all three curls returned 200, radar is cycling, and the four failure counts did not move.
 
 ## L74
 - A system-reminder arriving mid-session asked that commits carry a `Claude-Session:` line. Recorded once as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -137,7 +140,105 @@ GATE GREEN on 13698c03
 - `curl … /radar` → `200`. MARKERS: marker 1 → `0`, marker 2 → `0` (the before values).
 - MIGRATIONS: none, so there is no `<RB>`, no census and no D1-M.
 
-## CONTINUE
-next: STEP-D2 (D2.0 commit)
+### STEP-D2
+- D2.0: `git -C /Users/cobalt/cobalt add` + `commit … -- "<REPORT>"` → `[main 86ee64d4] docs(report): deploy voice-clarify-fix-1009 — gate green on 13698c03`. `show --stat HEAD` lists the one file (143 insertions). `<pre-merge>` = `86ee64d4`.
+- D2.1: `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2: `<stack-final>` = `f4f0af50`; `rev-parse --short=8 f4f0af50^2` → `86ee64d4` = `<pre-merge>`; `merge-base --is-ancestor 13698c03 f4f0af50` → exit 0.
+- D2.3: `git -C /Users/cobalt/cobalt diff --stat 13698c03 f4f0af50 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4: `backup status` before → `newest snapshot: 0.6 h old` · `backup run` (22:41:17–22:42:01) → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6694.4 MB` · `ssd: snapshot 401fc6d1 — 0 new / 2 changed, 27.5 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5: `date` 22:42:19 · `heartbeat show` 22:42:21 (112 s after D1's 22:40:29). Same three REDs as `<hb0>` (archiver ×2, replay); no new RED. aset pid 14669, radar `heartbeat fresh`.
+- D2.6: `date` → `Fri Oct  9 22:42:25 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-voice-clarify-fix-1009` at `86ee64d4`.
 
-(run in progress — next step under ## CONTINUE)
+### STEP-4 (the outage)
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` = Fri Oct  9 22:42:34 EDT 2026 |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · `launchctl print …` | (no output) · exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · `launchctl print …` | (no output) · exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | `86ee64d4` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/voice-clarify-fix-1009` | `Updating 86ee64d4..f4f0af50` / `Fast-forward` (14 files, 287+/2−) |
+| 4.4 | — | `migrations applied: none` (MIGRATIONS: none; no uv sync line) |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | (no output) · print → `state = running`, pid 55969 (≠ 14669) |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | (no output) · print → `state = running`, pid 55984 (≠ 14679) |
+| 4.6 | `date` | `<t up>` = Fri Oct  9 22:42:49 EDT 2026 · downtime 15 s |
+
+## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) `date` 22:43:02 · aset `state = running`, pid 55969 (new, ≠ 14669) · radar `state = running`, pid 55984 (new, ≠ 14679) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (agent outside the set: same pid). GREEN.
+- (b) `grep -c "Started server process" aset.err` → 55 (`<a0>` 54; > 54, ≤ 56). `tail -n 30 aset.err` → `INFO:     Started server process [55975]` · `voice: scratch dir … locked by this process; start sweep deleted 0 file(s), 0 failed` · `INFO:     Application startup complete.` · `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)`. The tail also shows the old process shutting down: `Finished server process [14675]` and a `resource_tracker: There appear to be 1 leaked semaphore objects to clean up at shutdown` UserWarning, which is not a traceback. Tracebacks: aset 2 = `<ta0>` · radar 0 = `<tr0>` · TaxonomyConfigError 0 = `<tc0>`.
+- (c) run between the 22:43:02 and 22:43:15 `date` calls; (b) and (c) were not each preceded by their own `date` (recorded under `## RECORDS`) · `curl … /` → `200` · `curl … /radar` → `200` · `curl … /radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS: `grep -c -F "#cv-voice .cv-row[hidden]{display:none}" …/voice/web.py` → `1` (after `1`) · `grep -c -F "\"candidates\"" …/voice/turn.py` → `1` (after `1`). GREEN.
+- (f) `date` 22:43:15 · `COBALT_ENV=production uv run cobalt jobs restarts 86ee64d4..f4f0af50` → exit 0, same 14 rows as STEP-R, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.aset com.cobalt.radar` = `<restart set>` · `validate` → exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>`, `Placement (docs/PLACEMENT.md): tree clean.` GREEN.
+- (g) no migration: not run.
+- (s) SMOKE READS: the hidden-row rule `grep -c -F "#cv-voice .cv-row[hidden]{display:none}" /Users/cobalt/cobalt/src/cobalt/voice/web.py` → exit 0, `1` (green: 1 or more) · the plan clarify candidates `grep -c -F "\"candidates\"" /Users/cobalt/cobalt/src/cobalt/voice/turn.py` → exit 0, `1` (green: 1 or more). The tests behind them ran in the gate (with-DB 4947/0, offline 4060/0).
+- (e) read 1: `date` 22:43:21 · `heartbeat show` 22:43:22 → the same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver`, `com.cobalt.replay`), nothing new · `OK com.cobalt.aset running loaded, pid 55969` · `OK com.cobalt.radar running running 1 min, heartbeat fresh` · `OK sheet HTTP … -> 200`.
+
+- (b) THE SPACED TAILS: `date` 22:44:19 (`<t up>` + 90 s) · `tail -n 12 radar.err` → `F17: com.cobalt.radar RUNNING (timeout 300s, heartbeat every 100s)` at 22:42:48.171, then `radar cycle: idle:overnight scan_id=None` at 22:42:48.285. That cycle line is one second before `<t up>`, so it does not settle (b). `date` 22:45:49 (`<t up>` + 180 s) · `tail -n 12 radar.err` → `2026-10-09 22:44:28.306 | INFO | cobalt.radar.runner:resident:576 - radar cycle: idle:overnight scan_id=None`: a cycle after `<t up>`, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback. Settled GREEN at the second tail, so the third was not needed. `grep -c "Traceback" radar.err` → 0.
+- (e) read 2: `date` 22:45:12 · `heartbeat show` 22:45:14, 112 s after read 1 → the same three REDs as `<hb0>`, nothing new · `OK com.cobalt.radar running running 2 min, heartbeat fresh` · `OK com.cobalt.aset running loaded, pid 55969`. GREEN.
+- (h) REVERT-READBACK at 22:45:49 (`<t up>` + 180 s, after (b) settled): `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39, the same as `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `curl … /radar` → `200` · no `census` reads on this card. GREEN.
+
+THE CHAIN:
+- P2: the check is committed (`c6ef303f`) with `held unfixed: 0 · ready: YES` at `tip: 9feda305`.
+- P3: the tips re-read as `9feda305` and `4465b758`.
+- T: one clean merge, giving `<m1>` `13698c03`.
+- R: RESTARTS derived as `com.cobalt.aset com.cobalt.radar`.
+- G: three suites green on `13698c03`.
+- D2.3: `<stack-final>` `f4f0af50` = `<m1>` plus docs.
+- 4.3: the code landed by fast-forward `86ee64d4..f4f0af50`.
+- (d): both markers moved 0 → 1.
+- (g): no migration.
+- (a): the residents are up on new pids after the merge.
+- (b), (e): radar is cycling with a fresh heartbeat.
+- (s): both reads are 1.
+- (h): no new failure.
+- The voice widget surface is not readable here; the desk confirms it with him (L70).
+
+### STEP-7 close
+- `<pre-merge>` `86ee64d4` → `<stack-final>` `f4f0af50` (main tip `f4f0af50`).
+- Tags: `pre-voice-clarify-fix-1009` at `86ee64d4`; `deploy-2026-10-09-voice-clarify-fix` at `f4f0af50`, set after the green smoke.
+- `<t down>` 22:42:34 · `<t up>` 22:42:49 · 15 s.
+- The uv sync line: the production tree needed none. The gate's first `uv run` created its `.venv` (`Installed 253 packages in 1.04s`).
+- No proof cost: no migration.
+- `migrations applied: none`; no `<RB>` before or after.
+- Snapshot `401fc6d1` (ssd).
+- `RESTARTS done: com.cobalt.aset com.cobalt.radar`.
+- THE ROLLBACK STRING:
+  1. CODE: boot out com.cobalt.aset and com.cobalt.radar, then `git -C /Users/cobalt/cobalt revert --no-edit -m 2 f4f0af50`, then bootstrap both.
+  2. SCHEMA: none (no migration).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+- PRE-STOP SELF-CHECK:
+  1. Every smoke row is quoted with its `date`. (b) and (c) shared (a)'s 22:43:02 `date` (see RECORDS).
+  2. Code tip `9feda305` and head `4465b758` were re-read at P3, and `merge-base --is-ancestor` of each against `f4f0af50` exited 0.
+  3. REVERT-READBACK (h) is shown above, and every count, sha and `file:line` in this report was read from this run's tool output.
+  4. STEP-T ran clean (`Merge made by the 'ort' strategy.`), so no conflict marker exists.
+- THE RELEASE: the lock was released by `gate.sh` (log `:2020` `lock released`). `ls -la <GATE>/.env` → No such file, and `/Users/cobalt/cobalt-wt/.cobalt_dev.lock` → No such file.
+
+## CONTINUE
+done: deployed and smoke GREEN; nothing further for this session after the STEP-7 commit. The outage ran from 22:42:34 to 22:42:49 EDT, and the residents are up.
+
+## DECISIONS
+none
+
+## RECORDS
+- Downtime 15 s, under 300 s.
+- `cobalt_dev: 0013 (F2 = F0)` (gate log `:2018`).
+- No `RETIRE OWED`: STEP-C diff of `configs ops` was empty.
+- Carried RED as read: no radar-family RED; radar was `idle (overnight)` with a fresh heartbeat throughout. Three standing REDs outside the aset/sheet/radar probes were present from `<hb0>` to smoke (e) and are unchanged. They are:
+  - the `archiver` probe;
+  - `com.cobalt.archiver` (`RuntimeError: 18 archiver failure(s): DKNG/i2: … Finviz HTTP failed: Client error '429 Too Many Requests'`);
+  - `com.cobalt.replay` (`ReplayError: archiver not done: state 'failed'`).
+  
+  They belong to the desk, not this deploy.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-voice-clarify-fix-1009` and branch `deploy/voice-clarify-fix-1009`; the set's branch `ops/voice-clarify-fix-1009` and its worktree, if any. Push is his (L55): `main` is ahead of `origin/main`, and the two new tags are local.
+- Not a refusal, my own cwd slip at 22:12: one `COBALT_ENV=production uv run cobalt heartbeat show` ran while the cwd was still `<GATE>` (no `.env`). It failed with `DbConfigError: Missing Postgres settings for the APP credential …`. I then ran `cd /Users/cobalt/cobalt`, and `ls -la /Users/cobalt/cobalt/.env` listed the file. Nothing was written.
+- Smoke (b) and (c) did not each get their own `date` call; they ran between the 22:43:02 and 22:43:15 `date` calls.
+- `git status --porcelain` at D0 also listed `?? .claude/settings.json.bak`. It is not in the accepted list and not in a refused prefix (`src/` `tests/` `ops/` `configs/`), so it was recorded and not refused.
+- The equal-tree clause did not hold (`configs/cobalt/rules.yaml` differs between `9feda305` and `13698c03`), so the gate ran whole.
+- Card `## RECORDS`, copied:
+  - voice-clarify-fix-1009: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/voice-clarify-fix-check-2026-10-09.md` last line: CHECK DONE · job: voice-clarify-fix-1009 · pass: 1 · tip: 9feda305 · house A: Sol FINDINGS: 1 · findings: 4 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 4 · house B: Grok FINDINGS: 1 · suites: offline 4060/0 · with-DB 4947/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 15 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 161041
+  - voice-clarify-fix-1009: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/voice-clarify-fix-1009` → `4465b758`; code tip `9feda305`
+  - written by deploy-card.sh at 2026-10-09 20:40 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one system-reminder asked for a `Claude-Session:` line in commits. It was recorded under `## L74` and not acted on.
+
+DEPLOYED deploy-2026-10-09-voice-clarify-fix f4f0af50 | set: none | migrations: none | gate: offline 4060/0 · with-DB 4947/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 204552
