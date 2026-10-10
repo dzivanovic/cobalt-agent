@@ -25,3 +25,6 @@ The evidence of every transition this module writes; S4-P2 reads it. Keys, in or
 
 ## 2026-10-09 — s4-p1-1009
 New module (S4-P1 C2, C3).
+
+## 2026-10-09 — s4-p1-1009 check
+Check O3/A2: `seen_at`, the cross's `now` and the TRIGGERED transition's `now` are each card's own poll clock (read after its fetch), not the tick's start.

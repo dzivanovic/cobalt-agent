@@ -578,8 +578,9 @@ async def make_strike_loop():
 class StrikeThread(threading.Thread):
     """S4-P1 C4: the strike loop in ITS OWN thread with its own event loop,
     so a scan cycle that blocks (synchronous DB and evaluate work) never
-    delays a strike poll. It ticks every interval the detector derives,
-    stops when `should_keep_running(label)` is false (the kill phrase) or
+    delays a strike poll. A tick STARTS every interval the detector derives:
+    the wait is what the tick (its token-paced GETs) left of the interval,
+    never a whole interval on top of it. It stops when `should_keep_running(label)` is false (the kill phrase) or
     the resident ends, and an exception in a tick is logged loud and the
     loop goes on at the next tick: it never takes the radar down, and the
     radar never takes it down."""
@@ -599,6 +600,7 @@ class StrikeThread(threading.Thread):
     async def _main(self) -> None:
         loop = None
         while not self.stopping.is_set() and should_keep_running(self.label):
+            started = time.monotonic()
             try:
                 if loop is None:
                     loop = await self.make_loop()
@@ -611,7 +613,7 @@ class StrikeThread(threading.Thread):
                 from cobalt.strike.config import check
 
                 wait = check().poll_interval_min
-            await self._wait(wait)
+            await self._wait(max(0.0, wait - (time.monotonic() - started)))
         logger.info("strike loop: stopped")
 
     def run(self) -> None:

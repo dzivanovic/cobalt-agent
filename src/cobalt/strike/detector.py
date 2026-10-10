@@ -292,15 +292,18 @@ class StrikeDetector:
                                card.ticker, scrub(str(e)))
                 continue
             report.fetched.append(card.ticker)
-            hit = crossed(policy, card.direction, card.entry, bars, since=card.armed_at, now=now)
+            # `seen_at` is THIS poll's wall clock (the CONTRACT), not the tick's
+            # start: the bucket wait and the fetch lie between them.
+            seen = self.now()
+            hit = crossed(policy, card.direction, card.entry, bars, since=card.armed_at, now=seen)
             if isinstance(hit, Unwatchable):
                 self._unwatchable_once(card, hit.reason)
                 continue
             if hit is None:
                 continue
-            evidence = contract(via=VIA_TRIGGERED, cross=hit, entry=card.entry, seen_at=now, cadence_s=interval,
+            evidence = contract(via=VIA_TRIGGERED, cross=hit, entry=card.entry, seen_at=seen, cadence_s=interval,
                                 def_md5=md5, card_def_md5=card.trade_def_md5)
-            if self._move(card, CardState.TRIGGERED, evidence=evidence, reason=None, now=now):
+            if self._move(card, CardState.TRIGGERED, evidence=evidence, reason=None, now=seen):
                 logger.info("strike: card {} ({}) TRIGGERED — {} bar {}", card.card_id, card.ticker, hit.policy,
                             hit.bar_ts.isoformat())
                 report.triggered.append(card.card_id)
