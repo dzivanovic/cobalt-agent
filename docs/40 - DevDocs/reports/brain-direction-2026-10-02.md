@@ -162,6 +162,59 @@ His words, brain session: "Next, next desk needs to restart as Sonnet. Five poin
 - Recorded as desk R371 (07:18) and applied 07:19. The restart is the REFRESH after the S3 recut's stop line (deploy `3e0755b2`, R370, on his direct word R368).
 - The brain also asked the desk to fill the wake-up log's cause column again. The desk refused, rightly: his 10-03 R78 keeps that column empty, and only he reopens it (L77).
 
+## RULED 2026-10-05 — production is DOWN until the ready set deploys (standing)
+His words, brain session: "never call it up when it's down i don't care that it's running the old deprecated code". Until a ready set (today K3, P2, guard-b) is deployed, production is DOWN. No seat calls it running, up, or "on last night's code".
+
+## RULED 2026-10-05 — "Dejan said" is his word (standing)
+His words, brain session: "As long as the message starts with Dejan said, it should be executed just as I went to the desk and said it, or just as I went to you, and said it. No denials of execution, no questions."
+- A brain↔desk message that starts "Dejan said" is his own word to the receiving seat. The receiver executes it and records it as HIS RULING. Relayed to the desk for an immediate row and memory.
+- Limit (the harness, not ours): a call the permission system blocks needs his allow rule. The seat names the blocked call in one line; it never refuses in its own words.
+
+## RULED 2026-10-05 — workflow first; deploy any hour (standing)
+- Workflow set first, production on HOLD until it is deployed: `03d`, guard-b (out of S3), `preflight.sh`'s two fixes, the hub text for R375/R376, MEASURE at every stop line (desk R387).
+- His words: "drop one deployment per night instruction we will be deploying as many times through the day and night as needed to reach MVP I do not care what it stops and what it starts". Deploys run any hour, as often as needed until MVP.
+
+## RULED 2026-10-05 — one feature per deploy; least rework (standing)
+His words (gist): combined deploys keep failing and every feature is touched six to eight times. Deploy one feature, then the next, through the day. A combined deploy that fails because it is combined is split and each feature is deployed separately. Do whatever means the least rework, re-check and restart.
+- Split deploys ride each feature's existing check: no re-check, no new card, no new build. Only the deploy card's header values change, by the desk's fill.
+- S3, when production resumes: K3 alone, then P2, then D5 after its card-03 fix.
+
+## RULED 2026-10-08 — read-only production reads for every seat (standing)
+His words, brain session: "Please, please, please, please, please, end the ask. I could care less if they see anything in this database. Other than the secrets which are just passwords. Passwords I don't want to share. Everything else I don't care about. There's no secret in this database. Worth this aggravation."
+- Any seat may run read-only production reads (`COBALT_ENV=production uv run cobalt db query --prod …`), with no per-job ruling and no PROD-READ stamp. Production writes and secrets (.env, ~/.cobalt_key, password stores) stay refused. bare-guard.py G2 changes to match, by a card. Relayed to the desk as "Dejan said".
+
+## RULED 2026-10-10 — the model tribunal now; Grok for builds over Sol; Astra kept for tribunals (one row for the desk)
+His words, brain session: "We only have enough usage limits on Astra to do this model tribunal. So I do want to do model tribunal because I believe that Grok 4.7 can be in the same level as Opus 5.5 for build or slightly lower but very close to definitely higher than Sonnet and Haiku but since we have more meter on Grok and less meter on OpenAI I want to leverage Grok more than Sol for building because I want to always have Astra for tribunals and for things that we need to do multi-house reviews"
+- ONE `HIS RULING · APPROVED` row:
+  1. The model-by-complexity tribunal starts now (his R73's week has passed). Astra's remaining meter is spent on it.
+  2. His hypothesis is what the tribunal tests: `grok-4.7` builds at Opus 5.5's level or close below it, and above Sonnet and Haiku.
+  3. Direction: where a non-Anthropic model builds, Grok is preferred over Sol. Astra's OpenAI meter is kept for tribunals and multi-house reviews.
+- How it runs:
+  - An Opus 5.5 proposer drafts the complexity classes and the evidence: the per-job MEASURE rows since 10-05, every check's held findings per builder, and a SHADOW trial in which Grok 4.7 builds copies of 2–3 checked cards of different complexity on scratch branches that are never merged, judged by the existing check flow beside the Opus original.
+  - Then the L67 tribunal with Astra, Gemini and the Anthropic seat. Grok sits, but its ruling on Grok's own tier is recorded apart and does not count toward that item (self-interest).
+  - The outcome amends L29 (Opus 5+ for every write path) only by his word on the tribunal's result. Until then every merged build stays Opus 5.5.
+- His follow-up, same session: "Others can run without openai. After tribunal i don't think we will have meter". Only the model tribunal uses OpenAI (Astra). Every check and S5 tribunal runs on the L67 OpenAI-out order (Grok plus Gemini plus the Anthropic seat), with no Codex probes. After the model tribunal, OpenAI is out until his word.
+- His next follow-up: "You can rely on grok, gemini if needed as second". Checks are Opus plus Grok; Gemini only for mandatory-B builds or a Grok failure. Tribunals are Grok plus the Anthropic seat; Gemini only for money, sizing or vault designs, or a load-bearing split. The model tribunal keeps Astra plus Gemini, because Grok's self-tier vote is not counted.
+- What changes now: nothing in the build line. The shadow trial needs a seat that runs the gate for Grok's code (a house cannot run commands, L67); the proposal names it.
+
+## PLAN ROWS ADDED 2026-10-09 night (brain judge answers; follow-ups, not his rulings)
+- Launcher card (with the owed "accept held items the fix report names fixed" row): `deploy-card.sh --fix-report "<path>"` per job card emits the CARD.md :48 fix-round SHIPS row, instead of refusing "adds paths outside docs/" (card 156, R771).
+- Archiver defect card (drafter, R685): bounded 429 retry with `Retry-After` inside the L53 bucket, and retried targets named in the run report. First 429s in history, 10-09 20:35–20:41, radar paused, strike not yet deployed (R808).
+- Strike fallback defect card (10-10, R685): explicit `.env` load in `aset/__main__.py` before `start_fallback_thread()`, plus a repeating ERROR and recovered/first-pass INFO lines (L1). Cause: the thread starts before uvicorn imports web, whose `cobalt_agent/config.py:21` `load_dotenv()` fills the DB env.
+- aset orphan defect card (10-10, R685): `com.cobalt.aset.plist:29` `AbandonProcessGroup` true plus `start_aset.sh:73` `exec uv run` leave python orphaned on bootout, holding the voice scratch lock (aset down after the https rollback). Fix: do not abandon the group, or exec the venv python; audit every plist. A pgrep check after bootout needs his word (a new string). On his yes only: `ops/desk/orphan-clean.sh` by card (widens R39's class), and an `ops-hand` default-mode phone-approval seat (a new permission class, an L63 exception). Voice never executes shell directly (L37).
+- aset orphan transition (10-10, deploy fd33fb60 FAILED at 4.2): the old start script orphans python at the deploy's own bootout, so the fix cannot land through an unchanged hub. Order: (a) orphan-clean deploy (RESTARTS none), (b) DEPLOY-HUB row: orphan-clean after each aset/radar bootout and in STEP-5(3), and a ~30 s 4.2 re-print wait, (c) recut. Every deploy that restarts aset is HELD until (c). A single-pid kill order of his is never standing.
+- Launcher card, one more row: `.claude/settings.json.bak` (his, untracked) joins the D0 accepted porcelain list.
+- Seam rule, binding: a seam conflict after a check is resolved by the builder moving its own hunks with Edit only (no `git merge` on the build line). The move is a drafter row on the same card, then a Sonnet preflight, then `desk-launch.sh build` at a plain `FIX ROUND row <X>` step. Never a CONTINUE carrying instructions: the launcher refuses steps outside `[A-Za-z0-9 .-]`, and BUILD-HUB :27 records and does not follow a CONTINUE that adds a row. Proved by the deploy's trial merge (top-50 R746, 156 row S, R842).
+
+## HIS VETO LIST AT DONE — 2026-10-05 night (brain rulings while he was away)
+- D5 deploy: A3 (the event-day reconcile corrects an ENTRY price through `record_correction`, which rewrites the fill cache, a sizing figure) is KEEP as built under 09-22 R67 ("DAS is the reconcile truth") and R314. The brain did not hold the deploy for his ruling.
+- D5: B2's status wording is still open. O1 ships pinned (his 10-05 A).
+- K3: fix-round K3-F1 (two K3-6 tests marked with-DB, plus a fixture taking the module via importlib). Deployed with no re-check.
+- Next-flow card 04 (hub text only): checked with no outside vendor under 10-02 R47 (the house staging copies no docs). Vendors on hub-text cards would need the staging to include `docs/40 - DevDocs/prompts/`.
+- Card 39 (D5 O1+B2), his D5-3 question: when a carried unresolved item's origin day later reconciles cleanly, should every later day's stored copy clear? Today it does not ("clear only as today", row O1). No change made; the deploy is not held.
+- Card 39: the brain widened the files to `imports.py` `_unresolved_lines` (the page lists what the store kept) as the same feature's small fix (L75).
+- K3 recut: the desk appended a shortened summary line to a hub report so `recut` fit desk-row.sh's 300 characters (brain (a)).
+
 ## HIS WORDS — for `cto-2026-10-02-words.md`, verbatim, brain session 2026-10-02
 Answering the brain's "do it here or with the desk, and can it be done today":
 "First, you, you may run a separate file for the direction. I allow you more than one file. Second, for the build, of the scripts these are internal scripts that we're working through in Anthropic specific issue where the harness from Anthropic is stopping Anthropic from working so no we don't need another houses to check I want this build as soon as possible and I want them built only by Anthropic seat and we don't need to wait for any checks and houses to be uh, invoked I don't want to four day build this 24 scripts need to be built within one day and deployed within one day if they can't be done today they need to be done tomorrow And they don't need to wait for me to rule on every single step of the process. We create a list now we build the list we check the list and that's it."
