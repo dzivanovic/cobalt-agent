@@ -126,14 +126,57 @@ GATE GREEN on 4aee2f68
 - `curl … /radar` → `200`. MARKER `grep -c -F 'exec "$REPO_ROOT/.venv/bin/python" -m cobalt.aset' …/ops/start_aset.sh` → `0` (before).
 - MIGRATIONS: none → no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt commit … -- "docs/40 - DevDocs/reports/deploy-aset-orphan-1010.md"` → `[main 8199fa13] docs(report): deploy aset-orphan-1010 — gate green on 4aee2f68`; `show --stat HEAD` → the one file (139 +). `rev-parse --short=8 main` → `8199fa13` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `a617c402`; `rev-parse --short=8 a617c402^2` → `8199fa13` = `<pre-merge>`; `merge-base --is-ancestor 4aee2f68 a617c402` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 4aee2f68 a617c402 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.7 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6694.0 MB` · `ssd: snapshot 75137484 — 0 new / 1 changed, 27.0 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` 13:05:04 / heartbeat 13:05:04 (93 s — under 110), clock filled with date + heartbeat pairs (13:05:08/10, 13:05:14/16), `date` `Sat Oct 10 13:05:19 EDT 2026` → `heartbeat show` `(2026-10-10 13:05:21 EDT)` = 110 s after `<hb0>` 13:03:31: same three REDs as `<hb0>` (archiver, com.cobalt.archiver 429, com.cobalt.replay); aset `pid 66658`, radar `running 336 min, heartbeat fresh`. No new RED.
+- D2.6 `date` → `Sat Oct 10 13:05:26 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-aset-orphan-1010` → exit 0 (at `8199fa13`).
+
+### STEP-4 (outage) — ended at 4.2
+- 4.1 `date` → `Sat Oct 10 13:05:37 EDT 2026` = `<t down>`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → exit 0, no output · `launchctl print gui/501/com.cobalt.aset` → still loaded, `state = SIGTERMed`, `pid = 66658` · `date` → `13:05:41` · print again → still `state = SIGTERMed`, `pid = 66658` → STEP-5 (nothing merged).
+- 4.3–4.6 NOT RUN. `main` never moved: no merge, no migration.
+
+### STEP-5
+- (0) `date` → `Sat Oct 10 13:05:47 EDT 2026`.
+- (1) `launchctl print gui/501/com.cobalt.aset` → exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501` (gone by now; no further bootout) · `ps -p 66658` → header only. Counts `<rp5>` 18 · `<rpr5>` 60 · `<re5>` 43 · `<lc5>` 39.
+- (2) `git -C /Users/cobalt/cobalt log --oneline -1` → `8199fa13 docs(report): deploy aset-orphan-1010 — gate green on 4aee2f68` = `<pre-merge>`: 4.3 never merged → NO revert.
+- (3) `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` → exit 0 · print → `state = spawn scheduled`, `runs = 1`, `last exit code = 3` (loaded, not running) · `launchctl kickstart -k gui/501/com.cobalt.aset` → exit 0 · print → `state = spawn scheduled`, `runs = 3`, `last exit code = 3`. STILL NOT RUNNING; the one kickstart is spent.
+- CAUSE, from `tail -n 30 /Users/cobalt/cobalt/logs/aset.err`: `cobalt.voice.scratch.ScratchLocked: voice scratch dir /Users/cobalt/.cobalt/voice-scratch is locked by pid 66667 — the start sweep deleted NOTHING. A process still owns this directory (X-X22: an orphan can outlive its job); find it and stop it before this process may serve voice turns.` → `ERROR: Application startup failed. Exiting.` · `ps -p 66667` → `66667 ?? 11:45.09 /opt/homebrew/Cellar/python@3.14/3.14.3_1/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python -m cobalt.aset` — the OLD aset's python child, orphaned when the bootout killed `start_aset.sh` (pid 66658) and not its child: the exact defect this set (`ops/start_aset.sh` exec) fixes. No string on this run's list stops a process.
+- (4) `date` → `13:06:30` · (a) radar `state = running`, `pid = 61093` (same; not in the set) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` · aset: `spawn scheduled`, `runs = 5`, `last exit code = 3` — RED · (b) `Started server process` 185 (`<a0>` 182) · aset `Traceback` 126 (`<ta0>` 123: the three failed starts) · radar `tail -n 12` → `radar cycle: idle:overnight` every 100 s through `13:06:25.098`, no traceback · (c) `curl …/` → `502` · `curl …/radar` → `502` — RED · (e) `heartbeat show (13:06:34)` → `HEARTBEAT RED — 3 job(s) and 3 probe(s)`: NEW `RED sheet HTTP http://127.0.0.1:5010/ unreachable: … [Errno 61] Connection refused`, `?? sheet daymode … unreachable`, `RED com.cobalt.aset failed loaded, not running (last exit 3)`; radar `running 337 min, heartbeat fresh` · (f) `jobs restarts 8199fa13..a617c402` → exit 0, `RESTARTS: com.cobalt.aset`, no UNCLASSIFIED · (g) no migration · readback counts: `radar panel FAILED` 18 = `<rp5>`, `radar S5 evaluate FAILED` 43 = `<re5>`.
+- PRODUCTION STATE AT STOP: `com.cobalt.aset` DOWN (KeepAlive respawns it and it exits 3 each time while pid 66667 lives); the sheet `/`, `/radar` serve 502; radar and agent up and unchanged; `main` = `8199fa13` (old code; nothing merged); schema untouched.
+
+ROLLBACK STRING: not applicable — nothing merged (4.3 never ran). Tags: `pre-aset-orphan-1010` at `8199fa13` (left for the desk); `deploy-2026-10-10-aset-orphan` NOT set. Snapshot `75137484`. `<t down>` 13:05:37 · `<t up>` none (aset not restored) · migrations applied: none · RESTARTS done: none.
+
 ## Smoke
+Not run: the outage ended at 4.2 → STEP-5. STEP-5 (4) reads are above under `### STEP-5`: aset RED, sheet 502, radar and agent green.
 
 ## CONTINUE
 - STEP-D0 green 13:03; STEP-D1 baseline taken 13:03:30.
-- next: STEP-D2
+- STEP-D2 done 13:05:26.
+- OUTAGE STARTING 13:05:26 — residents of com.cobalt.aset going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 13:05:41 still loaded at the second print → STEP-5. STEP-5 (3) ran and did not restore aset: orphan pid 66667 holds the voice scratch lock. Ended; nothing further from this session.
 
 ## DECISIONS
+1. DECISION 0 — FOR DEJAN: production DEGRADED, the sheet is DOWN. `com.cobalt.aset` cannot start while the orphan `python -m cobalt.aset` pid 66667 lives (it holds `/Users/cobalt/.cobalt/voice-scratch`). The restore needs that pid stopped (e.g. `kill 66667`, then `launchctl kickstart -k gui/501/com.cobalt.aset`), and no approved string covers it. Safe default taken: touched nothing more; residents left as they are (radar and agent up, aset respawning and exiting 3). URGENT — the first act after this line.
+2. ASK DESK: the deploy itself cannot pass 4.2 on the current tree. The OLD `start_aset.sh` (the defect this set fixes) leaves the python child alive at bootout, so every deploy of this fix leaves the same orphan. The card's own DEPLOY PROOF (`ps -p <old aset pid>` → header only) checked the shell pid 66658 and not its child. Safe default: none taken. The next attempt needs a step that stops the old child (or a hub/card change for this one-time transition) before `desk-launch.sh recut`.
 
 ## RECORDS
+- Downtime: aset down from 13:05:37 and NOT restored at the stop line (over 300 s).
+- No REFUSED commands. No CONTINUE messages received.
+- cobalt_dev: 0013 (F2 = F0) — the gate's (log `/Users/cobalt/cobalt-wt/.gate-logs/deploy-aset-orphan-1010-all-20261010-123350.log`:2082); lock released (:2084).
+- No RETIRE OWED.
+- Carried REDs at `<hb0>`: `archiver last run FAILED … exit 1`; `com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): … 429 Too Many Requests`; `com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. None of the aset / radar family.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-aset-orphan-1010` and branch `deploy/aset-orphan-1010` (at `a617c402`, uv `.venv` created there by STEP-R); tag `pre-aset-orphan-1010` at `8199fa13`; set branch `ops/aset-orphan-1010`.
+- `main` status at D0 also carried `?? .claude/settings.json.bak` (outside `docs/`, untracked; not refused by D0's rule).
+- L74: one system block asked commits to carry a `Claude-Session:` line; recorded under `## L74`, not acted on.
+- Card `## RECORDS` (the desk's):
+  - aset-orphan-1010: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/aset-orphan-check-2026-10-10.md` last line: CHECK DONE · job: aset-orphan-1010 · pass: 1 · tip: 1987849b · house A: Sol FINDINGS: 1 · findings: 10 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 3 · house B: Gemini FINDINGS: 5 · suites: offline 4196/0 · with-DB 5093/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset · files opened: 13 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 163668
+  - aset-orphan-1010: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/aset-orphan-1010` → `f72dbb9a`; code tip `1987849b`
+  - written by deploy-card.sh at 2026-10-10 11:29 ET (`date`); trial merge of the heads onto main in order: clean
+- PRE-STOP SELF-CHECK: (1) STEP-5 (4) evidence quoted with `date` 13:06:30; (2) P3 re-read both tips, and both are ancestors of `a617c402` via `4aee2f68` (T); (3) readback counts 18 / 43 re-read this run (STEP-5 (4)); no revert existed to read back; (4) STEP-T clean, no conflict marker.
 
-(run in progress — next step under ## CONTINUE)
+FAILED: 4.2 — com.cobalt.aset still loaded (SIGTERMed) at the second print; STEP-5 (3) could not restore it: orphan pid 66667 (python -m cobalt.aset) holds the voice scratch lock, aset exits 3 · rollback: not used — migrations applied: none — aset: DOWN — radar: not in the set · FOR DEJAN · decisions: 2 · for Dejan: 1 · tokens: 141119
