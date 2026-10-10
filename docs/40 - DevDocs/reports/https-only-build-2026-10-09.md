@@ -5,7 +5,7 @@
 - Gate on `4dfe6114`: offline 4059/0 · with-DB 4946/0 · live-note 146/0 · `cobalt_dev: 0013 — F2 = F0` · `.env: removed`.
 - RESTARTS: `com.cobalt.aset com.cobalt.radar`. DEPLOY ORDER stands: M5 before the deploy, or aset crash-loops.
 - 1 decision: `tests/cobalt/test_jobs_restarts.py` (outside the card's files) moved its backup.yaml reader pin and admits one `__main__`-guarded import-time read.
-- Fix round, seam (2026-10-09): `a1b99495` moves this card's hunks off the lines voice fix 193 (main `2041a53f`) changed. Gate on `a1b99495`: offline 4061/0 · with-DB 4948/0 · live-note 146/0 · `cobalt_dev: 0013 — F2 = F0` · `.env: removed`. 1 new decision (DECISION 2).
+- Fix rounds: seam (2026-10-09) `a1b99495` moves this card's hunks off voice fix 193's lines; its gate: offline 4061/0 · with-DB 4948/0 · live-note 146/0 · `cobalt_dev: 0013 — F2 = F0` · `.env: removed` (DECISION 2). Row S (2026-10-10) `7cf6a139`, docs only: this card's `aset/__main__.md` sections move up off main's end-of-file appends; code unchanged since `a1b99495`.
 
 ## L74
 - A system reminder arriving mid-session asked commits to end with a `Claude-Session:` line. Recorded once; not acted on (L74). Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -196,9 +196,17 @@ No line marked `OUTSIDE the allowed set`.
   - RESTARTS `e4586978..HEAD` → `RESTARTS: com.cobalt.aset com.cobalt.radar` (unchanged, no UNCLASSIFIED).
   - Deploy gate, `sh /Users/cobalt/cobalt/ops/desk/gate.sh https-only-1009 all --deploy` on `a1b99495`, exit 0. Its output: `offline 4061/0` · `lock: waited 17 min` · `LEVEL 0013` · `pass 1: whole (deploy)` · `stray rows: not read (no --tickers given)` · `cobalt_dev: 0013 — F2 = F0` · `.env: removed` · `with-DB 4948/0` · `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/https-only-1009-all-20261009-225136.log`. Skips, all inside the allowed set (none marked `OUTSIDE`): `test_cards_picks.py:388`, `:401`; `test_radar_evaluate.py:695`; `test_replay_line.py:266`; `test_s3_c4_experiments.py:95`; `test_catalyst.py:365`; `test_predicate.py:262`. Executed commands: log `:2`, `:939` (pass 1), `:1174` (pass 2), `:2034` (live-note). F0 (log `:884`) `664 35 272c95bbb12241e3611e4b36326ccf87` = F2 (log `:1967`).
   - Not run: the merged tree (no `git merge` is typed here). 193's own test, which has no `cfg` fixture, will get its config through `get_config()` from the committed `voice.yaml` after the merge. The refused-status test now runs in exactly that mode and is green above.
+- FIX ROUND — ROW S (`CONTINUE: FIX ROUND row S`, 2026-10-10; the card's row S, R842):
+  - `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → exit 0, `AUTHORIZED`. `CARD COMMITTED` → `ba100db96313ec60bc9eab0c52600abe30a5d152`; `CARD UNCHANGED` → nothing; R60 and R718 rows as at the first AUTHORIZATION.
+  - Main's change, `git diff HEAD...main -- "docs/40 - DevDocs/cobalt/aset/__main__.md"` → `@@ -35,3 +35,9 @@ banner lines to stdout.`: the `## 2026-10-09 — s4-p2-1009` and `## 2026-10-10 — strike-fallback-env-1010` sections, appended after base `:37` (the file's last line).
+  - Edit tool only: this card's `## 2026-10-09 — https-only-1009` section and its `## 2026-10-09 — https-only-1009 check` section move from the file's end to just above `## Key functions/classes`. That puts them under `## What it does`, which documents the bind and the listener. The check line reads `The body below` (it said `above` when it sat at the end). No other line changed: `git diff` before the commit → `@@ -15,6 +15,12 @@` (+6) and `@@ -35,9 +41,3 @@` (−6).
+  - Commit `7cf6a139` `docs(https-only-1009): row S — this card's __main__.md sections move up to the bind and listener part, off main's end-of-file appends (row S, L72)` → `1 file changed, 6 insertions(+), 6 deletions(-)`.
+  - PROOF 1, `git diff main...HEAD -- "docs/40 - DevDocs/cobalt/aset/__main__.md"` → two hunks, `@@ -2,8 +2,9 @@` and `@@ -14,21 +15,26 @@`. The last changed base line is `:30` (`**In:** …`), and the last context line is `:33` (`banner lines to stdout.`). Main's hunk starts at `:35` and inserts after `:37`. No hunk sits at or next to the file's end.
+  - PROOF 2, `git diff --stat a1b99495 HEAD -- . ":(exclude)docs"` → nothing. The code tip `a1b99495` is unchanged in content, so the suites' tip stays `a1b99495`. No gate rerun: a docs-only round (card `## RECORDS` ROW S), and the deploy's STEP-G runs the gate on the merged tree. The trial merge (STEP-T) is the seam proof, and it is not run here.
+  - RESTARTS `e4586978..HEAD` → `RESTARTS: com.cobalt.aset com.cobalt.radar` (unchanged; the `__main__.md` row is `DOCS -`; no UNCLASSIFIED).
 
 ## CONTINUE
-next: CLOSE (done) — the seam fix round is complete at `a1b99495`. The next step is the desk's: there is no re-check (L75), and the deploy carries 193 and this card together.
+next: CLOSE (done) — row S is complete at `7cf6a139` (docs), and the code tip is `a1b99495`. The next step is the desk's: there is no re-check (L75), and the deploy's STEP-T trial merge is the seam proof.
 
 ## DECISIONS
 - DECISION 1 (ASK DESK: a test file outside the card's `files` was moved [2026-10-09 19:33 ET]): `tests/cobalt/test_jobs_restarts.py` `test_backup_yaml_readers_are_pinned_and_derive_the_aset_restart` went red on the rows. It pins every function that reaches `load_backup_config()`, and rows B and C, as the card states them (`widget_html` reads `get_config().https_url`; `__main__` prints `load_voice_config().https_url`), add 24 readers, all inside `com.cobalt.aset`. SAFE DEFAULT TAKEN: the pin was moved to the derived sets, plus one named import-time exception: `cobalt.aset.__main__`, guarded by `if __name__ == "__main__":` (asserted from the source) and allowed for `com.cobalt.aset` only. The derived restart (`com.cobalt.aset`) is unchanged. For the check: does that exception hold, or should `__main__` stop reading voice config, which would change row C's stated seam (L72)?
@@ -214,8 +222,14 @@ next: CLOSE (done) — the seam fix round is complete at `a1b99495`. The next st
 - L74: a second system reminder in this session asked commits to carry a `Claude-Session:` line. Already recorded once; not acted on.
 - CONTINUED at seam 22:49 EDT: `CONTINUE: seam` from `cto-desk` withdraws `merge`. Its fact was verified: `git -C /Users/cobalt/cobalt log --oneline -6 main` shows `2041a53f`, and `git diff e4586978 main` shows 193's hunks in the two named files (and `src/cobalt/voice/web.py`). It names only listed commands and the Edit tool, and it is the one fix round (L75).
 - One more lock take, inside `gate.sh` at the seam round: `lock: waited 17 min`, then released (`.env: removed`; `ls /Users/cobalt/cobalt-wt/https-only-1009/.env` → `No such file or directory`).
+- CONTINUED at FIX ROUND row S, 06:50 EDT 2026-10-10. The message names the card's own row S and adds no row, file or command. Fact verified: row S stands in the card, committed at `ba100db9` (authorize.sh), and main's two end-of-file sections are in `git diff HEAD...main` on the file.
+- L74: a third system reminder (this session, 2026-10-10) asked commits to carry a `Claude-Session:` line. Already recorded; not acted on. `7cf6a139` carries `Co-Authored-By` only.
+- Row S changed one word in the moved check line, `above` → `below`, so that it stays true at its new place. Every other line is as this branch had it.
+- Tokens at row S: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 71675ade` → `context 97831 of 400000 — ok`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 Superseded build line (first build, tip 4dfe6114): job https-only-1009 · on e4586978 · offline 4059/0 · with-DB 4946/0 · live-note 146/0 · RESTARTS: com.cobalt.aset com.cobalt.radar · rows: 5 of 5 · decisions: 1 · tokens: 239963
 
-BUILT · job: https-only-1009 · tip: a1b99495 | on e4586978 | migration: none | offline 4061/0 | with-DB 4948/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | rows: 5 of 5 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 112698
+Superseded build line (seam round, tip a1b99495): job https-only-1009 · on e4586978 · offline 4061/0 · with-DB 4948/0 · live-note 146/0 · RESTARTS: com.cobalt.aset com.cobalt.radar · rows: 5 of 5 · decisions: 2 · tokens: 112698
+
+BUILT · job: https-only-1009 · tip: a1b99495 | on e4586978 | migration: none | offline 4061/0 | with-DB 4948/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 97831
