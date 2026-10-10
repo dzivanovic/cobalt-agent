@@ -2,7 +2,7 @@ JOB: house-seat-order-1010
 LADDER: OFF-LADDER — reports/cto-2026-10-10.md R963
 BRANCH: ops/house-seat-order-1010
 WORKTREE: house-seat-order-1010
-BASE: «FILL: 8-hex, the commit of main the branch is cut from (the desk, at the build launch)»
+BASE: 92c67916
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/house-seat-order-1010/docs/40 - DevDocs/reports/house-seat-order-build-2026-10-10.md
 CHECK REPORT:
