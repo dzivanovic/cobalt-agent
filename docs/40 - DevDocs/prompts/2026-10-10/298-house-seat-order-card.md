@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R963
 BRANCH: ops/house-seat-order-1010
 WORKTREE: house-seat-order-1010
 BASE: 92c67916
-TIP:
+TIP: f6e55cd3
 REPORT: /Users/cobalt/cobalt-wt/house-seat-order-1010/docs/40 - DevDocs/reports/house-seat-order-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/house-seat-order-check-2026-10-10.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-10 R920, 2026-10-10 R921
 
