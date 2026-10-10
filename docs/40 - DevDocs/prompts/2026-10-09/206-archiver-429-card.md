@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09.md R808
 BRANCH: ops/archiver-429-1009
 WORKTREE: archiver-429-1009
 BASE: fa968552
-TIP:
+TIP: 188190dc
 REPORT: /Users/cobalt/cobalt-wt/archiver-429-1009/docs/40 - DevDocs/reports/archiver-429-build-2026-10-09.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/archiver-429-check-2026-10-10.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
 ## ROWS
