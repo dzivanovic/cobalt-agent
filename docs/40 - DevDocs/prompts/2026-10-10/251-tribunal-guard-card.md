@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R877
 BRANCH: ops/tribunal-guard-1010
 WORKTREE: tribunal-guard-1010
 BASE: fccbb258
-TIP:
+TIP: 2e680273
 REPORT: /Users/cobalt/cobalt-wt/tribunal-guard-1010/docs/40 - DevDocs/reports/tribunal-guard-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/tribunal-guard-check-2026-10-10.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-08 R685
 
