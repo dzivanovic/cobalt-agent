@@ -2,7 +2,7 @@ JOB: https-only-1009
 LADDER: OFF-LADDER — reports/cto-2026-10-09-words.md 2026-10-09 R718
 BRANCH: deploy/deploy-2026-10-09-https-only
 WORKTREE: deploy-https-only-1009
-BASE: main «FILL: the desk fills the main hash»
+BASE: main
 TIP: 411f85b2
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-https-only-1009.md
 RULINGS: 2026-10-09 R718
