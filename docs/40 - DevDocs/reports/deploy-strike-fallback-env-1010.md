@@ -142,4 +142,58 @@ GATE GREEN on ca56ce65
   - strike-fallback-env-1010: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/strike-fallback-env-1010` → `f47ad2f0`; code tip `f47ad2f0`
   - written by deploy-card.sh at 2026-10-10 05:07 ET (`date`); trial merge of the heads onto main in order: clean
 
-FAILED PREFLIGHT: staged change on main — M  "docs/40 - DevDocs/reports/deploy-s4-p2-1009.md" · rollback: not used · gate: GATE GREEN on ca56ce65 · RESTARTS: com.cobalt.aset com.cobalt.radar · decisions: 1 · for Dejan: 0 · tokens: 100416
+# RELAUNCH
+- Launched `CONTINUE: STEP-D0` at `Sat Oct 10 05:12:29 EDT 2026` (`date`).
+- The old last non-blank line, quoted:
+  > `FAILED PREFLIGHT: staged change on main — M  "docs/40 - DevDocs/reports/deploy-s4-p2-1009.md" · rollback: not used · gate: GATE GREEN on ca56ce65 · RESTARTS: com.cobalt.aset com.cobalt.radar · decisions: 1 · for Dejan: 0 · tokens: 100416`
+- RESUME CHECKS, each its own call, (e) first:
+  - (e) `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 85816`, `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 85833`, `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` TRUE: nothing to restore.
+  - the gate's own `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-strike-fallback-env-1010/.env` → `No such file or directory`. No G (f), no release owed.
+  - (a) the old last line begins `FAILED PREFLIGHT:`, the STEP-D0 form of a `FAILED` ending (the stop-line list names it as such). Read as TRUE. See `## DECISIONS` 2.
+  - (b) `## L68 GATE` carries `GATE GREEN on ca56ce65`; `## RESTARTS` carries `<restart set>` = `com.cobalt.aset com.cobalt.radar`. TRUE.
+  - (c) `git -C <GATE> status --short --branch` → `## deploy/strike-fallback-env-1010` · `git -C <GATE> rev-parse --short=8 HEAD` → `ca56ce65` = `<m1>`. TRUE.
+  - (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor ca56ce65 main` → exit 1. TRUE: nothing merged.
+
+## RESUME (attempt 2)
+STEP-0, fresh rows (STEP-T, C, R, G not re-run: the tree is unchanged and the gate evidence stands):
+
+| rule | command | exit | result |
+|---|---|---|---|
+| P0 | `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "<card>"` | 0 | the same 11 rows as `## AUTHORIZATION` (card `13430db7…`, R60 `962e9d17…`, R685 `e1edc838…`), last line `AUTHORIZED` |
+| P1 DATE | `date` | 0 | `Sat Oct 10 05:12:43 EDT 2026` |
+| P2 | `tail -n 3 "<check report>"` | 0 | last line unchanged from attempt 1: `… tip: f47ad2f0 … held unfixed: 0 … ready: YES …` |
+| P2 | `git -C /Users/cobalt/cobalt log -1 --format=%H -- "<check report>"` | 0 | `c754ba2261c4716116778cc64dd51dbd5a19da98` |
+| P2 | `git -C /Users/cobalt/cobalt diff --stat -- "<check report>"` | 0 | nothing |
+| P3 | `rev-parse --short=8 f47ad2f0` · `rev-parse --short=8 ops/strike-fallback-env-1010` | 0 · 0 | `f47ad2f0` · `f47ad2f0` |
+| P3 | `merge-base --is-ancestor f47ad2f0 ops/strike-fallback-env-1010` | 0 | — |
+| P3 | `diff --stat f47ad2f0 ops/strike-fallback-env-1010 -- . ':(exclude)docs'` | 0 | nothing |
+| P4 LOCK | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` |
+| P5 | `git -C <GATE> status --short --branch` · `rev-parse --short=8 HEAD` | 0 · 0 | `## deploy/strike-fallback-env-1010` · `ca56ce65` (check (c)); `<m0>` stays `13430db7` |
+| P5 | `merge-base --is-ancestor 13430db7 main` | 0 | — (the EMPTY check is not run on a resume) |
+| P6 MARKERS | `grep -c -F "strike fallback: first pass OK" …/strike.py` | 1 | `0` = before |
+| P7 | `git -C /Users/cobalt/cobalt diff --stat main f47ad2f0 -- src/cobalt/db_migrations` | 0 | nothing |
+| P8 | `launchctl print` aset / radar (check (e), 05:12) | 0 | paths equal the bootstrap strings, both `state = running` |
+| P8 | `ls /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | listed |
+| P8 | `cobalt.sh status` (check (e)) | 0 | `Cobalt is ONLINE (PID: 22243).` |
+
+STEP-D0:
+- `git -C /Users/cobalt/cobalt status --short --branch` → `## main...origin/main [ahead 97]`.
+- `git -C /Users/cobalt/cobalt status --porcelain` → no STAGED line now. Every line is ` M` / `??` under `docs/40 - DevDocs/`, or ` M .claude/settings.json`, plus `?? .claude/settings.json.bak` (not a `src/`, `tests/`, `ops/` or `configs/` path). Accepted.
+- `git -C /Users/cobalt/cobalt diff --stat 13430db7 main -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- ALLOWLIST PROBE: `tag scratch-allow-probe-strike-fallback-env-1010` → ok · `tag -d …` → `Deleted tag 'scratch-allow-probe-strike-fallback-env-1010' (was ccd98354)` · `commit --allow-empty -m "scratch: allowlist probe (reverted next line)"` → `[main 4179ebae] scratch: allowlist probe (reverted next line)` · `reset --soft HEAD~1` → ok · `log --oneline -1` → `ccd98354 docs(desk): HANDOVER 8c3b68b4 to 91f18257, pane w2:pV1` (HEAD back).
+- TAG NAMES: `rev-parse --verify --quiet refs/tags/deploy-2026-10-10-strike-fallback-env` → exit 1 · `… refs/tags/pre-strike-fallback-env-1010` → exit 1 (no tag to delete).
+
+STEP-D1 (baseline):
+- `date` → `Sat Oct 10 05:13:01 EDT 2026`. `COBALT_ENV=production uv run cobalt heartbeat show` → `<hb0>`: `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-10 05:13:02 EDT)`. Probes `sheet HTTP` OK (`-> 200`), `sheet daymode` OK, `radar` OK (`idle (overnight)`), `com.cobalt.aset running loaded, pid 85816`, `com.cobalt.radar running running 109 min, heartbeat fresh`, `com.cobalt.agent running pid 22243 alive`. REDs, named, not a stop (not the aset, sheet or radar probe): `RED  archiver  last run FAILED — last run 2026-10-10 00:54 UTC (8.3 h ago), rows written 3308843, exit 1` · `RED  com.cobalt.archiver  failed  RuntimeError: 18 archiver failure(s): DKNG/i2: … Finviz HTTP failed: Client error '429 Too Many Requests' …` · `RED  com.cobalt.replay  failed  ReplayError: archiver not done: state 'failed'`. `AMB com.cobalt.herdr unmanaged` (declared interim).
+- `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.` = `<val0>`. `<jobs0>` = `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.`
+- `COBALT_ENV=production uv run cobalt backup status` → `newest snapshot: 1.9 h old` (ssd ARMED; b2 off).
+- `launchctl print` aset → running, pid `85816`; radar → running, pid `85833`; `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).`; `ps -p 22243` → `22243 ??  0:00.04 uv run src/cobalt_agent/main.py`.
+- `tail -n 8 /Users/cobalt/cobalt/logs/radar.err` → eight `radar cycle: idle:overnight scan_id=None` lines, 05:01:08 to 05:12:48, no traceback.
+- LOG BASELINES: `<a0>` = 58 · `<ta0>` = 2 · `<tr0>` = 0 · `<tc0>` = 0 · `<rp0>` = 18 · `<rpr0>` = 60 · `<re0>` = 43 · `<lc0>` = 39.
+- `curl … http://127.0.0.1:5010/radar` → `200`. MARKER → `0` (before).
+- No migration: `<RB>`, census and D1-M not run.
+
+## CONTINUE
+- next: STEP-D2 (D2.0 report commit) after D1 at 05:13.
+
+(run in progress — next step under ## CONTINUE)
