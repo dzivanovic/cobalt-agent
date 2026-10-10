@@ -48,7 +48,7 @@ def _ack(tid):
     return TestClient(web.app).post("/strike/ack", json={"transition_id": tid})
 
 
-def test_push_then_ack_is_one_row_with_pushed_at_before_shown_at(world):  # noqa: F811
+def test_push_then_ack_is_one_row_with_pushed_at_before_shown_at(world, monkeypatch):  # noqa: F811
     from cobalt.session import clock
 
     store = _store()
@@ -62,6 +62,9 @@ def test_push_then_ack_is_one_row_with_pushed_at_before_shown_at(world):  # noqa
     assert row["seam_at"] == at and row["pushed_at"] == pushed
     assert row["shown_at"] == clock.now_utc() and row["pushed_at"] <= row["shown_at"]
 
+    # A second ack, 5 s later on the server's clock, changes nothing.
+    later = row["shown_at"] + timedelta(seconds=5)
+    monkeypatch.setattr(clock, "now_utc", lambda: later)
     again = _ack(tid)
     assert again.status_code == 200
     assert _record(store, tid) == [row], "a second ack changes nothing"
@@ -77,6 +80,20 @@ def test_an_ack_for_an_id_that_is_not_a_seam_row_is_404_and_writes_nothing(world
         response = _ack(unknown)
         assert response.status_code == 404, response.text
         assert _record(store, unknown) == []
+
+
+def test_an_ack_for_his_own_tap_is_404(world):  # noqa: F811
+    """A TRIGGERED row in the shape his tap writes (`web.py` radar_card_triggered:
+    actor `you`, via `panel.triggered`) is not a seam row: 404, nothing written."""
+    store = _store()
+    _card, tid, _at = triggered_card(world)
+    with store._connect() as conn:
+        conn.execute("""UPDATE card_transitions SET actor = 'you',
+                        evidence = '{"via": "panel.triggered", "last_price": null, "last_price_at": null}'::jsonb
+                        WHERE id = %s""", (tid,))
+    response = _ack(tid)
+    assert response.status_code == 404, response.text
+    assert _record(store, tid) == []
 
 
 def test_an_ack_with_no_prior_push_creates_the_row(world):  # noqa: F811
@@ -104,6 +121,8 @@ def test_one_fallback_pass_with_no_stream_records_the_dm(world):  # noqa: F811
     tail = FallbackTail(store=store, send=fake_send, settings=DeliverySettings(), now=lambda: later)
     tail.pass_once()
     tail.pass_once()
+    # A restarted sheet's tail re-reads the day: the claim on the row, not memory, stops a second DM.
+    FallbackTail(store=store, send=fake_send, settings=DeliverySettings(), now=lambda: later).pass_once()
     assert len([text for text in sent if text.startswith(f"{TICKER} ")]) == 1
     [row] = _record(store, tid)
     assert row["pushed_at"] is None and row["shown_at"] is None

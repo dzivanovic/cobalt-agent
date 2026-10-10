@@ -46,7 +46,7 @@ def test_xk_drc_rows_refuses_a_build_kind_before_0020(migrated):
     from cobalt.db_migrations import MIGRATIONS_DIR
     from cobalt.db_migrations.cli import _apply
 
-    assert FORWARD[-4].name == "0020_drc_build_kinds.sql"  # 0021 (S3 exits C1), 0022 (F15 P1), 0023 follow it
+    assert FORWARD[-5].name == "0020_drc_build_kinds.sql"  # 0021 (S3 exits C1), 0022 (F15 P1), 0023, 0024 follow it  # S4-P2 (E4)
     assert "build_day" in _kind_check(migrated) and "build_trade" in _kind_check(migrated)
     with DrcStore()._connect() as conn:
         conn.execute(INSERT, (D,))
@@ -76,16 +76,17 @@ def test_0020_is_registered_last_and_its_rollback_first():
     from cobalt.db_migrations import MIGRATIONS_DIR, REVERSE
     from cobalt.db_migrations.cli import _rollback_paths
 
-    # S3 exits C1's 0021, F15 P1's 0022 and the price floor's 0023 now follow it (the last of the DRC
-    # lane, fourth-last overall).
-    assert FORWARD[-4] == MIGRATIONS_DIR / "0020_drc_build_kinds.sql"
-    assert FORWARD[-5].name == "0019_drc_events.sql"
-    assert REVERSE[3] == MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"
-    assert REVERSE[4].name == "0019_drc_events.rollback.sql"
+    # S3 exits C1's 0021, F15 P1's 0022, the price floor's 0023 and S4-P2's 0024 now follow it (the last
+    # of the DRC lane, fifth-last overall).  # S4-P2 (E4)
+    assert FORWARD[-5] == MIGRATIONS_DIR / "0020_drc_build_kinds.sql"
+    assert FORWARD[-6].name == "0019_drc_events.sql"
+    assert REVERSE[4] == MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"
+    assert REVERSE[5].name == "0019_drc_events.rollback.sql"
     assert [p.name for p in _rollback_paths("0019")] == [
+        "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",
         "0022_prediction_records.rollback.sql", "0021_legs.rollback.sql", "0020_drc_build_kinds.rollback.sql"]
-    code = "\n".join(l for l in FORWARD[-4].read_text().splitlines() if not l.strip().startswith("--"))
+    code = "\n".join(l for l in FORWARD[-5].read_text().splitlines() if not l.strip().startswith("--"))
     assert "CREATE TABLE" not in code and "'build_trade', 'build_day'" in code
-    back = REVERSE[3].read_text()
+    back = REVERSE[4].read_text()  # S4-P2 (E4)
     assert "-- COST:" in back and "to_regclass('\"user\".drc_rows')" in back

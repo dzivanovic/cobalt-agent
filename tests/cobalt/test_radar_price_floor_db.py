@@ -42,7 +42,8 @@ def _code(path) -> str:
 
 def test_0023_is_registered_last_and_its_rollback_first():
     assert SQL.exists() and ROLLBACK.exists()
-    assert FORWARD[-1] == SQL and REVERSE[0] == ROLLBACK
+    # S4-P2's 0024 now follows it (second-last forward, second reversed).  # S4-P2 (E4)
+    assert FORWARD[-2] == SQL and REVERSE[1] == ROLLBACK
 
 
 def test_0023_creates_no_table_and_matches_the_excluded_by_in_check_only():

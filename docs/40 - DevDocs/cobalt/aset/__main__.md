@@ -35,3 +35,6 @@ banner lines to stdout.
 ## Config it reads
 `AsetConfig.server` (`bind`, `port`) — the rest of `AsetConfig` is read
 per-request by `web.py`, not here.
+
+## 2026-10-09 — s4-p2-1009
+Before `uvicorn.run`: `strike.start_fallback_thread()` — the S4-P2 S4 phone-fallback tail, one daemon thread, synchronous, outside uvicorn's event loop (it never runs under `TestClient(web.app)`, DECISION E10).
