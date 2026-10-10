@@ -18,7 +18,16 @@ import os
 # that pulls in loguru.
 os.environ.setdefault("LOGURU_LEVEL", "INFO")
 
+from pathlib import Path  # noqa: E402
+
 import uvicorn  # noqa: E402
+from dotenv import load_dotenv  # noqa: E402
+
+# The fallback thread below opens Postgres before uvicorn imports
+# cobalt.aset.web, whose old-tree chain held the only load_dotenv() of this
+# process (cwd-relative). Load the repo .env deliberately, as cli.py does,
+# so the thread's first pass has the DB parts; the environment still wins.
+load_dotenv(Path(__file__).resolve().parents[3] / ".env")
 
 from cobalt.aset.config import load_config  # noqa: E402
 from cobalt.aset.net import local_lan_ip  # noqa: E402
