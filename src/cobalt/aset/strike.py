@@ -518,31 +518,60 @@ class FallbackTail:
         return sent
 
 
+#: A failure that persists with the same text logs its ERROR again once this
+#: many seconds have passed since the last one — a failing fallback is never
+#: silent. A code constant, not a tunable.
+REPEAT_ERROR_S = 60.0
+
+
 class FallbackThread(threading.Thread):
     """`FallbackTail.pass_once` every `interval_s`; an exception in a pass is
-    logged (once per distinct message) and the thread goes on — it never
-    takes the sheet down."""
+    logged and the thread goes on — it never takes the sheet down. A failure
+    streak logs an ERROR with its running count (a new text at once, the same
+    text again every `REPEAT_ERROR_S`); its end logs one `recovered` INFO; a
+    thread whose first pass succeeds logs one `first pass OK` INFO."""
 
-    def __init__(self, tail, *, interval_s: float):
+    def __init__(self, tail, *, interval_s: float, monotonic: Callable[[], float] = time.monotonic):
         super().__init__(name="strike-fallback", daemon=True)
         self.tail = tail
         self.interval_s = interval_s
+        self.monotonic = monotonic
         self.stopping = threading.Event()
+        self._failed = 0
+        self._last_error: Optional[str] = None
+        self._last_error_at: Optional[float] = None
+        self._stepped = False
 
     def stop(self) -> None:
         self.stopping.set()
 
+    def step(self) -> None:
+        """One pass and its one logging decision; never raises a pass's exception."""
+        try:
+            self.tail.pass_once()
+        except Exception as e:
+            text = f"{type(e).__name__}: {e}"
+            self._failed += 1
+            now = self.monotonic()
+            repeat_due = self._last_error_at is None or now - self._last_error_at >= REPEAT_ERROR_S
+            if text != self._last_error or repeat_due:
+                logger.error("strike fallback: pass failed — the thread goes on: {} (failed passes: {})",
+                             text, self._failed)
+                self._last_error_at = now
+            self._last_error = text
+        else:
+            if self._failed:
+                logger.info("strike fallback: recovered after {} failed passes", self._failed)
+            elif not self._stepped:
+                logger.info("strike fallback: first pass OK")
+            self._failed = 0
+            self._last_error = None
+            self._last_error_at = None
+        self._stepped = True
+
     def run(self) -> None:
-        last_error = None
         while not self.stopping.is_set():
-            try:
-                self.tail.pass_once()
-                last_error = None
-            except Exception as e:
-                text = f"{type(e).__name__}: {e}"
-                if text != last_error:
-                    logger.error("strike fallback: pass failed — the thread goes on: {}", text)
-                last_error = text
+            self.step()
             self.stopping.wait(self.interval_s)
 
 

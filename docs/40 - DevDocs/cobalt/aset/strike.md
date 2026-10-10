@@ -15,3 +15,6 @@ New module (S4-P2 S1, S2, S3, S4).
 
 ## 2026-10-10 — s4-p2-1009 check
 The stream's and the fallback tail's cursor moves only past a seam row (the last sent), never past his tap or another row: a detector row committed after a higher-id tap is no longer skipped (check O1, O2). A sent DM whose `dm_result` write fails is written again on the next pass and never sent twice (check A4).
+
+## 2026-10-10 — strike-fallback-env-1010
+`FallbackThread.step()` holds one pass and its logging decision (`run` calls it; `monotonic` is a keyword-only seam): a failure streak logs ERROR `… (failed passes: <n>)` at its first failure, at once for a new text, and again every `REPEAT_ERROR_S = 60.0` s while the same text persists; its end logs INFO `strike fallback: recovered after <n> failed passes`; a first pass that succeeds logs INFO `strike fallback: first pass OK` once (row B, R828).

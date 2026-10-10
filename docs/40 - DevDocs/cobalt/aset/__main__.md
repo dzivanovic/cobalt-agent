@@ -38,3 +38,6 @@ per-request by `web.py`, not here.
 
 ## 2026-10-09 — s4-p2-1009
 Before `uvicorn.run`: `strike.start_fallback_thread()` — the S4-P2 S4 phone-fallback tail, one daemon thread, synchronous, outside uvicorn's event loop (it never runs under `TestClient(web.app)`, DECISION E10).
+
+## 2026-10-10 — strike-fallback-env-1010
+Loads the repo `.env` explicitly at import (`load_dotenv(Path(__file__).resolve().parents[3] / ".env")`, `override` False, as `cli.py` does), before `start_fallback_thread()`: the thread's first pass opens Postgres, and the only other load was the cwd-relative one in `cobalt.aset.web`'s import chain, which runs after it (row A, R828).
