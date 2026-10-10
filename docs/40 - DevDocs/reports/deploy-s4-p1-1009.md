@@ -1,7 +1,10 @@
 # deploy s4-p1-1009 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/s4-p1-1009` (S4-P1 · F9) at tip `444e32b5`. In progress.
+- S4-P1 (F9, the strike loop) from `ops/s4-p1-1009` at tip `444e32b5` is on `main`, which moved `594bddd3` → `f5010068`. Tag: `deploy-2026-10-09-s4-p1`.
+- Gate on `156e4b75`: offline 4123/0 · with-DB 5012/0 · live-note 146/0; `cobalt_dev` back at 0013 (F2 = F0).
+- Restarted aset and radar (16 s outage). Smoke GREEN; the four failure counts did not grow. No migration.
+- Carried REDs (archiver 429, replay) are unchanged from before the deploy. Snapshot `4d45238d`.
 
 ## L74
 - The session's harness attribution reminder asked for a `Claude-Session:` trailer on commits. Recorded as DATA, not acted on: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -136,13 +139,94 @@ GATE GREEN on 156e4b75 (`date` → `Fri Oct  9 23:19:24 EDT 2026`): offline 4123
 - `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/radar` → `200` · marker `grep -c -F "def start_strike_thread" …/runner.py` → `0` (before ✓).
 - MIGRATIONS: none → no `<RB>`, no D1-M.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-s4-p1-1009.md"` · `commit … -- "<report>"` → `[main 594bddd3] docs(report): deploy s4-p1-1009 — gate green on 156e4b75` · `show --stat HEAD` → that one file (148 insertions) · `rev-parse --short=8 main` → `594bddd3` = `<pre-merge>`.
+- D2.1 `git -C /Users/cobalt/cobalt-wt/deploy-s4-p1-1009 merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `rev-parse --short=8 HEAD` → `f5010068` = `<stack-final>`; `rev-parse --short=8 f5010068^2` → `594bddd3` = `<pre-merge>` ✓; `merge-base --is-ancestor 156e4b75 f5010068` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 156e4b75 f5010068 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing ✓.
+- D2.4 `backup status` → `newest snapshot: 0.6 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6694.4 MB` · `ssd: snapshot 4d45238d — 0 new / 2 changed, 27.5 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `23:21:41` · `heartbeat show` → `(2026-10-09 23:21:43 EDT)`, 111 s after D1's `23:19:52`; RED lines identical to `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay); aset / sheet / radar probes OK. No new RED. (Clock filled with two more `heartbeat show` reads at 23:21:33 and 23:21:38, same content.)
+- D2.6 `date` → `Fri Oct  9 23:21:47 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-s4-p1-1009` → `rev-parse --short=8 pre-s4-p1-1009` → `594bddd3`.
+
+### STEP-4 — the outage
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `Fri Oct  9 23:22:00 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · `launchctl print …/com.cobalt.aset` | — · exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · `launchctl print …/com.cobalt.radar` | — · exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | `594bddd3` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/s4-p1-1009` | `Updating 594bddd3..f5010068` / `Fast-forward` (29 files changed, 2591 insertions(+), 5 deletions(-)) |
+| 4.4 | — | `migrations applied: none` (MIGRATIONS: none) |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`; new block `Strike (S4-P1): 4 tunables rows resolved.`; engine tunables `92` (was `88`); `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | — (no retry needed) |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | — (no retry needed) |
+| 4.6 | `launchctl print gui/501/com.cobalt.aset` | `state = running`, `pid = 79051` (≠ 55969) |
+| 4.6 | `launchctl print gui/501/com.cobalt.radar` | `state = running`, `pid = 79064` (≠ 55984) |
+| 4.6 | `date` | `Fri Oct  9 23:22:16 EDT 2026` = `<t up>` — downtime 16 s |
+
 ## Smoke
+- FIRST CALLS after `<t up>` 23:22:16: `<rp_up>` `18` · `<rpr_up>` `60` · `<re_up>` `43` · `<lc_up>` `39` (each = its D1 baseline).
+- (a) `date` 23:22:32 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 79051` (NEW, ≠ 55969) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 79064` (NEW, ≠ 55984) · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (agent not in the set: same pid). GREEN.
+- (b) `date` 23:22:35 · `grep -c "Started server process" …/aset.err` → `56` (`<a0>` 55; > 55, ≤ 57 ✓) · `tail -n 30 …/aset.err` → last `INFO:     Started server process [79058]` followed by `2026-10-09 23:22:13.388 | INFO | cobalt.voice.web:voice_startup:183 - voice: scratch dir … locked by this process; start sweep deleted 0 file(s), 0 failed`, `INFO:     Application startup complete.`, `INFO:     Uvicorn running on http://0.0.0.0:5010 (Press CTRL+C to quit)` ✓ · Traceback aset.err `2` (= `<ta0>`) · Traceback radar.err `0` (= `<tr0>`) · TaxonomyConfigError `0` (= `<tc0>`).
+- (c) `date` 23:22:39 · `curl … http://127.0.0.1:5010/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200` (first attempt each). GREEN.
+- (d) MARKER `grep -c -F "def start_strike_thread" /Users/cobalt/cobalt/src/cobalt/radar/runner.py` → `1` (after ✓).
+- (f) `date` 23:22:43 · `COBALT_ENV=production uv run cobalt jobs restarts 594bddd3..f5010068` → exit 0, same table as STEP-R, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.aset com.cobalt.radar` (= `<restart set>`) · `COBALT_ENV=production uv run cobalt validate` → exit 0, as 4.5 (`Jobs (F17): 15 registered — 6 resident, 9 one-shot.`; `Strike (S4-P1): 4 tunables rows resolved.`; `Placement … tree clean.`). GREEN.
+- (s) SMOKE READS: the strike loop starter, `grep -c -F "def start_strike_thread" /Users/cobalt/cobalt/src/cobalt/radar/runner.py` → exit 0, `1` (green: a count of 1 or more). GREEN.
+- (e) first: `heartbeat show` `(2026-10-09 23:22:46 EDT)` → RED lines = `<hb0>`'s three (archiver, com.cobalt.archiver, com.cobalt.replay); `OK com.cobalt.aset running loaded, pid 79051` · `OK com.cobalt.radar running running 1 min, heartbeat fresh` · `OK radar idle (overnight)` · `OK sheet HTTP … -> 200`.
+- (b) radar tail 1: `date` 23:23:48 (`<t up>` + 92 s) · `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` → startup lines (vault unlock, finviz token resolved) and `2026-10-09 23:22:14.966 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`; no traceback, no `S5 evaluate FAILED`, no `lifecycle card read failed`. That cycle line is stamped 1 s BEFORE `<t up>` (the bootstrap returned at ~23:22:14, `date` read 23:22:16): not settling; tail 2 decides.
+- (e) second: `date` 23:24:36 · `heartbeat show` `(2026-10-09 23:24:38 EDT)`, 112 s after the first → RED lines the same three as `<hb0>`; no new RED; `OK com.cobalt.radar running running 2 min, heartbeat fresh`; `OK com.cobalt.aset running loaded, pid 79051`. GREEN. (Clock filled with `date` + `heartbeat show` pairs 23:22:56–23:24:33, same content each.)
+- (b) radar tail 2: `date` 23:25:19 (`<t up>` + 183 s) · `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` → last line `2026-10-09 23:23:54.987 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle line stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback. (b) SETTLED GREEN.
+- (g) no migration — not run.
+- (h) REVERT-READBACK `date` 23:25:22 (`<t up>` + 186 s, after (b) settled): `radar panel FAILED` `18` = `<rp_up>` · `radar pool refresh FAILED` `60` = `<rpr_up>` · `radar S5 evaluate FAILED` `43` = `<re_up>` · `lifecycle card read failed` `39` = `<lc_up>` · `curl … /radar` → `200`. No `census` reads on the card. No growing count. GREEN.
+
+SMOKE: GREEN.
+
+THE CHAIN: every check committed (P2: `5fc1e9a4…`, unmodified, `held unfixed: 0` · `ready: YES`) → the tips (P3: `444e32b5` = code tip = head) → the merged tree (T: `156e4b75`, one merge, no migration) → RESTARTS derived (R: `com.cobalt.aset com.cobalt.radar`, no UNCLASSIFIED) → three suites green on `<m1>` (G: offline 4123/0 · with-DB 5012/0 · live-note 146/0, `F2 = F0`) → `<stack-final>` `f5010068` = `<m1>` + docs (D2.3: nothing) → the landed code (4.3: `Updating 594bddd3..f5010068`) → marker (d: `0` → `1`) → no migration (g) → residents up after the merge with new pids (a: aset 79051, radar 79064) → radar cycling (b: 23:23:54 cycle; e: heartbeat fresh, no new RED) → the set's read (s: `1`) → no new failure (h: four counts unchanged). The card surface is not readable here; the desk confirms it with him (L70).
+
+### Deploy close (STEP-7)
+| field | value |
+|---|---|
+| merge | `<pre-merge>` `594bddd3` → `<stack-final>` `f5010068` (fast-forward) |
+| tags | `pre-s4-p1-1009` at `594bddd3` · `deploy-2026-10-09-s4-p1` at `f5010068` |
+| outage | `<t down>` 23:22:00 · `<t up>` 23:22:16 · 16 s |
+| uv sync | none in production (the gate worktree's `.venv` was created at STEP-R: `Installed 253 packages in 820ms`) |
+| proof cost | n/a (no migration) |
+| migrations applied | none |
+| `<RB>` | n/a |
+| snapshot | `4d45238d` (ssd; `cobalt_brain` 6694.4 MB) |
+| RESTARTS done | `com.cobalt.aset com.cobalt.radar` |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 f5010068` — aset and radar down first, up after. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`. |
+
+### PRE-STOP SELF-CHECK
+1. Every smoke row's evidence is quoted above with its `date` (23:22:32 a · 23:22:35 b · 23:22:39 c/d · 23:22:43 f/s · 23:22:46 e1 · 23:23:48 b-tail1 · 23:24:38 e2 · 23:25:19 b-tail2 · 23:25:22 h).
+2. Code tip and head `444e32b5` re-read at P3 (`rev-parse` → `444e32b5` both); `git -C /Users/cobalt/cobalt merge-base --is-ancestor 444e32b5 f5010068` → exit 0.
+3. REVERT-READBACK (h) shown: four counts 18/60/43/39 = `<rp_up>`/`<rpr_up>`/`<re_up>`/`<lc_up>`; every count, sha and `file:line` in this report was read from tool output this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same; `grep -c -F "<<<<<<<" /Users/cobalt/cobalt/src/cobalt/radar/runner.py` → `0`.
+5. THE RELEASE: done at STEP-G (gate's `.env: removed`, `cobalt_dev: 0013 — F2 = F0`); the lock is not held by this run.
 
 ## CONTINUE
-- next: STEP-D2 (gate green at 23:19:24 ET; D0, D1 done; m1 = 156e4b75, restart set = com.cobalt.aset com.cobalt.radar)
+- D2 done (pre-merge 594bddd3, stack-final f5010068, tag pre-s4-p1-1009).
+- OUTAGE STARTING 23:21:47 ET — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- OUTAGE ENDED 23:22:16 ET (16 s): main at f5010068, aset pid 79051, radar pid 79064 running.
+- next: none — smoke GREEN, tag set, report committed (STEP-7).
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime 16 s (23:22:00 → 23:22:16 ET); under 300 s.
+- `REFUSED, not needed`: none. Messages not followed: none (no `CONTINUE` message arrived).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87` (gate log :887, :1979).
+- `RETIRE OWED`: none (no plist removed).
+- Carried RED as read at D1 and through smoke (not the radar family; not aset/sheet/radar probes): `RED archiver last run FAILED — … exit 1`; `RED com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2: … Finviz HTTP failed: Client error '429 Too Many Requests' …`; `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. Unchanged across the deploy; the desk's to chase.
+- Gate stray-rows read: `stray rows: not read (no --tickers given)` — the card says `TICKERS: none`; the build's gate ran `--tickers ZZPB` (`s4-p1-build-2026-10-09.md:126`). Recorded, not a gate leg.
+- `main` at D0 carried an untracked `.claude/settings.json.bak` (outside `src/ tests/ ops/ configs/`, not on the refused list); untouched.
+- `uv` created `/Users/cobalt/cobalt-wt/deploy-s4-p1-1009/.venv` at STEP-R (first `uv run` in the gate worktree).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-s4-p1-1009` and branch `deploy/s4-p1-1009`; the set's branch `ops/s4-p1-1009` and its worktree. Push of `main` and the two tags is his, through the desk (L55).
+- Card `## RECORDS`, copied:
+  - s4-p1-1009: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/s4-p1-check-2026-10-09.md` last line: CHECK DONE · job: s4-p1-1009 · pass: 1 · tip: 444e32b5 · house A: Sol FINDINGS: 5 · findings: 11 · dropped: 0 · held: 4 · fixed: 4 · held unfixed: 0 · open: 7 · house B: Grok FINDINGS: 4 · suites: offline 4117/0 · with-DB 5006/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 23 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 259254
+  - s4-p1-1009: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/s4-p1-1009` → `444e32b5`; code tip `444e32b5`
+  - written by deploy-card.sh at 2026-10-09 22:47 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: the harness's attribution reminder asked for a `Claude-Session:` commit trailer; recorded under `## L74`, not acted on.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-09-s4-p1 f5010068 | set: none | migrations: none | gate: offline 4123/0 · with-DB 5012/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 208792
