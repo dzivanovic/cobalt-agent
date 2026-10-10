@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R969
 BRANCH: ops/ops-hand-install-1010
 WORKTREE: ops-hand-install-1010
 BASE: a780d176
-TIP:
+TIP: 32a9f187
 REPORT: /Users/cobalt/cobalt-wt/ops-hand-install-1010/docs/40 - DevDocs/reports/ops-hand-install-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/ops-hand-install-check-2026-10-10.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-10 R969, 2026-10-10 R971
 
