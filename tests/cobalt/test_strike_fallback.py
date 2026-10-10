@@ -218,3 +218,82 @@ def test_the_thread_logs_a_failed_pass_and_goes_on():
     thread.join(timeout=5)
     assert not thread.is_alive() and tail.n >= 3
     assert thread.daemon
+
+
+# strike-fallback-env-1010 row B: a failing fallback is never silent, and its
+# recovery is said. `step()` is driven directly: no thread, no sleep.
+
+FAILED = "strike fallback: pass failed — the thread goes on: "
+
+
+class ScriptTail:
+    """`pass_once` follows a script: "ok", or an exception to raise."""
+
+    def __init__(self, script):
+        self.script = list(script)
+
+    def pass_once(self):
+        item = self.script.pop(0)
+        if isinstance(item, Exception):
+            raise item
+        return []
+
+
+def _drive(script_at):
+    """[(clock seconds, "ok" | exception), …] → the fallback's (level, message) pairs."""
+    from loguru import logger
+
+    from cobalt.aset.strike import FallbackThread
+
+    clock = [0.0]
+    thread = FallbackThread(ScriptTail([item for _, item in script_at]), interval_s=1, monotonic=lambda: clock[0])
+    records: list[str] = []
+    sink = logger.add(records.append, level="INFO", format="{level}|{message}")
+    try:
+        for at, _ in script_at:
+            clock[0] = at
+            thread.step()
+    finally:
+        logger.remove(sink)
+    pairs = [tuple(r.rstrip("\n").split("|", 1)) for r in records]
+    return [p for p in pairs if p[1].startswith("strike fallback:")]
+
+
+def test_b1_a_failure_streak_then_success_logs_one_error_and_one_recovered_line():
+    down = RuntimeError("database down")
+    assert _drive([(0.0, down), (1.0, down), (2.0, "ok")]) == [
+        ("ERROR", FAILED + "RuntimeError: database down (failed passes: 1)"),
+        ("INFO", "strike fallback: recovered after 2 failed passes"),
+    ]
+
+
+def test_b2_the_same_failure_repeats_its_error_after_60_s_with_the_running_count():
+    down = RuntimeError("database down")
+    assert _drive([(0.0, down), (61.0, down)]) == [
+        ("ERROR", FAILED + "RuntimeError: database down (failed passes: 1)"),
+        ("ERROR", FAILED + "RuntimeError: database down (failed passes: 2)"),
+    ]
+    assert _drive([(0.0, down), (30.0, down), (61.0, down)]) == [
+        ("ERROR", FAILED + "RuntimeError: database down (failed passes: 1)"),
+        ("ERROR", FAILED + "RuntimeError: database down (failed passes: 3)"),
+    ]
+
+
+def test_b3_a_different_failure_text_logs_at_once():
+    assert _drive([(0.0, RuntimeError("database down")), (1.0, OSError("socket closed"))]) == [
+        ("ERROR", FAILED + "RuntimeError: database down (failed passes: 1)"),
+        ("ERROR", FAILED + "OSError: socket closed (failed passes: 2)"),
+    ]
+
+
+def test_b4_a_clean_start_logs_first_pass_ok_once_and_no_error():
+    assert _drive([(0.0, "ok"), (1.0, "ok"), (2.0, "ok")]) == [
+        ("INFO", "strike fallback: first pass OK"),
+    ]
+
+
+def test_b5_one_recovered_line_then_silence():
+    assert _drive([(0.0, RuntimeError("database down")), (1.0, "ok"), (2.0, "ok")]) == [
+        ("ERROR", FAILED + "RuntimeError: database down (failed passes: 1)"),
+        ("INFO", "strike fallback: recovered after 1 failed passes"),
+    ]
