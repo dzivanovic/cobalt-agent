@@ -340,6 +340,9 @@ def test_an_insecure_page_shows_the_https_line(cfg):
     mic = onload.index("device.push({level:'red', text:'no microphone on this device'})")
     assert onload.index("window.isSecureContext") < mic
     assert "else if (!pickType())" in onload[:mic]
+    # the push sits INSIDE the else branch, never after it (check A2)
+    assert ("else if (!pickType()) { device.push({level:'red', text:'no microphone on this device'}); banner(); }"
+            in onload)
     assert onload.count("no microphone on this device") == 1
     line = "'voice needs the https address: ' + HTTPS.replace(/\\/$/, '') + location.pathname"
     assert f"if (!window.isSecureContext){{ banner([{{level:'red', text:{line}}}]); return; }}" in body

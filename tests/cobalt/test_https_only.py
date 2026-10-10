@@ -34,6 +34,14 @@ def _curl_pattern() -> str:
     return m.group(1)
 
 
+def _curl_arms() -> list[str]:
+    """Every arm of the curl shape's first `case "$url" in` block, in order."""
+    text = DEPLOY_SMOKE.read_text()
+    start = text.index('case "$url" in\n') + len('case "$url" in\n')
+    block = text[start:text.index("esac", start)]
+    return re.findall(r"^\s+(\S+)\)", block, re.M)
+
+
 def test_every_probe_reads_the_configured_https_url(monkeypatch):
     monkeypatch.delenv(vc.SCRATCH_ENV, raising=False)
     monkeypatch.delenv(vc.MODEL_ENV, raising=False)
@@ -53,6 +61,8 @@ def test_every_probe_reads_the_configured_https_url(monkeypatch):
     assert urls["sheet_http"] == https
     assert urls["sheet_daymode"] == https + "api/health"
     assert urls["deploy-smoke.sh curl case"] == https + "*"
+    # the curl case admits the https URL ONLY: one admitting arm, then the refusal (check A4)
+    assert _curl_arms() == [https + "*", "*"], _curl_arms()
     assert k4 == {
         "K4.1": https + "api/health",
         "K4.2": https,
