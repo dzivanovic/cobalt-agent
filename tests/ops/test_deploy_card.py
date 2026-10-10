@@ -561,6 +561,23 @@ def test_a_fix_report_naming_one_job_twice_is_refused(tmp_path):
                  "--fix-report names job 'alpha' twice")
 
 
+def test_check_o1_an_empty_fix_report_value_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    _fix_refused(desk, ("--fix-report", ""), "--fix-report '' must be <job>=<fix report path>")
+
+
+def test_check_o2_a_fix_report_path_with_a_pipe_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    fixed, head, report = fix_round(desk)
+    git(desk.repo, "checkout", "-q", "ops/alpha")
+    piped = desk.reports / "alpha|fix.md"
+    piped.write_text(f"# alpha fix round\n\nBUILT · job: x · tip: {fixed} | rows: 1 of 1\n")
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "alpha piped fix report")
+    git(desk.repo, "checkout", "-q", "main")
+    _fix_refused(desk, ("--fix-report", f"alpha={piped}"), "alpha: --fix-report path holds")
+
+
 def test_a_fix_report_round_trips_through_the_launchers_ships_checked(tmp_path):
     """The card written for a fix round passes desk-launch.sh's `ships_checked` (P2, P3): the
     code tip is the fix report's `tip:`, the check's tip its ancestor. RED on BASE: the option
