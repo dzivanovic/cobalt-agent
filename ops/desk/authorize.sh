@@ -15,6 +15,8 @@
 #                        and several dates are read as written)
 #   HOUSE A|HOUSE B overruled <date> R<n> row|committed|at HEAD
 #                        a HOUSE line that ends `overruled <date> R<n>`
+#   HOUSE A OpenAI <date> R<n> row|committed|at HEAD
+#                        a HOUSE A line `OpenAI — his <date> R<n>` (the Sol probe, his OpenAI meter)
 # A row `<date> R<n>` is proved by: `grep -n "^| R<n> " $REPO/docs/40 - DevDocs/reports/cto-<date>.md`
 # → ONE line holding `HIS RULING` and `APPROVED` (row); `git -C $REPO log -1 --format=%H -S"| R<n> |"
 # -- <that file>` non-empty (committed); and that same line present in the file at HEAD, so an
@@ -204,6 +206,21 @@ for h in "HOUSE A" "HOUSE B"; do
             fi
             ;;
     esac
+done
+
+# every column-0 `HOUSE A: OpenAI…` line of the whole card (not only the first HOUSE A line, as
+# `field` reads), each proved like a ruling; a tail, no `his` or `overruled` fails (card 298 S4)
+IFS='
+'
+set -- $(sed -n 's/^HOUSE A: *\(OpenAI.*\)$/\1/p' "$card" | sed 's/[[:space:]]*$//')
+unset IFS
+for v in "$@"; do
+    o=$(printf '%s\n' "$v" | sed -n 's/^OpenAI — his \(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]\) \(R[0-9][0-9]*\)$/\1 \2/p')
+    if [ -z "$o" ]; then
+        row "HOUSE A OpenAI" "field HOUSE A" 1 "no 'OpenAI — his <date> R<n>' alone on the line: $v" 1
+    else
+        prove "HOUSE A OpenAI" ${o% *} ${o#* }
+    fi
 done
 
 if [ -z "$failed" ]; then
