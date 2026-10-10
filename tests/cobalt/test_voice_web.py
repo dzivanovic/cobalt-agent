@@ -248,7 +248,7 @@ def _status_block(js: str) -> str:
     return js[start:js.index("\n", start)]
 
 
-def test_the_widget_reads_a_refused_status_as_red_never_all_clear(cfg):
+def test_the_widget_reads_a_refused_status_as_red_never_all_clear():
     """D3 (voice-v1-check-d-2026-09-24.md FOR THE CLASSIFIER 3; FINAL §7 loud
     states, L9): the `/voice/status` fetch tests `r.ok` BEFORE `r.json()`,
     and its non-OK branch pushes a RED `voice status refused (HTTP <status>)`
