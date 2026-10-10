@@ -105,7 +105,10 @@ STEP3_KEYS = ("dayrange.session", "frame.warmup_source", "slope_norm.bars", "vwa
               # + fix r3 F3's `A-24` row (R49)
               "leg.min_size_atr",
               # + the replay deadline fix's reserve row (`cto-2026-09-24.md` R95)
-              "replay.formations_reserve_s")
+              "replay.formations_reserve_s",
+              # + the strike detector's four rows (S4-P1 T1)
+              "strike.poll_interval_min", "strike.max_armed", "strike.alert_criterion_s",
+              "strike.missed_sweep_interval")
 
 
 def _tunables_digests() -> tuple[str, str]:

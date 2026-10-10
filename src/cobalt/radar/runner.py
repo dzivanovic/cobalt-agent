@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass
@@ -567,6 +568,67 @@ async def build_runner() -> RadarRunner:
     )
 
 
+async def make_strike_loop():
+    """The strike detector (S4-P1 C2/C3) the resident's strike thread ticks."""
+    from cobalt.strike.detector import build_detector
+
+    return await build_detector()
+
+
+class StrikeThread(threading.Thread):
+    """S4-P1 C4: the strike loop in ITS OWN thread with its own event loop,
+    so a scan cycle that blocks (synchronous DB and evaluate work) never
+    delays a strike poll. A tick STARTS every interval the detector derives:
+    the wait is what the tick (its token-paced GETs) left of the interval,
+    never a whole interval on top of it. It stops when `should_keep_running(label)` is false (the kill phrase) or
+    the resident ends, and an exception in a tick is logged loud and the
+    loop goes on at the next tick: it never takes the radar down, and the
+    radar never takes it down."""
+
+    def __init__(self, label: str, make_loop):
+        super().__init__(name="strike", daemon=True)
+        self.label = label
+        self.make_loop = make_loop
+        self.stopping = threading.Event()
+
+    def stop(self) -> None:
+        self.stopping.set()
+
+    async def _wait(self, seconds: float) -> None:
+        await asyncio.get_running_loop().run_in_executor(None, self.stopping.wait, seconds)
+
+    async def _main(self) -> None:
+        loop = None
+        while not self.stopping.is_set() and should_keep_running(self.label):
+            started = time.monotonic()
+            try:
+                if loop is None:
+                    loop = await self.make_loop()
+                await loop.tick()
+            except Exception as e:
+                logger.exception("strike loop: tick failed — the loop goes on at the next tick: {}", scrub(str(e)))
+            if loop is not None:
+                wait = loop.interval_s()
+            else:
+                from cobalt.strike.config import check
+
+                wait = check().poll_interval_min
+            await self._wait(max(0.0, wait - (time.monotonic() - started)))
+        logger.info("strike loop: stopped")
+
+    def run(self) -> None:
+        try:
+            asyncio.run(self._main())
+        except Exception as e:
+            logger.exception("strike loop: thread ended — the radar runs on: {}", scrub(str(e)))
+
+
+def start_strike_thread(label: str, *, make_loop=None) -> StrikeThread:
+    thread = StrikeThread(label, make_loop or make_strike_loop)
+    thread.start()
+    return thread
+
+
 def run_command(_args) -> None:
     async def resident() -> None:
         runner = await build_runner()
@@ -577,7 +639,13 @@ def run_command(_args) -> None:
             await asyncio.sleep(interval)
 
     with job_run(JOB_LABEL) as run:
-        asyncio.run(resident())
+        # The resident only (S4-P1 C4): `scan` and replay start no strike loop.
+        strike = start_strike_thread(JOB_LABEL, make_loop=lambda: make_strike_loop())
+        try:
+            asyncio.run(resident())
+        finally:
+            strike.stop()
+            strike.join(timeout=5)
         run.result = {"stopped": True}
 
 

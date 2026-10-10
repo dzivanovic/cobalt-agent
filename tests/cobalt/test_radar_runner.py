@@ -483,3 +483,181 @@ def test_open_member_values_flow_through_the_resident_scan_and_hold_preserves_th
     assert (by["MSFT"].action, by["MSFT"].rank_metric, by["MSFT"].rank_value) == (Action.HOLD, None, None)
     assert (by["AAA"].action, by["AAA"].rank_metric, by["AAA"].rank_value) == (
         Action.ADMIT, "rvol", Decimal("2.5"))
+
+
+# -- S4-P1 C4: the strike loop runs in its own thread inside the resident -----
+
+import time as _wall  # noqa: E402  (`time` above is datetime.time)
+from contextlib import contextmanager  # noqa: E402
+from types import SimpleNamespace  # noqa: E402
+
+
+class FakeStrikeLoop:
+    def __init__(self, *, raise_first=False):
+        self.ticks: list[float] = []
+        self.attempts = 0
+        self.raise_first = raise_first
+
+    async def tick(self):
+        self.attempts += 1
+        if self.raise_first and self.attempts == 1:
+            raise RuntimeError("constructed tick failure")
+        self.ticks.append(_wall.monotonic())
+
+    def interval_s(self):
+        return 1  # the test cadence
+
+
+def _resident(monkeypatch, loop, *, cycles, block_first_s):
+    import cobalt.radar.runner as r
+
+    calls: list[float] = []
+    seen: dict[str, int] = {}
+
+    class FakeRunner:
+        async def cycle(self):
+            calls.append(_wall.monotonic())
+            if len(calls) == 1:
+                _wall.sleep(block_first_s)  # synchronous DB/evaluate work, blocking the radar's event loop
+                seen["ticks_while_blocked"] = len(loop.ticks)
+            return SimpleNamespace(state="scanning", scan_id=len(calls))
+
+    async def build():
+        return FakeRunner()
+
+    async def make():
+        return loop
+
+    @contextmanager
+    def fake_job_run(_label):
+        yield SimpleNamespace(result=None)
+
+    monkeypatch.setattr(r, "build_runner", build)
+    monkeypatch.setattr(r, "load_tunables",
+                        lambda: SimpleNamespace(by_key={"radar.scan_interval": SimpleNamespace(value=0)}))
+    monkeypatch.setattr(r, "should_keep_running", lambda _label: len(calls) < cycles)
+    monkeypatch.setattr(r, "job_run", fake_job_run)
+    monkeypatch.setattr(r, "make_strike_loop", make, raising=False)
+    return r, calls, seen
+
+
+def test_strike_loop_ticks_while_a_scan_cycle_blocks(monkeypatch):
+    loop = FakeStrikeLoop()
+    r, calls, seen = _resident(monkeypatch, loop, cycles=2, block_first_s=10)
+    r.run_command(None)
+    assert len(calls) == 2
+    assert seen["ticks_while_blocked"] >= 3
+
+
+def test_a_tick_that_raises_does_not_stop_the_strike_loop_or_the_radar(monkeypatch):
+    loop = FakeStrikeLoop(raise_first=True)
+    r, calls, seen = _resident(monkeypatch, loop, cycles=3, block_first_s=4)
+    r.run_command(None)
+    assert loop.attempts >= 3 and len(loop.ticks) >= 2  # the loop went on after the raise
+    assert len(calls) == 3  # cycle() kept being called
+
+
+def test_the_kill_phrase_stops_the_strike_thread_within_one_cadence(monkeypatch):
+    import cobalt.radar.runner as r
+
+    loop = FakeStrikeLoop()
+    keep = {"on": True}
+
+    async def make():
+        return loop
+
+    monkeypatch.setattr(r, "should_keep_running", lambda _label: keep["on"])
+    thread = r.start_strike_thread(r.JOB_LABEL, make_loop=make)
+    deadline = _wall.monotonic() + 5
+    while not loop.ticks and _wall.monotonic() < deadline:
+        _wall.sleep(0.05)
+    assert loop.ticks
+    keep["on"] = False
+    stopped_at = _wall.monotonic()
+    thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert _wall.monotonic() - stopped_at <= 1.5
+
+
+def test_make_strike_loop_builds_the_strike_detector(monkeypatch):
+    import cobalt.radar.runner as r
+    import cobalt.strike.detector as detector
+
+    built = object()
+
+    async def fake_build():
+        return built
+
+    monkeypatch.setattr(detector, "build_detector", fake_build)
+    assert asyncio.run(r.make_strike_loop()) is built
+
+
+def test_scan_starts_no_strike_loop(monkeypatch):
+    import threading
+
+    loop = FakeStrikeLoop()
+    r, calls, _seen = _resident(monkeypatch, loop, cycles=1, block_first_s=0)
+    r.scan_command(SimpleNamespace(replay=None))
+    assert len(calls) == 1
+    assert loop.attempts == 0
+    assert not [t for t in threading.enumerate() if t.name == "strike"]
+
+
+# -- s4-p1-1009 check: findings O1, A3 -----------------------------------------
+
+
+def test_check_o1_the_strike_loop_ticks_every_interval_not_interval_plus_tick(monkeypatch):
+    import cobalt.radar.runner as r
+
+    starts: list[float] = []
+
+    class SlowLoop:
+        async def tick(self):
+            starts.append(_wall.monotonic())
+            await asyncio.sleep(0.6)  # the tick's own GETs, paced through the bucket
+
+        def interval_s(self):
+            return 1
+
+    async def make():
+        return SlowLoop()
+
+    monkeypatch.setattr(r, "should_keep_running", lambda _label: True)
+    thread = r.start_strike_thread(r.JOB_LABEL, make_loop=make)
+    _wall.sleep(4.5)
+    thread.stop()
+    thread.join(timeout=5)
+    gaps = [b - a for a, b in zip(starts, starts[1:])]
+    assert gaps and max(gaps) <= 1.25, gaps
+
+
+def test_the_strike_thread_waits_only_the_remainder_of_the_derived_interval(monkeypatch):
+    import cobalt.radar.runner as r
+
+    timeline = {"now": 0.0}
+    waits = []
+
+    class SlowLoop:
+        async def tick(self):
+            timeline["now"] += 0.6
+
+        def interval_s(self):
+            return 1
+
+    loop = SlowLoop()
+
+    async def make():
+        return loop
+
+    thread = r.StrikeThread(r.JOB_LABEL, make)
+
+    async def fake_wait(seconds):
+        waits.append(seconds)
+        thread.stop()
+
+    monkeypatch.setattr(r, "should_keep_running", lambda _label: True)
+    monkeypatch.setattr(r.time, "monotonic", lambda: timeline["now"])
+    monkeypatch.setattr(thread, "_wait", fake_wait)
+    asyncio.run(thread._main())
+
+    assert waits == [pytest.approx(0.4)]

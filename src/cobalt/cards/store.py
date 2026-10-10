@@ -1044,6 +1044,26 @@ class CardStore:
             for r in rows
         ]
 
+    def strike_cards(self) -> list:
+        """The strike detector's read (S4-P1 C2/C3): every radar card in
+        WATCH or ARMED with its `created_at` and the `at` of its latest
+        ARMED transition — `open_radar_cards` carries neither. Read-only."""
+        from cobalt.strike.detector import StrikeCard
+
+        with self._connect() as conn:
+            rows = conn.execute(
+                "SELECT s.id, s.ticker, s.direction, s.state, s.trade_def_slug, s.trade_def_md5, s.entry, "
+                "s.created_at, (SELECT max(t.at) FROM card_transitions t WHERE t.card_id = s.id "
+                "AND t.to_state = 'ARMED') FROM aset_sizings s "
+                "WHERE s.origin = 'radar' AND s.state = ANY(%s) ORDER BY s.id",
+                ([CardState.WATCH.value, CardState.ARMED.value],),
+            ).fetchall()
+        return [
+            StrikeCard(card_id=r[0], ticker=r[1], direction=str(r[2]).lower(), state=r[3], trade_def_slug=r[4],
+                       trade_def_md5=r[5], entry=r[6], created_at=r[7], armed_at=r[8])
+            for r in rows
+        ]
+
     def radar_board_cards(self, trade_date: date) -> list[dict[str, Any]]:
         """The `/radar` ladder's read (STEP-8): every `"user".radar_cards_v`
         row that is open, plus the terminal ones whose last transition

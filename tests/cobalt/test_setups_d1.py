@@ -56,7 +56,10 @@ ADDED_KEYS = (*STEP3_KEYS, "leg.consolidation_max_retrace", "range.micro.bound_f
               "levels.set", "level.rejected.rule",
               "range_break.retest_tolerance_atr", "range_prior.rule", "event.stop_hit.source", "turn_candle.rule",
               "leg.min_size_atr",  # + fix r3 F3's `A-24` row (R49)
-              "replay.formations_reserve_s")  # + the replay deadline fix's reserve row (R95)
+              "replay.formations_reserve_s",  # + the replay deadline fix's reserve row (R95)
+              # + the strike detector's four rows (S4-P1 T1), as every added row (R95)
+              "strike.poll_interval_min", "strike.max_armed", "strike.alert_criterion_s",
+              "strike.missed_sweep_interval")
 STEP3_CONVENTIONS = ("dayrange.session", "frame.warmup_source", "vwap.anchor")
 
 

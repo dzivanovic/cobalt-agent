@@ -114,3 +114,6 @@ DEPLOY-HUB STEP-G (d2) runs it from the gate, which has no `.env`
 pins the no-flag path. The SheetMode coupling still exits 1 on an
 unmodelled sheet, and Day modes still runs after it on the same sheets
 object. The first no-flag test passed on the first DB read alone.
+
+## 2026-10-09 — s4-p1-1009
+`cobalt strike …` registered (`strike_cli.add_parser(sub)`, after `voice_cli`); `_cmd_validate` prints the strike block (`strike.config.validate_command_lines`) right after the archiver's, and a `StrikeConfigError` there prints `FAILED: <key or unit>` and exits 1.

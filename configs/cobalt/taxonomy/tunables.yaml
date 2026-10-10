@@ -728,6 +728,46 @@ tunables:
     source: ruling
     consumers: ["cobalt.radar.poller (RTH stale-bar poll_failures entry)"]
 
+  # --- S4-P1 strike detector (F9 19b) --------------------------------
+  # No strike ceiling and no fixed poll interval (card S4-P1 DECISION D2,
+  # ruled 2026-10-09): the ceiling is radar.finviz_max_rpm, shared, and the
+  # interval is derived from the headroom the radar leaves.
+  - key: strike.poll_interval_min
+    value: 2
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.strike.detector (floor under the derived interval)", "cobalt.strike.measure (cadence floor; Charter F9 2-3 s)"]
+
+  - key: strike.max_armed
+    value: 5
+    unit: count
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.strike.detector (ARMED names watched; Charter §6)", "cobalt.strike.measure (names per run)"]
+
+  - key: strike.alert_criterion_s
+    value: 5
+    unit: duration
+    scope: global
+    dynamic: false
+    status: proposed
+    source: ruling
+    consumers: ["cobalt.strike.measure (verdict: lag p95 against it; Charter F9, re-ruled by the measurement)"]
+
+  - key: strike.missed_sweep_interval
+    value: 100
+    unit: duration
+    scope: global
+    dynamic: false
+    status: solidified
+    source: ruling
+    consumers: ["cobalt.strike.detector (WATCH -> MISSED sweep; = radar.poll_interval)"]
+
   # --- Bar Archiver: append-only redesign (2026-09-19) --------------------
   # FINAL design `docs/30 - Design/ARCHIVER-APPEND-ONLY-FINAL-2026-09-19.md`
   # §10, derived by the four-house tribunal (L67) from the owner's R14/R15
