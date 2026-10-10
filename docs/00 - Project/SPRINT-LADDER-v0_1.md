@@ -878,6 +878,31 @@ OFF-LADDER work of 2026-10-08 (ruled, not on a ladder line; each with the ruling
 | Day-open desk check (card 109) | DROPPED | Brain order R664 (L79). |
 | Standing rules of the day | RULED | 10-08 R662 (the brain directs the desk, L79 amended), R685 (a defect he reports is the desk's, APPLIED), R686 (read-only production reads, APPLIED), R689 (radar taps are one-tap, APPLIED), R692 (floor, APPLIED; LAWS fold at the close). |
 
+### Status 2026-10-09
+Sprint status block (ruled 09-19 R14); the earlier `### Status` blocks above stay as written. Written by close hub `close-1009` for 10-09 alone from `reports/cto-2026-10-09.md` rows R714–R791 (06:58 → 20:55 ET); re-verified against the tree (L35): `git tag --list "deploy-2026-10-09*"` = `-arm-unsized`, `-disarm-one-tap`, `-guard-d1`, `-guard-d2-g7`, `-radar-top50`. The 10-08 close ran (`CLOSE PUSHED 633a1792`). Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15 | DONE-LIVE | Unchanged (see 10-08). |
+| S3 smoke (live morning) | DONE (his word) | His R721 (10:40 ET): "smoke test complete"; screenshots NN short C, ARM, fill 134 sh, ½ off 67 sh, flat 67 sh, CLOSED 14:39:44Z. DRC, proposal, replay not seen by the desk. |
+| S4-P1 (card `72`, re-measure + detector) | BUILT-NOT-MERGED | R791: tip `2433078f`, 8 of 8 rows, offline 4113/0, with-DB 5002/0; check `da3e5a51` running. W-1 fixed in-build on the brain's direction (R789). D2 settled (R759: one 50 rpm Finviz bucket). |
+| S4-P2 (card `73`, SSE + notification + fallback) | NOT STARTED | Drafter follows the P1 deploy (§5 OWED). |
+
+**Stop date: 2026-10-14 (S4, capped, day 2 of 7 on 10-09). S4: ON TIME.** Reason: P1 is built and under check on 10-09, D2 and the smoke are cleared; P2 is not drafted and the cobalt_dev lock serialises every deploy (R786, R787, R790), so the margin is the five days left. S3 ended LATE (stop 10-07, smoke 10-09).
+
+OFF-LADDER work of 2026-10-09 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Guard D2 + G7 | DONE-LIVE | Brain R707 (L79), R759. `deploy-2026-10-09-guard-d2-g7` `ed4652f4`, RESTARTS none, smoke GREEN (R741). |
+| DISARM one-tap chips (card 134) | DONE-LIVE | His R689 (10-08). `deploy-2026-10-09-disarm-one-tap` `69d24e5d`, RESTARTS aset radar, smoke GREEN (R743). |
+| Guard D1 | DONE-LIVE | Brain R707. `deploy-2026-10-09-guard-d1` `65a3c209`, RESTARTS none, smoke GREEN (R755). |
+| ARM inert on unsized card (card 152) | DONE-LIVE | His defect R719, R685. `deploy-2026-10-09-arm-unsized` `f355eee2`, RESTARTS aset radar, smoke GREEN (R757). |
+| Radar top-50 shows 51 names (card 154) | DONE-LIVE | His backlog item R716, R685. `deploy-2026-10-09-radar-top50` `e4586978`, RESTARTS aset radar, smoke GREEN (R761). |
+| https only (card 156) | BUILT-NOT-MERGED | His R718 (L80). Tip `4dfe6114`; his M2, M3 done (R763, R766); check `87e4d591` running; his M5 (bind loopback, kickstart) after. |
+| Voice clarify/Confirm fix (card 193, deploy card 200) | BUILT-NOT-MERGED | His report R770. Tip `9feda305`, CHECK DONE ready YES (R790); deploy waits on card 199 and the dev lock. |
+| Desk pane by id (card 197, deploy card 199) | BUILT-NOT-MERGED | Brain R779 (L79). Tip `b7c52e51`, CHECK DONE ready YES (R786); deploy waits on the dev lock. |
+| Standing rules of the day | RULED | 10-09 R718 (https only, LAWS L80, APPLIED), R724 (desk record kept), R771 ("You always ask brain first", APPLIED). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

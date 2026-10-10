@@ -3680,3 +3680,86 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-08*"` = `deploy-2026-10-08-desk-ops-fixes-attempt2`, `deploy-2026-10-08-guard-g2-open-reads`, `deploy-2026-10-08-price-floor`, `deploy-2026-10-08-radar-display-fix`, `deploy-2026-10-08-stt-model-fix`.
 - STOP LINE (L35), `reports/close-2026-10-07.md`: `CLOSE PUSHED 1f9ac874 · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-08.md` `## 8`.
+
+### 2026-10-09 — Guard D2+G7, DISARM one tap, guard D1, ARM-unsized and radar top-50 deployed; https-only, voice fix, desk pane and S4-P1 built
+- R714 06:58 RECORD: day-open GREEN (C1-C6), `day-open-2026-10-09.md`.
+- R715 07:05 RECORD: day-open watch uses `'^SEAT VERDICT'`.
+- R716 07:08 RECORD (brain, L79): `/radar` top-50 shows 51 names; small display card.
+- R717 07:10 DESK RECORD (brain): voice box needs a secure origin; https card after the S3 smoke.
+- R718 07:14 HIS RULING: "yes https only please", every page https via `tailscale serve`. APPROVED, APPLIED (L80).
+- R719 07:30 RECORD: his defect, ARM live on an unsized card returns 409; small card.
+- R720 07:45 RECORD: WITHDRAWN by him, ½ and ⅓ buttons not a defect.
+- R721 10:40 RECORD: his word "smoke test complete"; S3 smoke done.
+- R722 11:30 LAUNCHED: four Opus drafters (arm-unsized, radar-top50, https-only, guard D2).
+- R723 11:30 LAUNCHED: brain `aa94b309` replaced by `f20cc306`.
+- R724 ≤11:41 DESK RECORD (brain): each startable item its own OWED line; no QUEUE rows.
+- R725 ≤11:41 ASKED HIM: D2 Finviz rate, one line.
+- R726 ≤11:41 LAUNCHED: brain judged card 134 D1-D7 KEEP; preflights and drafters.
+- R727 11:42 ASKED HIM: `tailscale serve` steps M0-M3 (card 156).
+- R728 11:43 RECORD: REFRESH at 300,454 tokens, successor `4cbc8a50`.
+- R729 11:45 LAUNCHED: guard D2 build `0ff8c770` (card `158`).
+- R730 11:45 LAUNCHED: D1 `162` and G7 `164` preflights ready NO; drafter `b6672914`.
+- R731 11:47 LAUNCHED: amend landed `9db1211c`; preflights r2 for D1 and G7.
+- R732 11:48 LAUNCHED: G7 preflight r2 READY YES; G7 build `1979c01a`.
+- R733 11:50 LAUNCHED: D1 preflight r2 ready NO; drafter `a04e1333`.
+- R734 11:53 LAUNCHED: card `162` amended `5c1e57dd`; preflight r3 `01a03b97`.
+- R735 11:56 RECORD: D1 preflight r3 READY YES.
+- R736 12:17 LAUNCHED: G7 BUILT `b8047e79`; check `4b7f4a92`.
+- R737 12:22 LAUNCHED: D2 BUILT `187bfd6c`; check `cb10f3ec`.
+- R738 12:26 LAUNCHED: DISARM 134 BUILT `f70f3db8`; check `bb0f05d6`.
+- R739 12:44 LAUNCHED: top-50 BUILT `1ad357a3`; check `9f800028`.
+- R740 12:52 RECORD: D2 and G7 CHECK DONE ready YES; deploy card `175`.
+- R741 13:55 RECORD: DEPLOYED `deploy-2026-10-09-guard-d2-g7` `ed4652f4`.
+- R742 13:53 LAUNCHED: deploy hub `6f4a0c01` (card `176`); D1 build `cc0fb55d`.
+- R743 14:30 RECORD: DEPLOYED `deploy-2026-10-09-disarm-one-tap` `69d24e5d`.
+- R744 14:32 LAUNCHED: top-50 seam merge as a card row; drafter `83fb8443`; ARM preflight `e05b85ab`.
+- R745 14:35 LAUNCHED: row D said `git merge`; drafters `21f40410`, `39ae9d44`.
+- R746 14:36 LAUNCHED: row D rewritten `3a33fdfc`; builder `90991bbe`.
+- R747 14:38 RECORD: REFRESH at 302,570 tokens, successor `a3a43852`.
+- R748 14:45 LAUNCHED: ARM preflight r2 `d95899e7`.
+- R749 14:41 LAUNCHED: D1 BUILT `8182771b`; check `7380d81b`.
+- R750 14:42 LAUNCHED: ARM preflight r2 READY YES; build `846dc13d`.
+- R751 15:07 LAUNCHED: top-50 fix round BUILT `bdd10f72`; re-check `1aa1ac0b`.
+- R752 15:10 OPEN: re-check `1aa1ac0b` FAILED at `## 1` (stale stage dir).
+- R753 15:20 RECORD: D1 CHECK DONE ready YES; deploy card `182`; launch refused (dev lock).
+- R754 15:28 LAUNCHED: ARM-unsized BUILT `676abb60`; D1 deploy hub `f2e1f62c`.
+- R755 16:04 RECORD: DEPLOYED `deploy-2026-10-09-guard-d1` `65a3c209`.
+- R756 16:43 LAUNCHED: ARM check ready YES; deploy card `183`; hub `75944848`.
+- R757 17:20 RECORD: DEPLOYED `deploy-2026-10-09-arm-unsized` `f355eee2`.
+- R758 17:54 LAUNCHED: re-check `1aa1ac0b` removed (R752 void); deploy card `184`; hub `9f3473fe`.
+- R759 17:54 DESK RECORD (brain, L79): D2 settled (one 50 rpm bucket); tailscale stays his.
+- R760 17:54 ASKED HIM: `tailscale serve` commands in this session.
+- R761 18:30 RECORD: DEPLOYED `deploy-2026-10-09-radar-top50` `e4586978`.
+- R762 18:31 LAUNCHED: drafter `ea78784e` re-points S4-P1 card `72`.
+- R763 18:40 RECORD: M2 DONE by him, `tailscale serve` up; ASKED M3.
+- R764 18:55 ASKED HIM: S4-P1 preflight launch declined by him; launch or hold?
+- R765 18:41 LAUNCHED: his yes; S4-P1 preflight `4d9b7754`.
+- R766 18:42 RECORD: M3 done by him; amend drafter `b0123b32`.
+- R767 18:44 LAUNCHED: https amend `9562c516`; preflight r2 `63c92a7c`.
+- R768 18:47 LAUNCHED: https preflight r2 1 FAIL; amend drafter `c428bf07`.
+- R769 18:48 LAUNCHED: S4-P1 build `d5bef4f9`; https preflight r3 `dfa2aa2d`.
+- R770 18:48 ASKED: brain first on the voice bug.
+- R771 18:44 HIS RULING: "You always ask brain first." APPROVED, APPLIED (contract, wake-up, NOW).
+- R772 18:55 DESK RECORD (brain, L79): voice Confirm/clarify fixes; drafter prompt `192`.
+- R773 19:00 RECORD: REFRESH at 304,494 tokens, successor launched.
+- R774 18:52 LAUNCHED: took over as `923058b9`; voice drafter `b66816e9`.
+- R775 18:52 LAUNCHED: https build `4b0161a5` (card `156`).
+- R776 18:55 DESK RECORD (brain, L79): `plan_shape` joins row C of card 193.
+- R777 18:58 LAUNCHED: voice card 193 DRAFTED; preflight `d17e39ff`.
+- R778 19:03 LAUNCHED: preflight card 193 READY YES; build `118cf74d`.
+- R779 18:59 DESK RECORD (brain, L79): one desk pane by id.
+- R780 19:05 LAUNCHED: desk-pane drafter `ec572454`.
+- R781 19:08 LAUNCHED: fresh brain `3d24c7e5`, handover committed `a82d8b6f`.
+- R782 19:14 LAUNCHED: card 197 DRAFTED; preflight `0eb2dc1c`.
+- R783 19:20 LAUNCHED: card 197 preflight READY YES; build `e30e6be1`.
+- R784 19:30 LAUNCHED: card 197 BUILT `b7c52e51`; check `a23aa606`.
+- R785 19:40 LAUNCHED: card 193 BUILT `9feda305`; check `91257733`.
+- R786 19:56 RECORD: card 197 CHECK DONE ready YES; deploy card 199 launch refused (dev lock).
+- R787 20:10 LAUNCHED: card 156 BUILT `4dfe6114`; check `87e4d591`.
+- R788 20:25 ASKED: S4-P1 build `d5bef4f9` FAILED at W; brain asked first.
+- R789 20:31 DESK RECORD (brain, L79): W-1 fixed in-build; CONTINUE sent to `d5bef4f9`.
+- R790 20:40 RECORD: card 193 CHECK DONE ready YES; deploy card 200 written, waits on dev lock.
+- R791 20:55 LAUNCHED: S4-P1 card 72 BUILT `2433078f`; check `da3e5a51`.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-09*"` = `deploy-2026-10-09-arm-unsized`, `deploy-2026-10-09-disarm-one-tap`, `deploy-2026-10-09-guard-d1`, `deploy-2026-10-09-guard-d2-g7`, `deploy-2026-10-09-radar-top50`.
+- STOP LINE (L35), `reports/close-2026-10-08.md`: `CLOSE PUSHED 633a1792 · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-09.md` `## 8`.

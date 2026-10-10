@@ -19,6 +19,32 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-10-09 -->
+### 2026-10-09
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-10-09 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `gpt-5.6-sol` | codex · — | 25,168,384 | 0 | 134,828 | $23.83 | +$4.70 |
+| `grok-4.7-build` | grok · — | 12,972,544 | 0 | 463,843 | $4.44 | +$1.12 |
+| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 722 | $0.00 [^free] | $0.00 |
+| `claude-opus-5-5` | claude · — | 293,842,125 | 6,790,078 | 1,401,344 | **unpriced** | — |
+| `claude-sonnet-5-5` | claude · — | 211,018,524 | 3,546,482 | 804,001 | **unpriced** | — |
+
+**Day total (API-equivalent):** ≥ $28.28 · **559,625,019** tokens across 5 model(s), seats: claude, codex, grok, qwen
+**Fresh input tokens:** 3,482,144 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `claude-opus-5-5`, `claude-sonnet-5-5`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
+
+[^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
+
+_Generated 2026-10-09 21:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20261009 --until 20261009 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-10-09 -->
+<!-- /cobalt:section seat-usage:2026-10-09 -->
 <!-- cobalt:section seat-usage:2026-10-08 -->
 ### 2026-10-08
 
