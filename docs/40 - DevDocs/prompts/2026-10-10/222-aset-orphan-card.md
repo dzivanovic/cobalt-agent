@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R853
 BRANCH: ops/aset-orphan-1010
 WORKTREE: aset-orphan-1010
 BASE: ddaae952
-TIP:
+TIP: 1987849b
 REPORT: /Users/cobalt/cobalt-wt/aset-orphan-1010/docs/40 - DevDocs/reports/aset-orphan-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/aset-orphan-check-2026-10-10.md
+HOUSE B: as needed
 RULINGS: 2026-10-08 R685
 
 ## ROWS
