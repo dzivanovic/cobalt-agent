@@ -248,5 +248,21 @@ def test_a_500_stays_a_plain_collector_error(monkeypatch):
     assert str(e.value).startswith("Fetch failed for TESTARCH/i5: Finviz HTTP failed: ")
 
 
+def test_check_o1_a_huge_retry_after_is_still_a_typed_rate_limit(monkeypatch):
+    _transport_answering(monkeypatch, 429, {"Retry-After": "9" * 400})
+    with pytest.raises(FinvizRateLimited):
+        asyncio.run(fetch_bars("TESTARCH", Interval.I5, "synthetic-token"))
+
+
+def test_a_429_with_an_unrepresentable_delta_stays_typed(monkeypatch):
+    _transport_answering(monkeypatch, 429, {"Retry-After": "9" * 400})
+
+    with pytest.raises(CollectorError) as error:
+        asyncio.run(fetch_bars("TESTARCH", Interval.I5, "synthetic-token"))
+
+    assert isinstance(error.value, FinvizRateLimited)
+    assert error.value.retry_after is None
+
+
 def test_scrub_redacts_auth_query():
     assert scrub("request failed ?auth=synthetic-secret&x=1") == "request failed ?auth=REDACTED&x=1"
