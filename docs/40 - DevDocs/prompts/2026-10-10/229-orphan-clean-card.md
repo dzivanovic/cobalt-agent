@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R855
 BRANCH: ops/orphan-clean-1010
 WORKTREE: orphan-clean-1010
 BASE: 1286d448
-TIP:
+TIP: 0ddb7114
 REPORT: /Users/cobalt/cobalt-wt/orphan-clean-1010/docs/40 - DevDocs/reports/orphan-clean-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/orphan-clean-check-2026-10-10.md
+HOUSE B: as needed
 RULINGS: 2026-10-10 R855
 
 ## ROWS
