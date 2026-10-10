@@ -5,8 +5,9 @@ Every run copies ops/desk/desk-launch.sh into tmp_path/ops/ beside two stubs: de
 COBALT_REPO_ROOT points the script at a tmp repo whose OPS-HAND.md is a constructed fixed file
 (the shape of H3's line, its Read path the tmp file); COBALT_WT_ROOT at a tmp worktree root, so
 the seat's dir is <wt>/.ops-hand. `claude` is a stub on PATH that records its cwd and arguments
-(`claude agents --json` answers `[]`). Two tests run the tree's own OPS-HAND.md through the same
-script (H3). Nothing here reads a real session list or launches a seat.
+(`claude agents --json` answers `[]`). One test runs the tree's own OPS-HAND.md through the same
+script (H3); two more read its launch line and its installed title. Nothing here reads a real
+session list or launches a seat.
 """
 
 from __future__ import annotations
@@ -293,20 +294,17 @@ def test_h3_the_real_line_is_h3s_shape():
     assert line == line_for(REAL_PATH)
 
 
-def test_h3_the_real_file_is_refused_while_it_holds_its_install_token(desk):
-    assert INSTALL in REAL.read_text().splitlines()[0]
-    shutil.copy(REAL, desk.fixed)
-    desk.commit("real")
-    refused(desk.run(), f"OPS-HAND.md still carries its {INSTALL} token")
-
-
-def test_h3_the_real_file_passes_once_his_row_fills_the_title(desk):
-    """The desk replaces the title token on his row (D2); the tmp repo stands in for the repo,
-    so the Read path is re-pointed at the tmp copy the same way."""
+def test_h3_the_real_file_is_installed_on_his_row():
+    """D2, his R969: the title carries his approval row in place of the token."""
     text = REAL.read_text()
-    first, rest = text.split("\n", 1)
-    first = first[: first.index(INSTALL)] + "(INSTALLED: his row, constructed)"
-    desk.fixed.write_text(first + "\n" + rest.replace(REAL_PATH, str(desk.fixed)))
+    assert INSTALL not in text
+    assert text.splitlines()[0].endswith("HIS RULING · APPROVED 2026-10-10 R969")
+
+
+def test_h3_the_real_file_passes_as_installed(desk):
+    """The real text, title as it stands; the tmp repo stands in for the repo, so only the
+    Read path is re-pointed at the tmp copy."""
+    desk.fixed.write_text(REAL.read_text().replace(REAL_PATH, str(desk.fixed)))
     desk.commit("real, installed")
     done = desk.run()
     assert done.returncode == 0, done.stderr

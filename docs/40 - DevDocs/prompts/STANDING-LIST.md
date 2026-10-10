@@ -218,3 +218,16 @@ NONE NEW: every string stands, in the same order, on the line of `prompts/2026-1
 | `Bash(git -C /Users/cobalt/cobalt log*)` · `… show*` · `… diff*` · `… ls-tree*` | standing (`23`) | a ruling row's commit, a file at a commit, a branch's tree | read only | — |
 
 Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)` (standing). `desk-launch.sh brain` refuses a handover outside `prompts/<YYYY-MM-DD>/` or holding a fill token, a hub still carrying its install token, and any live session named `brain` (his 2026-09-30 R76: a brain is stopped only on his word, so the successor launches after he has stopped it).
+
+## 8. `OPS-HAND.md` — THE OPS-HAND SEAT, launched on its own file (card `prompts/2026-10-10/231-ops-hand-card.md` H3, H4; his 2026-10-10 R855 for the build, R969 for D1-D5 and this install): 4 allow, 17 deny · `--model claude-sonnet-5-5` · `--permission-mode default` (the one fixed file whose mode is `default`: every Bash call waits on his tap, L63 EXCEPTION) · `--remote-control ops-hand --name ops-hand` · launched from `/Users/cobalt/cobalt-wt/.ops-hand` by `desk-launch.sh ops-hand` · NO `--add-dir`
+
+**NEW as a launch line** (L62: a string not in this file is NEW): all four allow strings and the mode `default`, approved as written by his R969. The seat runs only what the CTO desk hands it by `SendMessage`; guard rule G12 (`ops/desk/bare-guard.py`) holds every Bash call to its class before any prompt; `desk-launch.sh ops-hand` (H4) copies and checks the line word for word against `OPS-HAND.md` and refuses a persisted `settings.local.json` in the seat's directory (D4).
+
+| string | for | can touch | never touches |
+|---|---|---|---|
+| `SendMessage` | the seat's one reply channel to `cto-desk` | the desk's inbox | any other seat |
+| `Bash(ps *)` | the desk's `ps -o pid,ppid,command -p <pid>` before a `kill`, and its other `ps` reads | read only | writes nothing |
+| `Bash(pgrep *)` | the desk's `pgrep` reads | read only | writes nothing |
+| `Bash(launchctl print *)` | the desk's `launchctl print gui/<uid>/…` reads | read only | writes nothing |
+
+Deny (17): `AskUserQuestion`, `EnterWorktree`, `Write`, `Edit`, `NotebookEdit`, `Agent`, `Monitor`, `CronCreate`, `RemoteTrigger`, `ScheduleWakeup`, `Skill`, `WebFetch`, `mcp__*`, `Artifact*`, `Bash(git *)`, `Bash(claude *)`, `Bash(sudo *)`. The `kill` and `launchctl kickstart` of its class are no allow string: each is the desk's command, typed whole, on his tap (G12 admits only the class; his tap is "Yes" only, D4).

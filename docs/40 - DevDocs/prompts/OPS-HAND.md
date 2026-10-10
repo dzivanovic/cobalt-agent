@@ -1,4 +1,4 @@
-# OPS-HAND — the ops-hand seat (card 2026-10-10 231; his 2026-10-10 R855) «INSTALL: his row»
+# OPS-HAND — the ops-hand seat (card 2026-10-10 231; his 2026-10-10 R855) HIS RULING · APPROVED 2026-10-10 R969
 
 THE SEAT: `ops-hand`, launched by the CTO desk only through `sh /Users/cobalt/.claude/ops/desk-launch.sh ops-hand`, in `/Users/cobalt/cobalt-wt/.ops-hand`, in permission mode `default`. Every Bash call it makes waits on a permission prompt; the prompt reaches Dejan by remote control, and his tap is his approval (L37). Nobody else answers it.
 
