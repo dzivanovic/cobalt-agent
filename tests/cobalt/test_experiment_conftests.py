@@ -15,6 +15,15 @@ def _reexports(source: str, name: str) -> bool:
     return any(line.startswith(f"{name} = ") for line in source.splitlines())
 
 
+def _aliases(source: str, name: str) -> bool:
+    """The re-export binds the fixture itself (`<name> = <module>.<name>`),
+    not some other value (check S1)."""
+    return any(
+        line.startswith(f"{name} = ") and line.rstrip().endswith(f".{name}")
+        for line in source.splitlines()
+    )
+
+
 def _conftests_with_dev_db_tx() -> list[Path]:
     return sorted(
         path for path in _EXPERIMENTS.glob("*/conftest.py")
@@ -25,7 +34,7 @@ def _conftests_with_dev_db_tx() -> list[Path]:
 def test_a1_every_dev_db_tx_reexport_carries_offline_skip_guard():
     lacking = [
         path.parent.name for path in _conftests_with_dev_db_tx()
-        if not _reexports(path.read_text(), "offline_skip_guard")
+        if not _aliases(path.read_text(), "offline_skip_guard")
     ]
     assert not lacking, (
         f"experiment conftests re-export dev_db_tx without offline_skip_guard: {lacking}"
