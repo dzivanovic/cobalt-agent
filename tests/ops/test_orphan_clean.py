@@ -476,3 +476,135 @@ def test_pid_reused_between_term_and_kill_is_not_signalled(fake):
     assert fake.calls("kill") == [["-TERM", str(ORPHAN)]]
     assert lines(done, "RUN:") == [f"RUN: kill -TERM {ORPHAN}"]
     never_the_residents(fake)
+
+
+# ---- the check (orphan-clean-1010-check) ----------------------------------------------------
+
+
+def test_identity_read_at_verify_is_the_candidates(fake):
+    t = r851_table()
+    # every `ps -p` reading of the orphan's pid shows another ppid-1 program: the pid was reused after lsof
+    t["procs"][3].update(reused_after=0, reused_command="/usr/sbin/some-daemon --serve")
+    fake.set(t)
+    done = fake.run("--kill", "aset")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert fake.calls("kill") == []
+    never_the_residents(fake)
+
+
+def test_x1_ps_p_command_must_still_be_python_m_aset(fake):
+    t = r851_table()
+    t["procs"][3].update(reused_after=0, reused_command="/usr/bin/some-other-program --serve")
+    fake.set(t)
+    done = fake.run("--kill", "aset")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert fake.calls("kill") == [], fake.calls("kill")
+
+
+def test_resource_ownership_is_rechecked_before_signal(fake):
+    t = r851_table()
+    fake.set(t)
+    bin_dir = Path(fake.env["PATH"].split(os.pathsep, 1)[0])
+    dropping_lsof = HEAD + f'''log("lsof")
+t = load()
+a = sys.argv[1:]
+pid = int(a[a.index("-p") + 1])
+p = proc(t, pid)
+if "--" in a:
+    path = a[a.index("--") + 1]
+    if p is not None and p.get("holds_lock") and path == {LOCK!r}:
+        print("n" + path)
+        p["holds_lock"] = False
+        save(t)
+        sys.exit(0)
+sys.exit(1)
+'''
+    (bin_dir / "lsof").write_text(dropping_lsof)
+    (bin_dir / "lsof").chmod(0o755)
+
+    done = fake.run("--kill", "aset")
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert lines(done, "UNVERIFIED:")
+    assert fake.calls("kill") == []
+
+
+def test_launchctl_not_found_plus_other_error_is_unverifiable(fake):
+    t = r851_table()
+    t["launchctl"] = {
+        "stderr": NOT_FOUND + "launchctl: input/output error\n",
+        "code": 5,
+    }
+    fake.set(t)
+
+    done = fake.run("--kill", "aset")
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: " in done.stderr
+    assert fake.calls("kill") == []
+
+
+def test_x1_not_found_substring_does_not_hide_the_job_pid(fake):
+    job = 7300
+    t = {
+        "procs": [
+            {"pid": job, "ppid": 1, "command": f"{PY} -m cobalt.aset", "holds_lock": True, "listens": True},
+        ],
+        "launchctl": {
+            "stdout": running(job) + 'Could not find service "com.cobalt.aset" in domain for user gui: 501\n',
+            "code": 0,
+        },
+    }
+    fake.set(t)
+    done = fake.run("--kill", "aset")
+    assert fake.calls("kill") == [], done.stdout + done.stderr
+
+
+def test_ps_a_failure_prints_unverified_then_refuses(fake):
+    t = r851_table()
+    t["ps_error"] = "ps: permission denied"
+    fake.set(t)
+
+    done = fake.run("--kill", "aset")
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    unverified = lines(done, "UNVERIFIED:")
+    assert len(unverified) == 1, done.stdout
+    assert unverified[0].startswith("UNVERIFIED: ? — ")
+    assert "REFUSED: " in done.stderr
+    assert fake.calls("kill") == []
+
+
+def test_ps_a_stderr_prints_unverified_then_refuses(fake):
+    t = r851_table()
+    t["ps_error"] = "ps: permission denied"
+    fake.set(t)
+    done = fake.run("--kill", "aset")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert lines(done, "UNVERIFIED:"), done.stdout + done.stderr
+    assert "REFUSED: " in done.stderr
+    assert fake.calls("kill") == []
+
+
+def test_ps_p_failure_prints_unverified_then_refuses(fake):
+    t = r851_table()
+    fake.set(t)
+    bin_dir = Path(fake.env["PATH"].split(os.pathsep, 1)[0])
+    broken_ps = PS.replace(
+        'if a[:1] == ["-p"]:\n    pid = int(a[1])',
+        'if a[:1] == ["-p"]:\n'
+        '    sys.stderr.write("ps: permission denied\\n")\n'
+        '    sys.exit(1)\n'
+        '    pid = int(a[1])',
+    )
+    (bin_dir / "ps").write_text(broken_ps)
+    (bin_dir / "ps").chmod(0o755)
+
+    done = fake.run("--kill", "aset")
+
+    assert done.returncode == 1, done.stdout + done.stderr
+    unverified = lines(done, "UNVERIFIED:")
+    assert len(unverified) == 1, done.stdout
+    assert unverified[0].startswith(f"UNVERIFIED: {ORPHAN} — ")
+    assert "REFUSED: " in done.stderr
+    assert fake.calls("kill") == []
