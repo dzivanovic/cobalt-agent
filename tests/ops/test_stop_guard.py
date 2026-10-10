@@ -232,6 +232,20 @@ def test_an_empty_report_value_blocks(tmp_path):
     assert w.run().returncode == 2
 
 
+def test_h5_the_ops_hand_seat_stops_freely(tmp_path):
+    """Card 231 H5, a pin: cwd <wt>/.ops-hand is a worker cwd here and its launch message names
+    no CARD:, so the seat's stop is never blocked (the desk stops it with claude stop / rm)."""
+    w = World(tmp_path)
+    hand = tmp_path / "wt" / ".ops-hand"
+    hand.mkdir()
+    w.transcript.write_text(json.dumps(
+        {"type": "user", "message": {"role": "user",
+                                     "content": f"Read '{HUB}/OPS-HAND.md' and follow it exactly."}}
+    ) + "\n")
+    r = w.run(cwd=hand)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
 def test_unreadable_hook_input_never_blocks(tmp_path):
     w = World(tmp_path)
     r = w.run(raw="not json")
