@@ -550,7 +550,10 @@ class FallbackThread(threading.Thread):
         try:
             self.tail.pass_once()
         except Exception as e:
-            text = f"{type(e).__name__}: {e}"
+            try:
+                text = f"{type(e).__name__}: {e}"
+            except Exception:  # an exception that cannot print itself still never stops the thread
+                text = f"{type(e).__name__}: <str() failed>"
             self._failed += 1
             now = self.monotonic()
             repeat_due = self._last_error_at is None or now - self._last_error_at >= REPEAT_ERROR_S

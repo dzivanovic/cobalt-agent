@@ -18,3 +18,6 @@ The stream's and the fallback tail's cursor moves only past a seam row (the last
 
 ## 2026-10-10 — strike-fallback-env-1010
 `FallbackThread.step()` holds one pass and its logging decision (`run` calls it; `monotonic` is a keyword-only seam): a failure streak logs ERROR `… (failed passes: <n>)` at its first failure, at once for a new text, and again every `REPEAT_ERROR_S = 60.0` s while the same text persists; its end logs INFO `strike fallback: recovered after <n> failed passes`; a first pass that succeeds logs INFO `strike fallback: first pass OK` once (row B, R828).
+
+## 2026-10-10 — strike-fallback-env-1010 check
+`step()` still never raises when a pass's exception cannot print itself (`str()` raises): the ERROR reads `<Type>: <str() failed>` and the thread goes on (check O1).
