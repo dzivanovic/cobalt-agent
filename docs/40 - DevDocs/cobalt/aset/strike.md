@@ -12,3 +12,6 @@ Config: `configs/cobalt/strike.yaml` via `strike/delivery_config.py`; `configs/c
 
 ## 2026-10-09 — s4-p2-1009
 New module (S4-P2 S1, S2, S3, S4).
+
+## 2026-10-10 — s4-p2-1009 check
+The stream's and the fallback tail's cursor moves only past a seam row (the last sent), never past his tap or another row: a detector row committed after a higher-id tap is no longer skipped (check O1, O2). A sent DM whose `dm_result` write fails is written again on the next pass and never sent twice (check A4).

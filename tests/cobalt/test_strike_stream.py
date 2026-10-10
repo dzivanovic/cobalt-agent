@@ -41,8 +41,13 @@ class FakeStore:
         self.pushed: list = []
 
     def seam_rows(self, after_id, day):
+        from cobalt.session.clock import ET
+
         self.reads.append((after_id, day))
-        return [r for r in self.rows if after_id is None or r.transition_id > after_id]
+        if after_id is None:
+            # As `StrikeAlertStore.seam_rows`: a fresh connect reads the rows of ET `day` only.
+            return [r for r in self.rows if r.at.astimezone(ET).date() == day]
+        return [r for r in self.rows if r.transition_id > after_id]
 
     def upsert(self, transition_id, *, seam_at, pushed_at=None, shown_at=None):
         self.pushed.append((transition_id, seam_at, pushed_at, shown_at))
@@ -130,10 +135,11 @@ def test_a_fresh_connect_reads_todays_rows_and_last_event_id_resumes_after_it():
     assert [c.split("\n")[0] for c in chunks] == ["id: 12"]
     assert store.reads[0][0] == 11
 
-    fresh = FakeStore([_row(11)])
+    fresh = FakeStore([_row(10, at=AT - timedelta(days=1)), _row(11)])
     deps, _ = _deps(fresh)
-    _collect(deps)
+    chunks = _collect(deps)
     assert fresh.reads[0] == (None, AT.date()), "a fresh connect starts at today's ET date"
+    assert [c.split("\n")[0] for c in chunks] == ["id: 11"], "yesterday's row is not sent on a fresh connect"
 
 
 def test_his_own_tap_and_any_other_actor_send_no_event():

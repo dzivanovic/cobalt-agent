@@ -259,10 +259,12 @@ async def event_stream(deps: StreamDeps, *, last_event_id: Optional[int], stop: 
             await deps.sleep(deps.settings.stream_tail_ms / 1000)
             continue
         for row in rows:
-            cursor = max(cursor or 0, row.transition_id)
             kind = seam_kind(row)
             if kind is None:
+                # Never past a row not sent: his tap, written by the sheet, can
+                # take a higher id than a detector row not yet committed.
                 continue
+            cursor = max(cursor or 0, row.transition_id)
             await asyncio.to_thread(_mark_pushed, deps.store, row, deps.now())
             yield format_event(kind, row, deps.settings)
             last_out = deps.monotonic()
@@ -476,11 +478,22 @@ class FallbackTail:
         self.now = now
         self._cursor: Optional[int] = None
         self._pending: dict[int, SeamRow] = {}
+        #: A DM sent whose `dm_result` write failed: written again next pass,
+        #: never sent again.
+        self._unrecorded: dict[int, str] = {}
 
     def pass_once(self) -> list[int]:
         now = self.now()
+        for tid, outcome in list(self._unrecorded.items()):
+            self.store.record_dm_result(tid, outcome)
+            del self._unrecorded[tid]
         for row in self.store.seam_rows(self._cursor, now.astimezone(ET).date()):
-            if seam_kind(row) == "trigger":
+            kind = seam_kind(row)
+            if kind is None:
+                # Never past a row that is not P1's seam: his tap can take a
+                # higher id than a detector row not yet committed.
+                continue
+            if kind == "trigger":
                 self.store.upsert(row.transition_id, seam_at=row.at)
                 self._pending[row.transition_id] = row
             # Past the row only once its record exists: a failed upsert is read again.
@@ -498,8 +511,10 @@ class FallbackTail:
             except Exception as e:
                 outcome = f"DM FAILED — {type(e).__name__}: {e}"
                 logger.error("strike fallback: transition {} {}", tid, outcome)
-            self.store.record_dm_result(tid, outcome)
+            self._unrecorded[tid] = outcome
             sent.append(tid)
+            self.store.record_dm_result(tid, outcome)
+            del self._unrecorded[tid]
         return sent
 
 
