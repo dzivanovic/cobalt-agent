@@ -15,21 +15,27 @@
 #   ps -A -o pid= -o ppid= -o command=      the process table. A CANDIDATE has ppid 1 and a command
 #                                           that is, split on blanks, exactly `<path>/python[3[.N]] -m
 #                                           cobalt.<label>`; no substring, no pattern over the line.
-#   launchctl print gui/501/<job>           the job's pid: `Could not find service` = no job pid;
-#                                           one top-level `state = running` and one `pid = <n>` = the
-#                                           job pid, SPARED, never signalled; any other shape REFUSED.
+#   launchctl print gui/501/<job>           the job's pid: a non-zero exit whose whole answer is the
+#                                           one line `Could not find service "<job>" in domain for
+#                                           user gui: 501` = no job pid; one top-level `state = running`
+#                                           and one `pid = <n>` = the job pid, SPARED, never signalled;
+#                                           any other shape REFUSED.
 #   lsof -nP -a -p <pid> -Fn -- <lock>      VERIFIED when it prints `n<lock>`;
 #   lsof -nP -a -p <pid> -iTCP:<port> -sTCP:LISTEN -Fp   VERIFIED when it prints `p<pid>`.
-#                                           The pid written inside .lock is never proof (scratch.py:212
-#                                           writes it, release at scratch.py:225-231 never clears it).
-#   ps -p <pid> -o ppid= -o lstart= -o command=   the identity of each verified pid, read at verify,
-#                                           again before EACH signal (unchanged, else REFUSED: pid
-#                                           reuse) and once a second while waiting.
+#                                           Both run at verify and again before EACH signal (neither
+#                                           held then: REFUSED). The pid written inside .lock is never
+#                                           proof (scratch.py:212 writes it, release at
+#                                           scratch.py:225-231 never clears it).
+#   ps -p <pid> -o ppid= -o lstart= -o command=   the identity of each verified pid, read at verify
+#                                           (ppid 1 and the candidate's own command, else UNVERIFIED:
+#                                           pid reuse), again before EACH signal (unchanged, else
+#                                           REFUSED: pid reuse) and once a second while waiting.
 #   kill -TERM <pid>, then kill -KILL <pid> when the same process is still there after the grace
 #                                           (--kill only; each printed first as `RUN: kill -<SIG> <pid>`).
 #   sleep 1                                 between identity reads, up to the grace (10 s) per signal.
 #   mktemp -d, rm -rf of that one directory, grep, sed, printf: the script's own scratch and parsing.
-# A candidate holding neither lock nor port, a ps or lsof that exits non-zero with stderr, a ps line
+# A candidate holding neither lock nor port, a ps that exits non-zero, an lsof that exits non-zero
+# with stderr, a ps line
 # that does not parse, or an unknown launchctl shape: `UNVERIFIED: <pid> — <why>` and REFUSED,
 # exit 1, nothing signalled in the whole run.
 # TOUCHES: nothing but the signals above to the verified pids; no file outside its mktemp directory.
@@ -107,15 +113,42 @@ ident_of() {
     rc=$?
     ident=$(sed -n '1p' "$tmp/id.out")
     if [ "$rc" -ne 0 ] && [ -s "$tmp/id.err" ]; then
+        printf 'UNVERIFIED: %s — ps -p exited %s: %s\n' "$1" "$rc" "$(first_line "$tmp/id.err")"
         refuse "ps -p $1 exited $rc: $(first_line "$tmp/id.err")"
     fi
     [ "$rc" -eq 0 ] || ident=""
 }
 
+# prove PID -> $proof: `lock`, `port`, `both`, `none`, or `error: <why>` (the lsof proof, O2 (3))
+prove() {
+    proof=none
+    lsof -nP -a -p "$1" -Fn -- "$LOCK" < /dev/null > "$tmp/lsof.out" 2> "$tmp/lsof.err"
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ -s "$tmp/lsof.err" ]; then
+        proof="error: lsof (lock) exited $rc: $(first_line "$tmp/lsof.err")"
+        return
+    fi
+    if [ "$rc" -eq 0 ] && grep -q -x -F "n$LOCK" "$tmp/lsof.out"; then
+        proof=lock
+    fi
+    lsof -nP -a -p "$1" -iTCP:"$PORT" -sTCP:LISTEN -Fp < /dev/null > "$tmp/lsof.out" 2> "$tmp/lsof.err"
+    rc=$?
+    if [ "$rc" -ne 0 ] && [ -s "$tmp/lsof.err" ]; then
+        proof="error: lsof (port) exited $rc: $(first_line "$tmp/lsof.err")"
+        return
+    fi
+    if [ "$rc" -eq 0 ] && grep -q -x -F "p$1" "$tmp/lsof.out"; then
+        if [ "$proof" = lock ]; then proof=both; else proof=port; fi
+    fi
+}
+
 # ---- O2 (1) the candidates --------------------------------------------------------------------
 ps -A -o pid= -o ppid= -o command= > "$tmp/ps.out" 2> "$tmp/ps.err"
 rc=$?
-[ "$rc" -eq 0 ] || refuse "ps -A exited $rc: $(first_line "$tmp/ps.err")"
+if [ "$rc" -ne 0 ]; then
+    printf 'UNVERIFIED: ? — ps -A exited %s: %s\n' "$rc" "$(first_line "$tmp/ps.err")"
+    refuse "ps -A exited $rc: $(first_line "$tmp/ps.err")"
+fi
 : > "$tmp/candidates"
 while IFS= read -r line; do
     set -- $line
@@ -146,7 +179,9 @@ fi
 launchctl print "gui/501/$JOB" < /dev/null > "$tmp/lc" 2>&1
 rc=$?
 jobpid=""
-if grep -q -F "Could not find service" "$tmp/lc"; then
+# `Could not find service` counts only as launchctl's whole answer: a non-zero exit and that one line
+if [ "$rc" -ne 0 ] && [ "$(grep -c '[^[:space:]]' "$tmp/lc")" = 1 ] \
+        && [ "$(first_line "$tmp/lc")" = "Could not find service \"$JOB\" in domain for user gui: 501" ]; then
     jobpid=""
 elif [ "$rc" -ne 0 ]; then
     refuse "launchctl print gui/501/$JOB exited $rc: $(first_line "$tmp/lc") (unverifiable, L1)"
@@ -173,39 +208,32 @@ while IFS= read -r line; do
         ns=$((ns + 1))
         continue
     fi
-    holds=no
-    lsof -nP -a -p "$pid" -Fn -- "$LOCK" < /dev/null > "$tmp/lsof.out" 2> "$tmp/lsof.err"
-    rc=$?
-    if [ "$rc" -ne 0 ] && [ -s "$tmp/lsof.err" ]; then
-        printf 'UNVERIFIED: %s — lsof (lock) exited %s: %s\n' "$pid" "$rc" "$(first_line "$tmp/lsof.err")"
-        bad=1
-        continue
-    fi
-    if [ "$rc" -eq 0 ] && grep -q -x -F "n$LOCK" "$tmp/lsof.out"; then
-        printf 'VERIFIED: %s holds lock %s\n' "$pid" "$LOCK"
-        holds=yes
-    fi
-    lsof -nP -a -p "$pid" -iTCP:"$PORT" -sTCP:LISTEN -Fp < /dev/null > "$tmp/lsof.out" 2> "$tmp/lsof.err"
-    rc=$?
-    if [ "$rc" -ne 0 ] && [ -s "$tmp/lsof.err" ]; then
-        printf 'UNVERIFIED: %s — lsof (port) exited %s: %s\n' "$pid" "$rc" "$(first_line "$tmp/lsof.err")"
-        bad=1
-        continue
-    fi
-    if [ "$rc" -eq 0 ] && grep -q -x -F "p$pid" "$tmp/lsof.out"; then
-        printf 'VERIFIED: %s listens on :%s\n' "$pid" "$PORT"
-        holds=yes
-    fi
-    if [ "$holds" = no ]; then
-        printf 'UNVERIFIED: %s — holds neither lock %s nor port :%s\n' "$pid" "$LOCK" "$PORT"
-        bad=1
-        continue
-    fi
-    # the identity a signal is checked against (O4): same ppid 1, start time and command
+    prove "$pid"
+    case "$proof" in
+        error:*)
+            printf 'UNVERIFIED: %s — %s\n' "$pid" "${proof#error: }"
+            bad=1
+            continue ;;
+        none)
+            printf 'UNVERIFIED: %s — holds neither lock %s nor port :%s\n' "$pid" "$LOCK" "$PORT"
+            bad=1
+            continue ;;
+    esac
+    case "$proof" in lock|both) printf 'VERIFIED: %s holds lock %s\n' "$pid" "$LOCK" ;; esac
+    case "$proof" in port|both) printf 'VERIFIED: %s listens on :%s\n' "$pid" "$PORT" ;; esac
+    # the identity a signal is checked against (O4): same ppid 1, start time and command. The
+    # reading must still be the candidate (ppid 1, its exact command after the 5-word lstart),
+    # or the pid was reused after ps -A
     ident_of "$pid"
     set -- $ident
-    if [ "$#" -lt 2 ] || [ "$1" != 1 ]; then
+    if [ "$#" -lt 7 ] || [ "$1" != 1 ]; then
         printf 'UNVERIFIED: %s — ps -p no longer shows it with ppid 1\n' "$pid"
+        bad=1
+        continue
+    fi
+    shift 6
+    if [ "$*" != "$command" ]; then
+        printf 'UNVERIFIED: %s — ps -p shows another command: %s\n' "$pid" "$*"
         bad=1
         continue
     fi
@@ -242,6 +270,16 @@ gone() {
 signal() {
     ident_of "$1"
     [ "$ident" = "$saved" ] || refuse "$1 changed before $2"
+    # the lock or port proof again, at the moment of the signal (X1)
+    prove "$1"
+    case "$proof" in
+        error:*)
+            printf 'UNVERIFIED: %s — %s\n' "$1" "${proof#error: }"
+            refuse "$1 is unverifiable before $2" ;;
+        none)
+            printf 'UNVERIFIED: %s — holds neither lock %s nor port :%s before %s\n' "$1" "$LOCK" "$PORT" "$2"
+            refuse "$1 no longer holds the lock or port before $2" ;;
+    esac
     printf 'RUN: kill -%s %s\n' "$2" "$1"
     "$KILL" "-$2" "$1" < /dev/null
     gone "$1"
