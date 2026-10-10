@@ -4,7 +4,8 @@ MODEL: Sonnet 5.5 (`claude-sonnet-5-5`) — card preflight (his 2026-10-03 R115,
 CARD: `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-09/206-archiver-429-card.md`
 DRAFT REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/archiver-429-draft-2026-10-09.md` (7 decisions; the desk keeps their defaults pending the brain's word)
 SPEC: `prompts/CARD.md`
-REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/archiver-429-preflight-2026-10-09.md`
+EARLIER PREFLIGHT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/archiver-429-preflight-2026-10-09.md` (ready NO, 2 fails and 5 notes; check each is fixed in the card; the amend report is `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/archiver-429-amend-2026-10-09.md`)
+REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/archiver-429-preflight-r2-2026-10-09.md`
 
 Checks: header values against `ops/desk/desk-launch.sh` build mode (REPORT inside the worktree `archiver-429-1009`; BASE `fa968552` a real main commit, no code change past `f5010068`; RULINGS `2026-10-08 R685` is his standing row `HIS RULING` + `APPROVED` (L7a); no `«FILL` token anywhere); every `file:line` and count matches `git show f5010068:<path>` (quote each); each row's red fails on BASE for its stated reason, with the negative control (a non-429 error is not retried); every test offline; the retry bound and the waits stay inside the 2400 s declared window and the L53 pacing bound; no config or cadence change, no new Finviz bucket; `files` have their RESTARTS class home in `## RECORDS`; no new command beyond existing scripts (R411, R412); the card is committed and `git diff` of it against HEAD is empty.
 
