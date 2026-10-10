@@ -1273,6 +1273,68 @@ def test_g9_a_worker_with_no_hub_typing_a_house_string_is_denied(roots):
     assert_denied(run("grok --version", seat), G7_ROUTE)
 
 
+# ---- G9 THE TRIBUNAL HUB'S HOUSE CALLS (R877; 237-f4-tribunal.md line 1, line 9, ## 2) ----
+
+
+def tribunal_seat(roots, name="237-f4-tribunal.md") -> dict:
+    """A design-tribunal hub: a prompt under prompts/20*/, launched from <AGY> (237 line 1)."""
+    return make_seat(
+        roots,
+        None,
+        cwd=roots.wt / "agy-trial",
+        first=f"Read '{prompts(roots) / '2026-01-01' / name}' and follow it exactly.",
+    )
+
+
+ASTRA_PROBE = 'codex exec --skip-git-repo-check -m gpt-6-astra -s read-only "Reply with only the word OK."'
+TRIBUNAL_CALLS = HOUSE_CALLS + [
+    'grok -m grok-4.7 --sandbox cobalt-job -p "x"',
+    'agy --model m --mode accept-edits --sandbox --print-timeout 20m --print="x"',
+    ASTRA_PROBE,
+]
+
+
+@pytest.mark.parametrize("command", TRIBUNAL_CALLS)
+def test_g9_a_tribunal_hub_types_each_house_string(roots, command):
+    assert_allowed(run(command, tribunal_seat(roots)))
+
+
+@pytest.mark.parametrize("command", CHECK_LAUNCHES_DENIED)
+def test_g9_a_tribunal_hub_stays_denied_every_other_launch(roots, command):
+    assert_denied(run(command, tribunal_seat(roots)), G7_ROUTE)
+
+
+@pytest.mark.parametrize("kind", ["build", "devfix", "deploy"])
+@pytest.mark.parametrize(
+    "command", ["grok --version", "agy --version", ASTRA_PROBE, 'claude --bg "Read x"']
+)
+def test_g9_a_build_seat_is_still_denied_the_tribunal_shapes(roots, kind, command):
+    assert_denied(run(command, make_seat(roots, kind)), G7_ROUTE)
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "236-draft-f4-tribunal.md",
+        "238-f4-tribunal-opus-seat.md",
+        "239-f4-tribunal-derive.md",
+        "249-f4-tribunal-preflight.md",
+        "242-x29-card.md",
+    ],
+)
+def test_g9_a_non_hub_tribunal_prompt_is_denied(roots, name):
+    assert_denied(run("grok --version", tribunal_seat(roots, name)), G7_ROUTE)
+
+
+def test_g9_a_tribunal_hub_is_denied_what_g1_to_g6_deny(roots):
+    seat = tribunal_seat(roots)
+    assert_denied(run("git push", seat), G4_ROUTE)
+    # a worker seat meets G7 before G1, so on BASE G7 hid G1's resend line
+    done = run("grok --version && ls", seat)
+    assert done.returncode == 2, done.stderr
+    assert done.stderr == BLOCK_HEAD + "`&&`" + BLOCK_TAIL + "\n"
+
+
 # ---- the seat's kind (X2) ----------------------------------------------------------------
 
 
