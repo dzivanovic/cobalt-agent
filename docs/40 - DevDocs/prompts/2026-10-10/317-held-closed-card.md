@@ -3,9 +3,9 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R993
 BRANCH: ops/held-closed-1010
 WORKTREE: held-closed-1010
 BASE: 26327808
-TIP:
+TIP: ca5c11aa
 REPORT: /Users/cobalt/cobalt-wt/held-closed-1010/docs/40 - DevDocs/reports/held-closed-build-2026-10-10.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/held-closed-check-2026-10-11.md
 HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-05 R438
