@@ -1,62 +1,57 @@
-# Preflight of the four tribunal triples · 2026-10-11 06:29 ET
+# Preflight of the four tribunal triples, round 2 · 2026-10-11 06:38 ET
 
-Read-only. Triples: F5 `325a/b/c` · F20 `326a/b/c` · F21 ADR `327a/b/c` · F23 `328a/b/c`, all committed (`850e1cd6`; derives `325c/326c/327c` amended in `21c21b2d`). Precedents `237`, `238`, `239`, `258`. Hub = the `a` file.
+Read-only, re-run after prompt 339 (`bed0b360`). Hubs are now `335-f5-tribunal.md`, `336-f20-tribunal.md`, `337-f21-tribunal.md`, `338-f23-tribunal.md`. Seats and derives keep `325b/c` … `328b/c`. Prompt 333 still names the old `325a` … `328a` hub names; the files on disk are the renamed ones, and that is what was checked. `git diff HEAD` on `prompts/2026-10-11/` is empty (all committed).
 
-Short answer: the four prompts are sound except two defects. (1) None of the four hub filenames matches the guard's tribunal-hub pattern, so each hub's `grok` launch would be treated as a second session and denied. (2) `325c` (F5) has no one-line split rule and still carries the F4 round-2 machinery. Every launch string, stagger literal, seat field, design path and report path is clean.
+Short answer: the five fails of the first preflight are fixed. No FAIL remains. Four NOTES, none blocking. The desk still owes a launch row for each hub.
 
 ## CHECKS
 
 | # | triple | command | output | OK/FAIL |
 |---|---|---|---|---|
-| 1 | F5 | `grep -n tribunal ~/.claude/ops/bare-guard.py` → `:774` regex `prompts/20[^/]*/[0-9]+-(?!draft)[a-z0-9-]*-tribunal(-r[0-9]+)?\.md$`; `ls prompts/2026-10-11/[0-9][0-9][0-9]-*-tribunal.md` | digits must be followed by `-`; `325a-f5-tribunal.md` has `a` after `325`. Only the four `…-draft-…` files match the glob (the regex then drops them by `(?!draft)`). `237`, `258`, `278` match. | FAIL |
-| 1 | F20 | same | `326a-f20-tribunal.md`: no match (same cause) | FAIL |
-| 1 | F21 | same | `327a-f21-tribunal.md`: no match | FAIL |
-| 1 | F23 | same | `328a-f23-tribunal.md`: no match | FAIL |
-| 2 | F5 | `grep -o -E -e '--allowedTools .{0,1100} --add-dir /Users/cobalt/Vault'` on `325a/b/c` and on `258`, `237`, `238`, `239` | `325a`: 13 allow + 3 deny = `258`/`237` minus the `codex exec` string. `325b` = `238` (7 + 3). `325c` = `239`. Strings byte-identical; no new command. | OK |
-| 2 | F20 | same on `326a/b/c` | `326a` = 13 + 3 as `325a`; `326b` = `238`; `326c` = `239` | OK |
-| 2 | F21 | same on `327a/b/c` | `327a` = 13 + 3; `327b` = `238`; `327c` = `239` | OK |
-| 2 | F23 | same on `328a/b/c` | `328a` = 13 + 3; `328b` = `238`; `328c` = `239` | OK |
-| 3 | F5 | `grep -c -F -e 'grok runs: <n> of 3'` / `-e 'openai seat: free' -e 'openai seat: held by'` / `-e 'gemini: sits' -e 'gemini: not seated'` on `325a`, `258`; `grep -c -E -e 'Bash\(codex' -e 'gpt-5\.6-sol' -e 'claude -p --model'`; `grep -n -o -E 'astra: NOT SEATED'` | `325a`: 2 / 2 / 3 (`258`: 1 / 1 / 3). Codex, Sol and `claude -p` strings in a launch line: 0; the only hits are the "dropped / refused" prose at `:1`, `:7`, `:9`. `astra: NOT SEATED (R920)` at `:9` and in the stop line `:62`. | OK |
-| 3 | F20 | same on `326a` | 1 / 1 / 4. No probe. `astra: NOT SEATED (R920/R921)` at `:1`, `:9`; stop line has `astra: NOT SEATED` without the parenthesis (cosmetic). | OK |
-| 3 | F21 | same on `327a` | 2 / 2 / 3. `gemini: sits (<case>)` still contains the literal. `astra: NOT SEATED (his R920)` at `:1`, `:9`, `:41`. | OK |
-| 3 | F23 | same on `328a` | 1 / 1 / 4. `astra: NOT SEATED (R920)` at `:9`, `:45`. No probe. | OK |
-| 4 | F5 | `ls -l` + `git log --name-only` on the design | DESIGN = `reports/f5-design-proposal-2026-10-10.md`, 15,465 B (matches the prompt), committed `1eb47b59`. The drafter's report `f5-design-2026-10-10.md` (3,411 B) is staged as `12-` and is not the design. Stop line `F5 DESIGN DRAFTED · decisions: 12` present. `F4-FINAL-2026-10-10.md` and the seam doc exist and are committed. | OK |
-| 4 | F20 | same | DESIGN = `reports/f20-design-proposal-2026-10-10.md`, 13,421 B, committed `962ffba2`; report 4,151 B (`11-`); `sdk-spike-2026-10-10.md` exists and is committed (`05008634`). Stop line `F20 DESIGN DRAFTED · decisions: 16`. | OK |
-| 4 | F21 | same | DESIGN = `reports/f21-embedder-adr-2026-10-10.md`, 8,394 B (the ADR), committed `c91d9754`; `f21-adr-draft-2026-10-10.md` (3,817 B) is the report, staged as `11-`. `327a:1` and `:5` point at the ADR. Stop line `F21 ADR DRAFTED · decisions: 6`. | OK |
-| 4 | F23 | same | DESIGN = `reports/f23-design-proposal-2026-10-10.md`, 11,447 B, committed `1eb47b59`; report 4,434 B (`12-`). Stop line `F23 DESIGN DRAFTED · decisions: 13`. | OK |
-| 5 | F5 | read staging list `325a:15-33`; `grep -c -E -e TSLA -e '372[.]82' -e '374[.]50'` (the `73` §1 literals) on the design, report, seam, F4-FINAL, ledger; `grep -n` the Charter and ladder hits; `grep -n '^##'` on F4-FINAL | Every file the questions cite is staged except two gaps. The 15 design files and the ledger print 0; Charter `:145` and ladder `:645` carry the known `TSLA` line, outside every staged range. F4-FINAL `## SEAM` `:226` and `## CHUNKS` `:293` match the prompt, and its §7 `:283` and §8 `:288` sit inside `## SEAM`. NOTE a: `tunables.yaml` is named by item (f) and by cut order (iii) ("`tunables` ranges of `22-`") but `22-` stages no tunables range and `02-greps` has no tunables search. NOTE b: the ladder moved after `d0a5fbb8` (`b3f6fa0b` vs `88640167`; S5 now `:953`, F5 row `:963`); `325a` §1 sends ladder ranges to `git show d0a5fbb8:<path>`, which prints the whole 131 KB file and cannot be cut without a pipe. The Charter is unchanged (`fdf79d05`). | OK (2 NOTES) |
-| 5 | F20 | read `326a:15-31`; same greps | Staging covers all cited paths. Same ladder move (`:925-942` is a `d0a5fbb8` range; working S5 is `:953`) and same `git show` size hazard. Item (e)/(g) names `cli.py` and `uv.lock`; neither is staged (the prompt tells houses to say what they cannot settle). Redaction paragraph covers `notify.yaml` ids and secrets. | OK (2 NOTES) |
-| 5 | F21 | read `327a:15-29`; `grep -n -F '0.02'` on the ADR, report, Charter | One known span: `0.02` at `f21-embedder-adr:8`, `:28`, `:56`, `f21-adr-draft:51`, Charter `:203`; `327a` redacts it in the staged copies and never stages the ledger. Docs are staged from the working tree by anchor, moves listed. NOTE: the rule is "replace `0.02` in every staged file", which can also hit an unrelated `0.02` in a code range; the sentence `Stop buffer default = fixed [user data]` stays in the ADR (a rule sentence of his, L32). | OK (1 NOTE) |
-| 5 | F23 | read `328a:15-28`; `grep -n` the counts in the proposal and report | The known spans exist exactly where the prompt says: proposal `:19` and `:76`, report `:50` (22 notes, 13 non-empty, per-family deck sizes, `6/7/4/2/0`). Staged copies are redacted, originals untouched. Staging covers every cited file. Same ladder move: `328a` already sends the F23 row and `no vault write` line to `d0a5fbb8` bytes. | OK (1 NOTE) |
-| 6 | F5 | `grep -n -o -i 'split'` and `-i 'ONE line'` on `325c`; read `:8` and `:32-35` | WRITES = `docs/30 - Design/F5-FINAL-2026-10-11.md` (name also written `F5-FINAL-<date>.md`) plus the derive report. No rule to state a remaining split as ONE line: `325c` keeps the F4 shape (`DRAFT FINAL — ROUND 2 OWED`, `## NEEDS ROUND 2`, "each ONE A/B" in `## FOR DEJAN`). The other three derives have it. | FAIL |
-| 6 | F20 | `grep` on `326c:8,:12,:28,:33,:36` | WRITES = `docs/30 - Design/F20-FINAL-2026-10-11.md`. Split rule: stated ONCE, as ONE line in `## FOR DEJAN`, header `FINAL — ONE SPLIT FOR DEJAN`; no round-2 branch. | OK |
-| 6 | F21 | `grep` on `327c:8,:25,:33,:34` | WRITES = `docs/30 - Design/F21-ADR-FINAL-<date>.md` (prefix `F21-ADR-` as required). Split rule: ONE line `A: … / B: …`, stated ONCE. | OK |
-| 6 | F23 | `grep` on `328c:28,:34,:36` | WRITES = `docs/30 - Design/F23-FINAL-2026-10-11.md`. Split rule: ONE line `<item>: A … / B …`, marked `SPLIT`, no second line. | OK |
-| 7 | F5 | `grep -o` the REPORT / STOP LINE / FINAL names in all 12 files; `ls` all 16 target paths | hub `reports/f5-tribunal-2026-10-11.md` · `F5 TRIBUNAL DONE`; seat `f5-tribunal-opus-2026-10-11.md` · `F5 TRIBUNAL OPUS DONE`; derive `f5-tribunal-derive-2026-10-11.md` · `F5 DERIVED`; FINAL `F5-FINAL-2026-10-11.md`; scratch `…/f5-tribunal/r1/`, fallback `TRIBUNAL-R1.md`. All 4 names absent on disk. | OK |
-| 7 | F20 | same | `f20-tribunal-2026-10-11.md` · `F20 TRIBUNAL DONE`; `f20-tribunal-opus-…` · `F20 TRIBUNAL OPUS DONE`; `f20-tribunal-derive-…` · `F20 DERIVED`; `F20-FINAL-2026-10-11.md`; scratch `f20-tribunal/r1/`, fallback `TRIBUNAL.md`. Absent. | OK |
-| 7 | F21 | same | `f21-tribunal-2026-10-11.md` · `F21 TRIBUNAL DONE`; `f21-tribunal-opus-…` · `F21 TRIBUNAL OPUS DONE`; `f21-tribunal-derive-…` · `F21 DERIVED`; `F21-ADR-FINAL-<date>.md`; scratch `f21-tribunal/r1/`. Absent. | OK |
-| 7 | F23 | same | `f23-tribunal-2026-10-11.md` · `F23 TRIBUNAL DONE` (the desk's `F2`/`F20`/`F21` prefixes do not collide with `F23`); `f23-tribunal-opus-…`; `f23-tribunal-derive-…`; `F23-FINAL-2026-10-11.md`; scratch `f23-tribunal/r1/`. Absent. | OK |
-| 8 | F5 | `grep -n -F 'grok runs' …cto-2026-10-11.md` (no output: the desk writes the launch rows before launch); `grep -n R908 cto-2026-10-10.md:103` ("soft cap 3 Grok runs (L47)") | One Grok session per hub; nothing in the desk file shows a Grok run live now. F5 is the 1st Grok. | OK |
-| 8 | F20 | same | 2nd Grok | OK |
-| 8 | F21 | same | 3rd Grok | OK |
-| 8 | F23 | same | 4th Grok = over the cap of 3 (L15, R908, L47). F23 (`328a`) waits until one of F5, F20 or F21 releases its Grok. The hubs only require `grok runs: <n> of 3` to be present and never refuse n above 3, so only the desk's launch order prevents it. Other Grok users on the desk (card 284's read, the model-tribunal arms) are not counted here. | OK (NOTE: waits) |
-| 9 | F5 | read `f5-tribunal-draft-2026-10-11.md` `## DECISIONS` (4) against `325a/c` | Floor: Grok up and ruled + Opus stop line (`325a:9`, `:46`, `325c:14`). Packet scope: part `15-f4-final-seam.md` kept. Question set 19 items kept. Gemini default `not seated` when the row has no literal (`325a:9`). All four match. | OK |
-| 9 | F20 | read `f20-tribunal-draft-…` `## DECISIONS` (3) against `326a/c` | Floor Grok (`326a:9`, `:45`, `326c:14`). Launch row carries `f20-design-proposal-2026-10-10.md` (`326a:7`); report staged as `11-`. One-line split replaces `NEEDS ROUND 2` (`326c`). Match. | OK |
-| 9 | F21 | read `f21-tribunal-draft-…` `## DECISIONS` (4) against `327a/c` | Gemini default `not seated`; `gemini: sits (<case>)` accepted. The `0.02` redaction is in `327a:15`. The floor is at least ONE outside house (Grok or Gemini) plus the Opus seat (`327a:9`, `:45`, `327c:14`). Moved-cite handling in `327a:15`. Consistent with the report. NOTE: this floor differs from the other three and from the desk's own F23 default (Grok must rule). | OK (1 NOTE) |
-| 9 | F23 | read `f23-tribunal-draft-…` `## DECISIONS` (2) against `328a/c` | Staged copies redacted, originals untouched (`328a:15`). Floor = Grok rules AND Opus reports (`328a:9`, `:42`, `328c:14`). Match. | OK |
+| 1 | F5 | `grep -n tribunal ~/.claude/ops/bare-guard.py` → `:774` regex `prompts/20[^/]*/[0-9]+-(?!draft)[a-z0-9-]*-tribunal(-r[0-9]+)?\.md$`; `ls prompts/2026-10-11` | `335-f5-tribunal.md`: digits, `-`, `f5-`, `-tribunal.md`. Matches. | OK |
+| 1 | F20 | same | `336-f20-tribunal.md` matches | OK |
+| 1 | F21 | same | `337-f21-tribunal.md` matches | OK |
+| 1 | F23 | same | `338-f23-tribunal.md` matches | OK |
+| 2 | F5 | `grep -o -E -e '--allowedTools .{0,1100} --add-dir /Users/cobalt/Vault'` on `335` and on `258` | 13 allow + 3 deny, byte-identical to `258` minus the `codex exec` string. No new command. Seat `325b` and derive `325c` launch lines carry the same read-only strings as `238`/`239` (their lines were not edited by 339 except the hub name). | OK |
+| 2 | F20 | same on `336` | identical to `335` | OK |
+| 2 | F21 | same on `337` | identical to `335` | OK |
+| 2 | F23 | same on `338` | identical to `335` | OK |
+| 3 | F5 | `grep -n -o -E` for `grok runs: <n> of 3`, `openai seat: free\|held by`, `gemini: sits\|not seated`, `astra: NOT SEATED`; `grep -c -E -e 'Bash\(codex' -e 'gpt-5\.6-sol' -e 'claude -p --model' -e 'codex exec'` | `335`: all three stagger literals at `:2`, `:8`, `:10`; `astra: NOT SEATED (R920)` at `:10`, `:63`. The 3 codex/sol hits (`:1`, `:8`, `:10`) are "dropped / refused / NO codex exec" prose, none in a launch line. | OK |
+| 3 | F20 | same on `336` | literals at `:2`, `:8`, `:10`; `astra: NOT SEATED (R920/R921)` at `:1`, `:10`, `:62`. 3 codex/sol hits are prose (`:1`, `:8`, `:10`). | OK |
+| 3 | F21 | same on `337` | literals at `:2`, `:8`, `:10`; `astra: NOT SEATED (his R920 …)` at `:1`, `:10`, `:42`, `:62`. 2 prose hits (`:1`, `:8`). | OK |
+| 3 | F23 | same on `338` | literals at `:2`, `:8`, `:10`; `astra: NOT SEATED (R920 …)` at `:10`, `:46`, `:59`. 2 prose hits (`:1`, `:8`). No Codex or Sol probe in any hub. | OK |
+| 4 | F5 | `ls -l` on the design | DESIGN `reports/f5-design-proposal-2026-10-10.md`, 15,465 B, exists; named 5 times in `335`. Drafter report `f5-design-2026-10-10.md` and `f4-f5-seam-2026-10-10.md` exist; `F4-FINAL-2026-10-10.md` exists. | OK |
+| 4 | F20 | same | DESIGN `reports/f20-design-proposal-2026-10-10.md`, 13,421 B; named 5 times in `336`. `f20-design-2026-10-10.md` and `sdk-spike-2026-10-10.md` exist. | OK |
+| 4 | F21 | same | DESIGN `reports/f21-embedder-adr-2026-10-10.md` (the ADR), 8,394 B; named 5 times in `337`. Report `f21-adr-draft-2026-10-10.md` exists. | OK |
+| 4 | F23 | same | DESIGN `reports/f23-design-proposal-2026-10-10.md`, 11,447 B; named 6 times in `338`. `f23-design-2026-10-10.md` exists. | OK |
+| 5 | F5 | read `335:16`, `:24`, `:28`; `grep -c -E -e TSLA -e '372[.]82' -e '374[.]50'` on the design, report, seam, F4-FINAL | Staged files print 0. Ladder is now staged from the working tree by anchor, `git show d0a5fbb8:<ladder>` banned (`:24`). Tunables rows staged by `grep -n -F -e radar -e aset -e finviz` (`:28`). Both former NOTES are fixed. | OK |
+| 5 | F20 | read `336:16`, `:24`, `:36`; same grep | Same 0. Ladder by anchor (`:24`). `cli.py` and `uv.lock` named NOT STAGED with a reason at `:36` (UNKNOWN, never a defect). | OK |
+| 5 | F21 | read `337:12`, `:16`; `grep -n -F 0.02` on the ADR | Figure is at ADR `:8`, `:28`, `:56`; `337` redacts it to `[user data]` in staged copies (`:12`, `:16`, `:32`). The Charter ledger is not staged. | OK |
+| 5 | F23 | read `338:16`, `:19`, `:23`; same grep | Staged copies redacted, originals untouched. Ladder by anchor. | OK |
+| 6 | F5 | `grep` split rule on `325c` | WRITES `docs/30 - Design/F5-FINAL-2026-10-11.md` (also written `F5-FINAL-<date>.md`) + `reports/f5-tribunal-derive-2026-10-11.md`. `:28` `THE REMAINING SPLIT — ONE LINE FOR DEJAN`; header `FINAL — ONE SPLIT FOR DEJAN`; stop line `split lines: <0\|1>`; no `NEEDS ROUND 2`, no `DRAFT FINAL`. Fixed. | OK |
+| 6 | F20 | same on `326c` | `F20-FINAL-2026-10-11.md`; ONE-line split rule (`:28`, `:33`, `:36`) | OK |
+| 6 | F21 | same on `327c` | `docs/30 - Design/F21-ADR-FINAL-<date>.md`; `:25` ONE line `A: … / B: …`, stated once, in `## FOR DEJAN`. It keeps a `NEEDS ROUND 2` path. NOTE (see ISSUES). | OK (NOTE) |
+| 6 | F23 | same on `328c` | `F23-FINAL-2026-10-11.md`; `:28` ONE LINE FOR DEJAN | OK |
+| 7 | F5 | `grep -o` of REPORT, stop-line and FINAL names in all 3 files; `ls` of every target | hub `reports/f5-tribunal-2026-10-11.md` / `F5 TRIBUNAL DONE`; seat `f5-tribunal-opus-2026-10-11.md` / `F5 TRIBUNAL OPUS DONE`; derive `f5-tribunal-derive-2026-10-11.md` / `F5 DERIVED`; FINAL `F5-FINAL-2026-10-11.md`; scratch `f5-tribunal/r1`, fallback `TRIBUNAL-R1.md`. All 4 absent on disk. | OK |
+| 7 | F20 | same | `f20-tribunal-…` / `F20 TRIBUNAL DONE`, `…-opus-…` / `F20 TRIBUNAL OPUS DONE`, `…-derive-…` / `F20 DERIVED`, `F20-FINAL-2026-10-11.md`; fallback `TRIBUNAL.md`. Absent. | OK |
+| 7 | F21 | same | `f21-tribunal-…` / `F21 TRIBUNAL DONE`, `…-opus-…`, `…-derive-…` / `F21 DERIVED`, `F21-ADR-FINAL-<date>.md`. Absent. | OK |
+| 7 | F23 | same | `f23-tribunal-…` / `F23 TRIBUNAL DONE`, `…-opus-…`, `…-derive-…` / `F23 DERIVED`, `F23-FINAL-2026-10-11.md`. Absent. No prefix collision (`F2`, `F20`, `F21`, `F23` each start a distinct line). | OK |
+| 8 | F5 | `grep -n -F -e 'grok runs' …cto-2026-10-11.md`; `GROK SESSION CAP 3` in each hub; R908 at `cto-2026-10-10.md:104` | No launch rows yet (desk writes them before launch). Cap line at `335:2`. F5 = Grok 1 of 3. | OK |
+| 8 | F20 | same | Cap line at `336:2`. Grok 2 of 3. | OK |
+| 8 | F21 | same | Cap line at `337:2`. Grok 3 of 3. | OK |
+| 8 | F23 | same | Cap line at `338:2`. Grok 4 = over the cap. **F23 (`338`) waits** until F5, F20 or F21 releases Grok; the cap line and `cto-2026-10-11.md:50` both say so. | OK (waits) |
+| 9 | F5 | read `f5-tribunal-draft-2026-10-11.md` `## DECISIONS` (4) against `335`, `325c` | Floor: Grok up and ruled + Opus stop line (`335:47`, `325c:14`). Part `15-` F4-FINAL seam kept. Gemini default `not seated`. Match. | OK |
+| 9 | F20 | read `f20-…-draft` `## DECISIONS` (3) | Floor Grok (`336:46`). Launch row carries `f20-design-proposal-2026-10-10.md`. One-line split replaces round 2. Match. | OK |
+| 9 | F21 | read `f21-…-draft` `## DECISIONS` (4) | Gemini default `not seated`, `sits (<case>)` accepted. `0.02` redaction in `337`. Floor now Grok ruled AND the Opus stop line (`337:1`, `:46`, `327c:14`); a Gemini-only ruling does not let the derive run. Moved-cite handling kept. Match. | OK |
+| 9 | F23 | read `f23-…-draft` `## DECISIONS` (2) | Staged copies redacted. Floor Grok AND Opus (`338:43`, `328c:14`). Match. | OK |
 
 ## ISSUES
 
-- FAIL · check 1 · F5 F20 F21 F23 · the guard's G9 pattern (`~/.claude/ops/bare-guard.py:774`) needs `<digits>-` before the name; `325a`, `326a`, `327a`, `328a` have a letter after the digits, so `tribunal` is false and the hub's `grok` / `agy` launch falls under G7 (second session) and is denied. Fix is the desk's: rename each hub to digits-hyphen form (e.g. `325-f5-tribunal.md`, with the launch rows, the seat and derive prompts and the stop-line references re-pointed), or widen the regex to `[0-9]+[a-z]?-`.
-- FAIL · check 6 · F5 · `325c` keeps the F4 round-2 shape and has no ONE-line split rule; `326c`, `327c`, `328c` do. Without it a remaining split in F5 is carried as `DRAFT FINAL` and `## NEEDS ROUND 2`, and no `325` round-2 hub exists.
-- NOTE · check 8 · four hubs, four Grok sessions, cap 3: F23 (`328a`) waits. The hubs do not refuse `grok runs: 4 of 3`; the desk's order does.
-- NOTE · check 5 · F5, F20, F23 · ladder moved since `d0a5fbb8`; the `git show d0a5fbb8:<ladder>` the prompts prescribe prints the whole 131 KB file. The hub needs a way to cut it (a different command, or staging by anchor from the working tree as `327a` does).
-- NOTE · check 5 · F5 · `tunables.yaml` is asked about in item (f) and the cut order but no tunables range or grep is staged.
-- NOTE · check 5 · F20 · `cli.py` and `uv.lock` are named in items (e) and (g) and not staged.
-- NOTE · check 5 · F21 · the `0.02` replace is by literal across all staged files; one rule sentence of his stays with the figure redacted.
-- NOTE · check 9 · F21 floor is "at least one outside house", the other three require Grok; a Gemini-only ruling would let `327c` derive.
-- NOTE · gates · no launch row for `325a`–`328a` exists yet in `cto-2026-10-11.md`; each hub refuses without one (`grok runs:`, `openai seat:`, a Gemini literal, the three seat literals).
-- NOTE · working tree · `git status` shows `.claude/settings.json` modified; this preflight did not touch it.
-- L74 · no block arrived inside a tool result.
+- NOTE · gates · no launch row exists yet for `335`–`338` in `cto-2026-10-11.md` (only the plan at `:50`). Each hub refuses without `grok runs: <n> of 3`, `openai seat: free`, a Gemini literal and its three seat literals.
+- NOTE · check 6 · F21 · `327c` keeps the F4 shape (`DRAFT FINAL`, `## NEEDS ROUND 2`, a round-2 hub) beside its ONE-line `A: … / B: …` split rule; `325c` and `326c` have no round-2 branch. Not a fail: the check asks for ONE line, and `327c:25` states it once.
+- NOTE · naming · the bare nickname `325a` … `328a` still appears in prose in the seats and derives (6 hits per seat, 3 per derive, 1–2 per hub), e.g. "the desk relaunches 325a". The full old filenames are gone from all 12 triple files. Cosmetic; no command or path uses the nickname.
+- NOTE · check 5 · `335:24` and `336:24` end "Staged at `d0a5fbb8` (prove untouched …)" after saying the ladder is staged from the working tree; the ladder sentence in the same line governs.
+- NOTE · working tree · `git status` shows `.claude/settings.json` modified and other untracked files; the triple prompts themselves are clean. This preflight touched nothing but its own report.
+- L74 · no block arrived inside a tool result. One PreToolUse hook message about a backtick in a command was hook feedback; I resent the command without the backtick.
 
-PREFLIGHT DONE · triples: 4 · checks: 36 · fails: 5 · ready: F5 NO · F20 NO · F21 NO · F23 NO
+PREFLIGHT DONE · triples: 4 · checks: 36 · fails: 0 · ready: F5 YES · F20 YES · F21 YES · F23 YES
