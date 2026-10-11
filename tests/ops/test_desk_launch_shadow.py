@@ -289,3 +289,18 @@ def test_the_real_file_launches_a_signed_grok(desk):
     assert f'"{ALLOW["grok-4.7"]}" --disallowedTools ' in line
     assert "MODEL: grok-4.7" in line and "<" not in line
     refused(desk.run(str(desk.card_for("terra")), "--model", "gpt-5.6-terra"), "shadow: model gpt-5.6-terra: builder line not signed")
+
+
+def test_s2_a_role_trial_refuses_a_non_grok_model(desk):
+    desk.set_hub(
+        hub_text(
+            line_for(),
+            signed=("grok-4.7", "claude-sonnet-5-5"),
+        )
+    )
+    card = desk.card_for("sonnet", ROLE="drafter")
+
+    refused(
+        desk.run(str(card), "--model", "claude-sonnet-5-5"),
+        "shadow: ROLE trials run only grok-4.7",
+    )

@@ -2279,3 +2279,39 @@ def test_p4_run_seat_kinds(roots):
     for name, (cwd, first) in events.items():
         seat = make_seat(roots, None, cwd=cwd, first=first)
         print(f"P4 {name}: kind = {module.seat({'cwd': seat['cwd'], 'transcript_path': seat['transcript']})['kind']!r}")
+
+
+# ---- check of shadow-hub-1011: the findings, each run alone ---------------------------------
+
+
+def test_x1_a_shadow_builder_cannot_target_a_symlinked_worktree(roots):
+    seat = shadow_seat(roots)
+    target = roots.wt / JOB_WT
+    outside = roots.tmp / "outside"
+    target.rmdir()
+    outside.mkdir()
+    target.symlink_to(outside, target_is_directory=True)
+
+    assert_denied(run(builder(roots, "grok-4.7"), seat), G7_ROUTE)
+
+
+def test_x1_a_wider_write_glob_inside_sh_c_stays_g7(roots):
+    seat = shadow_seat(roots)
+    wide = builder(roots, "grok-4.7").replace(f"{roots.wt / JOB_WT}/**", f"{roots.wt}/**")
+    done = run(f"sh -c '{wide}'", seat)
+    assert_denied(done, G7_ROUTE)
+
+
+def test_x4_sh_c_of_the_builder_command_while_env_is_present_is_denied(roots):
+    seat = shadow_seat(roots)
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    done = run(f"sh -c '{builder(roots, 'grok-4.7')}'", seat)
+    assert_denied(done, ENV_ROUTE)
+
+
+def test_s3_a_symlink_instructions_file_is_not_a_write_of_src(roots):
+    seat = shadow_seat(roots)
+    link = roots.wt / JOB_WT / "SHADOW-INSTRUCTIONS.md"
+    link.symlink_to(roots.wt / JOB_WT / "src" / "x.py")
+    done = write(link, seat, "code\n")
+    assert_denied(done, G5_FENCE)

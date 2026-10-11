@@ -216,3 +216,14 @@ def test_the_prompt_kind_still_refuses_a_dont_ask_line(desk):
     )
     desk.commit("prompt")
     refused(desk.run("prompt", str(p)), "permission mode 'dontAsk': a one-off prompt runs auto or plan")
+
+
+def test_x6_a_symlink_cannot_stand_in_for_the_plain_scratch_dir(desk):
+    outside = desk.tmp / "outside"
+    outside.mkdir()
+    desk.scratch.symlink_to(outside, target_is_directory=True)
+
+    refused(
+        desk.run("spike", str(desk.prompt)),
+        f"spike: {desk.scratch} is a symlink, not the plain scratch dir",
+    )

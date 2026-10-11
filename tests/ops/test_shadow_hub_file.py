@@ -212,3 +212,28 @@ def test_s5_the_harness_difference_prints_once():
 @pytest.mark.parametrize("word", ["failed", "rank"])
 def test_s5_no_failed_and_no_rank_in_the_table(word):
     assert not re.search(rf"\b{word}\b", results(), re.I)
+
+
+# ---- check of shadow-hub-1011: the findings, each run alone ---------------------------------
+
+
+def test_s1_pass_s_is_not_restricted_to_src_and_tests():
+    procedure = section(text(), "THE PROCEDURE (BUILD-HUB's steps; only the differences are written here)")
+
+    assert "Pass S: the src/ rows" not in procedure
+    assert "rows' files under `src/` and `tests/`" not in procedure
+
+
+def test_s5_the_unavailable_model_has_its_na_row():
+    rows = [
+        line
+        for line in results().splitlines()
+        if line.startswith("| Gemini ")
+    ]
+
+    assert len(rows) == 1
+    assert "N/A —" in rows[0]
+
+
+def test_s1_the_built_line_can_record_a_db_none_gate():
+    assert "cobalt_dev: not taken" in text()
