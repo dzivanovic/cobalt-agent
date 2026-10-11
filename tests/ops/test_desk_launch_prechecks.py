@@ -65,9 +65,9 @@ def short(cwd: Path) -> str:
     return git(cwd, "rev-parse", "--short=8", "HEAD")
 
 
-def check_line(tip: str, *, ready: str = "YES", held_unfixed: int = 0) -> str:
+def check_line(tip: str, *, ready: str = "YES", held_unfixed: int = 0, open: int = 0) -> str:
     return (f"CHECK DONE · job: x-job · pass: 1 · tip: {tip} · held: 0 · fixed: 0 · "
-            f"held unfixed: {held_unfixed} · open: 0 · ready: {ready} · decisions: 0 · for Dejan: 0")
+            f"held unfixed: {held_unfixed} · open: {open} · ready: {ready} · decisions: 0 · for Dejan: 0")
 
 
 class Desk:
@@ -693,6 +693,140 @@ def test_f1_card_md_ships_header_has_the_fix_report_column_and_a_matching_separa
     assert header.endswith("| fix report |"), header
     assert set(sep) <= set("|-")
     assert header.count("|") == sep.count("|")
+
+
+# ---- card 317 H2: a held row launches on its fix round (THE RULE, R993) ------------------------
+
+HELD_RUN = ("- {id} · own · `uv run pytest -q tests/x_test.py` · `1 failed` · "
+            "**HELD, NOT FIXED — `ops/x.sh:1`** (constructed)")
+PLAIN_TEST = "import pytest\n\n\ndef test_o1():\n    assert True\n"
+STRICT_TEST = ('import pytest\n\n\n@pytest.mark.xfail(strict=True, reason="carried")\n'
+               "def test_o1():\n    assert False\n")
+XFAIL_TEST = 'import pytest\n\n\n@pytest.mark.xfail(reason="not yet")\ndef test_o1():\n    assert False\n'
+DESK_ROW = "| R7 | 09:00 ET | DESK RECORD (brain, L79): O1 is carried (constructed). | DESK RECORD |"
+FIXED_O1 = "FIXED: O1 — tests/x_test.py::test_o1"
+CARRIED_O1 = "CARRIED: O1 — tests/x_test.py::test_o1 — R7"
+
+
+def held_round(desk: Desk, *, lines: list[str], tests: dict[str, str] | None = None,
+               runs: tuple[str, ...] = ("O1",), n: int = 1, open: int | None = None,
+               desk_rows: tuple[str, ...] = (DESK_ROW,), fix: bool = True,
+               carry: str | None = None) -> tuple[str, str]:
+    """The check (dated `x-job-check-2026-01-02.md`) ran on the build's tip and lists `runs` as
+    `HELD, NOT FIXED` under `## RUNS`; its last line says `held unfixed: <n>`, `open: <open>`
+    (default n), `ready: NO`. With `fix`, a small fix writes `tests` in the job's worktree and
+    moves the code tip; its fix report, committed on the branch only, carries `lines` above its
+    `BUILT ·` line, and the row names it. Without `fix` the row's code tip is the checked tip and
+    it has no fix report. The SHIPS cell is `carry` (default the line's own literals); the day's
+    desk report holds R1 and `desk_rows`. Returns (code tip, fix report path or '')."""
+    tests = {"tests/x_test.py": PLAIN_TEST} if tests is None else tests
+    if fix:
+        (desk.job_wt / "src" / "x.py").write_text("X = 2\n")
+        for rel, text in tests.items():
+            (desk.job_wt / rel).parent.mkdir(parents=True, exist_ok=True)
+            (desk.job_wt / rel).write_text(text)
+        desk.commit_job("small fix after the check")
+        code_tip = short(desk.job_wt)
+        (desk.job_wt / FIX_REL).write_text("# x-job fix round\n\n" + "".join(f"{ln}\n" for ln in lines)
+                                           + f"\n{desk.built_line(code_tip)}\n\n")
+        desk.commit_job("fix report")
+        head = short(desk.job_wt)
+        frep = str(desk.repo / FIX_REL)
+    else:
+        code_tip, head, frep = desk.tip, desk.head, ""
+    desk.check_report = desk.reports / "x-job-check-2026-01-02.md"
+    desk.write_deploy(code_tip=code_tip, head=head, fix=frep if fix else None,
+                      carry=carry or f"`held unfixed: {n}` and `ready: NO`")
+    desk.write_rulings(APPROVED_R1, *desk_rows, commit=False)
+    runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
+    desk.ship(f"## RUNS\n{runs_text}\n## OPEN\n- constructed\n\n"
+              + check_line(desk.tip, ready="NO", held_unfixed=n, open=n if open is None else open))
+    return code_tip, frep
+
+
+def test_h2_a_held_row_with_a_fixed_line_per_id_launches(desk):
+    """PIN, green on BASE and after: the literal loop reads the cell's own literals and
+    `fixed_ok` passes the `BUILT ·` report."""
+    held_round(desk, lines=[FIXED_O1])
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode == 0, done.stderr
+    assert "REFUSED" not in done.stderr, done.stderr
+
+
+def test_h2_a_carried_line_with_a_strict_xfail_test_and_a_desk_record_row_launches(desk):
+    """PIN-shaped, green on BASE and after; its refusals below are the reds."""
+    held_round(desk, lines=[CARRIED_O1], tests={"tests/x_test.py": STRICT_TEST})
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode == 0, done.stderr
+    assert "REFUSED" not in done.stderr, done.stderr
+
+
+def test_h2_a_mix_of_one_fixed_and_one_carried_id_launches(desk):
+    held_round(desk, runs=("O1", "O2"), n=2,
+               lines=[FIXED_O1, "CARRIED: O2 — tests/y_test.py::test_o2 — R7"],
+               tests={"tests/x_test.py": PLAIN_TEST,
+                      "tests/y_test.py": STRICT_TEST.replace("test_o1", "test_o2")})
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode == 0, done.stderr
+    assert "REFUSED" not in done.stderr, done.stderr
+
+
+@pytest.mark.parametrize("kw, reason", [
+    pytest.param({"lines": []}, "deploy ops/x-job: held id O1 has no FIXED line in the fix report {frep}",
+                 id="a held id with no line"),
+    pytest.param({"lines": [FIXED_O1], "tests": {}},
+                 "deploy ops/x-job: FIXED test tests/x_test.py::test_o1 of O1 is absent at {tip}",
+                 id="test absent"),
+    pytest.param({"lines": [FIXED_O1], "tests": {"tests/x_test.py": XFAIL_TEST}},
+                 "deploy ops/x-job: FIXED test tests/x_test.py::test_o1 of O1 is marked xfail", id="xfail test"),
+    pytest.param({"lines": [FIXED_O1, FIXED_O1]},
+                 "deploy ops/x-job: held id O1 has 2 FIXED or CARRIED lines in the fix report {frep}",
+                 id="two lines for one id"),
+    pytest.param({"lines": [FIXED_O1, "FIXED: O2 — tests/x_test.py::test_o1"]},
+                 "deploy ops/x-job: the fix report {frep} names O2, which is no HELD, NOT FIXED id of the check",
+                 id="a line for an unlisted id"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": PLAIN_TEST}},
+                 "deploy ops/x-job: CARRIED test tests/x_test.py::test_o1 of O1 is not a strict xfail",
+                 id="CARRIED test not xfail"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": XFAIL_TEST}},
+                 "deploy ops/x-job: CARRIED test tests/x_test.py::test_o1 of O1 is not a strict xfail",
+                 id="CARRIED xfail not strict"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {}},
+                 "deploy ops/x-job: CARRIED test tests/x_test.py::test_o1 of O1 is absent at {tip}",
+                 id="CARRIED test absent"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": STRICT_TEST}, "desk_rows": ()},
+                 "deploy ops/x-job: CARRIED O1 names R7, which is no DESK RECORD row of {desk}",
+                 id="CARRIED row absent"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": STRICT_TEST},
+                  "desk_rows": ("| R7 | 09:00 ET | a note on O1 (constructed). | APPLIED |",)},
+                 "deploy ops/x-job: CARRIED O1 names R7, which is no DESK RECORD row of {desk}",
+                 id="CARRIED row without DESK RECORD"),
+    pytest.param({"lines": [FIXED_O1, CARRIED_O1], "tests": {"tests/x_test.py": STRICT_TEST}},
+                 "deploy ops/x-job: held id O1 has 2 FIXED or CARRIED lines in the fix report {frep}",
+                 id="one FIXED and one CARRIED line for one id"),
+])
+def test_h2_a_held_row_missing_one_proof_is_refused(desk, kw, reason):
+    """RED on BASE for each: the launch runs (exit 0)."""
+    tip, frep = held_round(desk, **kw)
+    refused(desk, desk.launch("deploy", str(desk.deploy), dry=True),
+            reason.format(frep=frep, tip=tip, desk=desk.rulings))
+    assert not desk.gate_left()
+
+
+def test_h2_a_held_check_at_the_code_tip_without_a_fix_report_is_refused(desk):
+    """RED on BASE: the check's tip is the code tip, so `:973` short-circuits and it launches."""
+    held_round(desk, lines=[], fix=False)
+    refused(desk, desk.launch("deploy", str(desk.deploy), dry=True),
+            "deploy ops/x-job: held id O1 has no FIXED line in the fix report (none named)")
+    assert not desk.gate_left()
+
+
+def test_h2_a_clean_cell_over_a_held_check_line_is_refused_by_the_literal_loop(desk):
+    """Pin, green on BASE and after: the cell says `held unfixed: 0` over `held unfixed: 1`."""
+    held_round(desk, lines=[FIXED_O1], carry="`held unfixed: 0` and `ready: YES`")
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    refused(desk, done, "deploy ops/x-job: its stop line lacks 'held unfixed: 0' — the check is not clean: ")
+    assert "held id" not in done.stderr
 
 
 # ---- L4: the WATCH line and the header ---------------------------------------------------------
