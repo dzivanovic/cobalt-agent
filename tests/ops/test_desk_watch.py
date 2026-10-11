@@ -423,6 +423,41 @@ def test_w1_each_kind_watches_its_own_session_name(card, tmp_path, kind, session
     assert done.stdout.splitlines()[0] == f"IDLE: {session} — no WAKE line"
 
 
+@pytest.mark.parametrize(
+    "line",
+    ["SHADOW BUILT · job: x-job · builder: grok-4.7", "SHADOW ROLE · drafter · builder: grok-4.7", "FAILED: W — x"],
+)
+def test_s4_kind_shadow_reads_the_report_and_its_stop_lines(card, line):
+    card, build, check, env = card
+    build.write_text(f"# x\n\n{line}\n")
+    done = watch("shadow", str(card), "30", env=env)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == line
+
+
+def test_s4_kind_shadow_does_not_stop_on_a_plain_built_line(card):
+    card, build, check, env = card
+    build.write_text("BUILT · job: x-job\n")
+    done = watch("shadow", str(card), "2", env=env)
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert "STILL RUNNING" in done.stdout
+
+
+def test_s4_kind_shadow_watches_the_gate_seat(card, tmp_path):
+    """The gate seat is named <job>-gate: found live (no GONE); a <job>-shadow row is not it."""
+    card, build, check, env = card
+    build.write_text(SEVEN)
+    answers(tmp_path, "x-job-gate busy working")
+    done = watch("shadow", str(card), "3", env=env)
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert "GONE" not in done.stdout
+    (tmp_path / "list-calls").unlink(missing_ok=True)
+    answers(tmp_path, "x-job-shadow busy working")
+    done = watch("shadow", str(card), "20", env=env)
+    assert done.returncode == 3, done.stdout + done.stderr
+    assert done.stdout.splitlines() == ["GONE: x-job-gate", *LAST_FIVE]
+
+
 def test_w1_close_watches_close_mmdd(card, tmp_path):
     card, build, check, env = card
     close = tmp_path / "close-2026-01-02.md"

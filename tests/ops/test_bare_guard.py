@@ -2089,3 +2089,185 @@ def test_h2_a_deny_is_recorded_in_the_ledger_as_g12(roots):
     run("rm -f /tmp/x", ops_hand_seat(roots))
     lines = [json.loads(x) for x in (roots.wt / ".ledger" / "sess-test-1.jsonl").read_text().splitlines()]
     assert [(x["rule"], x["command"]) for x in lines] == [("G12", "rm -f /tmp/x")]
+
+
+# ---- card 2026-10-11 324: the shadow gate seat (S3, S4, S7) and the spike seat (P3, P4) --------
+
+ENV_ROUTE = "route: no builder pass while .env is in the worktree (the gate's with-DB step holds it)"
+SHADOW_ROWS = {
+    "grok-4.7": (
+        "grok", "Bash(grok -m grok-4.7 --sandbox cobalt-job *)",
+        'grok -m grok-4.7 --sandbox cobalt-job --allow "Write(/Users/cobalt/cobalt-wt/<worktree>/**)" -p "<pass prompt>"',
+    ),
+    "claude-sonnet-5-5": (
+        "sonnet", "Bash(claude -p --model claude-sonnet-5-5 *)",
+        'claude -p --model claude-sonnet-5-5 --permission-mode dontAsk --output-format json --allowedTools "Read" '
+        '"Edit(//Users/cobalt/cobalt-wt/<worktree>/**)" "Write(//Users/cobalt/cobalt-wt/<worktree>/**)" '
+        '--disallowedTools "Bash" "AskUserQuestion" "EnterWorktree" "Agent" "WebFetch" "mcp__*" "<pass prompt>"',
+    ),
+    "gpt-5.6-terra": (
+        "terra", "Bash(codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write *)",
+        'codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write -C /Users/cobalt/cobalt-wt/<worktree> '
+        '"<pass prompt>" < /dev/null',
+    ),
+}
+PASS_PROMPT = "You are the builder. Read SHADOW-INSTRUCTIONS.md whole first. Pass T: tests only."
+
+
+def shadow_hub(roots) -> Path:
+    """A constructed SHADOW-HUB.md: its `## BUILDERS` table in the real file's row shape."""
+    hub = prompts(roots) / "SHADOW-HUB.md"
+    hub.parent.mkdir(parents=True, exist_ok=True)
+    rows = "".join(f"| `{m}` | `{s}` | `{a}` | `{c}` | sign |\n" for m, (s, a, c) in SHADOW_ROWS.items())
+    hub.write_text(
+        "# SHADOW-HUB (constructed)\n\n## BUILDERS\n\n| id | slug | builder allow | builder command | SIGN |\n"
+        f"|---|---|---|---|---|\n{rows}\n## PROCEDURE\n"
+    )
+    return hub
+
+
+def shadow_seat(roots, model: str = "grok-4.7", hub: str = "SHADOW-HUB.md") -> dict:
+    """The gate seat as desk-launch.sh shadow makes it: cwd the card's worktree, the launch
+    message reading the hub with `CARD:` and `MODEL:`."""
+    shadow_hub(roots)
+    card = prompts(roots) / "2026-01-01" / "02-job-grok-card.md"
+    card.parent.mkdir(parents=True, exist_ok=True)
+    card.write_text(card_text(roots, DEFAULT_FILES))
+    first = f"Read '{prompts(roots) / hub}' and follow it exactly. CARD: '{card}' MODEL: {model}"
+    return make_seat(roots, None, cwd=roots.wt / JOB_WT, first=first)
+
+
+def builder(roots, model: str, wt: str = JOB_WT) -> str:
+    cmd = SHADOW_ROWS[model][2].replace("/Users/cobalt/cobalt-wt/<worktree>", str(roots.wt / wt))
+    return cmd.replace("<pass prompt>", PASS_PROMPT)
+
+
+@pytest.mark.parametrize("model", list(SHADOW_ROWS))
+def test_s3_the_gate_seat_runs_its_models_builder_command(roots, model):
+    assert_allowed(run(builder(roots, model), shadow_seat(roots, model)))
+
+
+@pytest.mark.parametrize(
+    "model,command",
+    [
+        ("grok-4.7", "UP"),
+        ("grok-4.7", "OTHER"),
+        ("grok-4.7", "ALWAYS"),
+        ("grok-4.7", "SONNET"),
+        ("grok-4.7", "SECOND ALLOW"),
+        ("grok-4.7", "ANSI"),
+        ("claude-sonnet-5-5", "NO BASH DENY"),
+        ("gpt-5.6-terra", "DANGER"),
+        ("gpt-5.6-terra", "OTHER C"),
+        ("grok-4.7", "claude --bg x"),
+    ],
+)
+def test_s3_any_other_launch_from_the_gate_seat_is_g7(roots, model, command):
+    grok = builder(roots, "grok-4.7")
+    shapes = {
+        "UP": grok.replace(f"{roots.wt / JOB_WT}/**", f"{roots.wt}/**"),
+        "OTHER": builder(roots, "grok-4.7", wt="other-0101"),
+        "ALWAYS": grok.replace(" -p ", " --always-approve -p "),
+        "SONNET": builder(roots, "claude-sonnet-5-5"),
+        "SECOND ALLOW": grok.replace(" -p ", f' --allow "Write({roots.wt}/**)" -p '),
+        "ANSI": grok.replace(f'-p "{PASS_PROMPT}"', "-p $'x' --always-approve"),
+        "NO BASH DENY": builder(roots, "claude-sonnet-5-5").replace('--disallowedTools "Bash" ', "--disallowedTools "),
+        "DANGER": builder(roots, "gpt-5.6-terra").replace("workspace-write", "danger-full-access"),
+        "OTHER C": builder(roots, "gpt-5.6-terra", wt="other-0101"),
+    }
+    assert_denied(run(shapes.get(command, command), shadow_seat(roots, model)), G7_ROUTE)
+
+
+def test_s3_the_gate_seat_writes_its_instructions_and_its_report_only(roots):
+    seat = shadow_seat(roots)
+    assert_allowed(write(roots.wt / JOB_WT / "SHADOW-INSTRUCTIONS.md", seat))
+    assert_allowed(write(report(roots), seat))
+    assert_denied(write(roots.wt / JOB_WT / "src" / "x.py", seat), G5_FENCE)
+    assert_denied(edit(roots.wt / JOB_WT / "tests" / "ops" / "test_x.py", seat), G5_FENCE)
+
+
+def test_s3_the_gate_seat_keeps_g4_and_g2(roots):
+    seat = shadow_seat(roots)
+    assert_denied(run("git push origin x", seat), G4_ROUTE)
+    assert_denied(run("COBALT_ENV=production uv run cobalt db migrate", seat), G2_ROUTE)
+
+
+def test_s3_negative_control_a_build_seat_running_the_grok_command_is_g7(roots):
+    assert_denied(run(builder(roots, "grok-4.7"), make_seat(roots, "build")), G7_ROUTE)
+
+
+def test_s7_a_builder_pass_while_env_is_in_the_worktree_is_denied(roots):
+    seat = shadow_seat(roots)
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    assert_denied(run(builder(roots, "grok-4.7"), seat), ENV_ROUTE)
+
+
+def test_s7_a_dangling_env_symlink_counts_as_present(roots):
+    seat = shadow_seat(roots)
+    (roots.wt / JOB_WT / ".env").symlink_to(roots.tmp / "no-such-file")
+    assert_denied(run(builder(roots, "grok-4.7"), seat), ENV_ROUTE)
+
+
+def test_s7_no_env_lets_the_pass_through(roots):
+    """The positive control of S7."""
+    assert_allowed(run(builder(roots, "grok-4.7"), shadow_seat(roots)))
+
+
+@pytest.mark.parametrize("stop", ["SHADOW BUILT · job: x · builder: grok-4.7", "SHADOW ROLE · judge · builder: grok-4.7"])
+def test_s4_a_shadow_stop_line_while_env_is_on_disk_is_g6(roots, stop):
+    seat = shadow_seat(roots)
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    assert_denied(write(report(roots), seat, f"# r\n\n{stop}\n"), G6_ROUTE)
+
+
+def guard_module():
+    """bare-guard.py loaded as a module, under the roots this test set (no bytecode written)."""
+    import importlib.util
+    import sys
+
+    sys.dont_write_bytecode = True
+    spec = importlib.util.spec_from_file_location("bare_guard_under_test", GUARD)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def spike_seat(roots) -> dict:
+    """The spike seat as desk-launch.sh spike makes it: cwd the scratch dir, the launch message
+    reading SPIKE-HUB.md with `PROMPT:`."""
+    first = (
+        f"Read '{prompts(roots) / 'SPIKE-HUB.md'}' and follow it exactly. "
+        f"PROMPT: '{prompts(roots) / '2026-01-01' / '330-x-spike.md'}'"
+    )
+    return make_seat(roots, None, cwd=roots.wt / "sdk-spike-1010", first=first)
+
+
+def test_p3_the_spike_launch_is_its_own_kind(roots):
+    seat = spike_seat(roots)
+    s = guard_module().seat({"cwd": seat["cwd"], "transcript_path": seat["transcript"]})
+    assert s["kind"] == "spike"
+
+
+def test_p3_the_spike_seat_writes_its_scratch_dir_only(roots):
+    seat = spike_seat(roots)
+    assert_allowed(write(roots.wt / "sdk-spike-1010" / "report.md", seat))
+    assert_denied(write(Path("/Users/cobalt/cobalt/docs/x.md"), seat), G5_FENCE)
+    assert_denied(write(roots.wt / JOB_WT / "x.md", seat), G5_FENCE)
+
+
+def test_p3_the_spike_seat_launches_nothing(roots):
+    assert_denied(run("claude --bg x", spike_seat(roots)), G7_ROUTE)
+
+
+def test_p4_run_seat_kinds(roots):
+    """P4 RUN — asserts nothing: the kind seat() gives three launch messages (desk R1021)."""
+    p = prompts(roots)
+    events = {
+        "BRAIN-HUB from the repo": (roots.repo, f"Read '{p / 'BRAIN-HUB.md'}' and follow it exactly. HANDOVER: '{p / '2026-01-01' / 'h.md'}'"),
+        "a drafter's dated prompt from the repo": (roots.repo, f"Read '{p / '2026-10-11' / 'x.md'}' and follow it exactly."),
+        "SPIKE-HUB from sdk-spike-1010": (roots.wt / "sdk-spike-1010", f"Read '{p / 'SPIKE-HUB.md'}' and follow it exactly. PROMPT: '{p / '2026-01-01' / '330-x.md'}'"),
+    }
+    module = guard_module()
+    for name, (cwd, first) in events.items():
+        seat = make_seat(roots, None, cwd=cwd, first=first)
+        print(f"P4 {name}: kind = {module.seat({'cwd': seat['cwd'], 'transcript_path': seat['transcript']})['kind']!r}")
