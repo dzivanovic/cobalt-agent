@@ -11,7 +11,7 @@ On `reports/sdk-spike-live-2026-10-11.md` (`## §0`, `## ANSWERS`, `## UNKNOWN`,
 | # | Ruling | Reason |
 |---|---|---|
 | D1 | KEEP | Done; the desk copied the report. |
-| D2 | FOR DEJAN (rec.: subscription for his single-user use, auth a config switch; he may say API key) | Anthropic's terms allow Pro/Max Agent SDK use for "ordinary, individual usage" and steer "developers building products" to API keys. Which side Cobalt's unattended CoS falls on is his reading, and money (an API key bills per token). The config switch means either answer costs config, not code. |
+| D2 | RULED by Dejan, R1112: subscription everywhere, no pay-per-token account anywhere. F20's unattended runs use his Max login; auth stays a config switch; no API-key path is built or tested. L27's "API keys are for Cobalt's engine" waits for his word on amending it (the desk asked). Was: FOR DEJAN (rec. subscription) | Anthropic's terms allow Pro/Max Agent SDK use for "ordinary, individual usage" and steer "developers building products" to API keys. Which side Cobalt's unattended CoS falls on is his reading, and money (an API key bills per token). The config switch means either answer costs config, not code. |
 | D3 | KEEP | HITL as proven live: a `PreToolUse` hook per risky tool, `can_use_tool` deny-by-default, `allowed_tools` path rules for jailed reads, `HookMatcher.timeout` ≥ card TTL, and Cobalt's own card ledger. |
 | D4 | KEEP | `setting_sources=[]` plus `strict_mcp_config=True`. Without them, connector tools entered the jailed session. This is a binding F20 card row. |
 | D5 | KEEP | Fail on `is_error`/`terminal_reason`, never `subtype` alone. Own watchdog per session (L18). Kill the process group on teardown. Store `session_id` per task row. |

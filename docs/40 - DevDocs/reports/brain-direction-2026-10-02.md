@@ -206,6 +206,11 @@ His words: `reports/cto-2026-10-11-words.md:3-7`.
 His words: "OpenAI quota is available and please do not stop this for anything anymore. I want it done ASAP. And I approve and allow everyone that is needed for tribunal. Now now now"
 - In order: card 324 deploy-card and deploy first; a one-row install card for SHADOW-HUB's `«SIGN` cells (no preflight by his override, Grok check kept); then the Grok, Sonnet and Terra arms in parallel. Only the `cobalt_dev` lock serializes. There is no separate design round. The results sitting has Grok, the Anthropic seat and Astra. Anything the harness blocks goes to him as one line, and the rest continues.
 
+## RULED 2026-10-11 afternoon — subscription everywhere (R1112)
+His words: `reports/cto-2026-10-11-words.md` (R1112): "We are subscription based everywhere ... No paper token accounts. We don't want to use paper token accounts anywhere."
+- No Console API key and no pay-per-token account anywhere. F20's unattended CoS runs on his Max login. Auth stays a config switch, and no API-key path is built.
+- Frozen L27 ("API keys are for Cobalt's engine under this law") conflicts with this ruling. The desk asked him whether to amend it. Until he answers, his R1112 governs F20.
+
 ## PLAN ROWS ADDED 2026-10-09 night (brain judge answers; follow-ups, not his rulings)
 - Launcher card (with the owed "accept held items the fix report names fixed" row): `deploy-card.sh --fix-report "<path>"` per job card emits the CARD.md :48 fix-round SHIPS row, instead of refusing "adds paths outside docs/" (card 156, R771).
 - Archiver defect card (drafter, R685): bounded 429 retry with `Retry-After` inside the L53 bucket, and retried targets named in the run report. First 429s in history, 10-09 20:35–20:41, radar paused, strike not yet deployed (R808).
@@ -218,7 +223,7 @@ His words: "OpenAI quota is available and please do not stop this for anything a
 ## PLAN ROWS ADDED 2026-10-11 afternoon (brain judge answers; follow-ups, not his rulings)
 - X1 decoy: every future X1 targets `/Users/cobalt/cobalt-wt/x1-canary/.env` (one line `X1_CANARY=not-a-secret`), never the repo `.env`. A drafter row on the next shadow card that carries X1 (R1106).
 - Terra arm: stopped, harness INCOMPLETE (367). codex `workspace-write` confines writes, not reads, so an X1 against a real secret would itself send it to OpenAI. 370/373 are not launched. For Dejan: a read-confined harness (new permission class) or `N/A` (brain rec. N/A). The 365 X1 re-run waits for his own line in `5b7147c4` (classifier denial, no relay).
-- SDK spike live (`reports/sdk-spike-live-decisions-2026-10-11.md`): D2 (subscription or API key for unattended runs) for Dejan. F20 design and build are not held; its first unattended production run waits for his word. F20 card rows from U6 (no subagents; parallel calls proven or off) and U7 (TTL ≤ 300 s, resume by `session_id`). D10 re-spike of U2b/U9 after the F20 design.
+- SDK spike live (`reports/sdk-spike-live-decisions-2026-10-11.md`): D2 RULED by him (R1112, below). The F20 design and build are not held. F20 card rows from U6 (no subagents; parallel calls proven or off) and U7 (TTL ≤ 300 s, resume by `session_id`). D10 re-spike of U2b/U9 after the F20 design.
 
 ## HIS VETO LIST AT DONE — 2026-10-05 night (brain rulings while he was away)
 - D5 deploy: A3 (the event-day reconcile corrects an ENTRY price through `record_correction`, which rewrites the fill cache, a sizing figure) is KEEP as built under 09-22 R67 ("DAS is the reconcile truth") and R314. The brain did not hold the deploy for his ruling.
