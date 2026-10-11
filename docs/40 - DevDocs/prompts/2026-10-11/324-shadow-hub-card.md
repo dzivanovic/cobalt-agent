@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-11.md R1008
 BRANCH: ops/shadow-hub-1011
 WORKTREE: shadow-hub-1011
 BASE: 680eca0e
-TIP:
+TIP: bc25c523
 REPORT: /Users/cobalt/cobalt-wt/shadow-hub-1011/docs/40 - DevDocs/reports/shadow-hub-build-2026-10-11.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/shadow-hub-check-2026-10-11.md
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-11 R1009
 
