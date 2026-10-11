@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-11.md R1107
 BRANCH: ops/terra-pass-prompt-1011
 WORKTREE: terra-pass-prompt-1011
 BASE: ffc704da
-TIP: none
+TIP: a790e54d
 REPORT: /Users/cobalt/cobalt-wt/terra-pass-prompt-1011/docs/40 - DevDocs/reports/terra-pass-prompt-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/terra-pass-prompt-check-2026-10-11.md
 HOUSE B: as needed
