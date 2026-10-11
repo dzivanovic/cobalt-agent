@@ -8,7 +8,7 @@ REPORT: /Users/cobalt/cobalt-wt/held-closed-1010/docs/40 - DevDocs/reports/held-
 CHECK REPORT:
 HOUSE B: as needed
 DB: none
-RULINGS: 2026-10-10 R993
+RULINGS: 2026-10-05 R438
 
 ## ROWS
 
@@ -56,6 +56,7 @@ THE RULE (every row builds this text; the three scripts read it the same way):
 - X5 H3 widens the brain's file list by `deploy-step0.sh`: does P2 refuse the row H1 writes without it?
 
 ## RECORDS
+- Brain direction (L79, DESK RECORD R993, moved here from RULINGS by R1003): row H is the launcher half of next-flow change 2 (R438, `HIS RULING · APPROVED`: one fix round closes the findings, no re-check; changes 6-7 put it on the launcher). R376 says the same but is APPLIED, not APPROVED.
 - `ls -la /Users/cobalt/.claude/ops/desk-launch.sh` → `lrwxr-xr-x … desk-launch.sh -> /Users/cobalt/cobalt/ops/desk/desk-launch.sh` (21:36 ET). The installed launcher IS the repo file: the builder edits `ops/desk/desk-launch.sh` in its worktree like any `files` path; the edit reaches `/Users/cobalt/.claude/ops/desk-launch.sh` when the deploy merges the branch to main (the symlink resolves to main's file). Precedent `244-launcher-card.md` read `desk-launch.sh` and changed `deploy-card.sh` only; `231-ops-hand-card.md` names `ops/desk/desk-launch.sh` in a row's `files` cell (the one card of the day that edits it, by the same route); `298` and `306` only read it. `~/.claude/ops/` also holds `deploy-card.sh` and `deploy-step0.sh` as symlinks into `ops/desk/` (same ls).
 - Reads proven against HEAD `26327808` (`git -C /Users/cobalt/cobalt diff --stat HEAD -- ops tests` prints nothing, so each line below is HEAD's): `deploy-card.sh:172-173` (the two refusals), `:179-195` (the fix-report block), `:201` (the SHIPS row); `desk-launch.sh:907-987` (`ships_checked`), `:947-954` (literal loop), `:959-972` (`fixed_ok`), `:973-974` (the refusal); `deploy-step0.sh:337-340` (`$lits`, the prefix), `:368-376` (the literal loop), `:389-405` (the fix-round branch); `DEPLOY-HUB.md:59` (the P2 fix-round bullet); `CARD.md:48`; `test_deploy_card.py:40` (`check_line`), `:442` (`fix_round`), `:468-604` (the `--fix-report` tests); `test_deploy_step0.py:546`, `:578`, `:619`, `:637`. The brain's `:172-173` cite for `deploy-card.sh` holds. Its cite `desk-launch.sh` `fixed_ok` and the literal check: the line numbers are the ones above (the launcher grew since card 244 read `:804-884`).
 - The check report: last line `… held unfixed: 1 · open: 1 … ready: NO · decisions: 2 …`; `## RUNS` holds one `HELD, NOT FIXED` row (O1, line 69); D2 sits under `## DECISIONS` and is the same defect, so it is no held id. The fix report of 298 is on `ops/house-seat-order-1010` (head `7da667e8`, `git -C /Users/cobalt/cobalt log --oneline -1 ops/house-seat-order-1010`); it holds a `FIXED:` line only after this card is built and the builder of 298 adds it.
