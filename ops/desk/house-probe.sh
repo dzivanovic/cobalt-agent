@@ -1,14 +1,20 @@
 #!/bin/sh
-# house-probe.sh [sol] [grok] [gemini] — asks each named outside house for one word, all three when
-# none is named, and prints one line per house in that order (card 19 worker-steps S5):
+# house-probe.sh [--card <card>] [grok] [gemini] [sol] — asks each named outside house for one word;
+# when none is named, grok and gemini, and `sol grok gemini` when the card's header carries the line
+# below; prints one line per house in that order (card 19 worker-steps S5; card 298 S3, his
+# 2026-10-10 R920, R921):
 #   <house>: UP                        the answer, trimmed, is `OK`
 #   <house>: OUT — <first line>        anything else: the first non-blank line it printed
 #                                      (stdout, else stderr, else `(no output)`)
 #   <house>: OUT — TIMEOUT             no answer within the limit: 180 s each, the probes in parallel
-# Exit 0 always. A bad call (an unknown or repeated house): `REFUSED: <reason>` on stderr, exit 1.
+# Exit 0 always. A bad call (an unknown or repeated house; `--card` with no path, a path that is not
+# a readable file, or given twice; `sol` named without the line): `REFUSED: <reason>` on stderr, exit 1.
+#
+# THE LINE: in the card's header (the lines before the first line starting `## `), one whole line from
+# column 0 `HOUSE A: OpenAI — his <date> R<n>`, nothing after; authorize.sh proves it like a ruling.
 #
 # THE SPELLINGS:
-#   sol     CHECK-HUB.md PREFLIGHT's Sol probe, exactly:
+#   sol     only with the header line; CHECK-HUB.md PREFLIGHT's Sol probe, exactly:
 #           codex exec --skip-git-repo-check -m gpt-5.6-sol -s read-only -c model_reasoning_effort="high" "Reply with only the word OK." < /dev/null
 #   grok    CHECK-HUB.md `## 1` (5)'s Grok launch with the probe prompt, run from $WT/agy-trial, the
 #           model pinned (his 2026-10-03 R3: every Grok seat runs grok-4.7; card 2026-10-03/03 L7):
@@ -38,7 +44,20 @@ case "$LIMIT" in
     ""|*[!0-9]*) refuse "HOUSE_PROBE_LIMIT '$LIMIT' is not a whole number of seconds" ;;
 esac
 houses=""
-for h in "$@"; do
+card=""
+carded=""
+while [ "$#" -gt 0 ]; do
+    h=$1
+    shift
+    if [ "$h" = "--card" ]; then
+        [ -z "$carded" ] || refuse "--card given twice"
+        [ "$#" -gt 0 ] && [ -n "$1" ] || refuse "--card needs a path"
+        [ -f "$1" ] && [ -r "$1" ] || refuse "--card $1 is not a readable file"
+        card=$1
+        carded=1
+        shift
+        continue
+    fi
     case "$h" in
         sol|grok|gemini) ;;
         *) refuse "house '$h' is none of sol, grok, gemini" ;;
@@ -48,7 +67,25 @@ for h in "$@"; do
     esac
     houses="$houses $h"
 done
-[ -n "$houses" ] || houses=" sol grok gemini"
+
+# the header line (above): Sol is probed only with it (his 2026-10-10 R920)
+openai=""
+if [ -n "$card" ] && sed -n '/^## /q;p' "$card" \
+    | grep -q -x -e 'HOUSE A: OpenAI — his 20[0-9][0-9]-[0-9][0-9]-[0-9][0-9] R[0-9][0-9]*'; then
+    openai=1
+fi
+case " $houses " in
+    *" sol "*)
+        [ -n "$openai" ] || refuse "house 'sol' is probed only when the card header carries \"HOUSE A: OpenAI — his <date> R<n>\" (his 2026-10-10 R920)"
+        ;;
+esac
+if [ -z "$houses" ]; then
+    if [ -n "$openai" ]; then
+        houses=" sol grok gemini"
+    else
+        houses=" grok gemini"
+    fi
+fi
 
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/house-probe.XXXXXX") || refuse "mktemp failed"
 trap 'rm -rf "$tmp"' EXIT
