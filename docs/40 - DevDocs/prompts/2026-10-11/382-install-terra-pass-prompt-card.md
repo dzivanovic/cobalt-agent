@@ -2,8 +2,8 @@ JOB: terra-pass-prompt-1011
 LADDER: OFF-LADDER — reports/cto-2026-10-11.md R1107
 BRANCH: ops/terra-pass-prompt-1011
 WORKTREE: terra-pass-prompt-1011
-BASE: «FILL: the desk's main head at launch»
-TIP: «FILL: the desk's, after the build»
+BASE: ffc704da
+TIP: none
 REPORT: /Users/cobalt/cobalt-wt/terra-pass-prompt-1011/docs/40 - DevDocs/reports/terra-pass-prompt-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/terra-pass-prompt-check-2026-10-11.md
 HOUSE B: as needed
