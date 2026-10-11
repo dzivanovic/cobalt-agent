@@ -88,5 +88,7 @@ def test_p1_the_pin_rule_names_14_days_and_double_equals():
     assert "<name>==<that version>" in t
 
 
-def test_p1_the_line_waits_for_his_sign_off():
-    assert ("NEEDS HIS SIGN-OFF " + "«" + "SIGN: his row»") in text()
+def test_p1_the_line_is_signed_on_his_row():
+    """Card 355 S1, his R1069: the mark is replaced with his row."""
+    assert "THE LINE'S SIGN: 2026-10-11 R1069 · HIS RULING · APPROVED (R411:" in text()
+    assert ("«" + "SIGN") not in text()
