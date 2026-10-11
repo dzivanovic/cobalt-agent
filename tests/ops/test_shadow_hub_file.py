@@ -8,8 +8,10 @@ its `## BUILDERS` table holds the three builder rows (R1019: no Opus and no Sol 
 
 from __future__ import annotations
 
+import os
 import re
 import shlex
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -280,3 +282,57 @@ def test_f2_the_sonnet_read_is_its_worktree_only(worktree):
     reads = [w for w in allowed if w == "Read" or w.startswith("Read(")]
     assert reads == [READ_WT.replace("<worktree>", worktree)]
     assert "Read" not in allowed
+
+
+# ---- the fix round of install-shadow-hub-1011 (card 355 F1, check O1) ------------------------
+
+AUTHORIZE = REPO / "ops" / "desk" / "authorize.sh"
+INSTALL_TITLE = "INSTALL: 2026-10-11 R1069 · HIS RULING · APPROVED"
+GIT_ENV = {
+    "GIT_AUTHOR_NAME": "test",
+    "GIT_AUTHOR_EMAIL": "test@example.invalid",
+    "GIT_COMMITTER_NAME": "test",
+    "GIT_COMMITTER_EMAIL": "test@example.invalid",
+    "GIT_CONFIG_GLOBAL": "/dev/null",
+    "GIT_CONFIG_NOSYSTEM": "1",
+}
+
+
+def git(cwd: Path, *args: str) -> None:
+    subprocess.run(["git", "-c", "core.hooksPath=/dev/null", *args], cwd=cwd,
+                   env=dict(os.environ, **GIT_ENV), capture_output=True, text=True, check=True)
+
+
+def test_f1_the_real_title_passes_the_authorize_line_one_gate(tmp_path):
+    """authorize.sh shadow reads line 1 for `INSTALL: <date> R<n>` and proves that row
+    (test_authorize.py's `desk` shape: a tmp repo as COBALT_REPO_ROOT; the real repo is never read)."""
+    title = text().split("\n", 1)[0]
+    assert title == INSTALL_TITLE
+
+    repo = tmp_path / "repo"
+    prompts = repo / "docs" / "40 - DevDocs" / "prompts"
+    reports = repo / "docs" / "40 - DevDocs" / "reports"
+    (prompts / "2026-01-02").mkdir(parents=True)
+    reports.mkdir(parents=True)
+    (prompts / "SHADOW-HUB.md").write_text(title + "\n\nbody\n")
+    (reports / "cto-2026-10-11.md").write_text(
+        "| row | time | what | state |\n|---|---|---|---|\n"
+        "| R1069 | 09:00 ET | HIS RULING: installs the hub. | HIS RULING · APPROVED |\n")
+    (reports / "cto-2026-01-02.md").write_text(
+        "| row | time | what | state |\n|---|---|---|---|\n"
+        "| R2 | 09:05 ET | HIS RULING: the job's ruling. | HIS RULING · APPROVED |\n")
+    card = prompts / "2026-01-02" / "01-x-job-card.md"
+    card.write_text(
+        "JOB: x-job\nLADDER: OFF-LADDER\nBRANCH: ops/x-job\nWORKTREE: x-job\n"
+        "BASE: 0000aaaa\nTIP:\nREPORT: /nowhere/x-job-build.md\n"
+        "TREE STATE: unchanged\nRULINGS: 2026-01-02 R2\n\n## ROWS\n| row | what |\n")
+    git(repo, "init", "-q", "-b", "main")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "base")
+    env = dict(os.environ, COBALT_REPO_ROOT=str(repo), COBALT_WT_ROOT=str(tmp_path / "wt"), **GIT_ENV)
+    done = subprocess.run(["sh", str(AUTHORIZE), "shadow", str(card)], env=env,
+                          capture_output=True, text=True, timeout=120)
+
+    assert "STANDING LIST 2026-10-11 R1069 row · " in done.stdout, done.stdout + done.stderr
+    assert "the title names no INSTALL" not in done.stdout
+    assert done.returncode == 0, done.stdout + done.stderr
