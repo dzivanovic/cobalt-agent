@@ -2,10 +2,10 @@ JOB: kill-hub-row-1010
 LADDER: OFF-LADDER — reports/cto-2026-10-10.md R937
 BRANCH: ops/kill-hub-row-1010
 WORKTREE: kill-hub-row-1010
-BASE: 6fe8d690
+BASE: 91c48f36
 TIP: b4d82ad6
 REPORT: /Users/cobalt/cobalt-wt/kill-hub-row-1010/docs/40 - DevDocs/reports/kill-hub-row-build-2026-10-10.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/kill-hub-row-check-2026-10-10.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/kill-hub-row-read-2026-10-11.md
 HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-10 R855
@@ -74,6 +74,7 @@ TEXT K3 (FIX ROUND, replaces the K3 TEXT of round 1; the new `STANDING-LIST.md:1
 - X5 K2: "each resident booted out and not held DOWN" — does any later step (STEP-5 (4) re-run, (5) the last line's `aset: <UP|DOWN>`) read the held-down aset correctly?
 
 ## RECORDS
+- 2026-10-11 R1060 (brain R955, L67): the pass-1 report `kill-hub-row-check-2026-10-10.md` stands as the check; this read is L67's read of the fix round's hub text on a new CHECK REPORT path, BASE = the pass-1 tip `91c48f36`, TIP `b4d82ad6` (fix-round diff only), not a re-check of a build.
 - `git -C /Users/cobalt/cobalt log --oneline -1` → `6fe8d690 docs(desk): X29 deploy card 285, tip 3c00e204` (the drafter, 2026-10-10, `date` 15:20 EDT). The last commit touching either file: `7bc283fe` (M6, R839). `git -C /Users/cobalt/cobalt diff --stat HEAD -- <both files>` printed nothing: main's working files equal `BASE` (the restore, `reports/restore-hub-text-2026-10-10.md`).
 - At `BASE`: `DEPLOY-HUB.md` 181 lines, `STANDING-LIST.md` 220 lines; line 137 begins `4.2 for each of`, line 162 begins `- (3) THE RESTORE:`, line 148 is the `Bash(launchctl print gui/501/*)` row, line 149 the `Bash(/Users/cobalt/cobalt/cobalt.sh status)` row (Read tool on the files equal to `BASE`).
 - At `BASE`, `grep -c -F -e` on both files → 0 each for "orphan-clean.sh --kill aset", "the kill sequence:", "orphan-clean.sh aset", "--kill com.cobalt.aset", "killing the orphaned", "each resident booted out and not held DOWN", "ORPHAN-CLEAN, aset only".
