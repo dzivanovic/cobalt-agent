@@ -32,5 +32,11 @@
 - Precedent copied: `prompts/2026-10-10/231-ops-hand-card.md` (fixed file plus launcher kind plus guard kind, `«INSTALL` gate, DECISIONS FOR HIM).
 - RESTARTS: none expected. `ops/desk/` → operator script (`restarts.py:230-232`), `docs/` → DOCS (`:225-228`), `tests/ops/` → no resident (`:246`). Row S6 proves it.
 - Card size: 76 lines, 17,789 bytes before the spike fold (`wc -c`). A new file, so no shrink rule applies.
+- AMEND 06:23:04 EDT (desk message, brain direction L79), edit only; no other row touched:
+  - The card at HEAD `850e1cd6` was committed by the desk with `RULINGS: 2026-10-11 R1009`. It stays (direction (1)). The DECISIONS item on R1008 is answered by that.
+  - The redo file was re-read at the committed blob (`git show HEAD:…model-bakeoff-redo-answer-2026-10-11.md`, 06:22:40). R1016 is at `## PURPOSE` "His next words" (`:9`), and R1019 is at `:19` with "This SUPERSEDES" at `:20`. The DECISIONS item on the untracked file is answered by that.
+  - S1 (d): the `.env` precondition replaces "no builder pass while `.env` is in the worktree". Any model's pass starts only after `ls -la <wt>/.env` → `No such file`; `.env` lives only inside the gate's with-DB step under the lock (L76); builder and gate passes never overlap; Terra's network is OFF (the `workspace-write` default), and X1 proves it before the Terra arm runs.
+  - New row S7: the guard holds the precondition for kind `shadow` (a builder call is exit 2 while `<wt>/.env` exists, a symlink included). RED first: the route-line assertion on `BASE`, plus the file test for the `ls -la` step before every pass and Terra's `network: off`.
+  - P4 stays a RUN row (direction (4)).
 
 SHADOW-HUB CARD DRAFTED · decisions: 10
