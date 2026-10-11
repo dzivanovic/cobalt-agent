@@ -1,0 +1,175 @@
+BLIND: I did not read the houses' folder or the hub's report.
+RUN DATE: Sun Oct 11 07:28:13 EDT 2026
+
+## DIGEST FOR THE DESK
+TRIBUNAL R1: ADOPT AFTER lock-seam step, RESTARTS line, lazy pptx import, and five fact corrections
+- C1 ADOPT
+- C2 ADOPT
+- C3 ADOPT WITH — order `formed_at DESC NULLS LAST, id DESC`; cap per deck; a shared card counted in both, marked shared.
+- C4 ADOPT
+- C5 ADOPT WITH — pin = the version uv resolves; how `uv.lock` is produced named on the card (BUILD-HUB:14 forbids `uv lock`).
+- C6 ADOPT
+- C7 ADOPT — not an L53 cadence; an `at` literal in jobs.yaml has precedent (cards-expire 16:05).
+- C8 ADOPT
+- C9 ADOPT
+- C10 ADOPT WITH — unfiled rows show slug + reason (`draft` / `no note`).
+- C11 ADOPT WITH — rename sequence spelled out: `.tmp` cleaned, old folder moved aside, then swapped; POSIX rename onto non-empty dir is X5.
+- C12 ADOPT · SELF: yes · EVIDENCE: UNMEASURED (RULED R919 / BUILD-HUB:3)
+- C13 ADOPT
+- (a) ADOPT WITH — fact base holds except R746 (no lock rule), R5 (bad def crashes the load), R4 (heartbeat runs), test 10 helper (a fake).
+- (b) ADOPT WITH — title slide shows formed_at range, not "the week"; shared-card counts; one bad note fails the whole run, loud.
+- (c) ADOPT WITH — L10 dry-run added; import check made static (cli.py:80 imports vaultwrite into every process); L1 table.
+- (d) ADOPT WITH — lazy `pptx` import (radar imports `cobalt.cli`); lock seam is not a rule on record; `because:` key owed.
+- (e) ADOPT WITH — ONE chunk, GUESS 4–6 h; Opus 5.5 builder, check Opus + Grok (R921); DB tests 10/11/14; live-note invariants only · SELF: yes · EVIDENCE: UNMEASURED
+- (f) ADOPT WITH — RESTARTS: com.cobalt.aset, com.cobalt.agent, com.cobalt.radar (pyproject/uv.lock; radar also via `cobalt.cli`) + bootstrap com.cobalt.playbook.
+- EXPERIMENTS: X1 uv implicit relock · X2 lock diff of existing pins · X3 deck opens + layout · X4 launchd Sunday 17:30 · X5 folder swap on APFS with a viewer open · X6 production sync at deploy · X7 watchdog on a never-run weekly job.
+- OWNER: none (C7 and C3 fail "no house can decide it").
+- SELF: yes lines: 2 · UNMEASURED: 2.
+- WITHDRAWN sentences: 1.
+- ESCALATE: 5.
+
+## Rulings
+
+**C1 — ADOPT.** `Family` has five values (`src/cobalt/taxonomy/trade_def.py:116-121`); `TradeDef.family: list[Family] = Field(min_length=1)` (`:745`). The deck reads `LoadedTradeDef.definition.family` (`vault_loader.py:147`), the validated value — not the frontmatter `family:`, which the loader only cross-checks into `warnings` (`vault_loader.py:207-241`, called `:456`). The design already names `definition.family` (proposal :15); keep it. SELF: no.
+
+**C2 — ADOPT.** `aset_sizings_radar_provenance` makes `trade_def_slug` NOT NULL only for `origin = 'radar'` (`0007_radar_cards.sql:76-79`); a manual card has no slug, so a family needs a guess (L1). Precedent for selecting by origin: `cards/store.py:1024`, `replay/cards.py:573`. SELF: no.
+
+**C3 — ADOPT WITH:** "Latest = per family, the newest `latest_per_family` radar cards whose `trade_def_slug` resolves to a def listing that family, every state, ordered `formed_at DESC NULLS LAST, id DESC`. The cap applies per deck: a card of a two-family def is counted against both caps and appears in both decks. A row with NULL `formed_at` (the column is nullable, `0007:39`, and is not in the provenance check, `0007:78-79`) is listed with date `n/a`, never dropped."
+Reasoning: 12 cards with equal `formed_at`, N=10 → without a tie-break the 10 chosen change between two runs over the same rows (rerun test 7 compares nothing stable). `id DESC` is the cheapest total order. NULL `formed_at` cannot arise through `create_radar_card` (spec `formed_at: AwareDatetime`, `cards/radar.py:89`), but the DB permits it; NULLS LAST keeps such a row from displacing ten real ones. N=10 is a render tunable with no measurement; it is the houses' to set (OWNER: none) — UNVERIFIED — the slide count it yields per family on the build day's dev data. SELF: no.
+
+**C4 — ADOPT.** The reference renderer is one trade per deck on a licensed, gitignored template (`.gitignore:31`, proposal :89); the gate and a fresh checkout cannot load it. Built-in-code is the smaller mechanism: no template file, no asset path, no L32 question. SELF: no.
+
+**C5 — ADOPT WITH:** "Add `python-pptx` to `pyproject.toml` beside `python-multipart` (`pyproject.toml:33-35`), pinned `==` to the version uv resolves. `uv.lock` is produced on the build branch by the card's named step: the builder's first `uv run pytest` after the `pyproject.toml` edit, IF X1 shows uv re-locks implicitly; else the card asks, before launch, for the one new string `Bash(uv lock)` (L62) — the standing BUILD-HUB line never types `uv add` or `uv lock` (`BUILD-HUB.md:14`). The build report quotes `git diff --stat uv.lock` and the added package names; a change to any already-locked version (lxml `uv.lock:2681`, pillow `:3652`) is listed by name."
+Reasoning: the proposal (§3 row `uv.lock`, R2) has the lock "regenerated by `uv lock`" — a command the fixed builder line forbids. Without this the build stops at its first dependency step. SELF: no.
+
+**C6 — ADOPT.** `data/` is gitignored (`.gitignore:6`); `data/` exists and holds no `playbook` folder today (`ls /Users/cobalt/cobalt/data`). Outside the vault, so L28 stays untouched. Note: `data/` is not in the backup's sources (`jobs.yaml:268` "vault + a fresh cobalt_brain dump") — decks are regenerable from those two, so no loss of record. SELF: no.
+
+**C7 — ADOPT.** L53 reserves "the Finviz request ceiling and the scan cadence" (LAWS L53). A weekly render time is neither. Every `at` one-shot carries its time as a literal in `jobs.yaml` (`:211`, `:224`, `:239`, `:246`, `:253`, `:268`, `:309`); intervals that are thresholds go to tunables (`jobs.yaml:281`, `:293-294`). An `at` time without a tunables row is the registry's own lawful shape. 17:30 meets Charter M11 18:00 (`MVP-CHARTER-v0_2.md:58`) with 30 min for a failed run to show on the 15-min heartbeat (`tunables.yaml:587-588`). SELF: no.
+
+**C8 — ADOPT.** A failed run is exit 1 (`cli.py:575-577`) and a `jobs` row marked failed (`jobs/wrapper.py:175-189`); F18 reports it. A DM is a later card. SELF: no.
+
+**C9 — ADOPT.** The Charter test says "one deck per setup family" (`MVP-CHARTER-v0_2.md:210-211`); a missing file would read as a failure. SELF: no.
+
+**C10 — ADOPT WITH:** "`unfiled.pptx` lists every radar card whose slug is not among the loaded defs, newest first with the same order as C3, each row carrying its slug and the reason: `draft` when the slug is in `VaultTradeDefs.drafts`, else `no note`. Not capped; the title slide gives the count."
+Reasoning: a draft keeps its slug (`DraftNote.slug`, `vault_loader.py:161-166`; returned `:398-441`), so "deleted" and "drafted" are distinguishable at no cost; uncapped because unfiled is the L1 catch, not review material. SELF: no.
+
+**C11 — ADOPT WITH:** "Render into `<out>/<date>.tmp/` (removed first if present). Then: if `<out>/<date>.prev/` exists remove it; if `<out>/<date>/` exists rename it to `<date>.prev/`; rename `<date>.tmp/` to `<date>/`; remove `<date>.prev/`. A crash before the second rename leaves the old `<date>/` whole; after it, `<date>.prev/` whole and no `<date>/`; the next run rebuilds."
+Reasoning: rename onto an existing non-empty directory is refused by POSIX `rename(2)` — so the proposal's "write to `<date>.tmp/`, then rename" (:31) fails on every same-day rerun unless the old folder is moved first. That claim is behaviour, so X5 runs it; the wording above is correct whichever way X5 lands. Listing at each step: `{<date>/, <date>.tmp/}` → `{<date>.prev/, <date>.tmp/}` → `{<date>.prev/, <date>/}` → `{<date>/}`. SELF: no.
+
+**C12 — ADOPT.** SELF: yes. EVIDENCE: UNMEASURED (RULED R919 — LAWS L67 "Every merged build stays Opus 5.5 (L29) until his word"; `BUILD-HUB.md:3` MODEL line is a fixed file, not a measurement). The ladder's Sonnet (`SPRINT-LADDER-v0_1.md:971`) predates the fixed file. No measurement for or against this house on a renderer build was read.
+
+**C13 — ADOPT.** L67 MANDATORY HOUSE B: "a build that writes his vault notes or changes sizing". F23 writes `data/playbook/` and one `jobs` row; it reads `aset_sizings` and changes no sizing column. Under R921 the check is Opus + house A = Grok; Gemini sits only on a Grok failure. SELF: no.
+
+**(a) THE FACT BASE — ADOPT WITH:** "§6 R2: the lock seam is settled by the C5 step; no ruling on record resolves it. §6 R4: one SELECT at 17:30 beside the 15-minute heartbeat and the always-on residents; read-only. §6 R5: a finished def that fails validation, or any malformed note, raises `VaultTaxonomyError` and fails the whole run loud (exit 1, failed job row); drafts and frontmatter warnings print on stdout. §5 test 10 seeds cards through the `world` fixture of `tests/cobalt/test_radar_cards_db.py` (the real `create_radar_card` on `cobalt_dev`)."
+| Claim | Verdict |
+|---|---|
+| no `playbook` package; `drc/playbooks.py` is a name→slug resolver | HOLDS — no hit for `cobalt.playbook`/`src/cobalt/playbook` in src, configs, ops, tests, pyproject; `drc/playbooks.py:1-22`. No import clash (`cobalt.playbook` vs `cobalt.drc.playbooks`); no CLI clash (`cli.py:520-543` has no `playbook` subcommand; `drc/cli.py` has no `playbook` word). |
+| `Family` 5 values, def lists ≥1 | HOLDS `trade_def.py:116-121`, `:745` |
+| loader returns defs and drafts | HOLDS `vault_loader.py:170-175`, `:472-516`; but raises on a bad finished def `:449-453` and on malformed notes `:337-381` |
+| slug NOT NULL by constraint | HOLDS `0007:78` (radar only) |
+| `formed_at` column | HOLDS `0007:39`; nullable |
+| `CardStore.SIDE = Side.USER`, `db.connect(..., side=)` | HOLDS `cards/store.py:106`, `db.py:227` |
+| `job_run` `:125`, users `generated/cli.py:56`, `seatusage/runner.py:239` | HOLDS |
+| `WEEKDAY_NAMES` 0 = Sun `jobs/config.py:27` | HOLDS |
+| python-pptx absent; lxml, pillow locked | HOLDS — no `pptx`/`XlsxWriter` in pyproject, src, tests, configs, ops; `uv.lock:2681`, `:3652` |
+| ladder `:936`, `:942` | HOLDS at `d0a5fbb8`; MOVED on main (`b3f6fa0b`, 10-10 21:09) to `:966`, `:971-972` |
+| R746 records "re-run `uv lock`" | DOES NOT HOLD — `cto-2026-10-09.md:96` records a row-D rewrite and builder relaunch |
+| nothing else runs Sunday 17:30 | DOES NOT HOLD — `com.cobalt.heartbeat` every 15 min all week (`jobs.yaml:271-281`, `tunables.yaml:587-588`); residents `aset`, `agent`, `radar` live |
+| test 10 helper `radar_p2_support.py` seeds via `create_radar_card` | DOES NOT HOLD — that file's `create_radar_card` is an in-memory fake (`radar_p2_support.py:12-15`, `:248`); real-DB seeding is the `world` fixture (`test_radar_cards_db.py:44-45`; used so by `test_strike_detector_db.py:3-5`) |
+| MISSED | the three residents that re-read `pyproject.toml`/`uv.lock` (`jobs.yaml:88-89`, `:157-158`, `:201-202`) and the radar's `imports: [cobalt.cli]` (`jobs.yaml:203`) — see (f); `NoResidentRead.because` is required (`jobs/config.py:372`) |
+SELF: no.
+
+**(b) THE DATA WALK — ADOPT WITH:** "Title slide: family, `rendered <date> HH:MM ET`, the ET dates of the oldest and newest `formed_at` shown, counts: setups, cards shown, of which shared with another family's deck, cards in the family overall. Each setup slide names the other decks the setup also appears in. All vault and DB reads happen inside `job_run`; any loader error fails the run before any file is written."
+Walk (constructed fixture, run Sunday 17:30):
+- Setup S listed `[opening_drive, continuation]`, 3 cards → both decks carry S's slide and its 3 rows; each title says `shared: 3`. No double count inside one deck.
+- Draft note (no family) → in `drafts` (`vault_loader.py:396-441`), on stdout; its cards → `unfiled.pptx` reason `draft` (C10).
+- Card whose def note was deleted → `unfiled.pptx` reason `no note`.
+- `time_window` no setup → `time_window.pptx`, one content slide "no setup in this family" (C9).
+- 12 equal `formed_at`, N=10 → ids 12..3 shown (C3 tie-break); title `cards in family overall: 12`.
+- State `EXPIRED`/`CLOSED` → shown with its state (C3 "every state").
+- Note saved mid-read: the loader reads each file once (`vault_loader.py:336`); a half-saved note that fails to parse raises → exit 1, failed row, no folder touched; the heartbeat shows red before 18:00; a manual `cobalt playbook render` reruns. Whether Obsidian ever exposes a half-written file is X-territory, not argued.
+- Crash left `<date>.tmp/` → removed at start (C11).
+- `why` 300 chars → 120 + `…`.
+- `formed_at` Monday 00:05 ET → only a date in the range line; the proposal's "Mon–Fri week" (:22) no longer exists to contradict it — and it was misleading anyway, since C3 has no window and older cards appear under a "this week" header.
+- Folder open in a viewer → X5.
+Output: 6 files (`opening_drive`, `continuation`, `range_break`, `reversion`, `time_window`, `unfiled`). No sequence drops a card: every radar row lands in ≥1 family deck or in `unfiled`. Template alternative: pricing it adds a licensed asset path the gate cannot read, a one-trade-per-deck mapping to bend, and an L32 question — larger; rejected. SELF: no.
+
+**(c) LAWS — ADOPT WITH:** "L10: `configs/cobalt/playbook.yaml` loads through a Pydantic model with `extra="forbid"` (an unknown key crashes with its line); `cobalt playbook render --dry-run` prints the planned files, slide and card counts, writes nothing and skips `job_run` (the pattern of `generated/cli.py:46-52`). L28: test 8 checks the fixture vault's file list and mtimes unchanged AND that no module under `src/cobalt/playbook/` imports `cobalt.vaultwrite`, by AST — not by `sys.modules`, because `cobalt.cli` itself imports `VaultWriter` (`cli.py:80`)."
+- L52: the deck shows the stored `card_score` and orders by `formed_at`; nothing ranks, filters or computes a statistic beyond counts. Not a scoring build. Contrast: `cards/picks.py:227` orders by `card_score` — the design must not reuse that read.
+- L1 table, all exit 1 via `cli.py:575-577` and failed row via `jobs/wrapper.py:175-189`: dead DB (connect raises); vault folder missing (`vault_loader.py:477-481`); bad note (`:449-453`); unwritable `data/playbook` (OSError at mkdir); unknown config key (Pydantic); pptx save error (raised). Kill switch active → `JobStopped`, exit 0 "NOT RUN" (`cli.py:559-563`) — lawful by F17d. A failure inside `job_run`'s own `ensure_schema`/`register` raises before the block (non-exempt, `wrapper.py:136-146`).
+- L53: neither C7 nor C3 is a ceiling or cadence (C7).
+- L32: decks hold his card data outside git — lawful (user data stays on this install). The committed proposal :19 and :76 and its report :50 carry counts of his strategy notes per family — user data under this prompt's L32 line; not copied here; ESCALATE. The build's live-note test asserts invariants only (see (e)).
+SELF: no.
+
+**(d) THE SEAMS — ADOPT WITH:** "Seams as artifacts: `src/cobalt/cli.py` — one import line after `cli.py:83` and `playbook_cli.add_parser(sub)` after `strike_cli.add_parser(sub)` (`:543`), a new last line of the block as the archiver comment (`:535-538`) prescribes. `cobalt/playbook/cli.py` imports `data`, `deck` and `pptx` inside the command function only (pattern `generated/cli.py:54`); a test asserts `import cobalt.cli` leaves `pptx` out of `sys.modules`. `configs/cobalt/jobs.yaml` — the row after `com.cobalt.generated` (`:298-317`); the `no_resident_reads` entry `{path: configs/cobalt/playbook.yaml, readers: [com.cobalt.playbook], because: <file:line of the loader call>}` (`jobs/config.py:370-372`). `pyproject.toml` / `uv.lock` — the C5 step; on a trial-merge conflict with another lane's package, the lock is regenerated on the combined `pyproject.toml` by the same named step, never hand-merged."
+Reasoning: radar's entrypoint imports `cobalt.cli` (`jobs.yaml:203`); a top-level `pptx` import puts a new native dependency in the trading resident's startup. Failing scenario: Monday 09:20 radar restart after a sync that left `lxml` half-installed → `import cobalt.cli` raises → radar down at the open, for a Sunday feature. The lazy import costs one line. The "re-run `uv lock`" resolution is a sensible procedure but NOT a rule on record (R746, (a)); the derive should state it as this design's own rule. Missed shared files: `tests/cobalt/test_jobs.py:70-105` (plist ↔ registry parity, already generic — passes with the new plist if its `StartCalendarInterval` is one dict Weekday 0 Hour 17 Minute 30 and it carries `COBALT_ENV`), `cli.py:338-411` (the same parity in `cobalt validate`), `ops/README.md:18` (lists plists — UNVERIFIED whether it must list the new one). Test 9 passing on `cobalt validate` is UNVERIFIED until run (the DB checks in validate need `--no-db` offline, `cli.py:186-194`). SELF: no.
+
+**(e) CHUNKS AND SEATS — ADOPT WITH:** "ONE chunk. Size GUESS 4–6 h builder time (5 small modules, one config, one plist, one row, one parser line, a dependency, ~16 tests). Seat: Opus 5.5 builder on BUILD-HUB. Check: CHECK-HUB fresh Opus + house A = Grok (R921); no house B (C13). `cobalt_dev` under the L76 lock: tests 10, 11 and the loader-failure-with-DB test 14. Live vault, read-only through `COBALT_LIVE_VAULT_ROOT`: the live-note run asserts invariants only — six files exist; every loaded def appears in exactly `len(def.family)` decks; every radar card on `cobalt_dev` appears in ≥1 deck — and prints no per-family count of his notes (L32)."
+SELF: yes. EVIDENCE: UNMEASURED (RULED R919; the hour figure is a guess, not a measurement). Two chunks would put the job/registry/plist/dependency chunk without a caller — a seam with nothing to test it against; one chunk is smaller.
+
+**(f) RESTARTS — ADOPT WITH:** "RESTARTS: `pyproject.toml`, `uv.lock` → com.cobalt.aset, com.cobalt.agent, com.cobalt.radar (`jobs.yaml:88-89`, `:157-158`, `:201-202`; `test_jobs_reads.py:104-106`); `src/cobalt/cli.py` → com.cobalt.radar (`imports: [cobalt.cli]`, `jobs.yaml:203`) and any resident `cobalt jobs restarts` derives by its AST walk; `ops/com.cobalt.playbook.plist` → bootstrap com.cobalt.playbook; `configs/cobalt/jobs.yaml`, `configs/cobalt/playbook.yaml` → none (no resident `reads:` them; `playbook.yaml` declared in `no_resident_reads`). The deploy card carries the uv sync line (`DEPLOY-HUB.md:174`) and the plist bootstrap, and runs inside L66's shape (residents down before the merge)."
+Reasoning: the proposal names no restart; three residents restart because uv syncs at their start. Cost to him: on a trading day, his sheet (`com.cobalt.aset`, "the surface he trades beside", `jobs.yaml:191`) and the radar go down for the restart — L66 confines that to the 20:00–21:00 pause; on a weekend it costs nothing. Restart duration UNVERIFIED — X6. SELF: no.
+
+## Self-attack
+Writers / readers found (grep `/Users/cobalt/cobalt/src/cobalt`, plus tests/configs/ops where named):
+- `load_vault_trade_defs`: callers `cards/trail_fit_draft.py:56`, `taxonomy/catalyst.py:151,322`, `taxonomy/validate.py:93`, `taxonomy/cli.py:80,306,565`; many tests. Read-only callers; F23 is one more reader. No writer.
+- `LoadedTradeDef` / `VaultTradeDefs`: `taxonomy/vault_loader.py`, `taxonomy/store.py`, `taxonomy/validate.py`.
+- `Family`: `taxonomy/trade_def.py`, `taxonomy/vault_loader.py` only.
+- `trade_def_slug`: `cards/store.py` (8), `radar/evaluate.py` (7), `prefill/trade_note.py` (4), `strike/detector.py` (4), `aset/radar_panel.py` (4), `0007` (5), `replay/*` (6), `cards/radar.py` (2), `aset/web.py`, `db_migrations/cli.py`. Writer: `create_radar_card` only (`cards/store.py:1145-1164`).
+- `formed_at`: writer `cards/store.py:1147,1163` from `RadarCardSpec.formed_at: AwareDatetime` (`cards/radar.py:89`), set by `radar/evaluate.py:1977`; readers `cards/store.py:1023,1101,1364`, `replay/*`, `aset/radar_panel.py`.
+- `aset_sizings`: 46 files (src); radar selectors `cards/store.py:1024,1058,1100,1156,1224,1523`, `cards/picks.py:227`, `replay/cards.py:573`.
+- `create_radar_card`: real `cards/store.py:1121`, called `radar/evaluate.py:1992`; fake `tests/cobalt/radar_p2_support.py:248`; DB tests `test_radar_cards_db.py:158`, `test_f15_p1_records_db.py:209,217`, `test_x5_tap_refresh_db.py:130`, `tests/experiments/f15_p1/test_x12_transition_ids_db.py:93`.
+- `job_run`: `generated/cli.py`, `dayopen/parse.py`, `jobs/{__init__,cli,restarts,wrapper,entrypoint}.py`, `radar/runner.py`, `seatusage/runner.py`.
+- `no_resident_reads`: `jobs/config.py:381-445`, `jobs/cli.py:103`, `jobs.yaml:327`, `test_jobs_reads.py`, `test_jobs_restarts.py`.
+- `WEEKDAY_NAMES`: `jobs/config.py:27,118,186,193,482` only.
+- `playbook` (word): `drc/{build,units,stats_log,playbooks,models,__init__,pairing}.py`, `voice/tools.py:65`, `taxonomy/vault_loader.py:53,109-113,250-252` (`status: playbook` refused), `0020_drc_build_kinds.sql`. None in configs/cobalt/jobs.yaml or ops.
+- `python-pptx` / `pptx` / `XlsxWriter`: no committed file carries them (pyproject, src, tests, configs, ops).
+- `uv.lock`: `jobs.yaml:89,158,202`, `test_jobs_reads.py:97-106`, `BUILD-HUB.md:14` (never typed), `DEPLOY-HUB.md:174` (uv sync line).
+- `data/playbook`, `com.cobalt.playbook`: no committed file carries them.
+- `cards-expire`: `cards/cli.py:19,253` (`as_job`), `jobs/wrapper.py:8`, `jobs/watchdog.py:368`, `configs/cobalt/smoke/s2.yaml:613-615`, `jobs.yaml:242`, `tests/cobalt/test_jobs.py:852-930`, `ops/com.cobalt.cards-expire.plist`, `ops/README.md:18`.
+Walk against my text: `configs/cobalt/smoke/s2.yaml:613-615` registers a smoke check per job label (cards-expire) — a smoke row for `com.cobalt.playbook` may be expected; UNVERIFIED, left to the card, not a ruling. `cards/cli.py:253` uses `as_job`, not `job_run`: two wrapper names exist; the proposal's `job_run` is the one `generated/cli.py:56` uses — no change.
+WITHDRAWN: "the radar resident imports `cobalt.cli` at its start, so a top-level `pptx` import WILL load python-pptx in the radar" — kept only as "the radar's registered entrypoint import is `cobalt.cli` (`jobs.yaml:203`)"; that `cobalt.cli` imports the playbook CLI at module top follows from `cli.py:61-83` style, but the playbook module's own top-level imports do not exist yet, so the failing scenario in (d) is conditional on the build choosing a top-level import — the ruling words it as a requirement, not a found defect.
+
+## SELF-ASSIGNMENTS
+- C12 — Opus 5.5 builds F23 · EVIDENCE: UNMEASURED (RULED R919; `BUILD-HUB.md:3`).
+- (e) — Opus 5.5 builder; Anthropic fresh session in the check · EVIDENCE: UNMEASURED (RULED R919, R921; hour figure a GUESS).
+No measurement against this house on this kind of build was read.
+
+## Experiments (L70)
+- X1: in a scratch worktree off main, add `python-pptx` to `pyproject.toml`, run `uv run pytest tests/cobalt/test_jobs_reads.py` — does `uv.lock` change, adding `python-pptx` and its dependencies? If no → the card asks for `Bash(uv lock)` (C5).
+- X2: same worktree, `git diff uv.lock` — does any already-locked package (lxml, pillow, typing-extensions) change version? If yes → the deploy smoke covers the residents that import it, named.
+- X3: render the six decks from a synthetic fixture (3 defs, 17 cards, one 300-char `why`) and open each in PowerPoint and Keynote on the Mac — does the 8-row × 12-column table fit a 16:9 default slide? If it overflows → `rows_per_slide` or the column set changes.
+- X4: a dev-labelled copy of the plist with `StartCalendarInterval` Weekday 0 at the next minute, loaded with `launchctl bootstrap gui/$UID` — does it fire, and is ET the system zone it fires in? If not → schedule shape changes.
+- X5: on the `data/` volume, run the C11 sequence twice with a deck open in Keynote and Preview — does the rename of an existing non-empty `<date>/` onto itself fail (ENOTEMPTY), and does the open-file rename succeed? Result picks C11's exact calls.
+- X6: in a scratch clone with its own venv, time `uv run cobalt --help` after the lock change (sync with network) — the deploy's resident downtime; and with network off — does it fail loud? If slow or fragile → the deploy runs `uv sync` before restarts.
+- X7: with a dev registry holding the weekly row and no run yet, run the heartbeat sweep on a Wednesday — is the job reported missed/red before its first Sunday? If yes → the deploy card runs one manual render.
+Keep tests 1–9 and 11 as written (8 per (c)); change 10 (world fixture) and the live-note run (invariants); add 12 `import cobalt.cli` without `pptx`, 13 `--dry-run` writes nothing and no job row, 14 loader error → exit 1 + failed row + output folder untouched, 15 shared card in two decks with `shared` counts, 16 equal `formed_at` → `id DESC`, 17 rerun with a leftover `.tmp/` and an existing `<date>/`.
+
+## OWNER (after the tribunal)
+none. C7 run time: not his money, data, law or trading judgement, and the houses can set it against Charter M11. C3 window: a render tunable in config; the houses set its default; he may edit it. Nothing else passes.
+
+## WRONG FACTS
+1. Proposal :81 "resolved by re-running `uv lock` … (R746)" — `cto-2026-10-09.md:96` R746 records a row-D rewrite and relaunch; and `BUILD-HUB.md:14` lists `uv lock` as never typed.
+2. Proposal :84 "a note failing validation shows as a draft/error on stdout, never a crash" — `vault_loader.py:449-453` (finished def invalid → raise) and `:475-476` docstring "Fails loud on … a finished def that does not validate".
+3. Proposal :83 "nothing else runs then" — `jobs.yaml:271-281` heartbeat every `heartbeat.interval_min` = 15 (`tunables.yaml:587-588`), all week.
+4. Proposal :74 and report :48 — the "existing helper `tests/cobalt/radar_p2_support.py`" seeds `cobalt_dev` through `create_radar_card` — `radar_p2_support.py:12-15`, `:248` is an in-memory fake; real seeding `test_radar_cards_db.py:44-45`.
+5. Proposal :19 / :76 and report :50 — per-family counts from a frontmatter `family:` grep are presented as deck sizes; the deck reads `definition.family` of loaded defs only (`vault_loader.py:147`; drafts excluded `:396-441`; frontmatter disagreement is only a warning `:238-241`). Not the same quantity (counts not copied, L32).
+(Ladder `:936`/`:942` HOLD at `d0a5fbb8`; moved since — not a wrong fact.)
+
+## READING
+LAWS.md :1-392 · prompt `328b` whole · `338-f23-tribunal.md` :19, :31-33, :56 · proposal whole · report whole · `cto-2026-09-22.md:56` · `cto-2026-09-23.md:103,105` · `cto-2026-10-09.md:96` · `cto-2026-10-10.md:91,92,104,152` · `cto-2026-10-11.md:7,36` · `238-f4-tribunal-opus-seat.md` (10 counts) · `SPRINT-LADDER-v0_1.md` :3,41,915,950-975 (+ `git grep` at `d0a5fbb8`) · `MVP-CHARTER-v0_2.md:58,207-212` · `trade_def.py:95-130,730-760` · `vault_loader.py:80-100,125-185,332-456,460-545` · `0007_radar_cards.sql:20-95,210-236` · `cards/store.py:95-118,1110-1205` · `replay/cards.py:1-40,555-590` · `db.py:215-295` · `jobs/wrapper.py:110-205` · `generated/cli.py` whole · `seatusage/runner.py:225-262` · `cli.py:134-200,500-581` + import list · `jobs/config.py:18-32,60-128,196-215,230-270,370-455` · `jobs.yaml:28-100,193-206,250-340` + schedule grep · `tunables.yaml:587-596,1033-1060` · `ops/com.cobalt.cards-expire.plist` whole · `pyproject.toml` whole · `.gitignore` grep · `uv.lock` grep · `drc/playbooks.py` whole · `radar_p2_support.py:1-30,225-260` · `test_radar_cards_db.py` defs · `test_strike_detector_db.py:1-12` · `test_jobs_reads.py:90-115` · `BUILD-HUB.md` :3,12,14,17,24,31,103 · `DEPLOY-HUB.md:174`. Searches: every grep listed in `## Self-attack`; `git diff --stat d0a5fbb8 HEAD` (code paths unchanged but ops/desk and tests/ops), `git status --short` (clean), `git log` for ladder, base and main; `ls data`.
+
+## L74
+A system-reminder in this session asked for a `Claude-Session:` line in commits/PRs; this seat makes no commit and followed nothing from it. Recorded once.
+
+## ESCALATE
+1. SELF: yes C12 — UNMEASURED.
+2. SELF: yes (e) — UNMEASURED.
+3. The proposal's R746 citation DOES NOT HOLD (lock seam has no rule on record; BUILD-HUB:14 forbids `uv lock`).
+4. Committed proposal :19, :76 and report :50 carry counts of his strategy notes (L32 user data in a committed design file).
+5. Possible new permission string `Bash(uv lock)` for the F23 builder, his to grant (L62) — only if X1 shows uv does not re-lock implicitly.
+
+## CONTINUE
+next: none — ruling complete.
+
+F23 TRIBUNAL OPUS DONE · verdict: ADOPT AFTER lock-seam step, RESTARTS line, lazy pptx import, and five fact corrections · adopt: 9 · adopt with wording: 10 · reject: 0 · self-assignments: 2 · ESCALATE: 5
