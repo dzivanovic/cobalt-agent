@@ -704,14 +704,14 @@ CARRIED_O1 = "CARRIED: O1 — tests/x_test.py::test_o1 — R7"
 def held_round(desk, *, lines: list[str], tests: dict[str, str] | None = None,
                runs: tuple[str, ...] = ("O1",), n: str = "1", open: str | None = None,
                cell_n: str | None = None, desk_rows: tuple[str, ...] = (DESK_ROW,),
-               cell: bool = True, fix: bool = True) -> str:
+               cell: bool = True, fix: bool = True, runs_text: str | None = None) -> str:
     """Alpha's check (dated `alpha-check-2026-01-02.md`) ran on alpha's code tip and lists `runs`
     as `HELD, NOT FIXED` under `## RUNS`; its last line says `held unfixed: <n>`, `open: <open>`
     (default n), `ready: NO`. With `fix`, a small fix writes `tests` and moves the code tip; its
     fix report, on the branch head only, carries `lines` above its `BUILT ·` line, and the row's
     `fix report` cell names it (empty when `cell` is False). Alpha's row carries
     `held unfixed: <cell_n>` (default n) and `ready: NO`; the day's desk report holds R2 and
-    `desk_rows`. Returns the fix report path."""
+    `desk_rows`. `runs_text`, when given, is the `## RUNS` text instead. Returns the fix report path."""
     tests = {"tests/x_test.py": PLAIN_TEST} if tests is None else tests
     checked = desk.tip["alpha"]
     fix_report = desk.reports / "alpha-fix-build.md"
@@ -741,7 +741,8 @@ def held_round(desk, *, lines: list[str], tests: dict[str, str] | None = None,
     text = text.replace(f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` |\n",
                         f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` | |\n")
     desk.card.write_text(text)
-    runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
+    if runs_text is None:
+        runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
     desk.check["alpha"].write_text(f"# check alpha\n\n## RUNS\n{runs_text}\n## OPEN\n- constructed\n\n"
                                    + check_line(checked, "NO", n, n if open is None else open))
     desk.write_rulings(R2_ROW + "".join(desk_rows))
@@ -760,6 +761,17 @@ def test_h3_a_held_row_with_a_fixed_line_per_id_passes_p2(desk):
 def test_h3_a_carried_line_with_a_strict_xfail_test_and_a_desk_record_row_passes_p2(desk):
     """RED on BASE: `FAILED STEP-0: P2 check 1 — … the last line lacks 'held unfixed: 0'`."""
     held_round(desk, lines=[CARRIED_O1], tests={"tests/x_test.py": STRICT_TEST})
+    done = desk.run()
+    assert done.returncode == 0, done.stdout
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+
+
+def test_t1_p2_reads_a_table_row_marked_held(desk):
+    """Card 361 T1. RED on BASE: `FAILED STEP-0: P2 check 1 — … lists 0 HELD, NOT FIXED row(s)`."""
+    held_round(desk, lines=[FIXED_O1], runs_text=(
+        "| id | source | run | output | verdict |\n|---|---|---|---|---|\n"
+        "| O1 | own | `tests/x_test.py::test_o1`, alone | `1 failed` | "
+        "**HELD** — red for its stated reason: `ops/x.sh:1` (constructed) |\n"))
     done = desk.run()
     assert done.returncode == 0, done.stdout
     assert last_line(done) == "STEP-0 OK — window: (iii)"

@@ -711,14 +711,15 @@ CARRIED_O1 = "CARRIED: O1 — tests/x_test.py::test_o1 — R7"
 def held_round(desk: Desk, *, lines: list[str], tests: dict[str, str] | None = None,
                runs: tuple[str, ...] = ("O1",), n: int = 1, open: int | None = None,
                desk_rows: tuple[str, ...] = (DESK_ROW,), fix: bool = True,
-               carry: str | None = None) -> tuple[str, str]:
+               carry: str | None = None, runs_text: str | None = None) -> tuple[str, str]:
     """The check (dated `x-job-check-2026-01-02.md`) ran on the build's tip and lists `runs` as
     `HELD, NOT FIXED` under `## RUNS`; its last line says `held unfixed: <n>`, `open: <open>`
     (default n), `ready: NO`. With `fix`, a small fix writes `tests` in the job's worktree and
     moves the code tip; its fix report, committed on the branch only, carries `lines` above its
     `BUILT ·` line, and the row names it. Without `fix` the row's code tip is the checked tip and
     it has no fix report. The SHIPS cell is `carry` (default the line's own literals); the day's
-    desk report holds R1 and `desk_rows`. Returns (code tip, fix report path or '')."""
+    desk report holds R1 and `desk_rows`. `runs_text`, when given, is the `## RUNS` text instead.
+    Returns (code tip, fix report path or '')."""
     tests = {"tests/x_test.py": PLAIN_TEST} if tests is None else tests
     if fix:
         (desk.job_wt / "src" / "x.py").write_text("X = 2\n")
@@ -738,7 +739,8 @@ def held_round(desk: Desk, *, lines: list[str], tests: dict[str, str] | None = N
     desk.write_deploy(code_tip=code_tip, head=head, fix=frep if fix else None,
                       carry=carry or f"`held unfixed: {n}` and `ready: NO`")
     desk.write_rulings(APPROVED_R1, *desk_rows, commit=False)
-    runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
+    if runs_text is None:
+        runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
     desk.ship(f"## RUNS\n{runs_text}\n## OPEN\n- constructed\n\n"
               + check_line(desk.tip, ready="NO", held_unfixed=n, open=n if open is None else open))
     return code_tip, frep
@@ -756,6 +758,17 @@ def test_h2_a_held_row_with_a_fixed_line_per_id_launches(desk):
 def test_h2_a_carried_line_with_a_strict_xfail_test_and_a_desk_record_row_launches(desk):
     """PIN-shaped, green on BASE and after; its refusals below are the reds."""
     held_round(desk, lines=[CARRIED_O1], tests={"tests/x_test.py": STRICT_TEST})
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode == 0, done.stderr
+    assert "REFUSED" not in done.stderr, done.stderr
+
+
+def test_t1_the_launch_reads_a_table_row_marked_held(desk):
+    """Card 361 T1. RED on BASE: `REFUSED: … lists 0 HELD, NOT FIXED row(s) under ## RUNS (none)`."""
+    held_round(desk, lines=[FIXED_O1], runs_text=(
+        "| id | source | run | output | verdict |\n|---|---|---|---|---|\n"
+        "| O1 | own | `tests/x_test.py::test_o1`, alone | `1 failed` | "
+        "**HELD** — red for its stated reason: `ops/x.sh:1` (constructed) |\n"))
     done = desk.launch("deploy", str(desk.deploy), dry=True)
     assert done.returncode == 0, done.stderr
     assert "REFUSED" not in done.stderr, done.stderr

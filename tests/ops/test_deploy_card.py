@@ -617,8 +617,10 @@ CARRIED_O1 = "CARRIED: O1 — tests/x.py::test_o1 — R7"
 
 def held_round(desk: Desk, *, lines: list[str], tests: dict[str, str] | None = None,
                runs: tuple[str, ...] = ("O1",), held: str = "1", open: str | None = None,
-               desk_rows: tuple[str, ...] = (DESK_ROW,)) -> tuple[str, str, Path]:
-    """Alpha's check lists `runs` as `HELD, NOT FIXED` rows under `## RUNS` and its last line
+               desk_rows: tuple[str, ...] = (DESK_ROW,),
+               runs_text: str | None = None) -> tuple[str, str, Path]:
+    """Alpha's check lists `runs` as `HELD, NOT FIXED` rows under `## RUNS` (or carries
+    `runs_text` there instead, when given) and its last line
     says `held unfixed: <held>`, `open: <open>` (default `held`), `ready: NO`. A fix round then
     moves alpha's code past the check, writing `tests` (path → text) in the fix commit; its fix
     report, on the branch head only, carries `lines` above its `BUILT ·` line. The check report
@@ -642,7 +644,8 @@ def held_round(desk: Desk, *, lines: list[str], tests: dict[str, str] | None = N
     git(desk.repo, "checkout", "-q", "main")
     assert not report.exists()
     check = desk.reports / "alpha-check-2026-01-02.md"
-    runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
+    if runs_text is None:
+        runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
     check.write_text(f"# check alpha\n\n## RUNS\n{runs_text}\n## OPEN\n- constructed\n\n"
                      + check_line(desk.tip["alpha"], "NO", held, held if open is None else open))
     desk.card["alpha"].write_text(desk.card["alpha"].read_text().replace(str(desk.check["alpha"]), str(check)))
@@ -801,6 +804,73 @@ def test_h1_the_rule_is_one_text_in_the_three_scripts():
              for name in ("deploy-card.sh", "desk-launch.sh", "deploy-step0.sh")]
     assert "held_rule() {" in texts[0]
     assert texts[0] == texts[1] == texts[2]
+
+
+# ---- card 361 T1: the held-id read takes a table row marked **HELD** (R1084) -------------------
+
+TABLE_HEAD = "| id | source | run | output | verdict |\n|---|---|---|---|---|\n"
+TABLE_HELD = ("| {id} | own | `tests/x.py::test_o1`, alone | `1 failed` | "
+              "**HELD** — red for its stated reason: `ops/x.sh:1` (constructed) |")
+TABLE_NOT_HELD = ("| {id} | own | `tests/x.py::test_o2`, alone | `1 passed` | "
+                  "NOT HELD — green on the tip (constructed) |")
+
+
+def test_t1_a_bullet_row_is_still_counted(tmp_path):
+    """Pin, GREEN on BASE and after: the bullet form reads as before."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[FIXED_O1], runs_text=HELD_RUN.format(id="O1") + "\n")
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+    assert held_cells(desk)[6] == "`held unfixed: 1` and `ready: NO`"
+
+
+def test_t1_a_table_row_marked_held_is_counted(tmp_path):
+    """RED on BASE: exit 1, `lists 0 HELD, NOT FIXED row(s) under ## RUNS (none)`."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[FIXED_O1],
+                                     runs_text=TABLE_HEAD + TABLE_HELD.format(id="O1") + "\n")
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+    cells = held_cells(desk)
+    assert cells[3] == f"`{fixed}`", cells
+    assert cells[4] == f"`{head}`", cells
+    assert cells[6] == "`held unfixed: 1` and `ready: NO`", cells
+    assert cells[7] == f"`{report}`", cells
+
+
+@pytest.mark.parametrize("rows, ok", [
+    pytest.param(TABLE_HELD.format(id="O1") + "\n" + TABLE_NOT_HELD.format(id="O2") + "\n", True,
+                 id="one held and one not held"),
+    pytest.param(TABLE_NOT_HELD.format(id="O1") + "\n" + TABLE_NOT_HELD.format(id="O2") + "\n", False,
+                 id="not held only"),
+])
+def test_t1_a_table_row_marked_not_held_is_ignored(tmp_path, rows, ok):
+    """`one held and one not held` RED on BASE (`lists 0`); `not held only` GREEN on BASE and
+    after: refused with `lists 0 … (none)`."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[FIXED_O1], runs_text=TABLE_HEAD + rows)
+    if ok:
+        done = desk.run("--fix-report", f"alpha={report}")
+        assert done.returncode == 0, done.stderr
+        assert held_cells(desk)[6] == "`held unfixed: 1` and `ready: NO`"
+    else:
+        _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                     f"alpha: the check {desk.check['alpha']} lists 0 HELD, NOT FIXED row(s) under "
+                     "## RUNS (none), its last line says 'held unfixed: 1'")
+
+
+def test_t1_a_mixed_report_counts_both_forms(tmp_path):
+    """RED on BASE: `lists 1 HELD, NOT FIXED row(s) under ## RUNS (O1), … 'held unfixed: 2'`."""
+    desk = Desk(tmp_path)
+    rows = (HELD_RUN.format(id="O1") + "\n" + TABLE_HEAD + TABLE_HELD.format(id="O2") + "\n"
+            + TABLE_NOT_HELD.format(id="O3") + "\n")
+    fixed, head, report = held_round(
+        desk, held="2", runs_text=rows,
+        lines=[FIXED_O1, "FIXED: O2 — tests/y.py::test_o2"],
+        tests={"tests/x.py": PLAIN_TEST, "tests/y.py": PLAIN_TEST.replace("test_o1", "test_o2")})
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+    assert held_cells(desk)[6] == "`held unfixed: 2` and `ready: NO`"
 
 
 # ---- check of card 317: THE RULE's decorator read (O1 O2, house A 1, house B 1 2) -------------
