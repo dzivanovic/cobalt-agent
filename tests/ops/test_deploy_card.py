@@ -803,6 +803,82 @@ def test_h1_the_rule_is_one_text_in_the_three_scripts():
     assert texts[0] == texts[1] == texts[2]
 
 
+# ---- check of card 317: THE RULE's decorator read (O1 O2, house A 1, house B 1 2) -------------
+
+def test_check_o1_an_xfail_decorator_above_a_comment_is_still_xfail(tmp_path):
+    desk = Desk(tmp_path)
+    src = ('import pytest\n\n\n@pytest.mark.xfail(reason="not yet")\n'
+           "# a constructed comment between the decorator and its def\n"
+           "def test_o1():\n    assert False\n")
+    fixed, head, report = held_round(desk, lines=[FIXED_O1], tests={"tests/x.py": src})
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 "alpha: FIXED test tests/x.py::test_o1 of O1 is marked xfail")
+
+
+def test_check_o2_a_previous_functions_decorator_is_not_the_named_tests(tmp_path):
+    desk = Desk(tmp_path)
+    src = ('import pytest\n\n\n@pytest.mark.xfail(strict=True, reason="other")\n'
+           "def test_other():\n    assert False\n"
+           "def test_o1():\n    assert True\n")
+    fixed, head, report = held_round(desk, lines=[CARRIED_O1], tests={"tests/x.py": src})
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 "alpha: CARRIED test tests/x.py::test_o1 of O1 is not a strict xfail")
+
+
+def test_h1_a_fixed_line_uses_the_top_level_test_node(tmp_path):
+    desk = Desk(tmp_path)
+    source = (
+        "import pytest\n\n"
+        "def helper():\n"
+        "    def test_o1():\n"
+        "        return None\n"
+        "    return test_o1\n\n"
+        '@pytest.mark.xfail(strict=True, reason="still broken")\n'
+        "def test_o1():\n"
+        "    assert False\n"
+    )
+    fixed, head, report = held_round(
+        desk, lines=[FIXED_O1], tests={"tests/x.py": source}
+    )
+    _fix_refused(
+        desk,
+        ("--fix-report", f"alpha={report}"),
+        "alpha: FIXED test tests/x.py::test_o1 of O1 is marked xfail",
+    )
+
+
+def test_h1_a_carried_class_decorator_is_not_the_defs_decorator(tmp_path):
+    desk = Desk(tmp_path)
+    src = (
+        "import pytest\n\n\n"
+        "@pytest.mark.xfail(strict=True, reason='carried')\n"
+        "class T:\n"
+        "    def test_o1(self):\n"
+        "        assert False\n"
+    )
+    fixed, head, report = held_round(desk, lines=[CARRIED_O1], tests={"tests/x.py": src})
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 1, done.stderr
+    assert "alpha: CARRIED test tests/x.py::test_o1 of O1 is not a strict xfail" in done.stderr, done.stderr
+    assert not desk.out.exists()
+
+
+def test_h1_an_indented_pytestmark_xfail_still_marks_the_fixed_test(tmp_path):
+    desk = Desk(tmp_path)
+    src = (
+        "import pytest\n\n\n"
+        "class T:\n"
+        "    pytestmark = pytest.mark.xfail\n"
+        "    def test_o1(self):\n"
+        "        assert True\n"
+    )
+    fixed, head, report = held_round(desk, lines=[FIXED_O1], tests={"tests/x.py": src})
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 1, done.stderr
+    assert "alpha: FIXED test tests/x.py::test_o1 of O1 is marked xfail" in done.stderr, done.stderr
+    assert not desk.out.exists()
+
+
 @pytest.mark.parametrize("bad", ["../x-gate", "/abs/x-gate", "a/b", ".hidden", "agy-trial", ""])
 def test_a_worktree_outside_the_pattern_is_refused(tmp_path, bad):
     desk = Desk(tmp_path)

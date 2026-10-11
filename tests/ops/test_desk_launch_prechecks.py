@@ -829,6 +829,22 @@ def test_h2_a_clean_cell_over_a_held_check_line_is_refused_by_the_literal_loop(d
     assert "held id" not in done.stderr
 
 
+# ---- check of card 317: a held cell that lacks one of its pair (O3, house A 2) -----------------
+
+def test_check_o3_a_held_cell_without_its_held_unfixed_literal_is_refused(desk):
+    held_round(desk, lines=[FIXED_O1], carry="`ready: NO`")
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode != 0, done.stdout + done.stderr
+
+
+def test_h2_a_held_row_without_ready_no_in_its_cell_is_refused(desk):
+    held_round(desk, lines=[FIXED_O1], carry="`held unfixed: 1`")
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED" in done.stderr, done.stderr
+    assert not desk.gate_left()
+
+
 # ---- L4: the WATCH line and the header ---------------------------------------------------------
 
 
