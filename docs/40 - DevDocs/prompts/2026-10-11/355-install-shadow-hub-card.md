@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-11.md R1069
 BRANCH: ops/install-shadow-hub-1011
 WORKTREE: install-shadow-hub-1011
 BASE: 2322ed1e
-TIP: «FILL: the 8-hex code tip the suites ran on, written by the desk after the build (the desk's)»
+TIP: 2322ed1e
 REPORT: /Users/cobalt/cobalt-wt/install-shadow-hub-1011/docs/40 - DevDocs/reports/install-shadow-hub-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/install-shadow-hub-check-2026-10-11.md
 HOUSE B: as needed
@@ -48,4 +48,4 @@ WHY: his override R1069 (row `R1069` of `reports/cto-2026-10-11.md`, `HIS RULING
 - No preflight ran: his override R1069, brain direction, L79.
 - `authorize.sh` serves kind shadow (`:3`, `:51`: `shadow) hub=SHADOW-HUB.md`); `grep -n "SHADOW-HUB\|shadow" ops/desk/authorize.sh` → `:3`, `:4`, `:51`, `:45`, `:52`.
 - RESTARTS: every path is `docs/` or `tests/ops/` (`DB: none`); `uv run cobalt jobs restarts <BASE>..HEAD` is UNPROVEN at drafting (no `uv` on the drafter's allow list), the build hub runs it.
-- `BASE` and `TIP` are the desk's (`«FILL`): `BASE` is `main` at the launch, the desk re-writes it if `main` has moved; `TIP` is written after the build, before the check. Docs and ops tests only: house A is Grok, `HOUSE B: as needed`, never OpenAI (R920).
+- `BASE` and `TIP` are the desk's: `BASE` is `main` at the launch, the desk re-writes it if `main` has moved; `TIP` starts as BASE and is rewritten after the build, before the check. Docs and ops tests only: house A is Grok, `HOUSE B: as needed`, never OpenAI (R920).
