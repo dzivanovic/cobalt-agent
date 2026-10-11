@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-11.md R1084
 BRANCH: ops/held-table-row-1011
 WORKTREE: held-table-row-1011
 BASE: 2f877800
-TIP: 2f877800
+TIP: 0188faa1
 REPORT: /Users/cobalt/cobalt-wt/held-table-row-1011/docs/40 - DevDocs/reports/held-table-row-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/held-table-row-check-2026-10-11.md
 HOUSE B: as needed
