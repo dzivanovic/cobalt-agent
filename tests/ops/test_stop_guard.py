@@ -177,6 +177,29 @@ def test_a_check_session_reads_the_check_report_not_the_build_report(tmp_path):
     assert w.run().returncode == 2
 
 
+def test_s4_a_shadow_gate_seat_reads_the_cards_report(tmp_path):
+    """Card 324 S4, the pin: a SHADOW-HUB.md launch message with CARD: finds the card's REPORT:."""
+    w = World(tmp_path, hub="SHADOW-HUB.md")
+    w.report.write_text("# r\n\nprose\n")
+    assert w.run().returncode == 2
+    w.report.write_text("# r\n\nFAILED: W — x\n")
+    assert w.run().returncode == 0
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "SHADOW BUILT · job: x-job-grok · tip: 1a2b3c4d | on 1a2b3c4d · builder: grok-4.7 · gate: x · passes: 2",
+        "SHADOW ROLE · judge · builder: grok-4.7 · wall: 12",
+    ],
+)
+def test_s4_a_shadow_stop_line_lets_the_turn_end(tmp_path, line):
+    w = World(tmp_path, hub="SHADOW-HUB.md")
+    w.report.write_text(f"# r\n\nprose\n\n{line}\n")
+    r = w.run()
+    assert (r.returncode, r.stderr) == (0, "")
+
+
 def test_a_resumed_session_reads_the_card_of_its_launch_message(tmp_path):
     w = World(tmp_path)
     w.launch("BUILD-HUB.md", prefix="CONTINUE: W. ")

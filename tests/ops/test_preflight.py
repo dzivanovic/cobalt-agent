@@ -409,6 +409,16 @@ def test_l3_an_accented_worktree_is_refused_under_a_utf8_locale(job):
     assert "REFUSED: WORKTREE 'x-jobé' is not one directory name" in done.stderr
 
 
+def test_s4_kind_shadow_runs_the_build_rows(job):
+    """Card 324 S4: the gate seat's PREFLIGHT is build's, row for row."""
+    wt, repo, job_wt, base, card, env = job
+    write_card(card, job_wt, base)
+    done = preflight(env, "shadow", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+    assert rules(done) == ["clock", "status", "head", "diff", "main repo", "env here", "env anywhere"]
+
+
 @pytest.mark.parametrize("args", [[], ["build"], ["deploy", "x"], ["build", "/no/such/card.md"]])
 def test_a_bad_call_is_refused(job, args):
     wt, repo, job_wt, base, card, env = job

@@ -73,6 +73,9 @@ STOP = (
     "CHECK DONE ·",
     "DEPLOYED ",
     "REBUILT ·",
+    # SHADOW-HUB.md's two stop lines (card 2026-10-11 324 S4)
+    "SHADOW BUILT ·",
+    "SHADOW ROLE ·",
     "FAILED",
     "FAILED PREFLIGHT",
     "ASK DESK:",

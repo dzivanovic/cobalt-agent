@@ -1,6 +1,7 @@
 #!/bin/sh
-# authorize.sh <build|check|deploy> "<card>" — the AUTHORIZATION block of the kind's fixed file
-# (BUILD-HUB.md, CHECK-HUB.md or DEPLOY-HUB.md) run as ONE call (card 19 worker-steps S1). Read-only.
+# authorize.sh <build|check|deploy|shadow> "<card>" — the AUTHORIZATION block of the kind's fixed file
+# (BUILD-HUB.md, CHECK-HUB.md, DEPLOY-HUB.md or SHADOW-HUB.md) run as ONE call (card 19 worker-steps S1;
+# shadow: card 2026-10-11 324 S4). Read-only.
 #
 # Prints one row per rule, `rule · command · exit · result` (the result is the first line the
 # command printed, or `nothing`):
@@ -41,12 +42,14 @@ refuse() {
     exit 1
 }
 
-[ "$#" -eq 2 ] || refuse "usage: authorize.sh <build|check|deploy> <card>"
+[ "$#" -eq 2 ] || refuse "usage: authorize.sh <build|check|deploy|shadow> <card>"
 case "$1" in
     build) hub=BUILD-HUB.md ;;
     check) hub=CHECK-HUB.md ;;
     deploy) hub=DEPLOY-HUB.md ;;
-    *) refuse "kind '$1' is none of build, check, deploy" ;;
+    # card 2026-10-11 324 S4: the shadow gate seat, its rows as build's
+    shadow) hub=SHADOW-HUB.md ;;
+    *) refuse "kind '$1' is none of build, check, deploy, shadow" ;;
 esac
 fixed="$PROMPTS/$hub"
 card=$2

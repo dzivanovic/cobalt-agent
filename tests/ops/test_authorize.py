@@ -290,6 +290,22 @@ def test_the_deploy_kind_reads_the_first_row_of_its_own_title(desk):
     assert "DEPLOY-HUB.md" in done.stdout
 
 
+def test_s4_kind_shadow_reads_shadow_hub_and_the_build_rows(desk):
+    """Card 324 S4: the gate seat's AUTHORIZATION, its hub SHADOW-HUB.md, its rows as build's."""
+    repo, card, env = desk
+    (repo / "docs" / "40 - DevDocs" / "prompts" / "SHADOW-HUB.md").write_text(
+        TITLE.replace("BUILD-HUB", "SHADOW-HUB") + "\nbody\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "shadow hub")
+    done = authorize(env, "shadow", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "AUTHORIZED"
+    assert "SHADOW-HUB.md" in done.stdout
+    build = authorize(env, "build", card)
+    names = lambda d: [r.split(" · ")[0] for r in d.stdout.splitlines() if " · " in r]  # noqa: E731
+    assert names(done) == names(build)
+
+
 @pytest.mark.parametrize("args", [[], ["build"], ["judge", "x"], ["build", "/no/such/card.md"]])
 def test_a_bad_call_is_refused(desk, args):
     repo, card, env = desk

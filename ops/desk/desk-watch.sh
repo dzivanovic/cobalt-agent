@@ -1,9 +1,11 @@
 #!/bin/sh
-# desk-watch.sh <build|check|deploy|devfix|close> "<card or close report>" [max-seconds]
+# desk-watch.sh <build|check|deploy|devfix|shadow|close> "<card or close report>" [max-seconds]
 # Read-only. The desk's ONE watch command (card 17 A2). Derives the report from the card
-# (build: REPORT; check: CHECK REPORT; deploy and devfix: REPORT; close: the path given)
+# (build: REPORT; check: CHECK REPORT; deploy, devfix and shadow: REPORT; close: the path given)
 # and the stop regex from the kind (build: BUILT|FAILED; check: CHECK DONE|FAILED; deploy:
-# DEPLOYED|FAILED; devfix: REBUILT|FAILED; close: CLOSE PUSHED|FAILED; at line start).
+# DEPLOYED|FAILED; devfix: REBUILT|FAILED; shadow: SHADOW BUILT|SHADOW ROLE|FAILED; close: CLOSE
+# PUSHED|FAILED; at line start). Kind shadow (card 2026-10-11 324 S4) watches the gate seat
+# <JOB>-gate.
 # FIRST it reads the report's last non-blank line: already a stop line of that kind ->
 # prints it, exit 0, no wait. Else it waits as wait-stop-line.sh does (the last non-blank
 # line changed AND matching; a missing file is waited for), polling every DESK_WATCH_POLL
@@ -24,7 +26,7 @@
 export LC_ALL=C
 refuse() { echo "REFUSED: $1" >&2; exit 1; }
 kind="$1"; src="$2"; max="${3:-7000}"; poll="${DESK_WATCH_POLL:-20}"
-[ -n "$src" ] || refuse "usage: desk-watch.sh <build|check|deploy|devfix|close> <card or close report> [max-seconds]"
+[ -n "$src" ] || refuse "usage: desk-watch.sh <build|check|deploy|devfix|shadow|close> <card or close report> [max-seconds]"
 case "$max" in ''|*[!0-9]*) refuse "max-seconds is not a whole number: $max" ;; esac
 [ "$max" -le 7000 ] || refuse "max-seconds $max is over 7000 (the background limit is two hours)"
 case "$poll" in ''|0|*[!0-9]*) refuse "DESK_WATCH_POLL is not a whole number above 0: $poll" ;; esac
@@ -39,12 +41,14 @@ case "$kind" in
   check)  report=$(header 'CHECK REPORT') || exit 1; re='^(CHECK DONE|FAILED)' ;;
   deploy) report=$(header REPORT) || exit 1; re='^(DEPLOYED|FAILED)' ;;
   devfix) report=$(header REPORT) || exit 1; re='^(REBUILT|FAILED)' ;;
+  shadow) report=$(header REPORT) || exit 1; re='^(SHADOW BUILT|SHADOW ROLE|FAILED)' ;;
   close)  report="$src"; re='^(CLOSE PUSHED|FAILED)' ;;
   *) refuse "unknown kind: $kind" ;;
 esac
 wt=-
 case "$kind" in
   build|check|devfix) job=$(header JOB) || exit 1; wt=$(header WORKTREE) || exit 1; session="$job-$kind" ;;
+  shadow) job=$(header JOB) || exit 1; wt=$(header WORKTREE) || exit 1; session="$job-gate" ;;
   deploy) job=$(header JOB) || exit 1; session="deploy-hub-$job" ;;
   close)
     b=$(basename "$report" .md)
