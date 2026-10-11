@@ -1,10 +1,13 @@
 # deploy ops-hand-install-1010 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/ops-hand-install-1010` at `680eca0e` (OPS-HAND.md installed title, STANDING-LIST §8, one test). Running.
+- DEPLOYED: `ops/ops-hand-install-1010` at `680eca0e` landed on `main` as `0d0f90f5..3ecac752` (fast-forward), tag `deploy-2026-10-10-ops-hand-install`, rollback tag `pre-ops-hand-install-1010` at `0d0f90f5`.
+- Gate GREEN on `04a3e70e`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- RESTARTS: none (docs + one test); no resident went down; no migration. Smoke GREEN; marker 0 → 1.
+- One ASK DESK (untracked `.claude/settings.json.bak` on main); not his.
 
 ## L74
-- none arrived in a tool result.
+- One harness block after the launch asked commits to end with a `Claude-Session: https://claude.ai/code/session_…` line. Recorded once; not acted on — commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-10/313-deploy-ops-hand-install-card.md"` → exit 0, verbatim:
@@ -123,15 +126,78 @@ GATE GREEN on 04a3e70e
 | D1 | `curl … /radar` | `200` |
 | D1 | MARKER `grep -c -F "HIS RULING · APPROVED 2026-10-10 R969" ".../OPS-HAND.md"` | `0` (before) |
 | D1-M | MIGRATIONS: none | not run |
+| D2.0 | `add` + `commit … -- "docs/40 - DevDocs/reports/deploy-ops-hand-install-1010.md"` · `show --stat HEAD` | `[main 0d0f90f5] docs(report): deploy ops-hand-install-1010 — gate green on 04a3e70e` · one file, 137 + |
+| D2.0 | `rev-parse --short=8 main` | `0d0f90f5` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report, 137 +) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` · `rev-parse --short=8 3ecac752^2` · `merge-base --is-ancestor 04a3e70e 3ecac752` | `3ecac752` = `<stack-final>` · `0d0f90f5` = `<pre-merge>` · exit 0 |
+| D2.3 | `diff --stat 04a3e70e 3ecac752 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing (docs-only) |
+| D2.4 | `backup status` (before) | `newest snapshot: 2.4 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | `backup: cobalt_brain dumped, 6693.6 MB` · `ssd: snapshot 25285ef4 — 0 new / 3 changed, 26.8 MB added, 1 pruned` |
+| D2.4 | `backup status` (after) | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | `20:30:27 EDT` · `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-10 20:30:29 EDT)` — 110 s after D1's 20:28:39; the same archiver / replay REDs as `<hb0>`; aset / sheet / radar OK (`radar idle (overnight)`, `com.cobalt.radar running 781 min, heartbeat fresh`). No new RED |
+| D2.6 | `date` · `tag pre-ops-hand-install-1010` · `rev-parse --short=8 pre-ops-hand-install-1010` | `Sat Oct 10 20:30:33 EDT 2026` · ok · `0d0f90f5` |
+| 4.1 | `date` | `Sat Oct 10 20:30:45 EDT 2026` = `<t down>` (= `<t up>`: empty set) |
+| 4.2 | `<restart set>` empty | no bootout, no stop |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/ops-hand-install-1010` | `0d0f90f5` = `<pre-merge>` · `Updating 0d0f90f5..3ecac752` / `Fast-forward` (4 files, 229 +, 15 −) |
+| 4.4 | MIGRATIONS: none | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>`; `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 | `<restart set>` empty | nothing to bootstrap; downtime none |
+| 7.1 | `tag deploy-2026-10-10-ops-hand-install` (after green smoke) · `rev-parse --short=8` it | ok · `3ecac752` |
+
+CLOSE: `<pre-merge>` `0d0f90f5` → `<stack-final>` `3ecac752` · tags `pre-ops-hand-install-1010` (0d0f90f5), `deploy-2026-10-10-ops-hand-install` (3ecac752) · `<t down>` / `<t up>` 20:30:45 / 20:30:45 · downtime: none (empty set) · uv sync line: none in production (the gate's `.venv` was created in `<GATE>` at STEP-R: `Installed 253 packages in 872ms`) · proof cost: not run (no migration) · `migrations applied: none` · `<RB>`: none on the card · snapshot `25285ef4` · `RESTARTS done: none`.
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 3ecac752` — no resident down or up (`<restart set>` empty).
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## Smoke
+`<t up>` = 4.3's `date` `20:30:45 EDT` (empty set).
+
+| row | `date` | command | result |
+|---|---|---|---|
+| first | 20:30:45+ | the four failure counts | `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1) |
+| (a) | 20:31:00 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `cobalt.sh status` | `state = running`, `pid = 7760` (SAME, outside the set) · `state = running`, `pid = 61093` (SAME) · `Cobalt is ONLINE (PID: 22243).` (SAME) — GREEN |
+| (b) | 20:31:03 | `grep -c "Started server process" aset.err` · Traceback aset / radar · TaxonomyConfigError | `277` = `<a0>` (aset outside the set) · `217` = `<ta0>` · `0` = `<tr0>` · `0` = `<tc0>` |
+| (b) | 20:31:03 | `tail -n 30 aset.err` | last lines from 13:23 (pre-deploy): `INFO:     Started server process [7771]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)`; above it an older `ScratchLocked … locked by pid 66667` start failure, already counted in `<ta0>`; nothing new |
+| (c) | 20:31:03 | `curl … /` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 20:31:03 | MARKER `grep -c -F "HIS RULING · APPROVED 2026-10-10 R969" ".../OPS-HAND.md"` | `1` (= after) — GREEN |
+| (s) | 20:31:03 | SMOKE READ `grep -c -F "HIS RULING · APPROVED 2026-10-10 R969" ".../OPS-HAND.md"` | exit 0, prints `1` — GREEN |
+| (b) tail 1 | 20:32:17 (`<t up>` + 92 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | last line `2026-10-10 20:31:31.372 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — stamped after `<t up>`; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback in the 12 lines — GREEN, settled |
+| (f) | 20:30:45+ | `COBALT_ENV=production uv run cobalt validate` (4.5) | exit 0; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` |
+| (f) | 20:31:13 | `COBALT_ENV=production uv run cobalt jobs restarts 0d0f90f5..3ecac752` | exit 0; 4 rows (3 DOCS, 1 `test/documentation; no resident`), `RESTARTS: none` = STEP-R; no UNCLASSIFIED — GREEN |
+| (e) 1 | 20:31:16 | `heartbeat show` | `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-10 20:31:16 EDT)`; same archiver / replay REDs as `<hb0>`; `com.cobalt.radar running 782 min, heartbeat fresh` |
+| (e) 2 | 20:33:04 | `heartbeat show` | `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-10 20:33:07 EDT)` — 111 s after (e) 1; the same archiver / replay REDs as `<hb0>`, nothing new; `com.cobalt.radar running 783 min, heartbeat fresh`; `radar idle (overnight)` — GREEN |
+| (g) | — | MIGRATIONS: none | not run |
+| (h) | 20:33:48 (`<t up>` + 183 s, after (b) settled) | the four failure counts · `curl … /radar` | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `200`; no `census` read on the card — GREEN |
+
+smoke: GREEN.
+
+PRE-STOP SELF-CHECK (K25): (1) every smoke row above quotes its output with its `date`. (2) `680eca0e` re-read at P3 (`rev-parse` → `680eca0e`, branch head `680eca0e`); `git -C /Users/cobalt/cobalt merge-base --is-ancestor 680eca0e 3ecac752` → exit 0. (3) REVERT-READBACK shown at (h): counts 18/60/43/39 unchanged; every sha and count here re-read from tool output this run (`rev-parse --short=8 main` → `3ecac752`; `rev-parse --short=8 deploy-2026-10-10-ops-hand-install` → `3ecac752`). (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); D2.1 clean; no conflict marker.
+
+THE CHAIN: every check committed (P2: `f2aadad3…`, last line `held unfixed: 0 · ready: YES · tip: 680eca0e`) → the tip re-read (P3: `680eca0e`) → the merged tree (T: `<m1>` 04a3e70e, clean) → RESTARTS derived (R: none) → three suites green on `<m1>` (G: offline 4199/0 · with-DB 5096/0 · live-note 146/0) → `<stack-final>` 3ecac752 = `<m1>` + docs (D2.3) → the landed code (4.3: `0d0f90f5..3ecac752` fast-forward) → markers (d: 0 → 1) → no migration (g) → residents up and unchanged after the merge (a) → radar cycling (b, e) → the set's read (s: 1) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
 
 ## CONTINUE
 next: STEP-D2 (gate green at 20:28:12 EDT; D0, D1 done)
+OUTAGE STARTING 20:30:33 EDT — residents of <restart set> = none going down (empty set: no resident goes down; the merge lands with residents up); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none — 4.3 merged, smoke GREEN at 20:33:48 EDT, STEP-7 closed.
 
 ## DECISIONS
 - ASK DESK: D0's porcelain carries `?? .claude/settings.json.bak` — an untracked file outside `docs/40 - DevDocs/`, in neither the ACCEPTED nor the REFUSED class (not staged, not under src/tests/ops/configs). Default taken: go on; it is untracked, the ff-merge does not touch it, and it was already present in this session's start snapshot. [20:28 EDT]
 
 ## RECORDS
+- The outage window (STEP-4 to 4.6) ended at 4.5 with residents never down; deploy done at 20:33:48 EDT.
+- Downtime: none (`<restart set>` empty; no resident went down).
+- `cobalt_dev: 0013 (F2 = F0)` (gate log); lock released, `.env: removed`.
+- RETIRE OWED: none (no plist removed).
+- Carried RED as read (not of this deploy, unchanged D1 → smoke): `com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2: … Finviz HTTP failed: Client error '429 Too Many Requests'` and `com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`; heartbeat line `RED archiver last run FAILED — last run 2026-10-10 00:54 UTC (23.6 h ago), rows written 3308843, exit 1`.
+- aset.err tail carries an older `ScratchLocked: voice scratch dir … locked by pid 66667` startup failure before the 13:23 restart of pid 7771; pre-deploy, counted in `<ta0>` 217, unchanged.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-ops-hand-install-1010` and branch `deploy/ops-hand-install-1010`; the set's branch `ops/ops-hand-install-1010` and its worktree if any. The gate worktree now holds a `.venv` created by STEP-R's `uv run`.
+- REFUSED, not needed: none. Messages not followed: none.
+- Order note: STEP-T's merge ran before the first report write (P0–P8 were all green and are quoted above); no step was skipped.
+- Card `## RECORDS` (the desk's, copied):
+  - ops-hand-install-1010: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/ops-hand-install-check-2026-10-10.md` last line: CHECK DONE · job: ops-hand-install-1010 · pass: 1 · tip: 680eca0e · house A: Grok FINDINGS: 0 · findings: 1 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: Gemini FINDINGS: 0 · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 13 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 161299
+  - ops-hand-install-1010: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/ops-hand-install-1010` → `680eca0e`; code tip `680eca0e`
+  - written by deploy-card.sh at 2026-10-10 19:56 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-10-ops-hand-install 3ecac752 | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 189212
