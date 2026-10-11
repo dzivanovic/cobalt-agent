@@ -1,4 +1,4 @@
-# SHADOW-HUB — the gate seat of a shadow build (card 2026-10-11 324; FINAL `MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md` §3, §2.2; direction `model-bakeoff-redo-answer-2026-10-11.md` (b), (c)) «INSTALL: his row»
+# SHADOW-HUB — the gate seat of a shadow build (card 2026-10-11 324; FINAL `MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md` §3, §2.2; direction `model-bakeoff-redo-answer-2026-10-11.md` (b), (c)) HIS RULING · APPROVED 2026-10-11 R1069
 
 MODEL: Opus 5.5 (`claude-opus-5-5`; L29: the with-DB gate is a DB write path) · PERMISSION MODE `dontAsk`, never `auto`, never a bypass · SEAT: the gate seat `<job>-gate`, a FRESH session launched by the CTO desk with `sh /Users/cobalt/.claude/ops/desk-launch.sh shadow "<card>" --model <id>`. You are never the builder (the model of `MODEL:` in your launch message) and never the check (a separate fresh Opus under `CHECK-HUB.md`) · nobody sits at this terminal: the report is your channel, as in BUILD-HUB.
 
@@ -16,9 +16,9 @@ One row per proven id (the card's `## RECORDS`). Three rows (R1019: no Opus and 
 
 | id | slug | builder allow | builder command | SIGN |
 |---|---|---|---|---|
-| `grok-4.7` | `grok` | `Bash(grok -m grok-4.7 --sandbox cobalt-job *)` | `grok -m grok-4.7 --sandbox cobalt-job --allow "Write(/Users/cobalt/cobalt-wt/<worktree>/**)" -p "<pass prompt>"` | NEEDS HIS SIGN-OFF «SIGN: his row» |
-| `claude-sonnet-5-5` | `sonnet` | `Bash(claude -p --model claude-sonnet-5-5 *)` | `claude -p --model claude-sonnet-5-5 "<pass prompt>" --permission-mode dontAsk --output-format json --allowedTools "Read(//Users/cobalt/cobalt-wt/<worktree>/**)" "Edit(//Users/cobalt/cobalt-wt/<worktree>/**)" "Write(//Users/cobalt/cobalt-wt/<worktree>/**)" --disallowedTools "Bash" "AskUserQuestion" "EnterWorktree" "Agent" "WebFetch" "mcp__*"` | NEEDS HIS SIGN-OFF «SIGN: his row» |
-| `gpt-5.6-terra` | `terra` | `Bash(codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write *)` | `codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write -C /Users/cobalt/cobalt-wt/<worktree> "<pass prompt>" < /dev/null` | NEEDS HIS SIGN-OFF «SIGN: his row» · network: off (workspace-write default; X1 proves it) |
+| `grok-4.7` | `grok` | `Bash(grok -m grok-4.7 --sandbox cobalt-job *)` | `grok -m grok-4.7 --sandbox cobalt-job --allow "Write(/Users/cobalt/cobalt-wt/<worktree>/**)" -p "<pass prompt>"` | 2026-10-11 R1069 · HIS RULING · APPROVED |
+| `claude-sonnet-5-5` | `sonnet` | `Bash(claude -p --model claude-sonnet-5-5 *)` | `claude -p --model claude-sonnet-5-5 "<pass prompt>" --permission-mode dontAsk --output-format json --allowedTools "Read(//Users/cobalt/cobalt-wt/<worktree>/**)" "Edit(//Users/cobalt/cobalt-wt/<worktree>/**)" "Write(//Users/cobalt/cobalt-wt/<worktree>/**)" --disallowedTools "Bash" "AskUserQuestion" "EnterWorktree" "Agent" "WebFetch" "mcp__*"` | 2026-10-11 R1069 · HIS RULING · APPROVED |
+| `gpt-5.6-terra` | `terra` | `Bash(codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write *)` | `codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write -C /Users/cobalt/cobalt-wt/<worktree> "<pass prompt>" < /dev/null` | 2026-10-11 R1069 · HIS RULING · APPROVED · network: off (workspace-write default; X1 proves it) |
 
 Notes on the rows:
 - Grok is FINAL §2.6's line: `--sandbox cobalt-job` (`ops/grok-sandbox.toml`: the workspace profile; `.env`, `~/.cobalt` and the agent homes denied) and ONE `--allow "Write(…)"` glob; it never carries Grok's approve-everything flag, so Grok runs no shell command (the guard denies a Grok call that carries it).
