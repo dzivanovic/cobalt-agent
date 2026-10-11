@@ -413,6 +413,8 @@ if [ "$kind" = "spike" ]; then
     esac
     check_paths "$line"
     scratch="$WT/sdk-spike-1010"
+    # check A1: a link in its place would put the seat's writes where the link points
+    [ ! -L "$scratch" ] || refuse "spike: $scratch is a symlink, not the plain scratch dir"
     if [ -e "$scratch/.git" ] || git -C "$REPO" worktree list --porcelain 2>/dev/null | grep -q -x -F "worktree $scratch"; then
         refuse "spike: $scratch is a git worktree or holds .git"
     fi
@@ -1126,6 +1128,8 @@ build|shadow)
     if [ "$kind" = "shadow" ]; then
         # card 324 S2: the shadow's own header, then the ONE ## BUILDERS row of --model, signed
         [ -n "$(field "SHADOW OF")" ] || refuse "shadow: the card's header has no 'SHADOW OF:' line"
+        # check A4: a role trial (a ROLE: header) is Grok's only (R1016)
+        [ -z "$(field ROLE)" ] || [ "$model" = "grok-4.7" ] || refuse "shadow: ROLE trials run only grok-4.7"
         case "$branch" in
             shadow/?*) ;;
             *) refuse "shadow: BRANCH '$branch' does not start 'shadow/'" ;;

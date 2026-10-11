@@ -26,7 +26,7 @@ Notes on the rows:
 - Terra: `-s workspace-write` confines writes to `-C <worktree>`; its sandbox network stays off (codex's default; no `network_access` override on the command). X1 proves both before the Terra arm runs. Whether `workspace-write` lets codex run a shell command inside its sandbox is X3's question: "writes only" for Terra rests on the sign-off and X1.
 
 `<pass prompt>`, one double-quoted string with no `"`, `\`, `$` or backtick in it (the guard passes nothing else):
-`You are <GROK (xAI) | SONNET 5.5 (Anthropic) | TERRA (OpenAI)>, building a card. Read SHADOW-INSTRUCTIONS.md in this folder whole first and follow it exactly. Pass <T | S | S2>: <tests only under tests/ | the src/ rows | fix the failing lines quoted under PASS S2>. Write only the rows' files. Run no command. Reply with the list of files you wrote.`
+`You are <GROK (xAI) | SONNET 5.5 (Anthropic) | TERRA (OpenAI)>, building a card. Read SHADOW-INSTRUCTIONS.md in this folder whole first and follow it exactly. Pass <T | S | S2>: <tests only under tests/ | the rows | fix the failing lines quoted under PASS S2>. Write only the rows' files. Run no command. Reply with the list of files you wrote.`
 
 ## RULES OF THE SEAT
 - You run every command: BUILD-HUB's steps by their own scripts, RED FIRST, the three suites of BUILD-HUB `## RESTARTS` and `## W`, the with-DB gate under THE LOCK (L76). BUILD-HUB's UNATTENDED RULES, RECOVERY, THE LOCK and REPORT bind you as they bind a builder; where BUILD-HUB says "build the rows", the builder pass does it and you never do.
@@ -43,13 +43,13 @@ Notes on the rows:
 1. AUTHORIZATION: `sh /Users/cobalt/cobalt/ops/desk/authorize.sh shadow "<card>"` → quoted whole; last line `AUTHORIZED`.
 2. PREFLIGHT: `sh /Users/cobalt/cobalt/ops/desk/preflight.sh shadow "<card>"` → quoted whole; last line `PREFLIGHT OK`. Then BUILD-HUB's other PREFLIGHT rows. The card's `SHADOW OF:` original, its RULINGS and the original build report's admitted docs and test exceptions are read here.
 3. E0 BASELINE on BASE, as BUILD-HUB `## E0`.
-4. THE INSTRUCTIONS (`[F-32]`): write `/Users/cobalt/cobalt-wt/<worktree>/SHADOW-INSTRUCTIONS.md`, never committed (X9 settles its ignored path; until then it is named in the report as the one untracked file): the WHOLE shadow card, its RULINGS rows quoted, the original build's exceptions, BUILD-HUB `## E2` and `## E3` verbatim, and the fence: the rows' files under `src/` and `tests/` plus those exceptions, nothing else. The builder's sandbox reads only its workspace, so everything it needs is copied in.
+4. THE INSTRUCTIONS (`[F-32]`): write `/Users/cobalt/cobalt-wt/<worktree>/SHADOW-INSTRUCTIONS.md`, never committed (X9 settles its ignored path; until then it is named in the report as the one untracked file): the WHOLE shadow card, its RULINGS rows quoted, the original build's exceptions, BUILD-HUB `## E2` and `## E3` verbatim, and the fence: the rows' files (every path a row's `files` names) plus those exceptions, nothing else. The builder's sandbox reads only its workspace, so everything it needs is copied in.
 
 ENV CHECK before pass T: `ls -la /Users/cobalt/cobalt-wt/<worktree>/.env` → `No such file`, quoted.
 pass T — the row's command with `Pass T: tests only under tests/`. Then `git diff --stat` quoted; `git add <the test paths>`; `git commit -m "wip(<job>): red" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- <paths>`; the new tests run, each red quoted with its first line. A test green before the fix is recorded, not repaired.
 
 ENV CHECK before pass S: `ls -la /Users/cobalt/cobalt-wt/<worktree>/.env` → `No such file`, quoted.
-pass S — the row's command with `Pass S: the src/ rows`. Then `git diff --stat` quoted; `git add <paths>`; `git commit -m "feat(<job>): rows" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- <paths>`; the rows' tests → quoted.
+pass S — the row's command with `Pass S: the rows`. Then `git diff --stat` quoted; `git add <paths>`; `git commit -m "feat(<job>): rows" -m "Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>" -- <paths>`; the rows' tests → quoted.
 
 5. RESTARTS and W: BUILD-HUB `## RESTARTS` and `## W` as they stand (`gate.sh <worktree> all --deploy …`, the lock taken and released by the gate). A red: one re-pass.
 
@@ -60,6 +60,7 @@ pass S2 — the row's command with `Pass S2: fix the failing lines quoted under 
 7. REPORT: `<WT>/docs/40 - DevDocs/reports/<job>-build-<date>.md` (the card's REPORT) in BUILD-HUB's REPORT shape, plus `## PASSES` (per pass: the env check, the command as run, wall, tokens, the diff stat, the commit). Stop line, the last non-blank line:
 `SHADOW BUILT · job: <JOB> · tip: <tip> | on <BASE> | offline <p>/0 | with-DB <d>/0 | live-note <l>/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: <as derived> | decisions: <n> · builder: <id> · gate: <seat> · passes: <n> · suites at first run: <green|red> · builder tokens: <n|UNKNOWN> · wall: <minutes>`
 or `FAILED: <step> — <reason>` (a harness stop: INCOMPLETE named in it).
+A shadow of a "DB: none" card runs W as BUILD-HUB gives it for that card ((a0), (a), (e); no lock) and writes `with-DB 0/0` and `cobalt_dev: not taken` in those two fields.
 
 ## ROLE TRIALS (Grok only, R1016)
 A shadow card whose header carries `ROLE: drafter|preflight|judge` runs ONE Grok pass with the same Grok command, its write target that card's worktree, and no gate: no suite, no lock, no commit of the model's file.
@@ -84,6 +85,7 @@ The desk copies this shape into `reports/complexity-shadow-results-2026-10-<dd>.
 | Terra (`gpt-5.6-terra`) | <card> · <grade> · builder tokens <n or UNKNOWN> · wall <min> · insufficient data (n=1 per band), or `N/A — <where read>` | same | same | <reading> |
 | Opus 5.5 | can build every band — his word, 2026-10-11 R1019, not measured | | | NOT MEASURED |
 | Sol | can build every band — his word, 2026-10-11 R1019, not measured | | | NOT MEASURED |
+| Gemini | N/A — id not found (`CHECK-HUB.md:92` names `gemini-3.1-pro-high`; no `gemini-4` id in `prompts/`, `ops/`, `LAWS.md`; card 324 `## RECORDS`) | | | N/A |
 
 Per band, below the rows:
 - LOW — builds it: <models AT LEVEL>; with a review: <models CLOSE BELOW>.

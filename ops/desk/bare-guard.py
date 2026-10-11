@@ -106,6 +106,8 @@ WT_TOKEN = "/Users/cobalt/cobalt-wt/<worktree>"
 PASS_PROMPT = '"<pass prompt>"'
 # the one double-quoted prompt a builder call carries: nothing in it that bash expands or ends early
 PLAIN_PROMPT = re.compile(r'"[^"\\$`]*"')
+# check B1, B2: the shells whose -c string the shadow seat's G7 reads
+SHELLS = ("sh", "bash", "zsh", "dash", "ksh")
 READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc")
 # no rule reads ENV_READERS since D2 (card 158): G3 reads every verb's words
 ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
@@ -1076,6 +1078,13 @@ def bash_rules(command, s):
     launches = [k for k, ws in enumerate(segs) if verb(ws) in LAUNCHERS]
     if (kind == "check" or s["tribunal"]) and launches == [0] and HOUSE.match(command):
         launches = []  # G9: the check's (or a tribunal hub's) one house call, as CHECK-HUB.md line 10 lists it
+    if kind == SHADOW:
+        for ws in segs:
+            body = shell_c(ws)
+            if body is not None:
+                # check B1, B2: a shell's -c string is never the whole command; its .env reason first
+                hit = builder_call(body, s) if body else False
+                return "G7", hit if isinstance(hit, str) else ROUTE["G7"]
     if kind == SHADOW and launches == [0]:
         hit = builder_call(command, s)
         if hit is True:
@@ -1113,6 +1122,20 @@ def builder_command(hub, model):
     return rows[0] if len(rows) == 1 else None
 
 
+def shell_c(ws):
+    """Check B1, B2: the string a shell runs with `-c` (`sh -c '…'`, `bash -ec '…'`): '' when the
+    string is missing; None when the segment is no shell run with -c."""
+    if verb(ws) not in SHELLS:
+        return None
+    rest = ws[[os.path.basename(w) for w in ws].index(verb(ws)) + 1:]
+    for k, w in enumerate(rest):
+        if not w.startswith("-") or w.startswith("--"):
+            return None
+        if "c" in w[1:]:
+            return rest[k + 1] if k + 1 < len(rest) else ""
+    return None
+
+
 def write_targets(prefix):
     """Every path a builder command lets its model write: grok `--allow "Write(X)"`, claude
     `Edit(//X)` / `Write(//X)` (`//` marks an absolute path), codex `-C D` (D/**)."""
@@ -1133,6 +1156,8 @@ def builder_call(command, s):
     if not wt or not template:
         return False
     target = os.path.join(WT_ROOT, wt)
+    if os.path.islink(target):
+        return False  # check A2: a worktree that is a link writes where the link points
     filled = template.replace(WT_TOKEN, target)
     if "<worktree>" in filled or filled.count(PASS_PROMPT) != 1:
         return False
@@ -1210,6 +1235,8 @@ def g5(s, path):
     if kind == SHADOW:
         # card 324 S3: the gate seat writes its instructions file and its report, nothing else
         wt = s["card"]["worktree"]
+        if os.path.islink(path):
+            return ROUTE["G5 fence"]  # check B4: a link named as either file writes where it points
         if wt and path == os.path.join(WT_ROOT, wt, SHADOW_FILE):
             return None
         if s["card"]["report"] and path == s["card"]["report"]:
