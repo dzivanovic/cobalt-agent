@@ -75,9 +75,9 @@ def git(cwd: Path, *args: str) -> str:
     return done.stdout.strip()
 
 
-def check_line(tip: str, ready: str = "YES", held: str = "0") -> str:
+def check_line(tip: str, ready: str = "YES", held: str = "0", open: str = "0") -> str:
     return (
-        f"CHECK DONE · job: x · pass: 1 · tip: {tip} · held unfixed: {held} · open: 0"
+        f"CHECK DONE · job: x · pass: 1 · tip: {tip} · held unfixed: {held} · open: {open}"
         f" · ready: {ready} · decisions: 0 · for Dejan: 0\n"
     )
 
@@ -685,3 +685,150 @@ def test_n6_the_branch_heads_copy_decides_never_a_copy_on_main(desk, main_copy):
         assert done.returncode == 1, done.stdout
         assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
         assert "is absent at the branch head" in last_line(done), done.stdout
+
+
+# ---- card 317 H3: P2 reads a held row on its fix round (THE RULE, R993) -------------------------
+
+HELD_RUN = ("- {id} · own · `uv run pytest -q tests/x_test.py` · `1 failed` · "
+            "**HELD, NOT FIXED — `ops/x.sh:1`** (constructed)")
+PLAIN_TEST = "import pytest\n\n\ndef test_o1():\n    assert True\n"
+STRICT_TEST = ('import pytest\n\n\n@pytest.mark.xfail(strict=True, reason="carried")\n'
+               "def test_o1():\n    assert False\n")
+XFAIL_TEST = 'import pytest\n\n\n@pytest.mark.xfail(reason="not yet")\ndef test_o1():\n    assert False\n'
+DESK_ROW = "| R7 | 09:00 ET | DESK RECORD (brain, L79): O1 is carried (constructed). | DESK RECORD |\n"
+R2_ROW = "| R2 | 09:05 ET | HIS RULING: the set ships. | HIS RULING · APPROVED |\n"
+FIXED_O1 = "FIXED: O1 — tests/x_test.py::test_o1"
+CARRIED_O1 = "CARRIED: O1 — tests/x_test.py::test_o1 — R7"
+
+
+def held_round(desk, *, lines: list[str], tests: dict[str, str] | None = None,
+               runs: tuple[str, ...] = ("O1",), n: str = "1", open: str | None = None,
+               cell_n: str | None = None, desk_rows: tuple[str, ...] = (DESK_ROW,),
+               cell: bool = True, fix: bool = True) -> str:
+    """Alpha's check (dated `alpha-check-2026-01-02.md`) ran on alpha's code tip and lists `runs`
+    as `HELD, NOT FIXED` under `## RUNS`; its last line says `held unfixed: <n>`, `open: <open>`
+    (default n), `ready: NO`. With `fix`, a small fix writes `tests` and moves the code tip; its
+    fix report, on the branch head only, carries `lines` above its `BUILT ·` line, and the row's
+    `fix report` cell names it (empty when `cell` is False). Alpha's row carries
+    `held unfixed: <cell_n>` (default n) and `ready: NO`; the day's desk report holds R2 and
+    `desk_rows`. Returns the fix report path."""
+    tests = {"tests/x_test.py": PLAIN_TEST} if tests is None else tests
+    checked = desk.tip["alpha"]
+    fix_report = desk.reports / "alpha-fix-build.md"
+    if fix:
+        git(desk.repo, "checkout", "-q", "ops/alpha")
+        (desk.repo / "src" / "alpha.py").write_text("alpha = 2\n")
+        for rel, text in tests.items():
+            (desk.repo / rel).parent.mkdir(parents=True, exist_ok=True)
+            (desk.repo / rel).write_text(text)
+        git(desk.repo, "add", "-A")
+        git(desk.repo, "commit", "-q", "-m", "alpha small fix")
+        fixed = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+        fix_report.write_text("# alpha fix round\n\n" + "".join(f"{ln}\n" for ln in lines)
+                              + f"\nBUILT · job: alpha · tip: {fixed} | rows: 1 of 1\n")
+        git(desk.repo, "add", "-A")
+        git(desk.repo, "commit", "-q", "-m", "alpha fix report")
+        head = git(desk.repo, "rev-parse", "--short=8", "HEAD")
+        git(desk.repo, "checkout", "-q", "main")
+        desk.tip["alpha"], desk.head["alpha"] = fixed, head
+    desk.check["alpha"] = desk.reports / "alpha-check-2026-01-02.md"
+    text = desk.card_text()
+    text = text.replace("its stop line must carry |\n|---|---|---|---|---|---|\n",
+                        "its stop line must carry | fix report |\n|---|---|---|---|---|---|---|\n")
+    text = text.replace(f"`{desk.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
+                        f"`{desk.check['alpha']}` | `held unfixed: {cell_n or n}` and `ready: NO` | "
+                        + (f"`{fix_report}`" if fix and cell else "") + " |\n")
+    text = text.replace(f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` |\n",
+                        f"`{desk.check['beta']}` | `held unfixed: 0` and `ready: YES` | |\n")
+    desk.card.write_text(text)
+    runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
+    desk.check["alpha"].write_text(f"# check alpha\n\n## RUNS\n{runs_text}\n## OPEN\n- constructed\n\n"
+                                   + check_line(checked, "NO", n, n if open is None else open))
+    desk.write_rulings(R2_ROW + "".join(desk_rows))
+    desk.commit("held round")
+    return str(fix_report)
+
+
+def test_h3_a_held_row_with_a_fixed_line_per_id_passes_p2(desk):
+    """RED on BASE: `FAILED STEP-0: P2 check 1 — … the last line lacks 'held unfixed: 0'`."""
+    held_round(desk, lines=[FIXED_O1])
+    done = desk.run()
+    assert done.returncode == 0, done.stdout
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+
+
+def test_h3_a_carried_line_with_a_strict_xfail_test_and_a_desk_record_row_passes_p2(desk):
+    """RED on BASE: `FAILED STEP-0: P2 check 1 — … the last line lacks 'held unfixed: 0'`."""
+    held_round(desk, lines=[CARRIED_O1], tests={"tests/x_test.py": STRICT_TEST})
+    done = desk.run()
+    assert done.returncode == 0, done.stdout
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+
+
+def test_h3_a_mix_of_one_fixed_and_one_carried_id_passes_p2(desk):
+    """RED on BASE: `FAILED STEP-0: P2 check 1 — … the last line lacks 'held unfixed: 0'`."""
+    held_round(desk, runs=("O1", "O2"), n="2",
+               lines=[FIXED_O1, "CARRIED: O2 — tests/y_test.py::test_o2 — R7"],
+               tests={"tests/x_test.py": PLAIN_TEST,
+                      "tests/y_test.py": STRICT_TEST.replace("test_o1", "test_o2")})
+    done = desk.run()
+    assert done.returncode == 0, done.stdout
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+
+
+@pytest.mark.parametrize("kw, reason", [
+    pytest.param({"lines": []}, "ops/alpha: held id O1 has no FIXED line in the fix report {frep}",
+                 id="a held id with no line"),
+    pytest.param({"lines": [FIXED_O1], "tests": {}},
+                 "ops/alpha: FIXED test tests/x_test.py::test_o1 of O1 is absent at {tip}", id="test absent"),
+    pytest.param({"lines": [FIXED_O1], "tests": {"tests/x_test.py": XFAIL_TEST}},
+                 "ops/alpha: FIXED test tests/x_test.py::test_o1 of O1 is marked xfail", id="xfail test"),
+    pytest.param({"lines": [FIXED_O1], "cell": False},
+                 "ops/alpha: held id O1 has no FIXED line in the fix report (none named)",
+                 id="fix report cell empty"),
+    pytest.param({"lines": [FIXED_O1, "FIXED: O2 — tests/x_test.py::test_o1"]},
+                 "ops/alpha: the fix report {frep} names O2, which is no HELD, NOT FIXED id of the check",
+                 id="a line for an unlisted id"),
+    pytest.param({"lines": [FIXED_O1, FIXED_O1]},
+                 "ops/alpha: held id O1 has 2 FIXED or CARRIED lines in the fix report {frep}",
+                 id="two lines for one id"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": PLAIN_TEST}},
+                 "ops/alpha: CARRIED test tests/x_test.py::test_o1 of O1 is not a strict xfail",
+                 id="CARRIED test not xfail"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": XFAIL_TEST}},
+                 "ops/alpha: CARRIED test tests/x_test.py::test_o1 of O1 is not a strict xfail",
+                 id="CARRIED xfail not strict"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {}},
+                 "ops/alpha: CARRIED test tests/x_test.py::test_o1 of O1 is absent at {tip}",
+                 id="CARRIED test absent"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": STRICT_TEST}, "desk_rows": ()},
+                 "ops/alpha: CARRIED O1 names R7, which is no DESK RECORD row of {desk}", id="CARRIED row absent"),
+    pytest.param({"lines": [CARRIED_O1], "tests": {"tests/x_test.py": STRICT_TEST},
+                  "desk_rows": ("| R7 | 09:00 ET | a note on O1 (constructed). | APPLIED |\n",)},
+                 "ops/alpha: CARRIED O1 names R7, which is no DESK RECORD row of {desk}",
+                 id="CARRIED row without DESK RECORD"),
+    pytest.param({"lines": [FIXED_O1, CARRIED_O1], "tests": {"tests/x_test.py": STRICT_TEST}},
+                 "ops/alpha: held id O1 has 2 FIXED or CARRIED lines in the fix report {frep}",
+                 id="one FIXED and one CARRIED line for one id"),
+    # `:371` matches a literal by substring; the held path's n is exact
+    pytest.param({"lines": [FIXED_O1], "n": "10", "cell_n": "1"},
+                 "the last line lacks 'held unfixed: 1'", id="held unfixed 10 against n = 1"),
+])
+def test_h3_a_held_row_missing_one_proof_fails_p2(desk, kw, reason):
+    """RED on BASE for each: P2 fails on `the last line lacks 'held unfixed: 0'`, not this reason."""
+    frep = held_round(desk, **kw)
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
+    assert reason.format(frep=frep, tip=desk.tip["alpha"], desk=desk.reports / "cto-2026-01-02.md") \
+        in last_line(done), done.stdout
+
+
+def test_h3_a_held_check_at_the_code_tip_without_a_fix_report_fails_p2(desk):
+    """RED on BASE: P2 fails on `lacks 'held unfixed: 0'` (the clean pair prefixed to every row,
+    `:340`), never naming the id."""
+    held_round(desk, lines=[], fix=False)
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
+    assert "ops/alpha: held id O1 has no FIXED line in the fix report (none named)" in last_line(done), done.stdout

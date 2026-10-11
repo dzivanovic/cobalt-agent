@@ -15,7 +15,10 @@
 # cell. REFUSED: an empty value, a job no card names, a path outside $REPORTS/*.md or holding
 # '|' or a backtick (the cell's own characters), a report absent at the head,
 # a last line not `BUILT ·` with a `tip:`, a check tip not an ancestor of the fix tip; the head
-# rules above then read against the fix tip. Also refused: an --out path that exists, a worktree
+# rules above then read against the fix tip. A held check (card 317, R993): with a --fix-report, a
+# last line carrying `held unfixed: <n>`, n >= 1, is read by THE RULE below (one FIXED or CARRIED
+# line per held id) and its row carries `held unfixed: <n>` and `ready: NO`; without one it is
+# refused as above. Also refused: an --out path that exists, a worktree
 # outside $WT/<one directory name>, a value outside its character set.
 # It then TRIAL-MERGES the heads onto main in order with `git merge-tree --write-tree` (git
 # objects only: no branch, worktree, ref, index or working-tree change); a conflict exits 3 with
@@ -129,6 +132,194 @@ field() {
     sed -n "s/^$2: *//p" "$1" | sed -n '1p' | sed 's/[[:space:]]*$//'
 }
 
+# ---- THE RULE (card 317 held-closed-1010, R993): a held check ships on its fix round ---------
+# One text, byte for byte, in deploy-card.sh, desk-launch.sh and deploy-step0.sh (pinned by
+# tests/ops/test_deploy_card.py). held_n <line>: the n of the line's `held unfixed: <n>` when
+# n >= 1 (an exact number: `held unfixed: 10` is 10), else nothing.
+# held_rule <who> <check report> <its last line> <code tip> <branch head> <fix report or ''>:
+# the line carries `ready: NO` and `open: <n>`; `## RUNS` lists exactly n distinct ids, each a
+# line `- <id> · … HELD, NOT FIXED …`; the fix report lies under the reports folder, is read at
+# the branch head and ends `BUILT · … tip: <code tip>`; it holds, from column 0, exactly ONE line
+# per held id, `FIXED: <id> — <test id>` or `CARRIED: <id> — <test id> — R<n>`, and none for an
+# id the check does not list (<test id> = tests/<path>.py::<name>). A FIXED test exists at the
+# code tip with no xfail (no decorator of its def, no `pytestmark`); a CARRIED test exists there
+# with a decorator holding `xfail` and `strict=True`, and its R<n> is a `| R<n> |` row carrying
+# `DESK RECORD` in `reports/cto-<date>.md` at HEAD (<date> from the check report's file name).
+# A static read: no test is run. The first refusal sets held_why (naming <who> and the id) and
+# returns 1; the check report is never written.
+held_n() {
+    printf '%s\n' "$1" | grep -o -E '(^| )held unfixed: [0-9]+( |$)' | sed -n '1p' \
+        | sed -e 's/^ *held unfixed: //' -e 's/ *$//' | grep -E '^[1-9][0-9]*$'
+}
+held_rule() {
+    hr_who=$1 hr_check=$2 hr_last=$3 hr_tip=$4 hr_head=$5 hr_frep=$6
+    held_why=""
+    hr_reports="$REPO/docs/40 - DevDocs/reports"
+    hr_n=$(held_n "$hr_last")
+    hr_ids=$(awk '/^## /{on = ($0 == "## RUNS"); next}
+        on && /^- [A-Za-z0-9._-]+ · / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/ · .*/, ""); print}' "$hr_check")
+    hr_k=$(printf '%s\n' "$hr_ids" | grep -c .)
+    hr_u=$(printf '%s\n' "$hr_ids" | grep . | sort -u | grep -c .)
+    hr_list=$(printf '%s\n' "$hr_ids" | grep . | tr '\n' ' ' | sed 's/ *$//')
+    hr_list=${hr_list:-none}
+    if ! printf '%s\n' "$hr_last" | grep -q -E '(^| )ready: NO( |$)'; then
+        held_why="$hr_who: the check's last line says 'held unfixed: $hr_n' (held ids: $hr_list) but not 'ready: NO': $hr_last"
+        return 1
+    fi
+    if ! printf '%s\n' "$hr_last" | grep -q -E "(^| )open: $hr_n( |\$)"; then
+        held_why="$hr_who: the check's last line says 'held unfixed: $hr_n' (held ids: $hr_list) but not 'open: $hr_n': $hr_last"
+        return 1
+    fi
+    if [ "$hr_k" != "$hr_n" ]; then
+        held_why="$hr_who: the check $hr_check lists $hr_k HELD, NOT FIXED row(s) under ## RUNS ($hr_list), its last line says 'held unfixed: $hr_n'"
+        return 1
+    fi
+    if [ "$hr_u" != "$hr_k" ]; then
+        held_why="$hr_who: the check $hr_check lists a held id twice under ## RUNS ($hr_list)"
+        return 1
+    fi
+    if [ -z "$hr_frep" ]; then
+        held_why="$hr_who: held id $(printf '%s\n' "$hr_ids" | sed -n '1p') has no FIXED line in the fix report (none named)"
+        return 1
+    fi
+    case "$hr_frep" in
+        "$hr_reports"/*.md) ;;
+        *) held_why="$hr_who: the fix report $hr_frep of held id(s) $hr_list is not $hr_reports/<name>.md"; return 1 ;;
+    esac
+    if ! hr_blob=$(git -C "$REPO" show "$hr_head:${hr_frep#"$REPO"/}" 2>/dev/null); then
+        held_why="$hr_who: the fix report $hr_frep of held id(s) $hr_list is absent at the branch head $hr_head"
+        return 1
+    fi
+    hr_flast=$(printf '%s\n' "$hr_blob" | grep -v '^[[:space:]]*$' | tail -n 1)
+    case "$hr_flast" in
+        "BUILT ·"*"tip: $hr_tip"*) ;;
+        *) held_why="$hr_who: the fix report $hr_frep of held id(s) $hr_list does not end 'BUILT · … tip: $hr_tip': $hr_flast"; return 1 ;;
+    esac
+    # one normalized line per FIXED or CARRIED line: `F <id> <path> <name> -` or `C <id> <path> <name> R<n>`
+    hr_lines=$(printf '%s\n' "$hr_blob" | sed -n -E \
+        -e 's#^FIXED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+)$#F \1 \2 \3 -#p' \
+        -e 's#^CARRIED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+) — (R[0-9]+)$#C \1 \2 \3 \4#p')
+    while IFS=' ' read -r hr_kind hr_id hr_path hr_name hr_row; do
+        [ -n "$hr_id" ] || continue
+        if ! printf '%s\n' "$hr_ids" | grep -q -x -F -e "$hr_id"; then
+            held_why="$hr_who: the fix report $hr_frep names $hr_id, which is no HELD, NOT FIXED id of the check $hr_check"
+            return 1
+        fi
+    done <<HELD_LINES
+$hr_lines
+HELD_LINES
+    while IFS= read -r hr_id; do
+        [ -n "$hr_id" ] || continue
+        hr_c=$(printf '%s\n' "$hr_lines" | awk -v id="$hr_id" '$2 == id' | grep -c .)
+        if [ "$hr_c" -eq 0 ]; then
+            held_why="$hr_who: held id $hr_id has no FIXED line in the fix report $hr_frep"
+            return 1
+        fi
+        if [ "$hr_c" -ne 1 ]; then
+            held_why="$hr_who: held id $hr_id has $hr_c FIXED or CARRIED lines in the fix report $hr_frep"
+            return 1
+        fi
+    done <<HELD_IDS
+$hr_ids
+HELD_IDS
+    hr_date=$(printf '%s\n' "${hr_check##*/}" | sed -n 's/.*-\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)\.md$/\1/p')
+    hr_desk="$hr_reports/cto-$hr_date.md"
+    while IFS=' ' read -r hr_kind hr_id hr_path hr_name hr_row; do
+        [ -n "$hr_id" ] || continue
+        hr_label=FIXED
+        [ "$hr_kind" = F ] || hr_label=CARRIED
+        hr_shape=absent
+        case "$hr_path" in
+            *..*) ;;
+            *)
+                if hr_src=$(git -C "$REPO" show "$hr_tip:$hr_path" 2>/dev/null); then
+                    # `absent`, or the def's decorators (`strict`, `xfail` or `plain`) and ` pytestmark`
+                    # when a `pytestmark` statement (module or class) holds xfail. The def is the
+                    # column-0 one when there is one; its decorators are the `@` lines directly
+                    # above it, each with its bracketed continuation lines, comments skipped
+                    hr_shape=$(printf '%s\n' "$hr_src" | awk -v name="$hr_name" '
+                        function judge(t, s) {
+                            if (index(t, "xfail") && index(t, "strict=True")) return "strict"
+                            if (index(t, "xfail") && s != "strict") return "xfail"
+                            return s
+                        }
+                        function decos(s, e,   j, t, depth) {
+                            depth = 0
+                            for (j = s; j < e; j++) {
+                                if (line[j] ~ /^[ \t]*#/) continue
+                                if (depth == 0 && line[j] !~ /^[ \t]*@/) return 0
+                                t = line[j]
+                                depth += gsub(/[([{]/, "", t)
+                                t = line[j]
+                                depth -= gsub(/[])}]/, "", t)
+                            }
+                            return depth == 0
+                        }
+                        { line[NR] = $0 }
+                        END {
+                            pm = 0; inpm = 0; pind = 0
+                            for (i = 1; i <= NR; i++) {
+                                ind = match(line[i], /[^ \t]/) - 1
+                                c = substr(line[i], ind + 1, 1)
+                                if (line[i] ~ /^[ \t]*pytestmark/) { inpm = 1; pind = ind }
+                                else if (inpm && (line[i] ~ /^[ \t]*$/ || (ind <= pind && c != ")" && c != "]"))) inpm = 0
+                                if (inpm && index(line[i], "xfail")) pm = 1
+                            }
+                            d = 0
+                            for (i = 1; i <= NR; i++) if (line[i] ~ ("^def " name "\\(")) { d = i; break }
+                            if (!d) for (i = 1; i <= NR; i++) if (line[i] ~ ("^[ \t]+def " name "\\(")) { d = i; break }
+                            if (!d) { print "absent"; exit }
+                            top = d
+                            for (i = d - 1; i >= 1 && line[i] !~ /^[ \t]*$/; i--) {
+                                if (line[i] ~ /^[ \t]*(async[ \t]+)?(def|class)[ \t]/) break
+                                if (line[i] ~ /^[ \t]*@/ && decos(i, d)) top = i
+                            }
+                            shape = "plain"; deco = ""
+                            for (i = top; i < d; i++) {
+                                if (line[i] ~ /^[ \t]*#/) continue
+                                if (line[i] ~ /^[ \t]*@/) { if (deco != "") shape = judge(deco, shape); deco = line[i] }
+                                else deco = deco " " line[i]
+                            }
+                            if (deco != "") shape = judge(deco, shape)
+                            print shape (pm ? " pytestmark" : "")
+                        }')
+                fi
+                ;;
+        esac
+        hr_test="$hr_path::$hr_name"
+        case "$hr_kind $hr_shape" in
+            *" absent")
+                held_why="$hr_who: $hr_label test $hr_test of $hr_id is absent at $hr_tip"
+                return 1 ;;
+            "F plain") ;;
+            F*)
+                held_why="$hr_who: FIXED test $hr_test of $hr_id is marked xfail"
+                return 1 ;;
+            "C strict"*) ;;
+            *)
+                held_why="$hr_who: CARRIED test $hr_test of $hr_id is not a strict xfail"
+                return 1 ;;
+        esac
+        if [ "$hr_kind" = C ]; then
+            hr_rowline=""
+            if [ -n "$hr_date" ]; then
+                hr_rowline=$(git -C "$REPO" show "HEAD:${hr_desk#"$REPO"/}" 2>/dev/null \
+                    | awk -v r="| $hr_row |" 'index($0, r) == 1' | sed -n '1p')
+            fi
+            case "$hr_rowline" in
+                *"DESK RECORD"*) ;;
+                *)
+                    held_why="$hr_who: CARRIED $hr_id names $hr_row, which is no DESK RECORD row of $hr_desk"
+                    return 1 ;;
+            esac
+        fi
+    done <<HELD_LINES
+$hr_lines
+HELD_LINES
+    return 0
+}
+# ---- end of THE RULE --------------------------------------------------------------------------
+
 # ---- every job card: its check, its tip, its head (P2, P3) -----------------------------------
 ladder=""
 heads=""
@@ -169,15 +360,21 @@ for card in "$@"; do
     [ "$index_blob" = "$committed_blob" ] || refuse "$job: the check report is staged, not committed: $creport"
     [ "$file_blob" = "$committed_blob" ] || refuse "$job: the check report is modified since its commit: $creport"
     last=$(grep -v '^[[:space:]]*$' "$creport" | tail -n 1)
-    printf '%s\n' "$last" | grep -q -E '(^| )held unfixed: 0( |$)' || refuse "$job: the check's last line lacks 'held unfixed: 0': $last"
-    printf '%s\n' "$last" | grep -q -E '(^| )ready: YES( |$)' || refuse "$job: the check's last line lacks 'ready: YES': $last"
+    # the job's fix report, read before the check line's refusals: with one, a line carrying
+    # `held unfixed: <n>`, n >= 1, takes THE RULE's path below (card 317 H1)
+    frep=$(printf '%s' "$fixes" | sed -n "s/^$job=//p" | sed -n '1p')
+    hn=""
+    [ -z "$frep" ] || hn=$(held_n "$last")
+    if [ -z "$hn" ]; then
+        printf '%s\n' "$last" | grep -q -E '(^| )held unfixed: 0( |$)' || refuse "$job: the check's last line lacks 'held unfixed: 0': $last"
+        printf '%s\n' "$last" | grep -q -E '(^| )ready: YES( |$)' || refuse "$job: the check's last line lacks 'ready: YES': $last"
+    fi
     tip=$(printf '%s\n' "$last" | grep -o -E '(^| )tip: [0-9a-f]{7,40}' | sed -n '1p' | sed 's/.*tip: //')
     [ -n "$tip" ] || refuse "$job: the check's last line names no tip: $last"
     ctip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$tip^{commit}") || refuse "$job: code tip '$tip' is not a commit in $REPO"
     head=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "refs/heads/$branch^{commit}") || refuse "$job: no branch '$branch' in $REPO"
     jobs="$jobs $job"
     # a fix round: the code tip is the fix report's `tip:`, read at the head; the check's tip its ancestor
-    frep=$(printf '%s' "$fixes" | sed -n "s/^$job=//p" | sed -n '1p')
     fixcell=""
     if [ -n "$frep" ]; then
         fblob=$(git -C "$REPO" show "$head:${frep#"$REPO"/}" 2>/dev/null) || refuse "$job: the fix report is absent at the branch head $head: $frep"
@@ -190,6 +387,10 @@ for card in "$@"; do
         fixtip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$ftip^{commit}") || refuse "$job: fix tip '$ftip' is not a commit in $REPO"
         git -C "$REPO" merge-base --is-ancestor "$ctip" "$fixtip" || refuse "$job: the check's tip $ctip is not an ancestor of the fix tip $fixtip"
         ctip=$fixtip
+        # card 317 H1: a held check line needs a FIXED or CARRIED line per held id
+        if [ -n "$hn" ]; then
+            held_rule "$job" "$creport" "$last" "$fixtip" "$head" "$frep" || refuse "$held_why"
+        fi
         fixcell=" \`$frep\`"
         records="$records- $job: fix report \`$frep\` at \`$head\` last line: $flast$nl"
     fi
@@ -198,7 +399,12 @@ for card in "$@"; do
     [ -z "$past" ] || refuse "$job: the head $head adds paths outside docs/ past the code tip $ctip: $(printf '%s' "$past" | tr '\n' ' ')"
 
     heads="${heads:+$heads }$head"
-    ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: 0\` and \`ready: YES\` |$fixcell |$nl"
+    if [ -z "$hn" ]; then
+        ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: 0\` and \`ready: YES\` |$fixcell |$nl"
+    else
+        # a held row carries the check line's own literals (card 317 H1)
+        ships="$ships| $n | \`$branch\` | \`$ctip\` | \`$head\` | \`$creport\` | \`held unfixed: $hn\` and \`ready: NO\` |$fixcell |$nl"
+    fi
     records="$records- $job: check \`$creport\` last line: $last$nl- $job: head \`git -C $REPO rev-parse --short=8 $branch\` → \`$head\`; code tip \`$ctip\`$nl"
     # what the head changes since it left main (three dots): a migration main gained is not the head's
     changed=$(git -C "$REPO" diff --name-only "main...$head" -- src/cobalt/db_migrations)
