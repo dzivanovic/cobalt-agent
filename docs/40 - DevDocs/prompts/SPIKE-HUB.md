@@ -1,4 +1,4 @@
-# SPIKE-HUB — the scratch-dir research seat (card 2026-10-11 324, P1; desk rows R1012, R1018, R1021) «INSTALL: his row»
+# SPIKE-HUB — the scratch-dir research seat (card 2026-10-11 324, P1; desk rows R1012, R1018, R1021) HIS RULING · APPROVED 2026-10-11 R1069
 
 MODEL: Opus 5.5 (`claude-opus-5-5`) · PERMISSION MODE `dontAsk` · SEAT: `sdk-spike-live`, a FRESH session launched by the CTO desk only through `sh /Users/cobalt/.claude/ops/desk-launch.sh spike "<prompt>"`, in the plain scratch dir `/Users/cobalt/cobalt-wt/sdk-spike-1010` (never a git worktree; the launcher makes it when absent) · nobody sits at this terminal: the report is your channel.
 
@@ -21,6 +21,6 @@ It is prompt 330's line (`prompts/2026-10-11/330-sdk-spike-live.md:1`) string fo
 
 claude --bg "Read '/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/SPIKE-HUB.md' and follow it exactly. PROMPT: '<prompt>'" --model claude-opus-5-5 --permission-mode dontAsk --remote-control sdk-spike-live --name sdk-spike-live --allowedTools "Read" "Edit(//Users/cobalt/cobalt-wt/sdk-spike-1010/**)" "Write(//Users/cobalt/cobalt-wt/sdk-spike-1010/**)" "Bash(uv venv /Users/cobalt/cobalt-wt/sdk-spike-1010/.venv)" "Bash(uv pip install --python /Users/cobalt/cobalt-wt/sdk-spike-1010/.venv claude-agent-sdk==*)" "Bash(/Users/cobalt/cobalt-wt/sdk-spike-1010/.venv/bin/python /Users/cobalt/cobalt-wt/sdk-spike-1010/*)" "Bash(ls *)" "Bash(date*)" "WebFetch(domain:anthropic.com)" "WebFetch(domain:www.anthropic.com)" "WebFetch(domain:docs.anthropic.com)" "WebFetch(domain:code.claude.com)" "WebFetch(domain:pypi.org)" --disallowedTools "Bash(git *)" "Bash(COBALT_ENV=*)" "Bash(psql*)" "Bash(docker*)" "Bash(cat *)" "AskUserQuestion" "EnterWorktree" --add-dir /Users/cobalt/Vault --add-dir /Users/cobalt/cobalt --add-dir /Users/cobalt/cobalt-wt
 
-THE LINE'S SIGN: NEEDS HIS SIGN-OFF «SIGN: his row» (R411: a new command class; the desk replaces the mark with his row; the launcher refuses while it stands).
+THE LINE'S SIGN: 2026-10-11 R1069 · HIS RULING · APPROVED (R411: a new command class; the desk replaces the mark with his row; the launcher refuses while it stands).
 
 The launcher refuses (`REFUSED:`, exit 1, nothing made, nothing launched) anything but one argument; a prompt not a `.md` directly under `prompts/<YYYY-MM-DD>/`, uncommitted or changed; this file uncommitted, changed, or still holding its install token or sign mark; a file without exactly one launch line; a mode other than `dontAsk` stated once; a scratch path that is a git worktree or holds `.git`; and a live session named `sdk-spike-live`.

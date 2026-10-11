@@ -288,7 +288,16 @@ def test_the_real_file_launches_a_signed_grok(desk):
     line = done.stdout.splitlines()[-1]
     assert f'"{ALLOW["grok-4.7"]}" --disallowedTools ' in line
     assert "MODEL: grok-4.7" in line and "<" not in line
-    refused(desk.run(str(desk.card_for("terra")), "--model", "gpt-5.6-terra"), "shadow: model gpt-5.6-terra: builder line not signed")
+    terra = desk.run(str(desk.card_for("terra")), "--model", "gpt-5.6-terra")
+    assert terra.returncode == 0, terra.stderr  # card 355 S1: signed on his R1069
+
+
+def test_the_real_file_holds_no_install_token_and_no_sign_mark():
+    """Card 355 S1, his R1069: SHADOW-HUB.md and SPIKE-HUB.md are installed and signed."""
+    for path in (REAL, REAL.with_name("SPIKE-HUB.md")):
+        text = path.read_text()
+        assert INSTALL not in text, path.name
+        assert SIGN not in text, path.name
 
 
 def test_s2_a_role_trial_refuses_a_non_grok_model(desk):
