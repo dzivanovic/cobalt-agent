@@ -37,6 +37,11 @@
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh ops-hand                               (the default-mode
 #        seat on OPS-HAND.md, in /Users/cobalt/cobalt-wt/.ops-hand; card 2026-10-10 231 H4: its
 #        refusals are in its block, after kind `brain`)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh shadow "<absolute card path>" --model <id>  (the gate
+#        seat on SHADOW-HUB.md; card 2026-10-11 324 S2: its refusals are in its block, after the
+#        desk-size guard, and in its `shadow)` arm beside build's)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh spike "<absolute prompt path>"         (the scratch-dir
+#        research seat on SPIKE-HUB.md, in /Users/cobalt/cobalt-wt/sdk-spike-1010; card 324 P2)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh install-ops                            (links the ops
 #        scripts into /Users/cobalt/.claude/ops; the desk runs it after a deploy; launches nothing)
 # The desk types no `cd`, no `git worktree add` and no `claude --bg`: its own `claude --bg`
@@ -308,7 +313,7 @@ tool_list() {
 }'
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | ops-hand"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | ops-hand | shadow <card> --model <id> | spike <prompt file>"
 kind=$1
 # recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
 # 10-03, ASK DESK 13: an ignored argument is a guess)
@@ -320,6 +325,109 @@ kind=$1
 # successor launch (`desk`) is never guarded, so a REFRESH can always complete.
 if [ "$kind" != "desk" ]; then
     sh "$(dirname "$0")/desk-context.sh" --guard || exit $?
+fi
+
+# ---- kind shadow: the gate seat on SHADOW-HUB.md, one builder model (card 2026-10-11 324 S2) ---
+# Its arguments are read here and dropped to `shadow <card>`; the card then meets build's own gates
+# below, and the `build|shadow)` arm adds the shadow's: SHADOW OF:, a shadow/ BRANCH, the model's
+# ONE ## BUILDERS row, signed, and a JOB that ends in that row's slug. The line's mode is checked
+# after the fill: dontAsk, once.
+model=""
+builder=""
+if [ "$kind" = "shadow" ]; then
+    [ "$#" -ge 2 ] || refuse "usage: desk-launch.sh shadow <absolute card path> --model <id>"
+    scard=$2
+    shift 2
+    mn=0
+    while [ "$#" -gt 0 ]; do
+        case "$1" in
+            --model)
+                [ "$#" -ge 2 ] || refuse "shadow: --model <id> is required"
+                mn=$((mn + 1))
+                model=$2
+                shift 2 ;;
+            *) refuse "shadow: unknown argument '$1'" ;;
+        esac
+    done
+    [ "$mn" -le 1 ] || refuse "shadow: --model is given $mn times; one model per launch"
+    [ "$mn" -eq 1 ] || refuse "shadow: --model <id> is required"
+    case "$model" in
+        ""|*[!A-Za-z0-9._-]*) refuse "shadow: model '$model' holds a character outside [A-Za-z0-9._-]" ;;
+        gemini-*) refuse "shadow: model '$model' is a Gemini id; Gemini is not in ## BUILDERS (N/A — id not found)" ;;
+    esac
+    set -- shadow "$scard"
+fi
+
+# ---- kind spike: the scratch-dir research seat on SPIKE-HUB.md (card 2026-10-11 324 P2) --------
+# Kind `prompt` refuses dontAsk (R1020); this fixed file's line runs in it, from a plain scratch dir
+# this block makes (never a worktree). Refusals before anything is made or launched.
+if [ "$kind" = "spike" ]; then
+    [ "$#" -eq 2 ] || refuse "spike takes one argument, the prompt; $(($# - 1)) given"
+    pfile=$2
+    case "$pfile" in
+        *..*) refuse "spike: the prompt path holds '..': $pfile" ;;
+        *[!A-Za-z0-9\ ._/-]*) refuse "spike: the prompt path holds a character outside [A-Za-z0-9 ._/-]: $pfile" ;;
+    esac
+    prest=${pfile#"$PROMPTS"/}
+    pday=${prest%%/*}
+    pname=${prest#*/}
+    case "$pfile" in
+        "$PROMPTS"/*/*.md) ;;
+        *) refuse "spike: a prompt lives directly under $PROMPTS/<YYYY-MM-DD>/: $pfile" ;;
+    esac
+    case "$pday" in
+        20[0123456789][0123456789]-[0123456789][0123456789]-[0123456789][0123456789]) ;;
+        *) refuse "spike: a prompt lives directly under $PROMPTS/<YYYY-MM-DD>/: $pfile" ;;
+    esac
+    case "$pname" in
+        */*) refuse "spike: a prompt lives directly under $PROMPTS/<YYYY-MM-DD>/: $pfile" ;;
+    esac
+    [ -f "$pfile" ] || refuse "spike: no such prompt: $pfile"
+    committed "the prompt" "$pfile"
+    fixed="$PROMPTS/SPIKE-HUB.md"
+    [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
+    committed "the fixed file" "$fixed"
+    if grep -q '«INSTALL' "$fixed"; then
+        refuse "the fixed file still carries its «INSTALL token (his approval row is not filled): $fixed"
+    fi
+    if grep -q '«SIGN' "$fixed"; then
+        refuse "spike: SPIKE-HUB.md still holds its «SIGN mark (his sign-off is not filled): $fixed"
+    fi
+    n=$(grep -c '^claude --bg ' "$fixed")
+    [ "$n" -eq 1 ] || refuse "spike: SPIKE-HUB.md must hold exactly one launch line; found $n in $fixed"
+    line=$(grep '^claude --bg ' "$fixed")
+    case "$line" in
+        *bypassPermissions*) refuse "spike: bypassPermissions on the line (L55)" ;;
+    esac
+    pm_n=$(printf '%s\n' "$line" | grep -o -e '--permission-mode' | wc -l | tr -d ' ')
+    [ "$pm_n" -eq 1 ] || refuse "spike: the line states --permission-mode $pm_n times, not once"
+    pm=$(printf '%s\n' "$line" | sed -n 's/.*--permission-mode[ =]*\([^ ]*\).*/\1/p' | tr -d "\"'")
+    [ "$pm" = "dontAsk" ] || refuse "spike: permission mode '$pm' is not dontAsk"
+    case "$line" in
+        "claude --bg \"Read '$fixed' and follow it exactly. PROMPT: '<prompt>'\" "*) ;;
+        *) refuse "spike: the line's message is not the Read of SPIKE-HUB.md with PROMPT: '<prompt>'" ;;
+    esac
+    line=$(printf '%s\n' "$line" | sed "s|<prompt>|$pfile|g")
+    case "$line" in
+        *"<"*|*">"*) refuse "the launch line holds an unfilled token" ;;
+    esac
+    check_paths "$line"
+    scratch="$WT/sdk-spike-1010"
+    if [ -e "$scratch/.git" ] || git -C "$REPO" worktree list --porcelain 2>/dev/null | grep -q -x -F "worktree $scratch"; then
+        refuse "spike: $scratch is a git worktree or holds .git"
+    fi
+    # one seat at a time; the session list is desk-list.sh beside this script (as kind `ops-hand`)
+    list="$(dirname "$0")/desk-list.sh"
+    rows=$(sh "$list" 2>/dev/null) || refuse "spike: the session list is unreadable ($list); the seat never launches beside one it cannot rule out"
+    live=$(printf '%s\n' "$rows" | while IFS= read -r row; do
+        rest=${row#* · }
+        if [ "$rest" != "$row" ] && [ "${rest%% · *}" = "sdk-spike-live" ]; then
+            printf '%s ' "${row%% · *}"
+        fi
+    done)
+    [ -z "$live" ] || refuse "spike: a session named sdk-spike-live is live (${live% }): one seat at a time"
+    [ "${DESK_LAUNCH_DRY:-0}" = "1" ] || [ -d "$scratch" ] || mkdir "$scratch" || refuse "spike: cannot make $scratch"
+    run_launch "$scratch" "$line" "reminder: the desk copies $scratch/report.md under reports/; the seat writes nothing else"
 fi
 
 # ---- kind close: the nightly close of one day (RULED — THE NIGHTLY CLOSE) -----------------------
@@ -775,6 +883,7 @@ case "$kind" in
     check)  fixed="$PROMPTS/CHECK-HUB.md" ;;
     deploy|recut) fixed="$PROMPTS/DEPLOY-HUB.md" ;;
     devfix) fixed="$PROMPTS/DEVFIX-HUB.md" ;;
+    shadow) fixed="$PROMPTS/SHADOW-HUB.md" ;;
     *) refuse "kind '$kind' is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops" ;;
 esac
 [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
@@ -995,7 +1104,7 @@ prod=""
 table=""
 proof=""
 case "$kind" in
-build)
+build|shadow)
     [ -z "$tag" ] || refuse "this is a deploy card (TAG is set); kind 'build' needs a job card"
     section ROWS
     tree_state
@@ -1014,6 +1123,39 @@ build)
     fi
     # a build launches while the lock is held (R20); a resume still refuses another worktree's .env
     [ -z "$step" ] || lock_free
+    if [ "$kind" = "shadow" ]; then
+        # card 324 S2: the shadow's own header, then the ONE ## BUILDERS row of --model, signed
+        [ -n "$(field "SHADOW OF")" ] || refuse "shadow: the card's header has no 'SHADOW OF:' line"
+        case "$branch" in
+            shadow/?*) ;;
+            *) refuse "shadow: BRANCH '$branch' does not start 'shadow/'" ;;
+        esac
+        brows=$(awk '/^## /{insec = ($0 ~ /^## BUILDERS/)} insec && /^\| `/' "$fixed" \
+            | awk -F'|' -v m="$model" '{c = $2; gsub(/[` \t]/, "", c); if (c == m) print}')
+        nb=$(printf '%s' "$brows" | grep -c '')
+        [ "$nb" -ne 0 ] || refuse "shadow: model '$model' is no id of ## BUILDERS"
+        [ "$nb" -eq 1 ] || refuse "shadow: model '$model' has $nb rows in ## BUILDERS"
+        case "$(printf '%s\n' "$brows" | awk -F'|' '{print $6}')" in
+            *"«SIGN"*) refuse "shadow: model $model: builder line not signed" ;;
+        esac
+        slug=$(ship_cell "$brows" 3)
+        ballow=$(ship_cell "$brows" 4)
+        case "$slug" in
+            ""|*[!a-z0-9]*) refuse "shadow: the slug of $model in ## BUILDERS is not [a-z0-9]: '$slug'" ;;
+        esac
+        case "$job" in
+            *-"$slug") ;;
+            *) refuse "shadow: JOB '$job' does not end in '-$slug' (model $model)" ;;
+        esac
+        case "$ballow" in
+            Bash\(*\)) ;;
+            *) refuse "shadow: the builder allow of $model is not one Bash(…) string: '$ballow'" ;;
+        esac
+        case "$ballow" in
+            *[\"\'\\\$\`\|\&\;]*) refuse "shadow: the builder allow of $model holds a character the line cannot carry: '$ballow'" ;;
+        esac
+        builder="\"$ballow\""
+    fi
     ;;
 check)
     [ -z "$tag" ] || refuse "this is a deploy card (TAG is set); kind 'check' needs a job card"
@@ -1269,7 +1411,9 @@ line=$(grep '^claude --bg ' "$fixed" | sed \
     -e "s|<table>|$table|g" \
     -e "s|<proof test>|$proof|g" \
     -e "s|<tip merges>|$merges|" \
-    -e "s|<prod migrate strings>|$prod|")
+    -e "s|<prod migrate strings>|$prod|" \
+    -e "s|<model>|$model|g" \
+    -e "s|<builder allow>|$builder|g")
 if [ -n "$step" ]; then
     case "$step" in
         *[!A-Za-z0-9.\ -]*) refuse "resume step '$step' holds a character outside [A-Za-z0-9 .-]" ;;
@@ -1283,13 +1427,23 @@ fi
 case "$line" in
     *"<"*|*">"*) refuse "the launch line still holds an unfilled token" ;;
 esac
+if [ "$kind" = "shadow" ]; then
+    # card 324 S2: the gate seat runs dontAsk, stated once, and nothing wider
+    case "$line" in
+        *bypassPermissions*) refuse "shadow: bypassPermissions on the line (L55)" ;;
+    esac
+    pm_n=$(printf '%s\n' "$line" | grep -o -e '--permission-mode' | wc -l | tr -d ' ')
+    [ "$pm_n" -eq 1 ] || refuse "shadow: the line states --permission-mode $pm_n times, not once"
+    pm=$(printf '%s\n' "$line" | sed -n 's/.*--permission-mode[ =]*\([^ ]*\).*/\1/p' | tr -d "\"'")
+    [ "$pm" = "dontAsk" ] || refuse "shadow: permission mode '$pm' is not dontAsk"
+fi
 
 check_paths "$line"
 
 # ---- run the launch: the worktree add (when one is needed), the cd, the line -----------------
 add=""
 case "$kind" in
-build)
+build|shadow)
     [ -d "$WT/$wt" ] || add="git -C $REPO worktree add -b $branch $WT/$wt $base"
     dir="$WT/$wt"
     note="reminder: the build takes the cobalt_dev lock only at its with-DB steps and waits for it there (L76, R20); no deploy launch while it holds it"
@@ -1318,7 +1472,7 @@ fi
 
 if [ -n "$add" ]; then
     printf 'RUN: %s\n' "$add" >&2
-    if [ "$kind" = "build" ] || [ "$kind" = "devfix" ]; then
+    if [ "$kind" = "build" ] || [ "$kind" = "shadow" ] || [ "$kind" = "devfix" ]; then
         git -C "$REPO" worktree add -b "$branch" "$WT/$wt" "$base" || refuse "worktree add failed; nothing launched"
     else
         git -C "$REPO" worktree add -b "$branch" "$WT/$wt" main || refuse "worktree add failed; nothing launched"

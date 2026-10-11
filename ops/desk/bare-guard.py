@@ -13,7 +13,11 @@
 # THE SEAT (its kind): the first user record of the transcript is the launch message. A
 # `Read '<…>/BUILD-HUB.md'` (CHECK-, DEPLOY-, DEVFIX-) names the kind, and its `CARD: '<path>'`
 # is read for WORKTREE, REPORT, CHECK REPORT and the `## ROWS` files. A `Read '<…>/OPS-HAND.md'`
-# names the kind ops-hand whatever the cwd (card 231 H1). Otherwise the cwd: the repo
+# names the kind ops-hand whatever the cwd (card 231 H1). `Read '<…>/SHADOW-HUB.md'` names kind
+# shadow (its CARD read as a build's, its `MODEL:` the row of `## BUILDERS` whose one command passes
+# G7 while the card's worktree holds no .env; G5: SHADOW-INSTRUCTIONS.md and its REPORT only), and
+# `Read '<…>/SPIKE-HUB.md'` kind spike (G5: its scratch dir only; no G4) (card 2026-10-11 324 S3,
+# S7, P3). Otherwise the cwd: the repo
 # with CTO-DESK-WAKEUP.md = desk, the repo with a prompt under prompts/20*/ = brain, a worktree
 # under the worktree root = worker; anything else is UNKNOWN, and an unknown seat meets only the
 # kind-free rules G1, G3, G6.
@@ -76,6 +80,7 @@ ROUTE = {
     ),
     "G6": "route: release the lock (W (f)), then the stop line",
     "G7": "route: the desk launches",
+    "G7 env": "route: no builder pass while .env is in the worktree (the gate's with-DB step holds it)",
     "G12": (
         "route: ops-hand runs only its class (kill of one pid, kickstart of a com.cobalt resident, "
         "ps/pgrep/launchctl print); anything else is a card"
@@ -87,9 +92,20 @@ HUBS = {
     "CHECK-HUB.md": "check",
     "DEPLOY-HUB.md": "deploy",
     "DEVFIX-HUB.md": "devfix",
+    "SHADOW-HUB.md": "shadow",
+    "SPIKE-HUB.md": "spike",
 }
-WORKERS = ("build", "check", "devfix", "deploy", "worker")
-GIT_SHAPED = ("build", "check", "devfix", "worker")
+WORKERS = ("build", "check", "devfix", "deploy", "worker", "shadow", "spike")
+GIT_SHAPED = ("build", "check", "devfix", "worker", "shadow")
+# card 2026-10-11 324: the shadow gate seat (S3, S7) and the spike seat (P3)
+SHADOW = "shadow"
+SPIKE = "spike"
+SPIKE_DIR = "sdk-spike-1010"
+SHADOW_FILE = "SHADOW-INSTRUCTIONS.md"
+WT_TOKEN = "/Users/cobalt/cobalt-wt/<worktree>"
+PASS_PROMPT = '"<pass prompt>"'
+# the one double-quoted prompt a builder call carries: nothing in it that bash expands or ends early
+PLAIN_PROMPT = re.compile(r'"[^"\\$`]*"')
 READ_FILTERS = ("grep", "sed", "cut", "sort", "uniq", "head", "tail", "wc")
 # no rule reads ENV_READERS since D2 (card 158): G3 reads every verb's words
 ENV_READERS = ("cat", "grep", "sed", "head", "tail", "less", "sort", "cut", "uniq", "awk")
@@ -125,7 +141,7 @@ WRAP_VALUES = {
 }
 WRAPPED = "a wrapper whose command the guard cannot find"
 GIT_DENIED = ("push", "merge", "rebase", "reset", "checkout", "stash", "cherry-pick")
-STOP_HEADS = ("BUILT ·", "CHECK DONE ·", "DEPLOYED")
+STOP_HEADS = ("BUILT ·", "CHECK DONE ·", "DEPLOYED", "SHADOW BUILT ·", "SHADOW ROLE ·")
 PROD = re.compile(r"COBALT_ENV=production|(?<![\w-])--prod(?![\w-])|cobalt_brain")
 # card 162 D1: an option word holding `prod` as a token (`--allow-prod`, `--prod=1`, `-prod`;
 # not `--products`)
@@ -753,6 +769,8 @@ def seat(event):
     prompt = m.group(1) if m else ""
     m = re.search(r"CARD: '([^']+)'", text)
     card_path = m.group(1) if m else ""
+    m = re.search(r"MODEL: ([A-Za-z0-9._-]+)", text)
+    model = m.group(1) if m else ""
     hub = os.path.basename(prompt)
     in_repo = bool(cwd) and under(cwd, REPO_ROOT)
     wt = worktree_of(cwd)
@@ -772,7 +790,10 @@ def seat(event):
     # G9 (R877): a design-tribunal hub, `<n>-<name>-tribunal[-r<n>].md` under prompts/20*/ (not a
     # drafter, an Opus seat, a derive or a preflight prompt)
     tribunal = bool(re.search(r"(^|/)prompts/20[^/]*/[0-9]+-(?!draft)[a-z0-9-]*-tribunal(-r[0-9]+)?\.md$", prompt))
-    return {"kind": kind, "cwd": cwd, "wt": card["worktree"] or wt, "cwd wt": wt, "card": card, "first": text, "tribunal": tribunal}
+    return {
+        "kind": kind, "cwd": cwd, "wt": card["worktree"] or wt, "cwd wt": wt, "card": card, "first": text,
+        "tribunal": tribunal, "hub": prompt, "model": model,
+    }
 
 
 # ---- the Bash rules ------------------------------------------------------------------------
@@ -1055,6 +1076,12 @@ def bash_rules(command, s):
     launches = [k for k, ws in enumerate(segs) if verb(ws) in LAUNCHERS]
     if (kind == "check" or s["tribunal"]) and launches == [0] and HOUSE.match(command):
         launches = []  # G9: the check's (or a tribunal hub's) one house call, as CHECK-HUB.md line 10 lists it
+    if kind == SHADOW and launches == [0]:
+        hit = builder_call(command, s)
+        if hit is True:
+            launches = []  # S3: the gate seat's one builder call, its MODEL's ## BUILDERS command
+        elif isinstance(hit, str):
+            return "G7", hit  # S7: the same call while .env is in the worktree
     if kind in WORKERS and launches:
         return "G7", ROUTE["G7"]
     if kind == OPS_HAND and launches:
@@ -1065,6 +1092,65 @@ def bash_rules(command, s):
     if kind == OPS_HAND and not ops_class(command):
         return "G12", ROUTE["G12"]
     return None
+
+
+def builder_command(hub, model):
+    """S3: the `builder command` cell of MODEL's ONE row under `## BUILDERS` of the hub the launch
+    message reads, backticks cut; None when the file, the section or exactly one row is missing."""
+    try:
+        with open(hub, encoding="utf-8") as f:
+            text = f.read()
+    except (OSError, TypeError):
+        return None
+    m = re.search(r"^## BUILDERS[ \t]*$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    rows = []
+    for line in (m.group(1) if m else "").splitlines():
+        if not line.startswith("| `"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 4 and cells[0].strip("`") == model:
+            rows.append(cells[3].strip("`"))
+    return rows[0] if len(rows) == 1 else None
+
+
+def write_targets(prefix):
+    """Every path a builder command lets its model write: grok `--allow "Write(X)"`, claude
+    `Edit(//X)` / `Write(//X)` (`//` marks an absolute path), codex `-C D` (D/**)."""
+    out = set(re.findall(r'--allow "Write\(([^)]*)\)"', prefix))
+    out |= {p[1:] for p in re.findall(r'"(?:Edit|Write)\((//[^)]*)\)"', prefix)}
+    out |= {d + "/**" for d in re.findall(r" -C (\S+)", prefix)}
+    return out
+
+
+def builder_call(command, s):
+    """S3 and S7 (card 2026-10-11 324): True when the whole command is the ## BUILDERS command of
+    the seat's MODEL with `<worktree>` the card's WORKTREE and ONE plain double-quoted prompt, its
+    write target that worktree and nothing wider (Claude: dontAsk, Bash denied; Grok: no
+    --always-approve), and no `.env` (a file or a link) in that worktree; the S7 route when all
+    holds but `.env`; else False (G7)."""
+    wt = s["card"]["worktree"]
+    template = builder_command(s["hub"], s["model"]) if s["model"] else None
+    if not wt or not template:
+        return False
+    target = os.path.join(WT_ROOT, wt)
+    filled = template.replace(WT_TOKEN, target)
+    if "<worktree>" in filled or filled.count(PASS_PROMPT) != 1:
+        return False
+    prefix, suffix = filled.split(PASS_PROMPT)
+    if len(command) < len(prefix) + len(suffix) or not command.startswith(prefix) or not command.endswith(suffix):
+        return False
+    if not PLAIN_PROMPT.fullmatch(command[len(prefix):len(command) - len(suffix)]):
+        return False
+    if write_targets(prefix) != {target + "/**"}:
+        return False
+    head = verb(words(prefix))
+    if head == "claude" and (" --permission-mode dontAsk " not in prefix or '--disallowedTools "Bash" ' not in prefix):
+        return False
+    if head == "grok" and "--always-approve" in command:
+        return False
+    if os.path.lexists(os.path.join(target, ".env")):
+        return ROUTE["G7 env"]
+    return True
 
 
 def ops_class(command):
@@ -1121,6 +1207,17 @@ def g5(s, path):
         if not named:
             return ROUTE["G5 fixed"]
         # a named fixed file is still written inside the build's own fence only
+    if kind == SHADOW:
+        # card 324 S3: the gate seat writes its instructions file and its report, nothing else
+        wt = s["card"]["worktree"]
+        if wt and path == os.path.join(WT_ROOT, wt, SHADOW_FILE):
+            return None
+        if s["card"]["report"] and path == s["card"]["report"]:
+            return None
+        return ROUTE["G5 fence"]
+    if kind == SPIKE:
+        # card 324 P3: the spike seat writes only its scratch dir
+        return None if under(path, os.path.join(WT_ROOT, SPIKE_DIR)) and path != os.path.join(WT_ROOT, SPIKE_DIR) else ROUTE["G5 fence"]
     if kind in WORKERS:
         if under(path, VAULT_ROOT):
             return ROUTE["G5 fence"]

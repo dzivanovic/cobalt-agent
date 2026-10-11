@@ -435,9 +435,10 @@ def test_s4_kind_shadow_reads_the_report_and_its_stop_lines(card, line):
     assert done.stdout.strip() == line
 
 
-def test_s4_kind_shadow_does_not_stop_on_a_plain_built_line(card):
+def test_s4_kind_shadow_does_not_stop_on_a_plain_built_line(card, tmp_path):
     card, build, check, env = card
     build.write_text("BUILT · job: x-job\n")
+    answers(tmp_path, "x-job-gate busy working")
     done = watch("shadow", str(card), "2", env=env)
     assert done.returncode == 2, done.stdout + done.stderr
     assert "STILL RUNNING" in done.stdout

@@ -2193,7 +2193,15 @@ def test_s3_the_gate_seat_keeps_g4_and_g2(roots):
 
 
 def test_s3_negative_control_a_build_seat_running_the_grok_command_is_g7(roots):
-    assert_denied(run(builder(roots, "grok-4.7"), make_seat(roots, "build")), G7_ROUTE)
+    """Only the kind holds it: a BUILD-HUB seat whose message names MODEL: grok-4.7 and whose hub
+    file carries the same ## BUILDERS table is still denied."""
+    shadow_seat(roots)  # the card and the table
+    hub = prompts(roots) / "BUILD-HUB.md"
+    hub.write_text((prompts(roots) / "SHADOW-HUB.md").read_text())
+    card = prompts(roots) / "2026-01-01" / "02-job-grok-card.md"
+    first = f"Read '{hub}' and follow it exactly. CARD: '{card}' MODEL: grok-4.7"
+    seat = make_seat(roots, None, cwd=roots.wt / JOB_WT, first=first)
+    assert_denied(run(builder(roots, "grok-4.7"), seat), G7_ROUTE)
 
 
 def test_s7_a_builder_pass_while_env_is_in_the_worktree_is_denied(roots):

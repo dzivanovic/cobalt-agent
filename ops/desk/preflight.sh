@@ -1,6 +1,7 @@
 #!/bin/sh
-# preflight.sh <build|check> "<card>" — the MECHANICAL rows of BUILD-HUB.md / CHECK-HUB.md PREFLIGHT
-# in ONE call, read-only, run from the job's worktree $WT/<WORKTREE> (card 19 worker-steps S2).
+# preflight.sh <build|check|shadow> "<card>" — the MECHANICAL rows of BUILD-HUB.md / CHECK-HUB.md PREFLIGHT
+# in ONE call, read-only, run from the job's worktree $WT/<WORKTREE> (card 19 worker-steps S2; kind
+# shadow, SHADOW-HUB.md's gate seat, runs build's rows: card 2026-10-11 324 S4).
 #
 # Prints one row per rule, `rule · command · exit · output`; an output of more than one line follows
 # its row, each line indented four spaces:
@@ -42,12 +43,14 @@ refuse() {
     exit 1
 }
 
-[ "$#" -eq 2 ] || refuse "usage: preflight.sh <build|check> <card>"
+[ "$#" -eq 2 ] || refuse "usage: preflight.sh <build|check|shadow> <card>"
 kind=$1
 card=$2
 case "$kind" in
     build|check) ;;
-    *) refuse "kind '$kind' is neither build nor check" ;;
+    # card 2026-10-11 324 S4: the shadow gate seat runs build's rows
+    shadow) kind=build ;;
+    *) refuse "kind '$kind' is none of build, check, shadow" ;;
 esac
 [ -f "$card" ] || refuse "no such card: $card"
 
