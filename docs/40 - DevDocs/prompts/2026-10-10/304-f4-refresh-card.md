@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R849
 BRANCH: ops/f4-refresh-1010
 WORKTREE: f4-refresh-1010
 BASE: d78c66a2
-TIP:
+TIP: 799b6040
 REPORT: /Users/cobalt/cobalt-wt/f4-refresh-1010/docs/40 - DevDocs/reports/f4-refresh-build-2026-10-10.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-refresh-check-2026-10-10.md
+HOUSE B: mandatory — vault notes
 RULINGS: 2026-10-10 R849, 2026-10-10 R969
 
 ## ROWS
