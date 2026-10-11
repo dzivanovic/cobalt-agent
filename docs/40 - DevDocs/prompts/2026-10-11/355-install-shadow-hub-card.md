@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-11.md R1069
 BRANCH: ops/install-shadow-hub-1011
 WORKTREE: install-shadow-hub-1011
 BASE: 2322ed1e
-TIP: 2322ed1e
+TIP: 78f8572c
 REPORT: /Users/cobalt/cobalt-wt/install-shadow-hub-1011/docs/40 - DevDocs/reports/install-shadow-hub-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/install-shadow-hub-check-2026-10-11.md
 HOUSE B: as needed
