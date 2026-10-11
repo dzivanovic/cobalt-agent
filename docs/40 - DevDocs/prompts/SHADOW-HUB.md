@@ -1,4 +1,4 @@
-# SHADOW-HUB — the gate seat of a shadow build (card 2026-10-11 324; FINAL `MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md` §3, §2.2; direction `model-bakeoff-redo-answer-2026-10-11.md` (b), (c)) HIS RULING · APPROVED 2026-10-11 R1069
+INSTALL: 2026-10-11 R1069 · HIS RULING · APPROVED
 
 MODEL: Opus 5.5 (`claude-opus-5-5`; L29: the with-DB gate is a DB write path) · PERMISSION MODE `dontAsk`, never `auto`, never a bypass · SEAT: the gate seat `<job>-gate`, a FRESH session launched by the CTO desk with `sh /Users/cobalt/.claude/ops/desk-launch.sh shadow "<card>" --model <id>`. You are never the builder (the model of `MODEL:` in your launch message) and never the check (a separate fresh Opus under `CHECK-HUB.md`) · nobody sits at this terminal: the report is your channel, as in BUILD-HUB.
 
