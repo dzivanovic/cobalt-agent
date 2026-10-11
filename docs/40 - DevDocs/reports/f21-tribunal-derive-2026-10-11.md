@@ -65,10 +65,7 @@ Hours: none given by the ADR. GUESSES, not folded: Grok 8 h + 12 h; the Anthropi
 | F-18 | WRONG FACTS | 2 of 2 | hub file-check rows | not taken | no | n/a | WRONG FACTS rows HOLD: ADR:4, ADR:9 ×2 (FC14/FC15), ADR:21 (C10), moved cites (FC16), ADR:60 anchor gone. Corrected in place |
 
 ## NEEDS ROUND 2
-**R2-1 — the F21 table's name (items D2 / (d); Grok's closing condition "pin table").**
-- Grok, (d): "The table is `user.genesis_chunk`. … Unnamed before this paragraph, now pinned: route file, table name, batch owner." Reason, Grok (d): "Failing scenario if the names stay blank: F20's card adds `local.embed` with chat keys, and F21's card adds `user.recall` with a different `embed_dim`. Two writers, one LM Studio, L3 broken". Not folded: the hub's C5 DOES NOT HOLD, because the schema is `"user"`, always quoted, and a lint fails an unquoted `user.` under `src/cobalt`.
-- The Anthropic seat, (d) (folded): "the table is `\"user\".<name the card fixes>` declared in `placement.py`; the search function and its CLI are F21-owned and are the only recall entry for F20, the dream job (R4, Charter:398) and the observation store (O3)".
-- Question for round 2 (both seats): must the design pin the table name before the card, or does F21's search function as the only recall entry (F-11, F-15) answer Grok's L3 scenario? If the name must be pinned, give it with the schema written `"user"`.
+CLOSED by brain direction R1046
 
 ## OWNER ITEMS
 none. Both seats wrote "none". No item passed the owner test.
