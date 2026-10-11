@@ -1019,7 +1019,8 @@ lock_dir_free() {
 # n >= 1 (an exact number: `held unfixed: 10` is 10), else nothing.
 # held_rule <who> <check report> <its last line> <code tip> <branch head> <fix report or ''>:
 # the line carries `ready: NO` and `open: <n>`; `## RUNS` lists exactly n distinct ids, each a
-# line `- <id> · … HELD, NOT FIXED …`; the fix report lies under the reports folder, is read at
+# line `- <id> · … HELD, NOT FIXED …` or a table row `| <id> | … | <verdict> |` whose last cell
+# holds `**HELD**` (the id trimmed, [A-Za-z0-9._-]+); the fix report lies under the reports folder, is read at
 # the branch head and ends `BUILT · … tip: <code tip>`; it holds, from column 0, exactly ONE line
 # per held id, `FIXED: <id> — <test id>` or `CARRIED: <id> — <test id> — R<n>`, and none for an
 # id the check does not list (<test id> = tests/<path>.py::<name>). A FIXED test exists at the
@@ -1038,7 +1039,9 @@ held_rule() {
     hr_reports="$REPO/docs/40 - DevDocs/reports"
     hr_n=$(held_n "$hr_last")
     hr_ids=$(awk '/^## /{on = ($0 == "## RUNS"); next}
-        on && /^- [A-Za-z0-9._-]+ · / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/ · .*/, ""); print}' "$hr_check")
+        on && /^- [A-Za-z0-9._-]+ · / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/ · .*/, ""); print}
+        on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
+            sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && index(v, "**HELD**")) print id}' "$hr_check")
     hr_k=$(printf '%s\n' "$hr_ids" | grep -c .)
     hr_u=$(printf '%s\n' "$hr_ids" | grep . | sort -u | grep -c .)
     hr_list=$(printf '%s\n' "$hr_ids" | grep . | tr '\n' ' ' | sed 's/ *$//')
