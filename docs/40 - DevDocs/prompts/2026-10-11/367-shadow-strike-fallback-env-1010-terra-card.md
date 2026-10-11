@@ -7,7 +7,7 @@ TIP:
 REPORT: /Users/cobalt/cobalt-wt/strike-fallback-env-1010-terra/docs/40 - DevDocs/reports/strike-fallback-env-1010-terra-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/strike-fallback-env-1010-terra-check-2026-10-11.md
 HOUSE B: as needed
-RULINGS: 2026-10-08 R685, 2026-10-11 R1069, R1107
+RULINGS: 2026-10-08 R685, 2026-10-11 R1069, 2026-10-11 R1107
 SHADOW OF: /Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-09/215-strike-fallback-env-card.md
 
 ## ROWS
