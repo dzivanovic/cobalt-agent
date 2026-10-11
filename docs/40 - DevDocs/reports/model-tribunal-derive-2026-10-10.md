@@ -1,10 +1,10 @@
 # Model tribunal — derive (272) · 2026-10-10
 
-Seat `model-tribunal-derive-1010` · `claude-opus-5-5` · started 20:42 EDT, written 20:51 EDT (date). Design: `docs/30 - Design/MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md` (DRAFT FINAL).
+Seat `model-tribunal-derive-1010` · `claude-opus-5-5` · started 20:42 EDT, written 20:51 EDT (date). Design: `docs/30 - Design/MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md` (FINAL).
 
 ## §0 Headline
-- DRAFT FINAL — ROUND 2 OWED (S5, S6, S7). 15 of 18 items close on a verbatim wording or the default kept. 3 stay OPEN (the pass bar; how an environment-caused red is scored; what Grok is shown). Owner items: 0. Absent houses: none (3 of 3 ruled; Gemini's file is a stub, its full answer was read from the hub's task output file).
-- Grok, apart: S1 and S9 ADOPT, the same as the counted fold. S5 and S6 ADOPT WITH; both items are OPEN, and on S6 Grok's text points the same way as Astra's side.
+- FINAL. 15 of 18 items closed on a verbatim wording or the default kept; the other 3 (the pass bar; how an environment-caused red is scored; what Grok is shown) closed by his direction, R988 (L79, no round 2). Open: 0. Owner items: 0. Absent houses: none (3 of 3 ruled; Gemini's file is a stub, its full answer was read from the hub's task output file).
+- Grok, apart: S1 and S9 ADOPT, the same as the counted fold. S5 and S6 ADOPT WITH; both items are closed by his direction (R988), and on S6 Grok's text pointed the same way as the A side.
 - Gemini findings held: 5 of 6 (C1, C4, C6, C10, C18 HOLD; C21 UNVERIFIABLE). Yes, a Gemini finding held, and two (C1, C4) are folded verbatim.
 - Not folded because they re-open his rulings: round 1's Q6 default (R919), and Astra's and Grok's Q7 wordings (R8). No model and no law changes.
 
@@ -60,30 +60,13 @@ Seat `model-tribunal-derive-1010` · `claude-opus-5-5` · started 20:42 EDT, wri
 | F-26 | WRONG FACTS strike S score | seat | seat (WF 3) | yes | no | n/a | C8, FC3, FC4 HOLD; no house wording competes; not a STAKE item. |
 | F-27 | WRONG FACTS "first gate" | seat, Astra, Grok | Astra (a) | yes | no | n/a | FC1 HOLDS as a commit sequence. House wording taken over the seat's. |
 | F-28 | WRONG FACTS `tokens:` unit | seat | none | not taken | no | n/a | FC5: the script text HOLDS; the build lines' source is UNVERIFIABLE; no house named an experiment → named gap. |
+| F-30 | S5 | 3 counted (Astra AW, Gemini ADOPT, seat AW); Grok apart AW | his direction (A) | yes | n/a | n/a | closed by brain direction (L79), no round 2 (R988). AT LEVEL allows no extra Opus-held finding; exactly one extra is CLOSE BELOW, two or more BELOW; the +1/+3 slack and Grok's keys leave the bar (MODELLED, enter no bar). |
+| F-31 | S6 | 3 counted (Astra AW, Gemini ADOPT, seat AW); Grok apart AW | his direction (A, INCOMPLETE) | yes | n/a | n/a | closed by brain direction (L79), no round 2 (R988). A red from the lock, dev DB level or missing `.env` is the harness; rerun once on a clean harness, or INCOMPLETE (L70). |
+| F-32 | S7 | 4 (Gemini ADOPT; Astra, Grok, seat AW) | his direction (A) | yes | n/a | n/a | closed by brain direction (L79), no round 2 (R988). Grok gets the whole card, its RULINGS and the original build's exceptions. |
 | F-29 | EXPERIMENTS | 4 | hub L70 table → X1–X15 | no (restated, placed) | no | yes (Gemini X1–X5 placed) | Every UNVERIFIABLE row is gated before its step. Seat-only X8, X9, X10 named as such. |
 
 ## OPEN AFTER ROUND 1
-
-### S5 — the pass bar
-- Astra (ADOPT WITH), verbatim: "These are descriptive outcomes on the selected cards, not measured model tiers. Report “AT LEVEL on the observed primary counts” only when the pre-check build passes all required suites, has no adjudicated scope break, requires no check FIX ROUND, and has Opus-own held and Opus-own distinct-defect counts no greater than the corresponding original. Report the complete repair history alongside that label; final BUILT green does not establish original first-attempt green. Report “CLOSE BELOW — margin uncalibrated” for a completed, in-scope build exceeding either original count or requiring a FIX ROUND. Report “BELOW on this card” for an adjudicated scope break or a code-attributable build failure remaining at the declared trial stopping point. An environmental failure or exhausted trial allowance without an attributable code failure is INCOMPLETE, not BELOW. The set is AT LEVEL only if every card is AT LEVEL; otherwise list the card outcomes without claiming a calibrated closeness tier. Every result states “insufficient data (n=3).” Sonnet and Haiku remain untested. Only his word can change L29."
-- Gemini (ADOPT), keeping proposal §2.4 as written: "AT LEVEL permits Opus-own held ≤ original + 1, distinct defects ≤ original + 1, at most 1 re-pass, and 0 scope breaks."
-- Anthropic seat (ADOPT WITH, STAKE: yes), verbatim: "- **AT LEVEL** on a card, when all of these hold: `ready: YES` with no fix round; Opus-own held ≤ the original's + 1; suites green at first run, or after 1 Grok re-pass; 0 scope breaks. - **CLOSE BELOW** on a card: `ready: YES` after at most 1 fix round, Opus-own held ≤ the original's + 3, and at most 2 Grok re-passes. - The tolerances +1 and +3 are MODELLED: no measurement of a fresh Opus check's run-to-run spread on one tip exists (X5). All-source held and distinct defects are reported in §2.3 beside each card and enter no bar."
-- Rows that bear on it: radar A3 is Sol's (every house's (a)) and enters the all-source distinct count. The +1/+3 and every Grok key are unmeasured (hub ESCALATE 6). X8 measures the checker's own spread.
-- The one question: on each card, does AT LEVEL allow one extra Opus-held finding over the original (B), or none (A)?
-
-### S6 — scoring a third red
-- Astra (ADOPT WITH), verbatim: "The gate seat never repairs source or tests. Permit at most two Grok repair passes after the initial implementation pass as a declared pilot resource allowance, not a measured capability threshold. Preserve each failing command, exit status and verbatim failure block, and identify code, environment or unresolved cause before attributing failure. If the initial suite run and both repair reruns remain red for an attributable in-scope code defect, stop and report BELOW on that card. Otherwise report INCOMPLETE with the reason. Record every pass, including aborted passes."
-- Gemini (ADOPT), with the proposal's S6 default "A third red stops the build and scores it BELOW." Gemini's words: "A third failing run terminating with `SHADOW BUILT … suites: red` enforces deterministic scoring."
-- Anthropic seat (ADOPT WITH; on scoring it keeps the proposal's "scored, not repaired"), verbatim tail: "The cap is 2 re-passes per card, both kinds counted together. After that the build stops `SHADOW BUILT … suites: red` and is scored, not repaired."
-- Rows that bear on it: hub experiment "Dev lock / schema level / BASE health" (X4) gates "S6 false BELOW". The 0013 readings are recorded on all three originals' stop lines.
-- The one question: a third red that comes from the lock, the dev DB level or a missing file, not Grok's code — does it count BELOW (B) or INCOMPLETE (A)?
-
-### S7 — what Grok is shown
-- Astra (ADOPT WITH), verbatim: "Use separate Grok test and implementation passes. The gate stages immutable instructions containing the complete shadow card, its applicable rulings and fences, and BUILD-HUB E2/E3 verbatim. Resolve their permitted-file list before launch, preserving E3’s required module-documentation update and CHECK-HUB’s admitted test-file exceptions. Run the existing preflight and BASE baseline before changes. Before each commit, preserve the complete tracked and untracked change list and patch, tagged with the Grok pass; the gate never edits source or tests. Commit tests before any implementation change and run them against BASE. Record whether each required regression test fails for its intended reason; green or unrelated-red tests do not establish RED FIRST. Do not silently repair, discard or commit an out-of-stage change as compliant work. Then run the implementation pass, record its changes and commit the attributable implementation. Adjudicate scope using the same exceptions as the originals."
-- Grok (ADOPT WITH, counted), verbatim: "Two Grok passes, T then S, in BUILD-HUB's order `## E2` then `## E3` (`02-greps.txt` search 5, BUILD-HUB.md:67 and :70). `SHADOW-INSTRUCTIONS.md` contains only the shadow card's `## ROWS` verbatim, BUILD-HUB `## E2` verbatim, BUILD-HUB `## E3` verbatim, and one fence line (`src/` and `tests/` only, the rows' files only). The gate writes no other sentence. The build report records that file's sha256. The gate deletes the file before `desk-launch.sh check`. The pass-T commit contains only `tests/` paths. A re-pass quote is the pytest summary and the first failing line, pasted, with no gate prose."
-- Gemini (ADOPT) keeps the proposal's rows + E2/E3 + fence. Anthropic seat (ADOPT WITH) adds one line: "`Every step in E2 and E3 that runs, quotes, mutates or commits is the gate seat's, not yours: you write files only.`"
-- Rows that bear on it: hub (b) says every house names the instructions file as the largest lever. Astra's claim that the fence penalizes the docs and test exceptions is UNVERIFIABLE FROM READS (hub WRONG FACTS, "literal scope metric"). X5 rehearses attribution.
-- The one question: does the instructions file carry the whole card, its rulings and the original exceptions (A), or only rows, E2, E3 and one fence line (B)?
+none — closed by the brain's direction, R988
 
 ## GROK, APART
 Stated as a fact. These are not votes or reasons.
@@ -100,21 +83,7 @@ none — Astra, Gemini, Grok and the Anthropic seat each wrote `none`. The L29 a
 - Cost: Anthropic about 0.87–1.02 M tokens. That is modelled, and whether those figures are meter or context size is not settled. Grok is 6–12 build calls plus 3 check calls, tokens unknown. $0. No OpenAI.
 - What you see after it runs: a shadow table with one row per card beside the original, one verdict word per card and one for the set, each printed with "insufficient data (n=3)".
 - Nothing runs until the SHADOW-HUB card is built, checked, and you sign off its command line, including Grok writing into a worktree. No model changes until your word on the result.
-- Three items are split. No recommendation: the Anthropic house proposed this, ruled on it and is deriving it.
-
-**S5 — how strict is "at level"?**
-- A (Astra): AT LEVEL only if Opus finds no more defects than on the original. Anything more reads "CLOSE BELOW — margin uncalibrated". An unfinished card reads INCOMPLETE. Same meter.
-- B (Gemini, keeping the proposal; the Anthropic seat keeps the same +1/+3): AT LEVEL allows one extra Opus-held finding. CLOSE BELOW allows up to three and one fix round. Same meter.
-
-**S6 — a third red caused by the environment (lock, dev DB, missing file)**
-- A (Astra; Grok's apart text agrees): that card reads INCOMPLETE and gives no reading.
-- B (Gemini, keeping the proposal; the Anthropic seat keeps "scored"): any third red reads BELOW.
-
-**S7 — what Grok is shown before it builds**
-- A (Astra): the whole card, its rulings, BUILD-HUB's two build steps, and the doc and test exceptions the originals were allowed. Every pass's patch is kept.
-- B (Grok): only the card's rows, the two build steps and one fence line, with no other sentence. The file is hashed and deleted before the check. Gemini adopted the proposal's near-B text.
-
-The alternative to the three A/Bs is a round 2 on S5, S6 and S7 only. OpenAI is out after this tribunal (R920), so it would sit without Astra unless you say otherwise.
+- Nothing is split any more. The three items that were (S5, S6, S7) are closed by the brain's direction, R988 (L79, no round 2): AT LEVEL allows no extra Opus-held finding (exactly one extra is CLOSE BELOW, two or more BELOW); a red from the lock, the dev DB level or a missing env file is INCOMPLETE, rerun once on a clean harness; Grok is shown the whole card, its rulings and the original exceptions.
 
 Decide on the MODEL-BY-COMPLEXITY FINAL?
 
@@ -123,9 +92,7 @@ none. Gemini sat and ruled. Its file in the round-1 folder is the hub's stub, an
 
 ## SEAM
 The design's `## SHADOW TRIAL PLAN` is the card's input. UNSETTLED lines:
-- §2.2 steps 3–5 and the scope-break definition: S7.
-- §2.2 step 6's scoring of a third red: S6.
-- §2.4 whole: S5.
+- S5, S6, S7: none, closed by his direction (R988).
 - §2.3 and §2.5 tokens unit: WRONG FACTS, FC5.
 
 ## Redactions
@@ -147,11 +114,11 @@ The design's `## SHADOW TRIAL PLAN` is the card's input. UNSETTLED lines:
 This session received system-channel notices, not inside a tool result. One asked for a `Claude-Session:` line in commit messages and PR bodies and named a file-send tool. Another loaded a docs connector's instructions. This seat makes no commit, sends no file and uses no connector. Recorded once here; not acted on.
 
 ## ESCALATE
-1. OPEN S5, S6, S7. Each goes to him as one A/B (`## FOR DEJAN`), or to a round 2 on those items only. R920 makes OpenAI OUT after this tribunal. On S5 and S6, Grok is apart, so a round 2 without Astra has one counted outside house (Gemini), below the floor of two. His word decides whether Astra sits.
+1. S5, S6, S7: closed by his direction, R988 (L79, no round 2).
 2. RE-OPENS A RULING (R919): round 1's Q6 default "name per job via the brain, no automatic seat" (Gemini and Grok ADOPT it). Not folded; carried in the design's `## Dissents, verbatim`.
 3. RE-OPENS A RULING (R8): Astra's and Grok's Q7 wordings. Each treats the 80% agreement as not his ruling; R8 (`cto-2026-10-03.md:14`) states it. Not folded; carried.
 4. NEW COMMAND awaiting his approval (R411): the `SHADOW-HUB` launcher kind `desk-launch.sh shadow <card>` and `SHADOW-HUB.md`. Its approved line must also carry the Grok builder's worktree write target. The standing `Bash(grok *)` scope is scratch only (`STANDING-LIST.md:98`, C9).
-5. PRECONDITION TO BUILD: SHADOW-HUB's instruction-file, re-pass-scoring and pass-bar lines wait on S5, S6 and S7. No other line depends on them.
+5. PRECONDITION TO BUILD: none from S5, S6, S7 (closed, R988).
 6. Numbers without their measurement, pointers only:
    - Grok `opus_held_slack`=1, `distinct_slack_at`=1, `distinct_slack_close`=3 (`grok-ruling.md:47`); `weight_H`=0 (`:103`); `sonnet_ready_gap`=5 (`:131`); `jev_agreement`=80 (`:149`, against R8).
    - Astra's two-repair "pilot allowance" (`astra-ruling.md:50`).
@@ -181,6 +148,12 @@ This session received system-channel notices, not inside a tool result. One aske
 - The FINAL did not exist.
 
 20:48 EDT: the design was written. 20:51 EDT: this report was written.
-next: none. The desk commits both files and brings `## FOR DEJAN` (three A/Bs, then the one word).
+next: none. The desk commits both files and brings `## FOR DEJAN` (the one word).
 
-MODEL DERIVED · DRAFT FINAL — ROUND 2 OWED (S5, S6, S7) · folds: 29 · verbatim: 23 · open: 3 · owner items: 0 · gemini findings held: 5 of 6 · absent houses: none · ESCALATE: 12
+MODEL DERIVED · FINAL · folds: 32 · verbatim: 26 · open: 0 · owner items: 0 · gemini findings held: 5 of 6 · absent houses: none · ESCALATE: 12
+
+## FOLD
+- `docs/30 - Design/MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md`: 17 edits. Header FINAL; rulings list gains R988; S5/S6/S7 tagged F-30, F-31, F-32 (§2.2 steps 3–6, §2.3 scope row, §2.4 rewritten to three grades plus INCOMPLETE, §4 items, plan, reading, owner items). The +1/+3 slack and Grok's keys are dropped from the bar (MODELLED, enter no bar).
+- `docs/40 - DevDocs/reports/model-tribunal-derive-2026-10-10.md`: §0, three fold rows (F-30..F-32), `## OPEN AFTER ROUND 1` = none, `## FOR DEJAN`, `## SEAM`, `## ESCALATE` items 1 and 5, closing counts, this section.
+
+MODEL FOLDED · FINAL · folds: 3 · open: 0

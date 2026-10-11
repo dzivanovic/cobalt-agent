@@ -1,4 +1,4 @@
-# MODEL-BY-COMPLEXITY — DRAFT FINAL — ROUND 2 OWED (S5, S6, S7) · 2026-10-10
+# MODEL-BY-COMPLEXITY — FINAL · 2026-10-10
 
 PROPOSED DESIGN — NO MODEL AND NO LAW IS CHANGED BY THIS TRIBUNAL. L29 is amended only on Dejan's word on the result (R919, L77); every merged build stays Opus 5.5 until then.
 NOT LAUNCHED until the SHADOW-HUB card is built, checked and approved (S11); the desk drafts that card from the section SHADOW TRIAL PLAN.
@@ -7,6 +7,7 @@ Insufficient data (n=3), L8: every result line of this trial is an indication fo
 - Derived by: Opus 5.5 derive seat `model-tribunal-derive-1010` (prompt `prompts/2026-10-10/272-model-tribunal-derive.md`; derive seat by R109 `cto-2026-09-22.md:56` "Make all Opus 5.5 for now" and launch row R942 `cto-2026-10-10.md:50`). The Anthropic house proposed, ruled round 1 blind and derives: it holds a side (L37) and recommends nothing.
 - Amends: `docs/40 - DevDocs/reports/complexity-routing-proposal-r2-2026-10-10.md` (proposal r2, reproduced below §0–§4 with each amended paragraph tagged `[F-nn]`; struck text is proposal text whose claim does not hold or that a fold replaces). Round 1: `reports/complexity-routing-proposal-2026-10-10.md` (its Q1–Q8 carried by S10).
 - His rulings, never re-opened: R919, R920, R921, R908 (`cto-2026-10-10.md`; `brain-direction-2026-10-02.md` `## RULED 2026-10-10`), R109 (`cto-2026-09-22.md`), R95, R97 (`cto-2026-09-23.md`), and R8 (`cto-2026-10-03.md:14`, read because Q7 turns on it).
+  - His direction closing S5, S6 and S7 (brain L79, no round 2; row R988, `reports/cto-2026-10-10.md`): S5 = A, S6 = A (INCOMPLETE), S7 = A. Folded as `[F-30]`, `[F-31]`, `[F-32]`.
 - Round-1 rulings (3 of 3 seated houses ruled; floor MET):
   - Astra (OpenAI): `/Users/cobalt/cobalt-wt/agy-trial/scratch/tribunal-bars-0920/model-tribunal/r1/astra-ruling.md` — 18 of 18.
   - Gemini: `…/r1/gemini-ruling.md` is a STUB (hub ESCALATE 1); Gemini's full answer read from the task output file the stub names (lines 1-272) — 18 of 18, every item ADOPT.
@@ -15,7 +16,7 @@ Insufficient data (n=3), L8: every result line of this trial is an indication fo
   - Hub collation and file-check: `docs/40 - DevDocs/reports/model-tribunal-2026-10-10.md`.
 - Absent houses: none.
 - Fold table: `docs/40 - DevDocs/reports/model-tribunal-derive-2026-10-10.md` `## Fold table`.
-- ROUND 2 OWED (S5, S6, S7): the counted houses split on whether those mechanisms are correct; carried, never voted (L37, L39). Each goes to him as one A/B (derive report `## FOR DEJAN`), or to a round 2 for those items only. Their lines below are tagged `UNSETTLED (<item>)`.
+- S5, S6, S7 CLOSED by his direction (L79, row R988 in `reports/cto-2026-10-10.md`): the counted houses had split, and he ruled each A with no round 2. Their lines below carry `[F-30]`, `[F-31]`, `[F-32]`. This changes no model and no law.
 
 # Model-by-complexity rule, round 2: the Grok SHADOW trial · proposal for the model tribunal · 2026-10-10
 
@@ -99,17 +100,18 @@ Why these three (`[F-02]` S2: ADOPT, proposal kept):
    - New header line: `SHADOW OF: <original card path>`.
    - `[F-18]` The header pointers are governed by S11's fold (§3, R411 STOP): the shadow's own TIP, REPORT and CHECK REPORT paths are recorded and committed before each shadow check, answer-bearing pointers of the original are removed, and the original card requirements and applicable rulings are retained (the original REPORT line points at Opus's build: card `215` `:7`, read by the derive).
 2. **Worktree.** `git -C /Users/cobalt/cobalt worktree add -b shadow/<job>-grok /Users/cobalt/cobalt-wt/<job>-grok <BASE>`. This is BUILD-HUB LAUNCH (0) as it stands (`BUILD-HUB.md:9`), run by the launcher. Gated by X4 and X14 (below).
-3. **Gate seat, start.** `UNSETTLED (S7)` The gate seat (§3) writes `<WT>/SHADOW-INSTRUCTIONS.md` and never commits it. It holds the shadow card's ROWS verbatim, BUILD-HUB `## E2` and `## E3` verbatim, and the fence: `src/` and `tests/` only, the rows' files only. Grok's sandbox reads only its workspace, so the card is copied in. CHECK-HUB copies files for its houses the same way (`CHECK-HUB.md:91`).
-4. **Grok pass T (tests only).** `UNSETTLED (S7)` The gate seat runs the Grok builder line (§2.6). Grok writes the rows' tests under `tests/`. The gate seat then:
+3. **Gate seat, start.** `[F-32]` (S7 = A, his direction R988) The gate seat (§3) writes `<WT>/SHADOW-INSTRUCTIONS.md` and never commits it. It holds the WHOLE shadow card, its RULINGS and the original build's exceptions (the docs and test-file exceptions the original was admitted with), BUILD-HUB `## E2` and `## E3` verbatim, and the fence: `src/` and `tests/` only, the rows' files only plus those exceptions. This is the same input the Opus builder had; otherwise the comparison measures the prompt, not the model. Grok's sandbox reads only its workspace, so the card is copied in. CHECK-HUB copies files for its houses the same way (`CHECK-HUB.md:91`).
+4. **Grok pass T (tests only).** `[F-32]` The gate seat runs the Grok builder line (§2.6). Grok writes the rows' tests under `tests/`. The gate seat then:
    - runs `git diff --stat` and quotes it;
    - commits with `git add tests/…` and `git commit -m "wip(<job>-grok): red"`;
    - runs the new tests to show them red.
    - If a test is green before the fix, that is recorded. The gate does not repair it.
-5. **Grok pass S (the rows).** `UNSETTLED (S7)` The same line, now asking for the `src/` rows. The gate seat quotes `git diff --stat` and commits `feat(<job>-grok): rows`. A path outside the rows' files is recorded as `SCOPE` and is not reverted.
-6. **Gate.** `UNSETTLED (S6)` BUILD-HUB `## RESTARTS` and `## W` as they stand: offline, with-DB under THE LOCK, and live-note.
+5. **Grok pass S (the rows).** `[F-32]` The same line, now asking for the `src/` rows. The gate seat quotes `git diff --stat` and commits `feat(<job>-grok): rows`. A path outside the rows' files is recorded as `SCOPE` and is not reverted.
+6. **Gate.** `[F-31]` BUILD-HUB `## RESTARTS` and `## W` as they stand: offline, with-DB under THE LOCK, and live-note.
    - If a suite is red, the gate seat sends Grok ONE re-pass (pass S2) with the failing lines quoted verbatim, then reruns the suites.
    - The cap is 2 re-passes. After that the build stops `SHADOW BUILT … suites: red`, and the build is scored, not repaired.
-   - Settled by every counted house (S6): the cap is 2 and the gate seat never repairs `src/` or `tests/`. Open: how a third red that the environment caused is scored.
+   - Settled by every counted house (S6): the cap is 2 and the gate seat never repairs `src/` or `tests/`.
+   - `[F-31]` (S6 = A, INCOMPLETE; his direction R988) A red caused by the lock, the dev DB level or a missing `.env` is the harness, not Grok's code; unproven is never a defect (L70). That card's trial is rerun once on a clean harness, or reported INCOMPLETE. It is never scored BELOW on that red.
 7. **Build report.** The gate seat writes `<WT>/docs/40 - DevDocs/reports/<job>-grok-build-<date>.md` in BUILD-HUB's REPORT shape. Its stop line is BUILD-HUB's BUILT line with these extra fields: `builder: grok-4.7 · gate: <seat> · grok passes: <n> · suites at first run: <green|red>`.
 8. ~~**Check.** `desk-launch.sh check <shadow card>`: the existing CHECK-HUB, unchanged (fresh Opus plus house A by R921). Grok sits as house A on its own build. Its findings are run like any other and tallied apart (§2.3, T3). The check fixes what holds, as CHECK-HUB says. Those fixes are Opus's and are never counted for Grok.~~ `[F-03]` (hub C5 HOLDS: unchanged CHECK-HUB seats Sol first when UP and probes Codex; C12 HOLDS: R920/R921 override it; Grok, S3, verbatim:) "Grok is house A on the check of its own build. The shadow check does not run the Sol/Codex probe (L67 R920: no Codex probe outside the model tribunal's own seats; this check is a build check). Gemini is not seated unless Grok returns no list (L67 R921). These cards are `HOUSE B: as needed`. A Grok session already running is not a wait (L67 R908). CHECK-HUB.md is not edited. Grok's held findings are tallied in §2.3 and do not enter the §2.4 bar." Gated by X12 (below).
 9. **Never merged.**
@@ -129,7 +131,7 @@ Why these three (`[F-02]` S2: ADOPT, proposal kept):
 | ~~distinct defects~~ | ~~held rows merged where the check says "same defect as"~~ | ~~1 / 3 / 2~~ `[F-04]` |
 | fix rounds | `ready: NO` → the card's FIX ROUND count to `ready: YES` | 0 / 0 / 0 |
 | suites at first green | `suites at first run` plus `grok passes` on the BUILT line | ~~green at build / green / green (all three originals BUILT on the first gate)~~ `[F-27]` (hub FC1: a W red then a fix after s4-p1's build report; Astra, ITEM (a), verbatim:) "R2 :105’s first-gate assertion is **UNVERIFIED — original gate-attempt histories would settle it**. Final BUILT green does not establish first-attempt green." |
-| scope breaks | a path outside the rows' files (CHECK-HUB `## 7` (ii)) | 0 / 0 / 0 (A2, A5 and B4 rejected as docs/precedent) — `UNSETTLED (S7)`: whether the fence admits the originals' docs and test exceptions |
+| scope breaks | a path outside the rows' files (CHECK-HUB `## 7` (ii)) | 0 / 0 / 0 (A2, A5 and B4 rejected as docs/precedent) — `[F-32]`: the fence admits the originals' docs and test exceptions |
 | tokens | Opus: gate seat plus check `tokens:`. Grok: UNKNOWN (§2.5) | build 165,478 / 179,901 / 415,769 · check 138,173 / 176,294 / 259,254 — `UNSETTLED (WRONG FACTS, FC5)`: whether a stop line's `tokens:` is meter use or end-of-run context size |
 
 Known-answer side run (T5): after the shadow check, the gate seat's report lists the original check's red tests:
@@ -138,17 +140,20 @@ Known-answer side run (T5): after the shadow check, the gate seat's report lists
 - `radar-display-fix`: its red commit, read at launch (X13).
 For each test it says whether that test applies to Grok's tree: same function name, or not applicable. It is recorded only and does not count toward the bar. Gated by X6 (replay on the frozen pre-check TIP).
 
-### 2.4 Pass bar (proposed; each card, then the set) — `UNSETTLED (S5)`; the line "a build that stops with `suites: red`" also `UNSETTLED (S6)`
-The proposal's text stands below only as the text the split is about; it is not ruled. Both positions are carried verbatim in the derive report `## OPEN AFTER ROUND 1`.
+### 2.4 Pass bar (each card, then the set) — `[F-30]` (S5 = A, his direction R988); a red from the harness is INCOMPLETE `[F-31]`
+His hypothesis has two grades, "same level" and "slightly lower but very close". The FINAL names three grades, counted on the Opus-own held findings (`[F-04]`) against the original's:
 - **AT LEVEL** on a card, when all of these hold:
   - `ready: YES` with no fix round;
-  - Opus-own held ≤ the original's + 1;
-  - distinct defects ≤ the original's + 1;
+  - Opus-own held ≤ the original's: NO extra Opus-held finding;
+  - distinct defects ≤ the original's;
   - suites green at first run, or after 1 Grok re-pass;
   - 0 scope breaks.
-- **CLOSE BELOW** on a card: `ready: YES` after at most 1 fix round, distinct defects ≤ the original's + 3, and at most 2 Grok re-passes.
-- **BELOW** on a card: anything else, or a build that stops with `suites: red`.
-- SET result: AT LEVEL when all three cards are AT LEVEL. CLOSE BELOW when none is BELOW. Otherwise BELOW.
+- **CLOSE BELOW** on a card: exactly ONE extra Opus-held finding over the original, `ready: YES` after at most 1 fix round, distinct defects ≤ the original's + 1, and at most 2 Grok re-passes.
+- **BELOW** on a card: TWO OR MORE extra Opus-held findings, or anything else not met above, or a build that stops with `suites: red` on a red that is Grok's code (a row assertion).
+- **INCOMPLETE** on a card (`[F-31]`): a red from the lock, the dev DB level or a missing `.env`, unproven as Grok's code. The card is rerun once on a clean harness, or it stays INCOMPLETE. It is not scored.
+- The +1/+3 slack keys (the proposal's and the Anthropic seat's, and Grok's `opus_held_slack`, `distinct_slack_at`, `distinct_slack_close`) are dropped from the bar, as his A does: they were never measured. They stay MODELLED and enter no bar.
+- Closing wording: "AT LEVEL — no extra Opus-held finding", "CLOSE BELOW — one extra Opus-held finding", "BELOW — two or more extra Opus-held findings", each printed with "insufficient data (n=3)".
+- SET result: AT LEVEL when all three cards are AT LEVEL. CLOSE BELOW when none is BELOW (INCOMPLETE cards are listed, not counted). Otherwise BELOW.
 - The tribunal reads the set result against his hypothesis. Only his word turns it into a seat rule (R919).
 - The trial cannot show "above Sonnet and Haiku", because neither is in the trial. That half of the hypothesis stays untested (Q5). `[F-09]` (S9: ADOPT, proposal kept.)
 - Under `[F-04]`, any "distinct defects" count that enters a bar is the scored one (Opus-own HELD rows, baselines 1 / 2 / 2).
@@ -201,9 +206,9 @@ No item below is an owner item. A tier assignment is not his money, data or law.
 - **S2. Card choice: `strike-fallback-env`, `radar-display-fix`, `s4-p1`, no migration cards.** Default: keep. A migration card would move `cobalt_dev` for a branch that never lands. → `[F-02]` ADOPT, default kept (Astra, Gemini, Grok); BASE health is gated by X4.
 - **S3. Grok sits as house A on the check of its own build (R921 seat order, CHECK-HUB unchanged).** ~~Default: YES. Its findings are run by Opus like any other, and held ones are tallied apart and not counted toward the bar. No hub change is needed.~~ → `[F-03]` Grok's wording (§2.2 step 8).
 - **S4. Primary figure = the Opus check session's OWN held findings, because it is the only source on every original and every shadow.** Default: YES. All-source held and distinct defects are reported beside it. → `[F-04]` Astra's wording (§2.3).
-- **S5. Pass bar AT LEVEL / CLOSE BELOW / BELOW (§2.4).** Default: keep as written. *(Grok: recorded apart.)* → `[F-05]` OPEN: Astra replaces the bar; Gemini adopts it as written; the Anthropic seat keeps the tolerances and drops distinct defects from the bar.
-- **S6. Grok re-pass cap: 2 per card, and the gate seat never repairs code.** Default: keep. A third red stops the build and scores it BELOW. *(Grok: recorded apart.)* → `[F-06]` OPEN on the scoring of a third red the environment caused (Astra: INCOMPLETE; Gemini: BELOW). Cap 2 and "never repairs" are agreed.
-- **S7. Two Grok passes (tests, then rows) to keep BUILD-HUB's RED FIRST.** Default: YES. → `[F-07]` OPEN on what the gate seat puts before Grok (Astra: the complete card, rulings and the docs/test exceptions; Grok: rows, E2, E3 and one fence line only). Two passes, T then S, are agreed.
+- **S5. Pass bar AT LEVEL / CLOSE BELOW / BELOW (§2.4).** Default: keep as written. *(Grok: recorded apart.)* → `[F-05]` was OPEN (Astra replaced the bar; Gemini adopted it as written; the Anthropic seat kept the tolerances and dropped distinct defects), now CLOSED by his direction `[F-30]` (R988): S5 = A, AT LEVEL allows no extra Opus-held finding; three grades, §2.4.
+- **S6. Grok re-pass cap: 2 per card, and the gate seat never repairs code.** Default: keep. A third red stops the build and scores it BELOW. *(Grok: recorded apart.)* → `[F-06]` was OPEN on the scoring of a third red the environment caused (Astra: INCOMPLETE; Gemini: BELOW), now CLOSED by his direction `[F-31]` (R988): S6 = A, INCOMPLETE. Cap 2 and "never repairs" were agreed.
+- **S7. Two Grok passes (tests, then rows) to keep BUILD-HUB's RED FIRST.** Default: YES. → `[F-07]` was OPEN on what the gate seat puts before Grok (Astra: the complete card, rulings and the docs/test exceptions; Grok: rows, E2, E3 and one fence line only), now CLOSED by his direction `[F-32]` (R988): S7 = A, the whole card, its RULINGS and the original build's exceptions. Two passes, T then S, were agreed.
 - **S8. Grok's reasoning effort.** CLI headless runs show `"reasoning_effort": "medium"` (`summary.json` above). Default: leave the CLI default and record it. A pinned effort would be a new flag on the line (R411). → `[F-08]` ADOPT, default kept; the `medium` reading rests on one session file and is UNVERIFIABLE FROM READS (C21), gated by X2.
 - **S9. "Above Sonnet and Haiku" is untested by this trial.** Default: leave it untested. His R919 states it, and a Sonnet arm on a write path is barred (L29). *(Grok: recorded apart.)* → `[F-09]` ADOPT, default kept.
 - **S10. Round 1's Q1–Q8 (shadow log, inputs, bands, non-write Sonnet trial, HIGH → Fable, JEV, retire rule).** Default: carried as round 1's defaults. This tribunal rules them in the same sitting. → ruled item by item:
@@ -245,13 +250,13 @@ The desk drafts the `SHADOW-HUB` card from this section. Its two artifacts: the 
   0. Gates before any card: X1, X11, X12, X9.
   1. Shadow card committed, pointers per `[F-18]` (§2.2 step 1).
   2. Worktree at BASE (§2.2 step 2); X4 and (s4-p1) X14 before pass T.
-  3–5. Instructions file and passes T, S: two passes, T then S (agreed) — content of the instructions file, provenance capture and the fence: `UNSETTLED (S7)`.
-  6. Gate: cap 2 re-passes, the gate never repairs (agreed) — scoring of a third red the environment caused: `UNSETTLED (S6)`.
+  3–5. Instructions file and passes T, S: two passes, T then S (agreed) — the file carries the whole card, its RULINGS and the original build's exceptions, and the fence admits those exceptions `[F-32]`.
+  6. Gate: cap 2 re-passes, the gate never repairs (agreed) — a third red from the lock, the dev DB level or a missing `.env` is the harness: rerun once on a clean harness, or INCOMPLETE `[F-31]`.
   7. Build report and BUILT line (§2.2 step 7); pre-check Grok commit frozen as the scored build `[F-18]`.
   8. Check: `[F-03]` (Grok house A, no Sol/Codex probe, Gemini only if Grok returns no list, CHECK-HUB not edited, Grok's held findings out of the bar).
   9. Never merged (§2.2 step 9). T5 side run after the check: X6, X13.
-- Metric: §2.3 with `[F-04]` (primary = Opus-own held, recorded before opening house findings; scored distinct defects = Opus-own; baselines held 1 / 2 / 2, distinct 1 / 2 / 2) and `[F-27]`; scope-break definition `UNSETTLED (S7)`; tokens unit `UNSETTLED (WRONG FACTS, FC5)`.
-- Pass bar: `UNSETTLED (S5)` and its `suites: red` line `UNSETTLED (S6)`; every result printed beside "insufficient data (n=3)".
+- Metric: §2.3 with `[F-04]` (primary = Opus-own held, recorded before opening house findings; scored distinct defects = Opus-own; baselines held 1 / 2 / 2, distinct 1 / 2 / 2) and `[F-27]`; scope-break definition: the originals' exceptions are admitted `[F-32]`; tokens unit `UNSETTLED (WRONG FACTS, FC5)`.
+- Pass bar: §2.4, three grades AT LEVEL / CLOSE BELOW / BELOW plus INCOMPLETE `[F-30]` `[F-31]`; every result printed beside "insufficient data (n=3)".
 - Gate seat: §3 — fresh Opus 5.5, BUILD-HUB's 26 allow / 4 deny in `dontAsk`, plus `Bash(grok *)` with the builder's worktree write target as a changed builder authorization `[F-21]`.
 - Results: one row per card in `reports/complexity-shadow-results-2026-10-<dd>.md`; the tribunal reads them in a second sitting within its round cap `[F-18]`.
 - R411 stop: nothing launches until the SHADOW-HUB card is built, checked and approved with his sign-off on its command line.
@@ -265,7 +270,7 @@ No counted house REJECTED or wrote DO NOT ADOPT on any item. Carried here, not f
 ## Reading of the hypothesis
 - What the trial can show (as the folds leave it): for three cards, one per band, whether Grok 4.7 building through this gate seat lands near the Opus original on the Opus check's own held findings `[F-04]`, fix rounds, suites and scope — as an indication only, "insufficient data (n=3)" (L8, `[F-01]`).
 - What it cannot show: a tier; anything at n≥30; "above Sonnet and Haiku" — untested, neither is in the trial `[F-09]`; Grok's checker record — not builder evidence (§1 item 3); Grok's tokens — UNKNOWN (§2.5).
-- What is not yet fixed: the verdict words themselves (`UNSETTLED (S5)`), how an environmental red is scored (`UNSETTLED (S6)`), and what Grok is shown (`UNSETTLED (S7)`).
+- What is fixed by his direction (R988): the three grades (`[F-30]`), an environmental red reads INCOMPLETE (`[F-31]`), and Grok is shown the whole card, its RULINGS and the original exceptions (`[F-32]`).
 - No verdict on Grok's tier is given here.
 
 ## The bar
@@ -279,4 +284,4 @@ No counted house REJECTED or wrote DO NOT ADOPT on any item. Carried here, not f
 - L77: R8, R109, R919–R921 are not re-opened; the three carried texts are his to take up, never the derive's.
 
 ## OWNER ITEMS
-none — every house's owner section reads `none`; S5, S6 and S7 are design splits carried as A/Bs, not owner items.
+none — every house's owner section reads `none`; S5, S6 and S7 were design splits, closed by his direction (R988), not owner items.
