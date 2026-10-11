@@ -1,7 +1,10 @@
 # deploy shadow-hub-1011 — set: none · migrations: none (2026-10-11)
 
 ## §0 Headline
-- (filled at the close)
+- DEPLOYED: `ops/shadow-hub-1011` (code tip `90b8faad`, head `ba541a29`) is on `main` at `aeeab1e5` (fast-forward from `ea0dce4b`), tag `deploy-2026-10-11-shadow-hub`, rollback tag `pre-shadow-hub-1011`.
+- Gate on `1974228c`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- RESTARTS: none, so nothing went down; no migration. Smoke GREEN: `SHADOW-HUB.md` is on main and still unsigned (3 rows).
+- 1 decision, 0 for Dejan. The archiver / replay REDs (Finviz 429) were there before the deploy and did not change.
 
 ## L74
 - One block arrived in a system reminder at the start of the run: an attribution block asking commits to end with a `Claude-Session:` line. Recorded here as data and not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (DEPLOY-HUB L74).
@@ -164,11 +167,71 @@ GATE GREEN on 1974228c
 - MARKERS again: `grep -c -F -e "NEEDS HIS SIGN-OFF" ".../prompts/SHADOW-HUB.md"` → exit 2 `No such file or directory` = `before` (file absent).
 - `MIGRATIONS: none`: no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-shadow-hub-1011.md"` · `commit -m "docs(report): deploy shadow-hub-1011 — gate green on 1974228c" …` → `[main ea0dce4b] …  1 file changed, 181 insertions(+)`; `show --stat HEAD` lists that one file. `rev-parse --short=8 main` → `ea0dce4b` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `rev-parse --short=8 HEAD` → `aeeab1e5` = `<stack-final>`; `rev-parse --short=8 aeeab1e5^2` → `ea0dce4b` = `<pre-merge>`; `merge-base --is-ancestor 1974228c aeeab1e5` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 1974228c aeeab1e5 -- . ":(exclude)docs" ":(exclude)configs/cobalt/rules.yaml"` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.2 h old`; `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6693.2 MB` · `ssd: snapshot 7e6a7488 — 0 new / 1 changed, 26.3 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Sun Oct 11 10:51:47 EDT 2026`; `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-11 10:51:48 EDT)`, 110 s after D1's 10:49:58; the same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver` 429, `com.cobalt.replay`), aset `running loaded, pid 7760`, radar `running 1642 min, heartbeat fresh`, `OK backup newest snapshot 0.0 h old across ssd`. No new RED.
+- D2.6 `date` → `Sun Oct 11 10:51:53 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-shadow-hub-1011` → `rev-parse --short=8 pre-shadow-hub-1011` = `ea0dce4b`.
+
+### STEP-4 — the outage (`<restart set>` = none)
+- 4.1 `date` → `Sun Oct 11 10:52:06 EDT 2026` = `<t down>`; no resident goes down.
+- 4.2 acts on nothing (empty set).
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `ea0dce4b` = `<pre-merge>`; `git -C /Users/cobalt/cobalt merge --ff-only deploy/shadow-hub-1011` → `Updating ea0dce4b..aeeab1e5` / `Fast-forward` (18 files changed, 1942 insertions(+), 22 deletions(-)). `<t up>` = 10:52:06 ET (4.3's clock; the set is empty).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `13 trade_def(s) validated OK from the vault.`, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 acts on nothing; downtime: none.
+
+### Close
+| field | value |
+|---|---|
+| main | `<pre-merge>` `ea0dce4b` → `<stack-final>` `aeeab1e5` (fast-forward) |
+| tags | `pre-shadow-hub-1011` at `ea0dce4b`; `deploy-2026-10-11-shadow-hub` (STEP-7 1, after the green smoke) |
+| `<t down>` / `<t up>` / seconds | none (empty set) — 10:52:06 / 10:52:06 / 0 |
+| uv sync line | none in production (the gate's own `.venv` was created at STEP-R: `Installed 253 packages in 829ms`) |
+| proof cost | none (no production migration) |
+| migrations applied | none |
+| `<RB>` before / after | none (no migration) |
+| snapshot | `ssd: snapshot 7e6a7488` (pg_dump 6693.2 MB) |
+| RESTARTS done | none |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 aeeab1e5` — ONE revert of the main-into-gate merge (it carries the set's merge with it); `<restart set>` is none, so no resident goes down or up.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — git titles it `Reapply "Merge branch 'main' into deploy/shadow-hub-1011"`.
+
 ## Smoke
+`<t up>` = 10:52:06 ET (empty set). FIRST CALLS: `<rp_up>` = `18` · `<rpr_up>` = `60` · `<re_up>` = `43` · `<lc_up>` = `39` (= D1's).
+- (a) `date` 10:52:26 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 7760` (SAME as D1, outside the set) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 61093` (SAME) · `/Users/cobalt/cobalt/cobalt.sh status` → `  Cobalt is ONLINE (PID: 22243).` (one line; SAME pid). GREEN.
+- (b) `date` 10:52:30 · `grep -c "Started server process" aset.err` → `277` = `<a0>` (aset outside the set) · `tail -n 30 aset.err` → its last lines are the 2026-10-10 13:23 start (`INFO:     Started server process [7771]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)`), nothing newer; the `ScratchLocked` traceback above it is from that older start and is inside `<ta0>` · Traceback aset.err `217` = `<ta0>` · Traceback radar.err `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`. Radar tails: below.
+- (c) `date` 10:52:34 · `curl … https://cobalt.taild24291.ts.net/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 10:52:39 · `grep -c -F -e "NEEDS HIS SIGN-OFF" ".../prompts/SHADOW-HUB.md"` → `3` = the card's `after`. GREEN.
+- (s) `grep -c -F -e "«SIGN: his row»" ".../prompts/SHADOW-HUB.md"` → `3` = the card's `prints 3` (SHADOW-HUB on main, still unsigned). GREEN.
+- (f) `date` 10:52:41 · `COBALT_ENV=production uv run cobalt jobs restarts ea0dce4b..aeeab1e5` → exit 0, the same 18 rows as STEP-R, no `UNCLASSIFIED`, `RESTARTS: none` = `<restart set>` · `COBALT_ENV=production uv run cobalt validate` → exit 0, as 4.5 (`13 trade_def(s) validated OK`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.`, `Placement (docs/PLACEMENT.md): tree clean.`). GREEN.
+- (g) no migration.
+- (b) radar tail 1: `date` 10:53:36 (`<t up>` + 90 s) · `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` → last line `2026-10-11 10:53:25.137 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`; the 12 lines are all `radar cycle: idle:overnight` (10:35:04 to 10:53:25); no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback. Settled GREEN at the first tail.
+- (e) first read: `date` 10:52:44 · `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-11 10:52:44 EDT)`; the same three REDs as `<hb0>`; `OK   com.cobalt.radar             running   running 1643 min, heartbeat fresh`; `OK   com.cobalt.aset              running   loaded, pid 7760`.
+- (e) second read: `date` 10:54:33 · `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-11 10:54:35 EDT)`, 111 s after the first; the same three REDs as `<hb0>` and nothing else RED; `OK   com.cobalt.radar             running   running 1645 min, heartbeat fresh`; `OK   radar                    idle (overnight)`. No new RED. GREEN. (Between the two, the clock was filled with `date` + `heartbeat show` pairs at 10:53:08, :14, :22, :27, :32, :42, 10:54:19, :24, :29 — each the same three REDs.)
+- (h) REVERT-READBACK: `date` 10:55:08 (`<t up>` + 182 s, after (b) settled) · `radar panel FAILED` `18` = `<rp_up>` · `radar pool refresh FAILED` `60` = `<rpr_up>` · `radar S5 evaluate FAILED` `43` = `<re_up>` · `lifecycle card read failed` `39` = `<lc_up>` · `curl … /radar` → `200`. No census read (no migration). No count grew. GREEN.
+- Smoke: GREEN on every row. STEP-7 1: `git -C /Users/cobalt/cobalt tag deploy-2026-10-11-shadow-hub` → `rev-parse --short=8 deploy-2026-10-11-shadow-hub` = `aeeab1e5`.
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row's evidence is quoted above with its `date` (10:52:26 to 10:55:08).
+2. `merge-base --is-ancestor 90b8faad aeeab1e5` → exit 0; `merge-base --is-ancestor ba541a29 aeeab1e5` → exit 0 (both re-read at P3); `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `aeeab1e5`.
+3. REVERT-READBACK is (h) above; every count, sha and `file:line` here was read from tool output this run.
+4. STEP-T ran clean (`Merge made by the 'ort' strategy.`); `grep -c -F "<<<<<<<"` on the three auto-merged files `ops/desk/desk-launch.sh`, `ops/desk/authorize.sh`, `tests/ops/test_authorize.py` → `0` each.
+
+THE RELEASE: the lock was released by `gate.sh` (STEP-G); `ls -la /Users/cobalt/cobalt-wt/deploy-shadow-hub-1011/.env` → `No such file or directory`.
+
+THE CHAIN: every check committed (P2: check `ccc24ac1`, fix report at `ba541a29`) → the tips re-read (P3: `90b8faad`, `ba541a29`) → the merged tree `1974228c` clean (T) → RESTARTS derived, none (R) → three suites green on `1974228c`: offline 4199/0 · with-DB 5096/0 · live-note 146/0 (G) → `<stack-final>` `aeeab1e5` = `<m1>` + docs (D2.3) → the landed code `ea0dce4b..aeeab1e5` fast-forward (4.3) → markers `3` (d) → no migration (g) → residents up and unchanged after the merge (a) → radar cycling (b, e) → the set's read `3` (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
 
 ## CONTINUE
 - STEP-D0 (gate green at 10:49:16 ET) — done; STEP-D1 — done.
-- next: STEP-D2
+- STEP-D2 — done.
+- OUTAGE STARTING 10:51:53 ET — residents of none going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- STEP-4 (empty set: merge only, 10:52:06) — done; STEP-4.7 smoke GREEN (10:55:08) — done; STEP-7 — done. Nothing next in this session; push is his, through the desk (L55).
 
 ## DECISIONS
 1. `?? .claude/settings.json.bak` on `main` is not on D0's ACCEPTED list and not in its REFUSED classes (it is no staged line and no `src/`, `tests/`, `ops/`, `configs/` path); it was there at the session's start. Safe default taken: not a refusal, go on; the file is untouched. The desk may add it to the accepted list or remove it.
@@ -177,5 +240,15 @@ GATE GREEN on 1974228c
 - REFUSED, not needed: `COBALT_ENV=production uv run cobalt heartbeat show` run from `<GATE>` while the gate ran (my own clock read, no step names it there) → `FAILED: DbConfigError: Missing Postgres settings for the APP credential …` (the gate has no `.env`; not a refusal of the string). Nothing changed.
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` (my own read) — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. The same line was read with the Read tool (log line 2088).
 - `cobalt_dev: 0013 (F2 = F0)`.
+- Downtime: none (`<restart set>` empty; no resident went down). No `RETIRE OWED`.
+- The carried RED as read (not of the radar family; named at D1, unchanged through smoke): `RED  archiver  last run FAILED — last run 2026-10-10 00:54 UTC …, exit 1`; `RED  com.cobalt.archiver  failed  RuntimeError: 18 archiver failure(s): DKNG/i2: … Finviz HTTP failed: Client error '429 Too Many Requests' …`; `RED  com.cobalt.replay  failed  ReplayError: archiver not done: state 'failed'`.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-shadow-hub-1011` and branch `deploy/shadow-hub-1011`; the set's branch `ops/shadow-hub-1011` and any worktree of it.
+- The L74 line: one `Claude-Session:` attribution block in a system reminder, recorded under `## L74`, not acted on.
+- No `CONTINUE` message and no message from another session arrived.
+- From the card's `## RECORDS` (the desk's facts):
+  - shadow-hub-1011: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/shadow-hub-build-2026-10-11.md` at `ba541a29` last line: BUILT · job: shadow-hub-1011 · tip: 90b8faad | on 680eca0e | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 13 of 13 | self-check: 3 of 3 | decisions: 4 · for Dejan: 1 · tokens: 195234
+  - shadow-hub-1011: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/shadow-hub-check-2026-10-11.md` last line: CHECK DONE · job: shadow-hub-1011 · pass: 1 · tip: cd302109 · house A: Sol FINDINGS: 9 · findings: 21 · dropped: 0 · held: 9 · fixed: 9 · held unfixed: 0 · open: 11 · house B: Grok FINDINGS: 7 · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 24 · ready: YES · decisions: 5 · for Dejan: 3 · tokens: 270103
+  - shadow-hub-1011: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/shadow-hub-1011` → `ba541a29`; code tip `90b8faad`
+  - written by deploy-card.sh at 2026-10-11 10:16 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-11-shadow-hub aeeab1e5 | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 189024
