@@ -173,8 +173,17 @@ Started 21:19 (`date`) on `ed48d80d` (the check's `wip(house-seat-order-1010): c
 - Self-check, fix round: (1) the O1 test red before the fix and red under the first-line mutation (both quoted above); (2) the one caller path the fix touches, a card with a first `HOUSE A: OpenAI…` line and a later overrule, is the O1 test; the first-line path stays pinned by `test_a_house_overrule_is_proved_like_a_ruling` (green); `deploy-step0.sh:307` by `test_deploy_step0.py` (green); (3) `:204` re-read by `grep -n -F "for v in" ops/desk/authorize.sh` → `204`, `224`.
   - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → exit 0 · `2934 passed, 1 xfailed, 15 warnings in 556.75s (0:09:16)` (the check's 2933 + its O1 test, now green); no SKIPPED line.
 
+## FIX ROUND F1 (the FIXED line; docs only)
+Resumed 07:50 (`date`, 2026-10-11) on `7da667e8`; `git status --short --branch` → `## ops/house-seat-order-1010` plus this report only.
+- `git show --stat ed48d80d` → `wip(house-seat-order-1010): check red — O1` · ` tests/ops/test_authorize.py | 8 ++++++++` · `1 file changed, 8 insertions(+)`: the commit lists the test file.
+- `git show ed48d80d -- tests/ops/test_authorize.py` → adds `+def test_check_o1_a_first_openai_line_does_not_hide_a_later_overrule(desk):` with `+    assert last_line(done).startswith("FAILED: authorization mismatch — HOUSE A overruled 2026-01-02 R7"), done.stdout`.
+- At `1b671292`: `git show 1b671292:tests/ops/test_authorize.py` (read whole) → the test stands as committed, with no decorator above it and no `xfail` in the file; `git diff --stat ed48d80d 1b671292 -- tests/ops/test_authorize.py` → nothing; Grep `xfail` on the file (equal to `1b671292`, below) → `0` occurrences.
+- The check's O1 text and the assertion match. Check report line 5: "`authorize.sh` proves a HOUSE overrule only from the FIRST `HOUSE A:` line, so an OpenAI line placed first hides a later unproved `none — overruled` line (AUTHORIZED)." The test's card is `HOUSE A: OpenAI — his 2026-01-02 R2` followed by `HOUSE A: none — overruled 2026-01-02 R7`, and its assertion is `last_line(done).startswith("FAILED: authorization mismatch — HOUSE A overruled 2026-01-02 R7")`.
+- At the tip: `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_authorize.py::test_check_o1_a_first_openai_line_does_not_hide_a_later_overrule` → `1 passed, 15 warnings in 1.30s`.
+- Row check: `git diff --stat 1b671292 HEAD -- . ":(exclude)docs"` → prints nothing. F1 changes no code, test or config, and the tip stays `1b671292`.
+
 ## CONTINUE
-next: none — BUILT (fix round done; no re-check, L75)
+next: none — BUILT (fix round and F1 done; no re-check, L75)
 
 ## DECISIONS
 - DECISION 1 (the card's `## NOT IN THIS JOB`, third bullet, asks the report for this item): CHECK-HUB lines 3 and 16 ("TWO outside houses", "START HOUSE A AND HOUSE B AT ONCE"), 21 ("two different houses, never fewer than one other house"), 28, 29, 87, 99-100, 117 and the stop line keep their words, though the new SEAT ORDER (line 23-27) makes house B `none (not needed)` unless the card is `mandatory`. A check that reads line 3 or 16 literally may look for a second house the order no longer seats. Safe default taken: nothing changed beyond lines 23-27, 65 and 90 (the fence); the desk decides whether a later card aligns those lines.
@@ -188,8 +197,14 @@ next: none — BUILT (fix round done; no re-check, L75)
 - CONTINUED at FIX ROUND 21:19 (the desk's `CONTINUE: FIX ROUND`, card 298; fact verified: the O1 red, `## FIX ROUND`).
 - L74 at the fix round: the same system-reminder attribution block (`Claude-Session:` line) arrived again; not acted on; `1b671292` carries `Co-Authored-By` only.
 - Fix round: no DevDocs module page covers `ops/desk/` (as at E3); none written.
+- CONTINUED at FIX ROUND F1 07:50 (2026-10-11; the desk's `CONTINUE: FIX ROUND row F1`, card 298). Fact verified at `## FIX ROUND F1`.
+- L74 at F1: the same system-reminder attribution block (`Claude-Session:` line) arrived again. Not acted on.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 Build round closed at the line `BUILT · job: house-seat-order-1010 · tip: f6e55cd3 · … · decisions: 1 · for Dejan: 0 · tokens: 197783` (pass 1 build; replaced at the fix round).
 
-BUILT · job: house-seat-order-1010 · tip: 1b671292 | on 92c67916 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 125019
+Fix round closed at the line `BUILT · job: house-seat-order-1010 · tip: 1b671292 · … · decisions: 2 · for Dejan: 0 · tokens: 125019` (replaced at F1).
+
+FIXED: O1 — tests/ops/test_authorize.py::test_check_o1_a_first_openai_line_does_not_hide_a_later_overrule
+
+BUILT · job: house-seat-order-1010 · tip: 1b671292 | on 92c67916 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 96904
