@@ -903,6 +903,36 @@ OFF-LADDER work of 2026-10-09 (ruled, not on a ladder line; each with the ruling
 | Desk pane by id (card 197, deploy card 199) | BUILT-NOT-MERGED | Brain R779 (L79). Tip `b7c52e51`, CHECK DONE ready YES (R786); deploy waits on the dev lock. |
 | Standing rules of the day | RULED | 10-09 R718 (https only, LAWS L80, APPLIED), R724 (desk record kept), R771 ("You always ask brain first", APPLIED). |
 
+### Status 2026-10-10
+Sprint status block (ruled 09-19 R14); the earlier `### Status` blocks above stay as written. Written by close hub `close-1010` for 10-10 alone from `reports/cto-2026-10-10.md` rows R819–R989 (00:43 → 21:00 ET); re-verified against the tree (L35): `git tag --list "deploy-2026-10-10*"` = `-archiver-429`, `-launcher`, `-ops-hand`, `-ops-hand-install`, `-orphan-clean`, `-s4-p2`, `-strike-fallback-env`, `-tribunal-guard`, `-x29-fixture`; `git tag --list "deploy-2026-10-09*"` adds `-s4-p1` (`f5010068`, R802), `-voice-clarify-fix` and `-desk-pane-by-id`. The 10-09 close ran (`CLOSE PUSHED 88640167`). Status only — scope, dates and order change by his ruling alone. Legend: DONE-LIVE · DONE-DARK · BUILT-NOT-MERGED · BUILDING · NOT STARTED.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke | DONE-LIVE | Unchanged (see 10-08, 10-09). |
+| S4-P1 (card `72`, re-measure + detector) | DONE-LIVE | `deploy-2026-10-09-s4-p1` `f5010068`, RESTARTS aset radar, smoke GREEN (R802 of `cto-2026-10-09.md`). |
+| S4-P2 (card `73`, SSE + notification + fallback) | DONE-LIVE | `deploy-2026-10-10-s4-p2` `975345f3`, migration 0024, RESTARTS aset radar, smoke GREEN (R827). Strike fallback `deploy-2026-10-10-strike-fallback-env` `d0a5fbb8` (R836), `first pass OK`. His B5 live alert proof is NOT done: waits for the first trigger Monday 10-12 (R848). |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | Design FINAL `docs/30 - Design/F4-FINAL-2026-10-10.md` APPROVED (R969, R971); card BUILT `799b6040`, offline 4243/0, with-DB 5165/0 (R986); check `dc08ec00` running. |
+| S5 F5 checkpoints, F20 chief of staff, F21 genesis import, F23 PPTX renderer | NOT STARTED | Design proposals landed (R862, R865, R866); each waits for its tribunal (R860, R921). Live SDK spike asked of him (R859), not answered. |
+| S5 F16 close | NOT STARTED | No row on 10-10. |
+
+**Stop date: 2026-10-14 (S4, capped, day 3 of 7 on 10-10). S4: AT RISK.** Reason: both S4 builds are DONE-LIVE, but F9's acceptance (alert ≤5 s on the panel, phone DM fallback) is proven only by a live trigger, and B5 waits for Monday 10-12 (R848) with no safe test alert (R848); the stop date holds only if that first trigger passes. S5 opens 10-15 and F4 is already BUILT ahead of it (R849: S5 pulled forward, ruled).
+
+OFF-LADDER work of 2026-10-10 (ruled, not on a ladder line; each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Archiver 429 retry | DONE-LIVE | Brain R808 (L79, 10-09). `deploy-2026-10-10-archiver-429` `b690235c`, RESTARTS aset radar, smoke GREEN (R824); gap self-heals Monday 10-12 20:30 ET. Heartbeat still shows the 10-09 run RED. |
+| Tribunal guard (card `251`) | DONE-LIVE | His R685 (standing); brain R877. `deploy-2026-10-10-tribunal-guard` `230b2463` (R893). |
+| Orphan-clean (card `229`) | DONE-LIVE | His R855. `deploy-2026-10-10-orphan-clean` `26143007`, RESTARTS none, smoke GREEN (R922). |
+| Orphan-cause (aset, card `222`, deploy card `256`) | BUILT-NOT-MERGED | His R855. BUILT `1987849b`, check ready YES (R891); deploy `fd33fb60` FAILED at 4.2, aset DOWN, orphan pid 66667 (R897); fixed by his `kill -9` (R902). HELD until the `--kill` hub card merges (R937); then recut `256`. |
+| X29 fixture (card `242`) | DONE-LIVE | His R685. `deploy-2026-10-10-x29-fixture` `df17d8fe` (R940). |
+| Launcher (card `244`) | DONE-LIVE | His R685. `deploy-2026-10-10-launcher` `b78cbfa3` (R943). |
+| Ops-hand seat (card `231`) and its install (card `306`) | DONE-LIVE | His R855; D1-D5 APPROVED R969 (L63), R971. `deploy-2026-10-10-ops-hand` `1e9f2e4c` (R957), `deploy-2026-10-10-ops-hand-install` `3ecac752` (R983). |
+| https only (card `156`, deploy card `208`) | BUILT-NOT-MERGED | His R718 (10-09). Attempt 2 FAILED at 4.6, rolled back `7f6b63fd` (R851); recut attempt 2 FAILED merge (R847); his M5, M6, M7 done (R837, R839, R844); built head `16559ba4` (R846). Next: a new recut, deploy, after the orphan-cause deploy. |
+| `--kill` hub card (card `284`) | BUILT-NOT-MERGED | Brain R926, R955. BUILT `b4d82ad6` (R962), preflight ready YES; ONE Grok read waits for card 298; merge only on his yes. |
+| House seat order (card `298`) | BUILT-NOT-MERGED | Brain R963, R964. BUILT `f6e55cd3` (R981); check `7cd26acb` running (R984). |
+| Model tribunal (R919) | DONE (FINAL awaits his word) | His R919, R920. Tribunal R1 DONE, derive DONE, FINAL `docs/30 - Design/MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md` committed `3c3c37f6` (R989); brain closed S5, S6, S7 (R988). Asked him once. |
+| Standing rules of the day | RULED | 10-10 R849 (S5 pulled forward, option A), R855 (orphan-clean and ops-hand), R908 (several Grok sessions, one OpenAI seat), R919-R921 (model tribunal, OpenAI only there, check houses, via brain L79; LAWS L67), R969 (F4 FINAL, ops-hand D1-D5; LAWS L63). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

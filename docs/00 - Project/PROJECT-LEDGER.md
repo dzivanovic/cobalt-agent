@@ -3763,3 +3763,178 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-09*"` = `deploy-2026-10-09-arm-unsized`, `deploy-2026-10-09-disarm-one-tap`, `deploy-2026-10-09-guard-d1`, `deploy-2026-10-09-guard-d2-g7`, `deploy-2026-10-09-radar-top50`.
 - STOP LINE (L35), `reports/close-2026-10-08.md`: `CLOSE PUSHED 633a1792 · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-09.md` `## 8`.
+
+### 2026-10-10 — Archiver 429, S4-P2, strike fallback, tribunal-guard, orphan-clean, X29, launcher, ops-hand and install deployed; F4 FINAL approved; model FINAL
+- R819 00:43 LAUNCHED: archiver 429 BUILT `188190dc`; check `7af516fa`.
+- R820 01:00 RECORD: S4-P2 BUILT `8c2f338d`; check waits behind `7af516fa`.
+- R821 01:33 LAUNCHED: archiver 429 CHECK DONE ready YES; S4-P2 check `81a995b6`.
+- R822 01:36 RECORD: deploy card `212` written for archiver 429.
+- R823 01:40 LAUNCHED: deploy hub `d0da67f9` (archiver 429).
+- R824 01:41 RECORD: DEPLOYED `deploy-2026-10-10-archiver-429` `b690235c`.
+- R825 02:45 RECORD: S4-P2 CHECK DONE ready YES; deploy card `213`.
+- R826 02:48 LAUNCHED: deploy hub `2c443d6e` (S4-P2, migration 0024).
+- R827 03:31 RECORD: DEPLOYED `deploy-2026-10-10-s4-p2` `975345f3`; fallback `DbConfigError`, brain asked.
+- R828 03:40 DESK RECORD (brain, L79): strike-fallback env fix; drafter prompt `214`.
+- R829 03:55 LAUNCHED: card `215` drafted; preflight `65abd081`.
+- R830 04:10 LAUNCHED: card 215 preflight READY YES; build `5755d42a`.
+- R831 04:25 LAUNCHED: strike fallback BUILT `b3d59b5f`; check `0b18207c`.
+- R832 04:45 RECORD: check ready YES; deploy card `217`.
+- R833 04:50 LAUNCHED: deploy hub `9a36fef7` (strike fallback).
+- R834 05:15 RECORD: hub `9a36fef7` FAILED PREFLIGHT (staged report on main); committed, removed.
+- R835 05:15 LAUNCHED: desk `91f18257`; relaunch deploy hub `ac7bfe57`.
+- R836 05:20 RECORD: DEPLOYED `deploy-2026-10-10-strike-fallback-env` `d0a5fbb8`.
+- R837 06:41 RECORD: his M5 done (`bind: loopback`, aset kicked).
+- R838 06:42 LAUNCHED: M6 drafter `e2ed836e`.
+- R839 06:50 DESK RECORD (brain, L79): M6 APPROVED.
+- R840 06:58 LAUNCHED: https deploy hub `d6c90e7d` (card 208).
+- R841 07:20 RECORD: https deploy FAILED at STEP-T (docs merge conflict), nothing merged.
+- R842 07:30 DESK RECORD (brain, L79): 208 seam fixed by the kept builder.
+- R843 07:50 DESK RECORD (brain, L79): row S on card 156; drafter, preflight, build.
+- R844 06:49 RECORD: his M7 done; only B5 waits.
+- R845 06:58 LAUNCHED: row S build `71675ade`.
+- R846 07:12 RECORD: row S BUILT, head `16559ba4`.
+- R847 06:52 RECORD: RECUT https-only-1009 attempt 2 FAILED: merge.
+- R848 07:05 DESK RECORD (brain, L79): no safe test alert; B5 waits for Monday 10-12.
+- R849 07:13 HIS RULING: option A, S5 pulled forward. APPROVED, APPLIED.
+- R850 07:25 DESK RECORD (brain, L79): S5 weekend design-first, four lanes.
+- R851 07:34 RECORD: INCIDENT, https attempt 2 FAILED at 4.6, rolled back `7f6b63fd`; aset DOWN.
+- R852 08:10 RECORD: day-open AMBER (archiver 18 failures, the 429 run).
+- R853 08:25 DESK RECORD (brain, L79): cause = `AbandonProcessGroup` + `exec uv run`.
+- R854 07:51 RECORD: his `kill -9 39280` executed; aset up.
+- R855 07:51 HIS RULING: build `orphan-clean.sh` and the `ops-hand` seat. APPROVED, APPLIED.
+- R856 07:54 LAUNCHED: aset-orphan drafter (prompt `221`).
+- R857 07:56 LAUNCHED: seven drafters, prompts `223`-`230`.
+- R858 07:58 DESK RECORD (brain, L79): SDK spike PARTIAL; F20 drafter.
+- R859 08:00 ASKED HIM: live SDK spike (Opus, `sdk-spike-1010`). OPEN.
+- R860 08:05 DESK RECORD (brain, L79): S5 tribunals use the 09-22 shape.
+- R861 08:08 LAUNCHED: orphan-cause card `222` committed `ea3ac11c`; preflight `233`.
+- R862 08:12 LAUNCHED: F5, F23 designs landed; orphan-clean preflight `234`.
+- R863 08:16 LAUNCHED: ops-hand card `231` landed; preflight `235`.
+- R864 08:02 LAUNCHED: aset-orphan preflight READY YES; build on card `222`.
+- R865 08:02 LAUNCHED: orphan-clean preflight READY YES; F20 design `962ffba2`; build `229`.
+- R866 08:02 LAUNCHED: F4 design and seam doc landed; drafter `236`.
+- R867 08:02 DESK RECORD (brain plan): side lanes, drafters `240`, `241`, `243`.
+- R868 08:02 LAUNCHED: ops-hand preflight READY NO (5 fails); amend drafter `245`.
+- R869 08:02 LAUNCHED: X29 card `242` drafted; preflight `246`.
+- R870 08:02 LAUNCHED: launcher card `244` drafted; preflight `247`.
+- R871 08:02 LAUNCHED: ops-hand card amended; preflight r2 `248`.
+- R872 08:02 LAUNCHED: X29 preflight READY YES; build card `242`.
+- R873 08:02 LAUNCHED: launcher preflight READY YES; build card `244`.
+- R874 08:02 LAUNCHED: ops-hand preflight r2 READY YES; build card `231`.
+- R875 08:02 LAUNCHED: F4 tribunal prompts `237`-`239` drafted; preflight `249`.
+- R876 08:02 LAUNCHED: F4 tribunal hub `237`.
+- R877 08:25 DESK RECORD (brain, L79): tribunal preflight failure = bare-guard gap; guard card, prompt `250`.
+- R878 08:40 LAUNCHED: tribunal-guard card `251` drafted; preflight `252`.
+- R879 08:55 LAUNCHED: guard preflight READY NO; amend drafter `253`.
+- R880 09:10 LAUNCHED: card 251 amended; preflight r2 `254`.
+- R881 09:25 LAUNCHED: guard preflight r2 READY YES; build `659c32b4`.
+- R882 09:40 RECORD: tribunal-guard BUILT `2e680273`.
+- R883 09:45 LAUNCHED: guard check `9d7aa0cb`.
+- R884 10:05 RECORD: orphan-cause BUILT `1987849b`; check waits.
+- R885 09:32 LAUNCHED: guard CHECK DONE ready YES; orphan-cause check `29d790fa`; deploy card `255`.
+- R886 09:37 RECORD: X29 BUILT `d083ec76`.
+- R887 09:56 RECORD: ops-hand BUILT `2cb7a9ad`; brain asked.
+- R888 09:57 DESK RECORD (brain, L79): ops-hand D1-D3 KEEP.
+- R889 10:22 RECORD: orphan-clean BUILT `0ddb7114`.
+- R890 10:31 RECORD: launcher BUILT `b71837f2`.
+- R891 10:50 LAUNCHED: orphan-cause CHECK DONE ready YES; guard deploy hub `d79293a1`.
+- R892 10:52 LAUNCHED: X29 check `8eb3b9fc`.
+- R893 11:29 RECORD: DEPLOYED `deploy-2026-10-10-tribunal-guard` `230b2463`.
+- R894 11:30 LAUNCHED: deploy card `256` (orphan-cause).
+- R895 12:32 LAUNCHED: X29 CHECK DONE `3c00e204`; deploy hub `fd33fb60`; F4 tribunal hub `2e7c410e`.
+- R896 12:59 LAUNCHED: F4 tribunal R1 collated; Opus seat `99799801`.
+- R897 13:08 RECORD: INCIDENT, deploy `fd33fb60` FAILED at 4.2, aset DOWN (orphan pid 66667).
+- R898 13:20 DESK RECORD (brain, L79): kill 66667 goes to him; route orphan-clean first.
+- R899 13:13 RECORD: F4 Opus seat DONE (ADOPT AFTER 4 corrections).
+- R900 13:16 LAUNCHED: F4 R1 final; derive `242c9789`.
+- R901 13:23 RECORD: HIS ORDER kill 66667 and kickstart aset; SIGTERM ran, aset still DOWN.
+- R902 13:25 RECORD: HIS ORDER kill -9 66667 ran once; aset UP pid 7760.
+- R903 13:28 LAUNCHED: F4 DERIVED draft final; round-2 drafter `257`.
+- R904 13:36 LAUNCHED: F4 round-2 prompts `258`-`260`; preflight `261`.
+- R905 13:38 RECORD: REFRESH at 303,106 tokens, successor `c724a66e`.
+- R906 13:38 LAUNCHED: took over; preflight `42efbd84`.
+- R907 13:41 RECORD: F4 round-2 preflight ready YES.
+- R908 13:55 HIS RULING: several Grok sessions at once; one OpenAI seat. APPROVED, APPLIED.
+- R909 13:56 DESK RECORD (brain, L79): soft cap 3 Grok runs; serialized deploys.
+- R910 13:56 RECORD: first launch of hub `66055cd6` FAILED its gate.
+- R911 13:58 LAUNCHED: F4 round-2 Opus seat `71ca11d1`.
+- R912 14:02 LAUNCHED: relaunch hub `1dd4e302`.
+- R913 14:10 LAUNCHED: ops-hand check `40f322d5`.
+- R914 14:16 RECORD: hub `1dd4e302` FAILED PREFLIGHT; brain asked.
+- R915 14:24 DESK RECORD (brain A, L79): re-issue 258; drafter `87b0bb51`.
+- R916 14:32 LAUNCHED: stagger preflight `d4e15e81`.
+- R917 14:01 LAUNCHED: F4 R2 hub 258.
+- R918 14:09 LAUNCHED: orphan-clean deploy hub `d27c2e51`.
+- R919 14:11 HIS RULING: model tribunal starts now (via brain, L79). APPROVED, APPLIED.
+- R920 14:18 HIS RULING: only the model tribunal uses OpenAI (via brain, L79). APPROVED, APPLIED.
+- R921 14:21 HIS RULING: check and tribunal houses (via brain, L79). APPROVED, APPLIED.
+- R922 14:58 RECORD: DEPLOYED `deploy-2026-10-10-orphan-clean` `26143007`; F4 round 2 DONE.
+- R923 14:58 LAUNCHED: F4 R2 derive `6927deb4`; complexity proposer `b9e7ec29`.
+- R924 15:02 LAUNCHED: DEPLOY-HUB orphan-row drafter `634ece91`.
+- R925 15:12 DESK RECORD (brain, L79): ops-hand check ready YES; launcher check `d251a642`.
+- R926 15:20 DESK RECORD (brain A, L79): `--kill` needs a STANDING-LIST row; drafter `e77b38ce`.
+- R927 15:30 DESK RECORD (brain, L79): `--kill` sequence fixed; amend drafter `5bdb9eae`.
+- R928 15:40 LAUNCHED: tribunal drafter `abea90cf`; kill-row preflight `905b765b`.
+- R929 15:48 LAUNCHED: kill-row preflight FAIL (1 of 6); fix drafter `a1b121ef`.
+- R930 15:55 LAUNCHED: kill label fixed; re-preflight and Grok read `6b7556ca`.
+- R931 15:13 DESK RECORD (brain, L79): F4 round 3 narrowed; REFRESH at 300,706 tokens.
+- R932 15:13 DESK RECORD (brain, L79): DEPLOY-HUB and STANDING-LIST dirty; restore first.
+- R934 15:14 LAUNCHED: drafters `a379a156`, `cf0536a4`; desk `e8778a8d` took over.
+- R935 15:15 RECORD: model-tribunal preflight `7cf33277` ready NO (2 fails).
+- R936 15:15 LAUNCHED: count-fix drafter `b2f4cfc0`.
+- R937 15:17 DESK RECORD (brain, L79): deploy X29 then ops-hand; 256 HELD.
+- R938 15:17 LAUNCHED: `--kill` card drafter `296622d5`; re-preflight `3dcea8e5`.
+- R939 15:19 LAUNCHED: X29 deploy hub `2af8fe1f`.
+- R940 16:14 RECORD: DEPLOYED `deploy-2026-10-10-x29-fixture` `df17d8fe`.
+- R941 16:14 RECORD: drafters 277, 283 DONE; re-preflight 276 ready YES; launcher check ready YES.
+- R942 16:20 LAUNCHED: model tribunal hub 270 (R919).
+- R943 16:40 RECORD: DEPLOYED `deploy-2026-10-10-launcher` `b78cbfa3`; tribunal hub FAILED its gate.
+- R944 16:45 LAUNCHED: model tribunal hub `f9872990`, Opus seat `f80dc4b3`, drafter `46d9de2d`.
+- R945 16:55 DESK RECORD (brain, L79): ops-hand conflict → row S on card 231.
+- R946 17:00 LAUNCHED: row-S drafter `5b765e87`; preflights `f1f65da0`, `5b02c96d`.
+- R947 17:10 LAUNCHED: kill-card build `55c83363`.
+- R948 17:20 LAUNCHED: ops-hand build at row S `b0f4ee01`.
+- R949 17:25 LAUNCHED: F4 round-3 prompts 278-280.
+- R950 17:30 LAUNCHED: F4 round-3 hub `2b27a44b`, seat `16adb460`.
+- R951 18:00 LAUNCHED: F4 round 3 DONE; derive `e4dbb07e`.
+- R952 18:10 LAUNCHED: `--kill` build BUILT `91c48f36`; check `cdaf5faa`.
+- R953 18:30 LAUNCHED: ops-hand deploy hub `05d26b95`.
+- R954 18:40 DESK RECORD (brain, L79): F4 R2-4 = form B.
+- R955 18:55 DESK RECORD (brain, L79): `--kill` row narrowed; drafter prompt 295.
+- R956 18:55 RECORD: BREACH, `--kill` check ran Sol against R920.
+- R957 19:05 RECORD: DEPLOYED `deploy-2026-10-10-ops-hand` `1e9f2e4c`.
+- R958 19:10 LAUNCHED: F4 FINAL fold drafter `bc31aa95`; `--kill` narrowing drafter `c51f009b`.
+- R959 18:15 RECORD: REFRESH at 308,237 tokens, successor launched.
+- R960 18:16 LAUNCHED: desk `092d855d`; `--kill` preflight `26e7c533`.
+- R961 18:18 LAUNCHED: card 284 fix-round builder `a2ff44fe`.
+- R962 18:33 RECORD: fix round BUILT `b4d82ad6`; brain asked.
+- R963 18:33 DESK RECORD (brain, L79): one card for CHECK-HUB seat order and `house-probe.sh`.
+- R964 18:38 DESK RECORD (brain, L79): card 298 drafted; decision 1 changed.
+- R965 18:40 LAUNCHED: card 298 amended; preflight `299`.
+- R966 18:42 LAUNCHED: preflight 299 READY NO (3 fails); amend2 prompt `301`.
+- R967 18:44 LAUNCHED: card 298 amended 2; re-preflight prompt `302`.
+- R968 18:45 LAUNCHED: re-preflight READY YES; build on card 298.
+- R969 18:51 HIS RULING: "Approved", F4 FINAL and ops-hand D1-D5. APPROVED, APPLIED (LAWS L63).
+- R970 18:53 LAUNCHED: F4 card drafter (prompt 303); ops-hand install drafter (prompt 305).
+- R971 18:54 HIS RULING: "Yes both", confirms R969. APPROVED.
+- R972 18:56 LAUNCHED: ops-hand install card 306 drafted; preflight `307`.
+- R973 18:58 LAUNCHED: preflight 307 READY NO (2 fails); amend drafter `308`.
+- R974 18:59 LAUNCHED: card 306 amended; re-preflight `309`.
+- R975 19:00 LAUNCHED: re-preflight `c1f644ca` READY YES; Opus build.
+- R976 19:01 LAUNCHED: F4 card 304 drafted; preflight `310`.
+- R977 19:05 LAUNCHED: preflight 310 READY NO (1 fail); amend drafter `311`.
+- R978 19:08 LAUNCHED: F4 card amended `3ec87ff8`; re-preflight `312`.
+- R979 19:10 LAUNCHED: F4 re-preflight READY YES; Opus build `b151d6e8`.
+- R980 19:29 LAUNCHED: card 306 BUILT `32a9f187`; check `209cd7a1`.
+- R981 19:30 RECORD: card 298 BUILT `f6e55cd3`; check held.
+- R982 19:56 LAUNCHED: card 306 CHECK DONE ready YES; deploy hub `b4a33f9e`.
+- R983 20:35 RECORD: DEPLOYED `deploy-2026-10-10-ops-hand-install` `3ecac752`.
+- R984 20:37 LAUNCHED: tribunal hub nudged; card 298 check `7cd26acb`.
+- R985 20:41 LAUNCHED: model tribunal R1 DONE; derive `28c218f5`.
+- R986 20:49 LAUNCHED: card 304 BUILT `799b6040`; check `dc08ec00`.
+- R987 20:55 ASKED: derive 272 DONE (draft FINAL, round 2 owed); brain asked S5, S6, S7.
+- R988 21:00 DESK RECORD (brain, L79): S5, S6, S7 ruled; F4 304 X16, X12 fixed in the one fix round.
+- R989 20:57 ASKED HIM: MODEL-BY-COMPLEXITY FINAL committed `3c3c37f6`; decide on it.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-10*"` = `deploy-2026-10-10-archiver-429`, `-launcher`, `-ops-hand`, `-ops-hand-install`, `-orphan-clean`, `-s4-p2`, `-strike-fallback-env`, `-tribunal-guard`, `-x29-fixture`.
+- STOP LINE (L35), `reports/close-2026-10-09.md`: `CLOSE PUSHED 88640167 · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-10.md` `## 8`.
