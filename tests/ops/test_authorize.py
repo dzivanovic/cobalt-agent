@@ -306,6 +306,17 @@ def test_s4_kind_shadow_reads_shadow_hub_and_the_build_rows(desk):
     assert names(done) == names(build)
 
 
+def test_check_o1_the_real_shadow_title_names_its_standing_row(desk):
+    """Check of card 355, O1: authorize.sh shadow reads SHADOW-HUB.md's title for INSTALL: <date> R<n>."""
+    repo, card, env = desk
+    real = (REPO / "docs" / "40 - DevDocs" / "prompts" / "SHADOW-HUB.md").read_text().split("\n", 1)[0]
+    (repo / "docs" / "40 - DevDocs" / "prompts" / "SHADOW-HUB.md").write_text(real + "\n\nbody\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "the real title")
+    done = authorize(env, "shadow", card)
+    assert "the title names no INSTALL: <date> R<n>" not in done.stdout, done.stdout
+
+
 @pytest.mark.parametrize("args", [[], ["build"], ["judge", "x"], ["build", "/no/such/card.md"]])
 def test_a_bad_call_is_refused(desk, args):
     repo, card, env = desk
