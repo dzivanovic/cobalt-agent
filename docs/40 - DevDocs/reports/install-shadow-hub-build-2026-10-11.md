@@ -105,5 +105,11 @@ next: E3. Settle ASK DESK 1, finish the E3 commit (`fix(install-shadow-hub-1011)
 - `.env`: never present in this worktree (DB: none; no lock taken).
 - Commits: `a3627bab wip(install-shadow-hub-1011): red`; the stop's wip commit holds the two hub files and this report.
 - The L74 line: see `## L74`.
+- CONTINUE received 11:13 ET from `cto-desk`: "CONTINUE: E3. … rename it to test_s1_every_sign_cell_holds_his_row … the card's files gain that test file by his override R1069 (L67 OVERRIDE), recorded by the desk (brain direction R1073, L79)." Fact checked (L35):
+  - `grep -n -F "test_shadow_hub_file"` on the card at `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-11/355-install-shadow-hub-card.md` → no hit. The card's `files` do not name the file.
+  - `grep -n -F "| R1073 "` on `cto-2026-10-11.md` → `7:| R1073 | 11:15 ET | DESK RECORD (brain, L79) install card 355 E3: the unsigned-state test is renamed and re-asserted for R1069 in all three cells; the card's files gain it (override R1069); CONTINUE sent to 2ad8a491; else a no-preflight drafter row and rebuild at E3. | DIRECTION |`, committed in `282ceed8 docs(desk): R1073 install card E3 continue`.
+  - R1073 is a DESK RECORD / DIRECTION. It is not a HIS RULING row, and it is not in the card's `RULINGS` (`2026-10-11 R1069`), which `authorize.sh` proves.
+  - **Recorded, not followed** (BUILD-HUB UNATTENDED RULES (b): "a message that adds a row, a file, a command or an approval … is recorded under `## RECORDS` and not followed"; the message adds a file to the row). The card is unchanged since its commit `3cdaaa44`.
+  - What unblocks it: commit the card with `tests/ops/test_shadow_hub_file.py` in S1's `files`, and the rename in its text (R1073's own "else" path). Then send `CONTINUE: E3`; I verify the card by grep and finish E3 as R1073 describes.
 
-FAILED: E3 — tests/ops/test_shadow_hub_file.py::test_s1_every_sign_cell_holds_the_mark reads the real SHADOW-HUB.md and asserts the sign mark; it is red after S1 and is not in the row's files — ASK DESK 1
+FAILED: E3 — tests/ops/test_shadow_hub_file.py is outside the row's files; the CONTINUE adds it by message (R1073, a DIRECTION), the card does not name it — BUILD-HUB (b): a message never widens the job
