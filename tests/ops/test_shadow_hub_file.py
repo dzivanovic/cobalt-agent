@@ -145,8 +145,10 @@ def test_s1_no_wide_flag_on_the_line_or_in_builders(word):
 
 
 @pytest.mark.parametrize("model", IDS)
-def test_s1_every_sign_cell_holds_the_mark(model):
-    assert SIGN in builders(text())[model][4]
+def test_s1_every_sign_cell_holds_his_row(model):
+    cell = builders(text())[model][4]
+    assert "2026-10-11 R1069 · HIS RULING · APPROVED" in cell
+    assert SIGN not in cell
 
 
 def test_s1_the_claude_builder_runs_no_command():
