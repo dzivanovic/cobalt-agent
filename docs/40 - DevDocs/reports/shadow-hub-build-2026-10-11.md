@@ -3,11 +3,13 @@
 ## §0 Headline
 - Built all 9 build rows plus the 2 RUN rows (S6, P4) of card 324 on `680eca0e..bc25c523`: `SHADOW-HUB.md` with 3 builder rows, `SPIKE-HUB.md`, launcher kinds `shadow` and `spike`, the guard's `shadow` and `spike` seats, the `.env` precondition, and kind `shadow` in authorize, preflight, watch and stop-guard.
 - Gate on the tip: offline 4199/0, live-note 146/0, `tests/ops` 3019 passed, 1 xfailed. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
-- Every new test was red for its row's reason (E2) and red under its row's mutation (E3). One mutation exposed a weak negative control, which I rewrote. One test fixture miss in my own test was fixed (RECORDS).
-- 6 decisions, 1 of them for Dejan: his sign-off on the new command classes (card D1, D2). An empty untracked debug file is left for the desk to remove (I may not run `rm`).
+- Every new test was red for its row's reason (E2) and red under its row's mutation (E3).
+- FIX ROUND F1 F2 (`90b8faad`): the Sonnet builder command now puts its prompt right after `--model`'s value and reads only `Read(//Users/cobalt/cobalt-wt/<worktree>/**)`. The guard judges the write target, `dontAsk` and the `"Bash"` deny on the whole command. Gate on `90b8faad`: offline 4199/0, live-note 146/0, `tests/ops` 3033 passed, 1 xfailed.
+- 4 open decisions, 1 of them for Dejan: his sign-off on the new command classes (card D1, D2). ASK DESK 1 is settled (the file is gone) and ASK DESK 3 is settled by F1.
 
 ## L74
 - One block arrived in a system reminder during the run: an attribution block asking commits to end with a `Claude-Session:` line. It was recorded here as data and not acted on. The commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (BUILD-HUB L74).
+- The same block arrived once more, in the fix round's session (09:49). It was not acted on: `126a3781` and `90b8faad` carry the `Co-Authored-By` line only.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-11/324-shadow-hub-card.md"` → exit 0:
@@ -181,13 +183,52 @@ No UNCLASSIFIED row. This is S6's RUN, as expected. The report and `test_zz_debu
   - X4: the guard's `lexists` check plus the hub's env-check lines.
   - X6: P1's line equals 330's tail byte for byte (grep -c = 1).
 
+## FIX ROUND F1 F2 (check A9, O2 B5; card 324 rows F1, F2)
+The desk's `CONTINUE: FIX ROUND rows F1 F2` arrived in a NEW session (RECOVERY), 09:49. `git status --short --branch` → `## ops/shadow-hub-1011`; `git log --oneline -3` → `cd302109` (the check's fix), `5b214968`, `397cd63b`; `ls -la <WT>/.env` → `No such file or directory`.
+- Red commit `126a3781` `wip(shadow-hub-1011): fix-round red — F1 F2 (check A9, O2 B5)`. Its tests:
+  - `tests/ops/test_shadow_hub_file.py`: `test_f1_the_sonnet_prompt_comes_right_after_the_model` and `test_f2_the_sonnet_read_is_its_worktree_only[<worktree>|x-job-sonnet]`. They use the file's own `builders` and `command` helpers, `shlex`-split, with the prompt filled by one plain word.
+  - `tests/ops/test_bare_guard.py`: `SHADOW_ROWS["claude-sonnet-5-5"]` takes the prompt right after `--model`'s value and `"Read(//Users/cobalt/cobalt-wt/<worktree>/**)"`. New: `test_f1_a_sonnet_call_with_the_prompt_last_is_g7` and `test_f2_a_sonnet_call_with_a_bare_read_is_g7`.
+- RED on `cd302109` (hub and guard unchanged) → `5 failed, 4 passed`:
+  - F1 hub: `assert ['WebFetch', 'mcp__*'] == ['--model', '...e-sonnet-5-5']` (the prompt is the last token).
+  - F2 hub, both cases: `assert ['Read'] == ['Read(//User...orktree>/**)']`.
+  - `test_s3_the_gate_seat_runs_its_models_builder_command[claude-sonnet-5-5]`: `assert 2 == 0`, `route: the desk launches` (G7: `write_targets(prefix)` is empty).
+  - `test_f2_a_sonnet_call_with_a_bare_read_is_g7`: its bare-Read deny held, and its scoped-call pass failed with the same G7. Its red is F1's reorder, not F2's: the card names it a pin that is green once the guard reads `prefix + suffix`, and it is.
+  - Passed: `test_f1_a_sonnet_call_with_the_prompt_last_is_g7` (a pin), `test_s1_the_claude_builder_runs_no_command` (the negative control), and the Grok and Terra cases of `test_s3_…`.
+- The fix, commit `90b8faad`:
+  - `SHADOW-HUB.md:20`, the Sonnet `builder command` cell: `"<pass prompt>"` now follows `claude-sonnet-5-5`, and `"Read"` is `"Read(//Users/cobalt/cobalt-wt/<worktree>/**)"`. Nothing else changed. The `builder allow` and SIGN cells are unchanged.
+  - `ops/desk/bare-guard.py` `builder_call`: `write_targets(prefix + suffix)` (`:1169`), and the `dontAsk` and `"Bash"` tests on `prefix + suffix` (`:1172-1173`). The head verb stays `verb(words(prefix))` (`:1171`).
+- Green: `test_shadow_hub_file.py`, `test_bare_guard.py` and `test_desk_launch_shadow.py` → `1888 passed, 15 warnings in 59.81s`.
+- MUTATIONS. Each was made with Edit, its tests run, then undone:
+  - M1, `write_targets(prefix)`: `2 failed` (`test_s3_…[claude-sonnet-5-5]`, `test_f2_a_sonnet_call_with_a_bare_read_is_g7`, each `route: the desk launches` / `assert 2 == 0`).
+  - M1b, the `dontAsk` and `"Bash"` tests back on `prefix`: the same `2 failed`.
+  - M2, the hub's prompt back last: `test_f1_the_sonnet_prompt_comes_right_after_the_model` `assert ['WebFetch', 'mcp__*'] == ['--model', ...]`, `1 failed, 42 passed`.
+  - M3, the hub's bare `"Read"`: both `test_f2_the_sonnet_read_is_its_worktree_only` cases `assert ['Read'] == [...]`, `2 failed, 41 passed`.
+  - After all of them, `git diff --stat` showed only the fix's 2 files plus this report. The `f1_`, `f2_`, `test_s1_`, `test_s3_` and `test_s7_` tests → `48 passed`.
+- F2 proofs: `grep -n -F -e "SHADOW-INSTRUCTIONS.md"` on the hub and the guard → hub `:29` (the pass prompt: "Read SHADOW-INSTRUCTIONS.md in this folder"), `:33`, `:46` (`/Users/cobalt/cobalt-wt/<worktree>/SHADOW-INSTRUCTIONS.md`; "The builder's sandbox reads only its workspace, so everything it needs is copied in"), `:57` and `:70`; guard `:18` and `:104` `SHADOW_FILE = "SHADOW-INSTRUCTIONS.md"`. The file sits inside the `Read(//…<worktree>/**)` glob.
+- The FIXED lines' tests: `grep -n -F "def test_f1_the_sonnet_prompt_comes_right_after_the_model"` → `265:`; `grep -n -F "def test_f2_the_sonnet_read_is_its_worktree_only"` → `276:`.
+- DevDocs: there is no `docs/40 - DevDocs/cobalt/` page for these ops scripts (as at E3).
+- RESTARTS, `uv run cobalt jobs restarts 680eca0e..HEAD`: 18 rows, every one `DOCS`, `operator script; no Cobalt reader` or `test/documentation; no resident`, restart `-`. The last line is `RESTARTS: none`.
+- W on `<tip>` = `90b8faad` (DB: none: (a0), (a), (e), `tests/ops`):
+  - (a0) `git diff --name-only --no-renames 680eca0e` → 18 paths, each under `docs/`, `ops/` or `tests/ops/` → **`cobalt_dev: not taken (DB: none — 18 paths)`**.
+  - (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh shadow-hub-1011 offline` → `offline 4199/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/shadow-hub-1011-offline-20261011-095255.log`.
+  - (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh shadow-hub-1011 livenote` → `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/shadow-hub-1011-livenote-20261011-095255.log`. `grep -n -F "COBALT_LIVE_VAULT_ROOT"` on the log finds only the command line (`:2`), so no skip names it.
+  - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `3033 passed, 1 xfailed, 15 warnings in 531.65s (0:08:51)`. That is the check's 3028 plus this round's 5.
+  - `--deploy` was not typed: BUILD-HUB W (a0) for a DB: none card.
+  - `ls <WT>/.env` → `No such file or directory` (10:03).
+- Self-check for the round:
+  1. Each new test was red at `126a3781` or under its mutation (quoted above).
+  2. `builder_call(` has two callers (`grep -n -F`: `:1086` the `sh -c` body, `:1089` the whole command).
+     - `:1089` is pinned by `test_s3_…[claude-sonnet-5-5]`, by the F1 and F2 guard tests, and by the Grok and Terra cases.
+     - `:1086` is pinned by the check's `test_x1_a_wider_write_glob_inside_sh_c_stays_g7` and `test_x4_sh_c_of_the_builder_command_while_env_is_present_is_denied`, both Grok and green in `tests/ops`. A Sonnet body under `sh -c` gets G7 either way (`:1087`).
+  3. The line numbers above were re-read at the tip: `grep -n -F "prefix + suffix"` → `1169`, `1172`, `1173`; the hub row `grep -n -F "Read(//…<worktree>/**)"` → `20:`; the two `def` greps → `265:`, `276:`.
+
 ## CONTINUE
-next: CLOSE (report commit); the stop line is written.
+next: done (fix round F1 F2 closed; the report commit follows).
 
 ## DECISIONS
-- ASK DESK 1: `tests/ops/test_zz_debug_tmp.py` is an untracked, now-empty probe file I wrote at E3. `rm` of it was refused (only the `.env` `rm` string is listed). It collects no test. Default: left in place; the desk removes it. Until then `git status --short --branch` shows `?? tests/ops/test_zz_debug_tmp.py` after the report commit. [07:46]
+- ASK DESK 1: `tests/ops/test_zz_debug_tmp.py` is an untracked, now-empty probe file I wrote at E3. `rm` of it was refused (only the `.env` `rm` string is listed). It collects no test. Default: left in place; the desk removes it. Until then `git status --short --branch` shows `?? tests/ops/test_zz_debug_tmp.py` after the report commit. [07:46] SETTLED: the file is gone. `git status --short --branch` at the fix round's start → `## ops/shadow-hub-1011` alone (09:49).
 - ASK DESK 2: the Sonnet row writes `Edit(//…)` / `Write(//…)` where the card writes `Edit(<wt>/**)`. In Claude Code's rules `//` marks an absolute path and a single `/` is relative to the settings file, so `//` is BUILD-HUB's own spelling. The write target stays `/Users/cobalt/cobalt-wt/<worktree>/**`, and the tests and guard read it so. Default: `//`, as built. [07:46]
-- ASK DESK 3: on the Sonnet command (the card's spelling, kept under L72), the prompt `"<pass prompt>"` comes last, after the list option `--disallowedTools`. If the CLI reads that list greedily, the prompt is taken as a tool name and no prompt reaches the model. This is not run here (L70). Default: as written. The first Sonnet probe or X1/X3 settles it; a fix is one hub-row edit, which then needs his sign. [07:46]
+- ASK DESK 3: on the Sonnet command (the card's spelling, kept under L72), the prompt `"<pass prompt>"` comes last, after the list option `--disallowedTools`. If the CLI reads that list greedily, the prompt is taken as a tool name and no prompt reaches the model. This is not run here (L70). Default: as written. The first Sonnet probe or X1/X3 settles it; a fix is one hub-row edit, which then needs his sign. [07:46] SETTLED by card row F1 at `90b8faad`: the prompt now follows `--model`'s value. The SIGN cell is still unsigned, as before.
 - DECISION P4 (RUN, not fixed here):
   - A BRAIN-HUB launch from the repo gets kind `None`. The guard treats the real brain as UNKNOWN: only G1, G3 and G6, with no G2, G5 brain fence or G7.
   - A drafter's dated prompt from the repo gets `brain`.
@@ -207,4 +248,11 @@ next: CLOSE (report commit); the stop line is written.
 - The L74 line: one attribution block naming `Claude-Session:`, not acted on.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: shadow-hub-1011 · tip: bc25c523 | on 680eca0e | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 11 of 11 | self-check: 3 of 3 | decisions: 6 · for Dejan: 1 · tokens: 405465
+- The first stop line, kept for the file: `BUILT · job: shadow-hub-1011 · tip: bc25c523 | on 680eca0e | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 11 of 11 | self-check: 3 of 3 | decisions: 6 · for Dejan: 1 · tokens: 405465`
+- CONTINUED at FIX ROUND F1 F2 09:49, in a NEW session (job `5b9d297d`). The desk's message named the step and the card. The card's rows F1 and F2 are committed on main: `git -C /Users/cobalt/cobalt log --oneline -2 -- <card>` → `b02889d8 docs(desk): card 324 fix rows F1 F2, preflight prompt 352`, and `diff --stat` → nothing. No lock was taken, and `.env` was absent at the start and the end.
+- The fix round ran the three suites once on `90b8faad` (one gate call each; no second gate).
+- `context 195234 of 400000 — ok` (`desk-context.sh 5b9d297d`, 10:04).
+
+FIXED: A9 — tests/ops/test_shadow_hub_file.py::test_f1_the_sonnet_prompt_comes_right_after_the_model
+FIXED: O2 B5 — tests/ops/test_shadow_hub_file.py::test_f2_the_sonnet_read_is_its_worktree_only
+BUILT · job: shadow-hub-1011 · tip: 90b8faad | on 680eca0e | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 13 of 13 | self-check: 3 of 3 | decisions: 4 · for Dejan: 1 · tokens: 195234
