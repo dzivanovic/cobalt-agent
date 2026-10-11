@@ -1,7 +1,10 @@
 # deploy held-table-row-1011 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/held-table-row-1011` (code tip `0188faa1`, head `6625875e`) via gate `deploy/held-table-row-1011`. In progress.
+- DEPLOYED `ops/held-table-row-1011` (code tip `0188faa1`, head `6625875e`): main `fd4144cb` → `30950adb`, tag `deploy-2026-10-11-held-table-row`.
+- Gate green on `328e7947`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev` back at 0013 (F2 = F0).
+- RESTARTS: none — no resident went down; migrations: none.
+- Smoke GREEN: markers 0 → 2 in `deploy-card.sh`, `deploy-step0.sh`, `desk-launch.sh`; no new RED (archiver/replay REDs carried from before).
 
 ## L74
 - A system reminder in this session asked commits to end with a `Claude-Session:` line. Recorded as data; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -135,13 +138,83 @@ STEP-D1 (`date` → `Sun Oct 11 14:06:06 EDT 2026`):
 - `curl … /radar` → `200`. MARKER `deploy-card.sh` → `0` (before `0`). SMOKE READ `deploy-step0.sh` → `0` (before).
 - No migration: `<RB>`, census and D1-M not run.
 
+STEP-D2:
+- D2.0 `add` + `commit … -- "docs/40 - DevDocs/reports/deploy-held-table-row-1011.md"` → `[main fd4144cb] docs(report): deploy held-table-row-1011 — gate green on 328e7947` (1 file, 147 insertions); `show --stat HEAD` lists that one file. `<pre-merge>` = `fd4144cb`.
+- D2.1 `git -C /Users/cobalt/cobalt-wt/deploy-held-table-row-1011 merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `30950adb`; `rev-parse --short=8 30950adb^2` → `fd4144cb` = `<pre-merge>`; `merge-base --is-ancestor 328e7947 deploy/held-table-row-1011` → exit 0.
+- D2.3 `diff --stat 328e7947 deploy/held-table-row-1011 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 3.3 h old` · `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6693.0 MB` · `ssd: snapshot b6b70e14 — 0 new / 2 changed, 26.1 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Sun Oct 11 14:07:58 EDT 2026` · heartbeat at `14:08:00 EDT` (113 s after D1's `14:06:07`) → same three REDs as `<hb0>` (archiver probe, com.cobalt.archiver, com.cobalt.replay); no new RED; aset/sheet/radar OK; `com.cobalt.radar running 1838 min, heartbeat fresh`.
+- D2.6 `date` → `Sun Oct 11 14:08:05 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-held-table-row-1011` at `fd4144cb` → exit 0.
+
+STEP-4 (restart set EMPTY):
+- 4.1 `date` → `Sun Oct 11 14:08:20 EDT 2026` = `<t down>` = `<t up>` (empty set).
+- 4.2 no label in the set: nothing booted out, agent not stopped.
+- 4.3 `rev-parse --short=8 HEAD` → `fd4144cb` = `<pre-merge>` · `git -C /Users/cobalt/cobalt merge --ff-only deploy/held-table-row-1011` → `Updating fd4144cb..30950adb` / `Fast-forward` (7 files, 261 insertions, 15 deletions).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bootstrap. Downtime: none.
+
+STEP-7 close:
+| item | value |
+|---|---|
+| merge | `<pre-merge>` `fd4144cb` → `<stack-final>` `30950adb` (main tip `30950adb`) |
+| tags | `pre-held-table-row-1011` at `fd4144cb`; `deploy-2026-10-11-held-table-row` at `30950adb` (after green smoke, exit 0) |
+| `<t down>` / `<t up>` / seconds | none (empty restart set) |
+| uv sync line | none on the production calls |
+| proof cost | n/a (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a |
+| snapshot | `b6b70e14` (ssd) |
+| RESTARTS done | none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 30950adb` (no resident to take down: the set is empty). 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`. |
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row is quoted with its `date` (## Smoke: 14:08:39, 14:08:43, 14:08:47, 14:08:49, 14:08:57, 14:09:50, 14:10:52, 14:11:21).
+2. `merge-base --is-ancestor 0188faa1 30950adb` → exit 0; `merge-base --is-ancestor 6625875e 30950adb` → exit 0.
+3. (h) shown above; every count and sha re-read from this run's tool output.
+4. STEP-T ran clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/held-table-row-1011` (no conflict, nothing dirty).
+THE RELEASE: the lock was released by `gate.sh` (log:2084); `ls -la <GATE>/.env` → No such file.
+
 ## Smoke
+`<t up>` = 4.3's `date` = 14:08:20 (empty set). FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) `date` 14:08:39 · aset `state = running` pid 7760 (SAME as D1, outside the set) · radar `state = running` pid 61093 (SAME) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (SAME). GREEN.
+- (b) `date` 14:08:43 · `grep -c "Started server process" aset.err` → 277 = `<a0>` (aset outside the set) · aset Traceback 217 = `<ta0>` · radar Traceback 0 = `<tr0>` · TaxonomyConfigError 0 = `<tc0>` · `tail -n 30 aset.err` → last lines `2026-10-10 13:23:12.685 | INFO | cobalt.voice.web:voice_startup:183 - voice: scratch dir … locked by this process` · `INFO: Application startup complete.` · `INFO: Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (an older `ScratchLocked` traceback above it is from 2026-10-10, inside the unchanged count).
+- (c) `date` 14:08:47 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 14:08:49 · MARKER `grep -c -F -e "**HELD**" ".../ops/desk/deploy-card.sh"` → `2` (after `2`); `deploy-step0.sh` → `2`; `desk-launch.sh` → `2`. GREEN.
+- (s) SMOKE READ `grep -c -F -e "**HELD**" ".../ops/desk/deploy-step0.sh"` → exit 0, `2` (card: prints 2). GREEN.
+- (f) `date` 14:08:57 · `COBALT_ENV=production uv run cobalt jobs restarts fd4144cb..30950adb` → exit 0, the same seven rows as STEP-R, `RESTARTS: none` = `<restart set>`, no `UNCLASSIFIED` · `validate` → exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` GREEN.
+- (g) no migration.
+- (e) heartbeat #1 at `14:09:00 EDT` → the same three REDs as `<hb0>` (archiver probe, com.cobalt.archiver 429, com.cobalt.replay); `com.cobalt.radar running running 1839 min, heartbeat fresh`. Heartbeat #2: `date` 14:10:52 → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-11 14:10:53 EDT)` (113 s apart): same three REDs, nothing new; `com.cobalt.radar running running 1841 min, heartbeat fresh`; `OK radar idle (overnight)`. GREEN.
+- (b) spaced radar tails: `date` 14:09:50 (`<t up>` + 90 s) · `tail -n 12 radar.err` → `2026-10-11 14:08:28.044 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle line after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled at the first tail). Tail at 14:11:21 also shows `2026-10-11 14:10:08.068 … radar cycle: idle:overnight scan_id=None`.
+- (h) REVERT-READBACK: `date` 14:11:21 (`<t up>` + 181 s) · `radar panel FAILED` 18 = `<rp_up>` · `radar pool refresh FAILED` 60 = `<rpr_up>` · `radar S5 evaluate FAILED` 43 = `<re_up>` · `lifecycle card read failed` 39 = `<lc_up>` · `/radar` → `200`. No census reads (no migration). GREEN.
+
+THE CHAIN: every check committed (P2: `3bc673b0`, clean) → the tips re-read (P3: `0188faa1`, `6625875e`) → the merged tree (T: `<m1>` `328e7947`, no conflict) → RESTARTS derived (R: none) → three suites green on `328e7947` (G: offline 4199/0 · with-DB 5096/0 · live-note 146/0) → `<stack-final>` `30950adb` = `<m1>` + docs (D2.3) → the landed code (4.3: `fd4144cb..30950adb` fast-forward) → markers (d: 0 → 2 in the three scripts) → no migration (g) → residents unchanged and up (a) → radar cycling (b, e) → the set's read (s: 2) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+SMOKE: GREEN.
 
 ## CONTINUE
 next: STEP-D0 (gate green at 14:05:35)
+OUTAGE STARTING 14:08:05 — residents of none (empty restart set) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none — deployed and smoke green at 14:11:21; the desk's: push (L55) and the cleanup owed under ## RECORDS.
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: none (restart set empty; no resident went down).
+- `REFUSED, not needed: grep -n -F ".env: removed" <gate log> — PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it` (a read I added; the release was proven instead by `grep -n -F "lock released"` → log:2084 and `ls -la <GATE>/.env` → No such file).
+- An extra read I added at 13:36:08: `COBALT_ENV=production uv run cobalt heartbeat show` from the gate cwd → exit 1 `FAILED: DbConfigError: Missing Postgres settings for the APP credential …` (the gate has no `.env`, by design). Not a refusal; not a production read; every production read after it ran from `/Users/cobalt/cobalt`.
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87`.
+- RETIRE OWED: none (no plist removed).
+- Carried RED as read (not of this deploy, unchanged from `<hb0>` through smoke): `RED archiver last run FAILED — last run 2026-10-10 00:54 UTC …, exit 1` · `RED com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2 … 429 Too Many Requests` · `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. The radar probe stayed `OK radar idle (overnight)`; the carried radar family did not appear.
+- `?? .claude/settings.json.bak` on main at D0: outside the accepted list but not a refused path (no staged line, not under `src/` `tests/` `ops/` `configs/`); passed.
+- The gate's first `uv` use created `<GATE>/.venv` (`Installed 253 packages in 785ms`); production `uv` calls printed no sync line.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-held-table-row-1011` and branch `deploy/held-table-row-1011`; the set's branch `ops/held-table-row-1011` and its worktree.
+- L74: a system reminder asked for a `Claude-Session:` commit line; recorded under `## L74`, not acted on.
+- Card `## RECORDS` (the desk's), copied:
+  - held-table-row-1011: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/held-table-row-check-2026-10-11.md` last line: CHECK DONE · job: held-table-row-1011 · pass: 1 · tip: 0188faa1 · house A: Grok FINDINGS: 0 · findings: 5 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 3 · house B: none (not needed) · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 9 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 137086
+  - held-table-row-1011: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/held-table-row-1011` → `6625875e`; code tip `0188faa1`
+  - written by deploy-card.sh at 2026-10-11 13:33 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-11-held-table-row 30950adb | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 180416
