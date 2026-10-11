@@ -1166,10 +1166,11 @@ def builder_call(command, s):
         return False
     if not PLAIN_PROMPT.fullmatch(command[len(prefix):len(command) - len(suffix)]):
         return False
-    if write_targets(prefix) != {target + "/**"}:
+    if write_targets(prefix + suffix) != {target + "/**"}:
         return False
     head = verb(words(prefix))
-    if head == "claude" and (" --permission-mode dontAsk " not in prefix or '--disallowedTools "Bash" ' not in prefix):
+    if head == "claude" and (" --permission-mode dontAsk " not in prefix + suffix
+                             or '--disallowedTools "Bash" ' not in prefix + suffix):
         return False
     if head == "grok" and "--always-approve" in command:
         return False

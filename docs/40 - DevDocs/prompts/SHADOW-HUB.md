@@ -17,7 +17,7 @@ One row per proven id (the card's `## RECORDS`). Three rows (R1019: no Opus and 
 | id | slug | builder allow | builder command | SIGN |
 |---|---|---|---|---|
 | `grok-4.7` | `grok` | `Bash(grok -m grok-4.7 --sandbox cobalt-job *)` | `grok -m grok-4.7 --sandbox cobalt-job --allow "Write(/Users/cobalt/cobalt-wt/<worktree>/**)" -p "<pass prompt>"` | NEEDS HIS SIGN-OFF «SIGN: his row» |
-| `claude-sonnet-5-5` | `sonnet` | `Bash(claude -p --model claude-sonnet-5-5 *)` | `claude -p --model claude-sonnet-5-5 --permission-mode dontAsk --output-format json --allowedTools "Read" "Edit(//Users/cobalt/cobalt-wt/<worktree>/**)" "Write(//Users/cobalt/cobalt-wt/<worktree>/**)" --disallowedTools "Bash" "AskUserQuestion" "EnterWorktree" "Agent" "WebFetch" "mcp__*" "<pass prompt>"` | NEEDS HIS SIGN-OFF «SIGN: his row» |
+| `claude-sonnet-5-5` | `sonnet` | `Bash(claude -p --model claude-sonnet-5-5 *)` | `claude -p --model claude-sonnet-5-5 "<pass prompt>" --permission-mode dontAsk --output-format json --allowedTools "Read(//Users/cobalt/cobalt-wt/<worktree>/**)" "Edit(//Users/cobalt/cobalt-wt/<worktree>/**)" "Write(//Users/cobalt/cobalt-wt/<worktree>/**)" --disallowedTools "Bash" "AskUserQuestion" "EnterWorktree" "Agent" "WebFetch" "mcp__*"` | NEEDS HIS SIGN-OFF «SIGN: his row» |
 | `gpt-5.6-terra` | `terra` | `Bash(codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write *)` | `codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write -C /Users/cobalt/cobalt-wt/<worktree> "<pass prompt>" < /dev/null` | NEEDS HIS SIGN-OFF «SIGN: his row» · network: off (workspace-write default; X1 proves it) |
 
 Notes on the rows:
