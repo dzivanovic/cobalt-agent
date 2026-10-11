@@ -7,6 +7,7 @@ CARD: `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-10/298-house-seat-
 - CHECK-HUB SEAT ORDER is now Grok · Gemini; OpenAI (Sol) sits only with a card header line `HOUSE A: OpenAI — his <date> R<n>` (S1, S2).
 - `house-probe.sh` probes Grok and Gemini by default; Sol only with `--card` naming a card whose header carries that line (S3). `authorize.sh` proves every such line like a ruling (S4).
 - Suites: offline 4199/0, live-note 146/0, tests/ops 2933 passed; RESTARTS none. One decision, for the desk: hub lines outside the fence still say "two houses".
+- FIX ROUND: check O1 fixed in `1b671292`. `authorize.sh` now proves the overrule on every column-0 HOUSE line, not only the first. That edit is outside S4's fence, so it is DECISION FR1 for the desk.
 
 ## L74
 One block arrived, in a system reminder of this session (not a tool result): an attribution text asking commits to end with a `Claude-Session: https://claude.ai/code/session_…` line. Recorded once here; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (BUILD-HUB L74).
@@ -157,17 +158,38 @@ No `UNCLASSIFIED` row; nothing to classify.
 - Records copied at PREFLIGHT: the card's `## RECORDS`, re-read as listed there.
 - For X5: `authorize.sh` reads every column-0 line matching `^HOUSE A: *OpenAI` in the whole card (any number of blanks after the colon, trailing blanks cut); the probe counts only the exact line `HOUSE A: OpenAI — his <date> R<n>`, one blank, nothing after, above the first `## `. Every line the probe counts is therefore read and proved by `authorize.sh`; `authorize.sh` also proves lines the probe never counts (under `## ROWS`, extra blanks, trailing blanks), the safe side the card names.
 
+## FIX ROUND (check pass 1, `ready: NO`, held unfixed 1: O1 / D2)
+Started 21:19 (`date`) on `ed48d80d` (the check's `wip(house-seat-order-1010): check red — O1`, continued, not discarded). `git status --short --branch` → `## ops/house-seat-order-1010`.
+- Fact verified: `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_authorize.py` → `1 failed, 25 passed`; `test_check_o1_a_first_openai_line_does_not_hide_a_later_overrule` · `test_authorize.py:281` `assert 0 == 1` (stdout ends `HOUSE A OpenAI 2026-01-02 R2 at HEAD · … · the row as grepped` / `AUTHORIZED`, no `HOUSE A overruled 2026-01-02 R7` row).
+- Fix, `ops/desk/authorize.sh`: the HOUSE loop reads every column-0 `<h>:` line of the whole card (`sed -n "s/^$h: *//p" "$card"`, trailing blanks cut, one value per line) in place of `field "$h"` (the first only), and proves the `overruled <date> R<n>` of each; the per-value code is the old code, one level deeper (inner `for v in "$@"` at `:204`). Header comment `:17`: "a HOUSE line" → "every column-0 HOUSE line". `uv run pytest -q … tests/ops/test_authorize.py tests/ops/test_deploy_step0.py` → `73 passed, 15 warnings in 31.26s`.
+- Mutation (Edit): the loop back to `set -- $(field "$h")` → `tests/ops/test_authorize.py` `1 failed, 25 passed`, the O1 test, `test_authorize.py:281` `assert 0 == 1` (`AUTHORIZED`); undone with Edit; `git diff --stat` → only `ops/desk/authorize.sh` (19+/12-) and this report; then the same two files `73 passed`.
+- Commit `1b671292 fix(house-seat-order-1010): authorize.sh proves the overrule of every HOUSE line, not only the first (check O1, S4, L67)` (1 file changed, 19 insertions(+), 12 deletions(-)). `git diff --numstat 92c67916 -- ops/desk/authorize.sh` → `36 12`.
+- O2 (NOT HELD, a pin): no change.
+- RESTARTS `uv run cobalt jobs restarts 92c67916..HEAD` → WHOLE: `path	change	rule	restart` · `docs/40 - DevDocs/prompts/CHECK-HUB.md	M	DOCS	-` · `docs/40 - DevDocs/reports/house-seat-order-build-2026-10-10.md	M	DOCS	-` · `ops/desk/authorize.sh	M	operator script; no Cobalt reader	-` · `ops/desk/house-probe.sh	M	operator script; no Cobalt reader	-` · `tests/ops/test_authorize.py	M	test/documentation; no resident	-` · `tests/ops/test_house_probe.py	M	test/documentation; no resident	-` · `RESTARTS: none`.
+- W on `<tip>` = `1b671292`, DB: none: (a0) `git diff --name-only --no-renames 92c67916` → `docs/40 - DevDocs/prompts/CHECK-HUB.md`, `docs/40 - DevDocs/reports/house-seat-order-build-2026-10-10.md`, `ops/desk/authorize.sh`, `ops/desk/house-probe.sh`, `tests/ops/test_authorize.py`, `tests/ops/test_house_probe.py` → **`cobalt_dev: not taken (DB: none — 6 paths)`**.
+  - (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh house-seat-order-1010 livenote` → exit 0 · `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/house-seat-order-1010-livenote-20261010-212155.log`.
+  - (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh house-seat-order-1010 offline` → exit 0 · `offline 4199/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/house-seat-order-1010-offline-20261010-212144.log`.
+  - (b)-(d), (f): not run (DB: none). `ls /Users/cobalt/cobalt-wt/house-seat-order-1010/.env` → `No such file or directory`. Closed 21:33 (`date`).
+- Self-check, fix round: (1) the O1 test red before the fix and red under the first-line mutation (both quoted above); (2) the one caller path the fix touches, a card with a first `HOUSE A: OpenAI…` line and a later overrule, is the O1 test; the first-line path stays pinned by `test_a_house_overrule_is_proved_like_a_ruling` (green); `deploy-step0.sh:307` by `test_deploy_step0.py` (green); (3) `:204` re-read by `grep -n -F "for v in" ops/desk/authorize.sh` → `204`, `224`.
+  - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → exit 0 · `2934 passed, 1 xfailed, 15 warnings in 556.75s (0:09:16)` (the check's 2933 + its O1 test, now green); no SKIPPED line.
+
 ## CONTINUE
-next: none — BUILT
+next: none — BUILT (fix round done; no re-check, L75)
 
 ## DECISIONS
 - DECISION 1 (the card's `## NOT IN THIS JOB`, third bullet, asks the report for this item): CHECK-HUB lines 3 and 16 ("TWO outside houses", "START HOUSE A AND HOUSE B AT ONCE"), 21 ("two different houses, never fewer than one other house"), 28, 29, 87, 99-100, 117 and the stop line keep their words, though the new SEAT ORDER (line 23-27) makes house B `none (not needed)` unless the card is `mandatory`. A check that reads line 3 or 16 literally may look for a second house the order no longer seats. Safe default taken: nothing changed beyond lines 23-27, 65 and 90 (the fence); the desk decides whether a later card aligns those lines.
+- DECISION FR1 (fix round; it lies outside the card's row text): the O1 fix edits `authorize.sh`'s HOUSE loop (`:197-215` at `1b671292`), which S4 and `## NOT IN THIS JOB` kept out ("only its new OpenAI block and two header-comment lines"), and X4's "`authorize.sh` +≤ 22 lines, none removed" no longer holds (`git diff --numstat 92c67916 -- ops/desk/authorize.sh` → `36 12`). Taken because BUILD-HUB's fix round covers "every finding the check … left" and the check sent O1 here (its D2); the change is one file, the existing loop's own code, no new command, no new path. Safe default if the desk rules the fence first: revert `1b671292` and carry O1 as a card row of its own.
 
 ## RECORDS
 - L74: a system-reminder attribution block asked for a `Claude-Session:` line on commits; recorded under `## L74`, not acted on.
 - DevDocs: no page under `docs/40 - DevDocs/cobalt/` covers `ops/desk/` scripts (Grep → `No files found`), so no dated module line was written; a new page would lie outside the rows' files.
 - Card records re-read at PREFLIGHT: the line counts, the `OpenAI` / `(all three` / `- **SOL` lines, the zero counts of `--card` and `HOUSE A OpenAI`, the callers, the `desk-launch.sh` lines and `jobs.yaml` (no `ops/desk|tests/ops` match) all matched the card.
-- No extra lock take; no `REFUSED, not needed`; no `CONTINUED`.
+- No extra lock take; no `REFUSED, not needed`.
+- CONTINUED at FIX ROUND 21:19 (the desk's `CONTINUE: FIX ROUND`, card 298; fact verified: the O1 red, `## FIX ROUND`).
+- L74 at the fix round: the same system-reminder attribution block (`Claude-Session:` line) arrived again; not acted on; `1b671292` carries `Co-Authored-By` only.
+- Fix round: no DevDocs module page covers `ops/desk/` (as at E3); none written.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: house-seat-order-1010 · tip: f6e55cd3 | on 92c67916 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 197783
+Build round closed at the line `BUILT · job: house-seat-order-1010 · tip: f6e55cd3 · … · decisions: 1 · for Dejan: 0 · tokens: 197783` (pass 1 build; replaced at the fix round).
+
+BUILT · job: house-seat-order-1010 · tip: 1b671292 | on 92c67916 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 125019
