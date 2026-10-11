@@ -238,30 +238,49 @@ HELD_IDS
             *)
                 if hr_src=$(git -C "$REPO" show "$hr_tip:$hr_path" 2>/dev/null); then
                     # `absent`, or the def's decorators (`strict`, `xfail` or `plain`) and ` pytestmark`
-                    # when a module `pytestmark` statement holds xfail
+                    # when a `pytestmark` statement (module or class) holds xfail. The def is the
+                    # column-0 one when there is one; its decorators are the `@` lines directly
+                    # above it, each with its bracketed continuation lines, comments skipped
                     hr_shape=$(printf '%s\n' "$hr_src" | awk -v name="$hr_name" '
                         function judge(t, s) {
                             if (index(t, "xfail") && index(t, "strict=True")) return "strict"
                             if (index(t, "xfail") && s != "strict") return "xfail"
                             return s
                         }
+                        function decos(s, e,   j, t, depth) {
+                            depth = 0
+                            for (j = s; j < e; j++) {
+                                if (line[j] ~ /^[ \t]*#/) continue
+                                if (depth == 0 && line[j] !~ /^[ \t]*@/) return 0
+                                t = line[j]
+                                depth += gsub(/[([{]/, "", t)
+                                t = line[j]
+                                depth -= gsub(/[])}]/, "", t)
+                            }
+                            return depth == 0
+                        }
                         { line[NR] = $0 }
                         END {
-                            pm = 0; inpm = 0
+                            pm = 0; inpm = 0; pind = 0
                             for (i = 1; i <= NR; i++) {
-                                c = substr(line[i], 1, 1)
-                                if (line[i] ~ /^pytestmark/) inpm = 1
-                                else if (inpm && (line[i] ~ /^[ \t]*$/ || (c != " " && c != "\t" && c != ")" && c != "]"))) inpm = 0
+                                ind = match(line[i], /[^ \t]/) - 1
+                                c = substr(line[i], ind + 1, 1)
+                                if (line[i] ~ /^[ \t]*pytestmark/) { inpm = 1; pind = ind }
+                                else if (inpm && (line[i] ~ /^[ \t]*$/ || (ind <= pind && c != ")" && c != "]"))) inpm = 0
                                 if (inpm && index(line[i], "xfail")) pm = 1
                             }
                             d = 0
-                            for (i = 1; i <= NR; i++) if (line[i] ~ ("^[ \t]*def " name "\\(")) { d = i; break }
+                            for (i = 1; i <= NR; i++) if (line[i] ~ ("^def " name "\\(")) { d = i; break }
+                            if (!d) for (i = 1; i <= NR; i++) if (line[i] ~ ("^[ \t]+def " name "\\(")) { d = i; break }
                             if (!d) { print "absent"; exit }
                             top = d
-                            for (i = d - 1; i >= 1 && line[i] !~ /^[ \t]*$/ && line[i] !~ /^[ \t]*#/; i--)
-                                if (line[i] ~ /^[ \t]*@/) top = i
+                            for (i = d - 1; i >= 1 && line[i] !~ /^[ \t]*$/; i--) {
+                                if (line[i] ~ /^[ \t]*(async[ \t]+)?(def|class)[ \t]/) break
+                                if (line[i] ~ /^[ \t]*@/ && decos(i, d)) top = i
+                            }
                             shape = "plain"; deco = ""
                             for (i = top; i < d; i++) {
+                                if (line[i] ~ /^[ \t]*#/) continue
                                 if (line[i] ~ /^[ \t]*@/) { if (deco != "") shape = judge(deco, shape); deco = line[i] }
                                 else deco = deco " " line[i]
                             }
