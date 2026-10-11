@@ -9,6 +9,7 @@ its `## BUILDERS` table holds the three builder rows (R1019: no Opus and no Sol 
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 
 import pytest
@@ -237,3 +238,43 @@ def test_s5_the_unavailable_model_has_its_na_row():
 
 def test_s1_the_built_line_can_record_a_db_none_gate():
     assert "cobalt_dev: not taken" in text()
+
+
+# ---- the fix round of shadow-hub-1011 (card 324 F1, F2) --------------------------------------
+
+READ_WT = "Read(//Users/cobalt/cobalt-wt/<worktree>/**)"
+
+
+def sonnet_words(worktree: str = "<worktree>") -> list[str]:
+    """The Sonnet `builder command`, `shlex`-split with `<worktree>` and the prompt filled."""
+    cmd = command(builders(text())["claude-sonnet-5-5"])
+    cmd = cmd.replace("<worktree>", worktree).replace('"<pass prompt>"', '"PROMPTWORD"')
+    return shlex.split(cmd)
+
+
+def tool_list(ws: list[str], flag: str) -> list[str]:
+    """The words after `flag` up to the next word that starts with `--`."""
+    out = []
+    for w in ws[ws.index(flag) + 1:]:
+        if w.startswith("--"):
+            break
+        out.append(w)
+    return out
+
+
+def test_f1_the_sonnet_prompt_comes_right_after_the_model():
+    ws = sonnet_words()
+    k = ws.index("PROMPTWORD")
+    assert ws[k - 2:k] == ["--model", "claude-sonnet-5-5"]
+    for flag in ("--allowedTools", "--disallowedTools"):
+        assert "PROMPTWORD" not in tool_list(ws, flag)
+    for flag in ("--allowedTools", "--disallowedTools", "--permission-mode"):
+        assert k < ws.index(flag)
+
+
+@pytest.mark.parametrize("worktree", ["<worktree>", "x-job-sonnet"])
+def test_f2_the_sonnet_read_is_its_worktree_only(worktree):
+    allowed = tool_list(sonnet_words(worktree), "--allowedTools")
+    reads = [w for w in allowed if w == "Read" or w.startswith("Read(")]
+    assert reads == [READ_WT.replace("<worktree>", worktree)]
+    assert "Read" not in allowed

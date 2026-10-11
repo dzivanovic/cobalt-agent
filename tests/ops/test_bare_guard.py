@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 from pathlib import Path
 from types import SimpleNamespace
@@ -2101,9 +2102,10 @@ SHADOW_ROWS = {
     ),
     "claude-sonnet-5-5": (
         "sonnet", "Bash(claude -p --model claude-sonnet-5-5 *)",
-        'claude -p --model claude-sonnet-5-5 --permission-mode dontAsk --output-format json --allowedTools "Read" '
+        'claude -p --model claude-sonnet-5-5 "<pass prompt>" --permission-mode dontAsk --output-format json '
+        '--allowedTools "Read(//Users/cobalt/cobalt-wt/<worktree>/**)" '
         '"Edit(//Users/cobalt/cobalt-wt/<worktree>/**)" "Write(//Users/cobalt/cobalt-wt/<worktree>/**)" '
-        '--disallowedTools "Bash" "AskUserQuestion" "EnterWorktree" "Agent" "WebFetch" "mcp__*" "<pass prompt>"',
+        '--disallowedTools "Bash" "AskUserQuestion" "EnterWorktree" "Agent" "WebFetch" "mcp__*"',
     ),
     "gpt-5.6-terra": (
         "terra", "Bash(codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write *)",
@@ -2219,6 +2221,23 @@ def test_s7_a_dangling_env_symlink_counts_as_present(roots):
 def test_s7_no_env_lets_the_pass_through(roots):
     """The positive control of S7."""
     assert_allowed(run(builder(roots, "grok-4.7"), shadow_seat(roots)))
+
+
+def test_f1_a_sonnet_call_with_the_prompt_last_is_g7(roots):
+    """Card 324 F1: the prompt goes right after --model's value; the old order is no longer the
+    hub's command."""
+    sonnet = builder(roots, "claude-sonnet-5-5").replace(f' "{PASS_PROMPT}"', "", 1) + f' "{PASS_PROMPT}"'
+    assert_denied(run(sonnet, shadow_seat(roots, "claude-sonnet-5-5")), G7_ROUTE)
+
+
+def test_f2_a_sonnet_call_with_a_bare_read_is_g7(roots):
+    """Card 324 F2: the Read string is the worktree's; a bare "Read" is not the hub's command."""
+    scoped = builder(roots, "claude-sonnet-5-5")
+    bare = re.sub(r'"Read\([^)]*\)"', '"Read"', scoped)
+    assert bare != scoped
+    seat = shadow_seat(roots, "claude-sonnet-5-5")
+    assert_denied(run(bare, seat), G7_ROUTE)
+    assert_allowed(run(scoped, seat))
 
 
 @pytest.mark.parametrize("stop", ["SHADOW BUILT · job: x · builder: grok-4.7", "SHADOW ROLE · judge · builder: grok-4.7"])
