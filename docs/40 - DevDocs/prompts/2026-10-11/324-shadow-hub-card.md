@@ -2,7 +2,7 @@ JOB: shadow-hub-1011
 LADDER: OFF-LADDER — reports/cto-2026-10-11.md R1008
 BRANCH: ops/shadow-hub-1011
 WORKTREE: shadow-hub-1011
-BASE: «FILL: main's code commit at the build launch (8 hex)»
+BASE: 680eca0e
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/shadow-hub-1011/docs/40 - DevDocs/reports/shadow-hub-build-2026-10-11.md
 CHECK REPORT:
