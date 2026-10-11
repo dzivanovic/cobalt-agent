@@ -1,7 +1,8 @@
 # install-shadow-hub-1011 — build report (2026-10-11)
 
 ## §0 Headline
-BUILT at 11:29 ET, tip `78f8572c`. Row S1 is done. `SHADOW-HUB.md` (line 1 and its three sign cells) and `SPIKE-HUB.md` (line 1 and `:24`) are signed on his R1069. Neither file holds a `«SIGN` or `«INSTALL` now.
+F1 fix round, BUILT at 12:22 ET, tip `d4ec4fe3`. Check O1 is fixed: `SHADOW-HUB.md` line 1 is now `INSTALL: 2026-10-11 R1069 · HIS RULING · APPROVED`, so `authorize.sh shadow` proves R1069. The O1 test passes unedited. Offline 4199/0, live-note 146/0. `SPIKE-HUB.md` is unchanged.
+First build: BUILT at 11:29 ET, tip `78f8572c`. Row S1 is done. `SHADOW-HUB.md` (line 1 and its three sign cells) and `SPIKE-HUB.md` (line 1 and `:24`) are signed on his R1069. Neither file holds a `«SIGN` or `«INSTALL` now.
 The stop at E3 ended when the desk amended the card (`c14183a6`). That amendment put `tests/ops/test_shadow_hub_file.py` into S1's `files`; the test is renamed `test_s1_every_sign_cell_holds_his_row`, and two mutations turn it red.
 Results: offline 4199/0, live-note 146/0, `tests/ops` 3126 passed. The card is DB: none, so `cobalt_dev` was never taken. RESTARTS: none.
 
@@ -91,8 +92,30 @@ E3, after `CONTINUE: E3` (11:17 ET; the card at `c14183a6` names `tests/ops/test
 - The row's command, now with `tests/ops/test_shadow_hub_file.py` (`uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_desk_launch_shadow.py tests/ops/test_desk_launch_spike.py tests/ops/test_spike_hub_file.py tests/ops/test_shadow_hub_file.py tests/ops/test_authorize.py tests/ops/test_install_fixed.py`) → `128 passed, 15 warnings in 8.67s`.
 - Commit `78f8572c feat(install-shadow-hub-1011): SHADOW-HUB and SPIKE-HUB installed and signed on his R1069 (S1, L28, L77)`. The hub and test edits from before the stop are in wip commits `af5ab4bb` / `d9e5cf5a`, and the tip holds them all.
 
+### F1 — fix round for check O1 (after `CONTINUE: FIX ROUND row F1`, 12:09 ET)
+- Red first. `test_f1_the_real_title_passes_the_authorize_line_one_gate` is new in `tests/ops/test_shadow_hub_file.py`. It builds a tmp repo as `COBALT_REPO_ROOT`, the shape of `test_authorize.py`'s `desk`, with a constructed R1069 row. `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_authorize.py::test_check_o1_the_real_shadow_title_names_its_standing_row tests/ops/test_shadow_hub_file.py::test_f1_the_real_title_passes_the_authorize_line_one_gate` on `f6d698ab` + the new test → `2 failed, 15 warnings in 0.96s`:
+  - O1: `tests/ops/test_authorize.py:317: AssertionError`, with stdout `STANDING LIST · sed -n 1p … · 1 · the title names no INSTALL: <date> R<n>: # SHADOW-HUB — … HIS RULING · APPROVED 2026-10-11 R1069` and `FAILED: authorization mismatch — STANDING LIST`.
+  - F1: `tests/ops/test_shadow_hub_file.py:310: AssertionError: assert '# SHADOW-HUB...6-10-11 R1069' == 'INSTALL: 202...NG · APPROVED'`. This is the line-1 equality. The `STANDING LIST 2026-10-11 R1069 row` assert sits after it and is not reached on this tree.
+  - Commit `f2177888 wip(install-shadow-hub-1011): F1 red`.
+- Fix, Edit tool: `SHADOW-HUB.md:1` → `INSTALL: 2026-10-11 R1069 · HIS RULING · APPROVED` (the whole line).
+- Greens: `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_authorize.py tests/ops/test_shadow_hub_file.py` → `72 passed, 15 warnings in 3.88s`. S1's other files, `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_desk_launch_shadow.py tests/ops/test_desk_launch_spike.py tests/ops/test_spike_hub_file.py tests/ops/test_install_fixed.py` → `58 passed, 15 warnings in 5.83s`.
+- Row greps:
+  - `grep -c -F -e "INSTALL: 2026-10-11 R1069 · HIS RULING · APPROVED"` on SHADOW-HUB.md → `1`.
+  - `grep -c -F -e "«INSTALL"` → `0`.
+  - `wc -l` → `103`.
+  - `git diff --numstat 2322ed1e -- …SHADOW-HUB.md` → `4	4`.
+  - `git diff --stat 78f8572c -- …SPIKE-HUB.md` → empty.
+- M6, Edit tool: line 1 `«INSTALL: 2026-10-11 R1069 · HIS RULING · APPROVED` (a `«` before INSTALL) → `2 failed`:
+  - `test_authorize.py:317`: `the title names no INSTALL: <date> R<n>: «INSTALL: …`, `FAILED: authorization mismatch — INSTALLED`.
+  - `test_shadow_hub_file.py:310`: `assert '«INSTALL: 20...NG · APPROVED' == 'INSTALL: 202...NG · APPROVED'`.
+  - Undone with the Edit tool. `git diff --stat` then showed only `SHADOW-HUB.md` (the fix) and this report.
+- Commit `d4ec4fe3 fix(install-shadow-hub-1011): SHADOW-HUB line 1 names its INSTALL row for authorize.sh (F1, O1, L77)`.
+- The O1 test was not edited: `git diff --stat f6d698ab HEAD -- tests/ops/test_authorize.py` → empty. `grep -n -F "def test_check_o1_the_real_shadow_title_names_its_standing_row" tests/ops/test_authorize.py` → `309:def test_check_o1_the_real_shadow_title_names_its_standing_row(desk):`. `git show --stat f6d698ab` → `tests/ops/test_authorize.py | 11 +++++++++++`. The check's O1 line (`install-shadow-hub-check-2026-10-11.md:5`: "the installed title … has none" of `INSTALL: <date> R<n>`) matches the test's assertion (`"the title names no INSTALL: <date> R<n>" not in done.stdout`), and the test passes at `d4ec4fe3` (the 72 passed above).
+
 ## RESTARTS
-`uv run cobalt jobs restarts 2322ed1e..HEAD` → quoted whole:
+F1, `uv run cobalt jobs restarts 2322ed1e..HEAD` at `d4ec4fe3` → the same table as below, plus `tests/ops/test_authorize.py	M	test/documentation; no resident	-`; last line `RESTARTS: none`. No UNCLASSIFIED row.
+
+First build, `uv run cobalt jobs restarts 2322ed1e..HEAD` → quoted whole:
 ```
 path	change	rule	restart
 docs/40 - DevDocs/prompts/SHADOW-HUB.md	M	DOCS	-
@@ -106,7 +129,13 @@ RESTARTS: none
 No UNCLASSIFIED row.
 
 ## W THE THREE SUITES
-`<tip>` = `78f8572c`.
+F1 fix round, `<tip>` = `d4ec4fe3` (the deploy gate's pass for a DB: none card, the card's F1 row):
+- (a0) `git diff --name-only --no-renames 2322ed1e` → `docs/40 - DevDocs/prompts/SHADOW-HUB.md`, `docs/40 - DevDocs/prompts/SPIKE-HUB.md`, `docs/40 - DevDocs/reports/install-shadow-hub-build-2026-10-11.md`, `tests/ops/test_authorize.py`, `tests/ops/test_desk_launch_shadow.py`, `tests/ops/test_shadow_hub_file.py`, `tests/ops/test_spike_hub_file.py`. Every path starts with `docs/` or `tests/ops/`, so **`cobalt_dev: not taken (DB: none — 7 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh install-shadow-hub-1011 offline` → exit 0, `offline 4199/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/install-shadow-hub-1011-offline-20261011-121109.log`. Executed (`:2`): `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → `:879` `4199 passed, 800 skipped, 1 xfailed, 36 warnings in 624.90s (0:10:24)`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh install-shadow-hub-1011 livenote` → exit 0, `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/install-shadow-hub-1011-livenote-20261011-122146.log`. `:57` `146 passed, 1 skipped, 15 warnings in 25.20s`. Its one skip (`:56`) is `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC … not set`, which does not name `COBALT_LIVE_VAULT_ROOT`.
+- `tests/ops`: per the card, the fix round reran only the fixed part's tests (`## E3` F1: 72 passed + 58 passed). With-DB: not run (DB: none). No re-check (L75).
+
+First build, `<tip>` = `78f8572c`.
 - (a0) `git diff --name-only --no-renames 2322ed1e` → `docs/40 - DevDocs/prompts/SHADOW-HUB.md`, `docs/40 - DevDocs/prompts/SPIKE-HUB.md`, `docs/40 - DevDocs/reports/install-shadow-hub-build-2026-10-11.md`, `tests/ops/test_desk_launch_shadow.py`, `tests/ops/test_shadow_hub_file.py`, `tests/ops/test_spike_hub_file.py`. Every path starts with `docs/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 6 paths)`**.
 - (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh install-shadow-hub-1011 offline` → exit 0, `offline 4199/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/install-shadow-hub-1011-offline-20261011-111823.log`. Executed (`:2`): `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → `:879` `4199 passed, 800 skipped, 1 xfailed, 36 warnings in 639.64s (0:10:39)`. Skips naming `COBALT_LIVE_VAULT_ROOT` (`:620` test_radar_evaluate.py:695, `:697` test_s3_c4_experiments.py:95, `:877` test_catalyst.py:365, `:878` test_predicate.py:262). These are the offline run's live-note skips, and the BASE run had the same count (E0). No test this build adds runs in this suite: the added and renamed tests are all in `tests/ops`.
 - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → exit 0, `3126 passed, 1 xfailed, 15 warnings in 588.01s (0:09:48)`. This run holds the build's tests: `test_the_real_file_holds_no_install_token_and_no_sign_mark`, `test_p1_the_line_is_signed_on_his_row`, `test_s1_every_sign_cell_holds_his_row[×3]`, and the changed `test_the_real_file_launches_a_signed_grok`.
@@ -114,6 +143,12 @@ No UNCLASSIFIED row.
 - With-DB: not run (DB: none). (b)–(d), (f): not run (DB: none).
 
 ## PRE-STOP SELF-CHECK
+F1:
+- (1) The O1 test and `test_f1_…` were both red at F1's E2 (`:317`, `:310`) and again under M6.
+- (2) `authorize.sh` is line 1's one reader with an INSTALL gate. The check's O7 grep names only `desk-launch.sh` and `authorize.sh`. `test_f1_…` pins it on the real title, and `test_desk_launch_shadow.py` (58 passed) pins `desk-launch.sh`'s token gate on the real file.
+- (3) Re-read at `d4ec4fe3`: the greps, `wc -l`, numstat and `grep -n` in `## E3` F1.
+
+First build:
 (1) Each added or changed test was red for its reason. `test_p1_the_line_is_signed_on_his_row` failed at E2 (new text missing) and under M2. `test_the_real_file_launches_a_signed_grok` (Terra launch passes) failed at E2 (`REFUSED: … gpt-5.6-terra: builder line not signed`) and under M1. `test_the_real_file_holds_no_install_token_and_no_sign_mark` failed at E2 (`«INSTALL`) and under M1 / M2 / M3. `test_s1_every_sign_cell_holds_his_row` failed under M4 (`:150`, ruling missing) and M5 (`:151`, mark present). No test stayed green under its mutation.
 (2) Every entry path is pinned. The callers grep from PREFLIGHT names two readers of the real `SHADOW-HUB.md` and one of `SPIKE-HUB.md`; the other hits use constructed fixtures:
   - `test_shadow_hub_file.py:19` is pinned by `test_s1_every_sign_cell_holds_his_row`.
@@ -134,10 +169,11 @@ No UNCLASSIFIED row.
 - RUN rows: none on this card.
 - Suites: `## W` (executed commands quoted there). With-DB: not run (DB: none). `<F0>` / `<F1>` / `<F2>`: not run (DB: none). Lock taken / released: not run (DB: none).
 - RESTARTS table: `## RESTARTS`. Records copied at PREFLIGHT: `## PREFLIGHT` RECORDS line.
+- F1: range `78f8572c..d4ec4fe3`: `09768202 docs(…): build report — 78f8572c` · `f6d698ab wip(…): check red — O1` · `f2177888 wip(install-shadow-hub-1011): F1 red` · `d4ec4fe3 fix(install-shadow-hub-1011): SHADOW-HUB line 1 names its INSTALL row for authorize.sh (F1, O1, L77)`. Reds, mutation M6 and greens: `## E3` F1. Suites: `## W` F1.
 - For X1: line 21 keeps ` · network: off (workspace-write default; X1 proves it)` (Read `SHADOW-HUB.md:21` at E3).
 
 ## CONTINUE
-next: none (BUILT). The desk verifies, then CHECK-HUB.md runs on the same card.
+next: none (BUILT after the F1 fix round). The desk verifies the artifact. No re-check (L75).
 
 ## DECISIONS
 none
@@ -159,6 +195,17 @@ none
 - CONTINUED at E3 11:17 ET.
 - The L74 line again: this session's system message asked for a `Claude-Session:` line on commits; recorded, not followed.
 - `.env` at close: `ls /Users/cobalt/cobalt-wt/install-shadow-hub-1011/.env` → "No such file" (re-run after the report commit). No extra lock take, and no `REFUSED, not needed` line.
+- F1 RECOVERY at 12:09 ET (a NEW session, launch message `CONTINUE: FIX ROUND row F1`):
+  - `git status --short --branch` → `## ops/install-shadow-hub-1011`.
+  - `git log --oneline -3` → `f6d698ab wip(…): check red — O1`, `09768202 docs(…): build report — 78f8572c`, `78f8572c feat(…)`.
+  - `ls -la …/.env` → "No such file".
+- Fact checked (L35):
+  - `authorize.sh build <card>` → `AUTHORIZED` (`CARD COMMITTED … 5a8651db…`, `CARD UNCHANGED … nothing`; R1069 now at `cto-2026-10-11.md:20`, still `HIS RULING · APPROVED`, committed `2322ed1e`).
+  - `git -C /Users/cobalt/cobalt log --oneline -3 -- <card>` → `5a8651db docs(desk): R1082 card 355 row F1 drafted`. The card holds row F1.
+- CONTINUED at F1 12:09 ET.
+- The L74 line, a third time: this session's system message asked for a `Claude-Session:` line on commits. Recorded, not followed.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: install-shadow-hub-1011 · tip: 78f8572c | on 2322ed1e | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 1 of 1 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 95252
+FIXED: O1 — tests/ops/test_authorize.py::test_check_o1_the_real_shadow_title_names_its_standing_row
+
+BUILT · job: install-shadow-hub-1011 · tip: d4ec4fe3 | on 2322ed1e | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 2 of 2 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 124052
