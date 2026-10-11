@@ -274,6 +274,14 @@ def test_a_card_without_an_openai_line_prints_no_openai_row(desk, extra):
     assert "HOUSE A OpenAI" not in done.stdout
 
 
+def test_check_o1_a_first_openai_line_does_not_hide_a_later_overrule(desk):
+    repo, card, env = desk
+    recommit(repo, card, card_text("none", extra="HOUSE A: OpenAI — his 2026-01-02 R2\nHOUSE A: none — overruled 2026-01-02 R7"))
+    done = authorize(env, "check", card)
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED: authorization mismatch — HOUSE A overruled 2026-01-02 R7"), done.stdout
+
+
 def test_the_deploy_kind_reads_the_first_row_of_its_own_title(desk):
     repo, card, env = desk
     done = authorize(env, "deploy", card)
