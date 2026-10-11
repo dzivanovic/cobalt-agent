@@ -1,10 +1,13 @@
 # deploy terra-pass-prompt-1011 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-(filled at close)
+- DEPLOYED: `ops/terra-pass-prompt-1011` (code tip `a790e54d`, head `7e0cc8a2`) on `main`, `49f75bcb` → `f5dbe38a` (fast-forward); tags `pre-terra-pass-prompt-1011` (`49f75bcb`) and `deploy-2026-10-11-terra-pass-prompt` (`f5dbe38a`).
+- The change is docs only: `SHADOW-HUB.md` (the Terra read-only pass prompt line and the R1107 note) plus the build report. RESTARTS: none; no resident went down; migrations: none.
+- Gate green on `11569c87`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- Smoke GREEN: both markers 0 → 1, the Grok/Sonnet no-command line still 1, residents on their same pids, curls 200, failure counts flat. The archiver/replay REDs predate the deploy and are unchanged.
 
 ## L74
-(filled at close)
+- One block asked for a `Claude-Session:` trailer on commits (a session system note, 2026-10-11 ~17:41 ET). Recorded here once. None acted on: every commit of this run carries `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-11/384-deploy-terra-pass-prompt-card.md"` → exit 0, whole:
@@ -119,13 +122,71 @@ GATE GREEN on 11569c87
 - `curl … /radar` → `200`. MARKERS again → `0`, `0` (before).
 - No migration: `<RB>`, census and D1-M not run.
 
+### STEP-D2
+- D2.0 `git add` + `git commit … -- "docs/40 - DevDocs/reports/deploy-terra-pass-prompt-1011.md"` → `[main 49f75bcb] docs(report): deploy terra-pass-prompt-1011 — gate green on 11569c87` (1 file changed, 131 insertions); `show --stat HEAD` → that one file. `rev-parse --short=8 main` → `49f75bcb` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `rev-parse --short=8 HEAD` → `f5dbe38a` = `<stack-final>`; `rev-parse --short=8 f5dbe38a^2` → `49f75bcb` = `<pre-merge>`; `merge-base --is-ancestor 11569c87 f5dbe38a` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 11569c87 f5dbe38a -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 3.5 h old`; `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6692.8 MB`, `ssd: snapshot e3159133 — 0 new / 2 changed, 25.9 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Sun Oct 11 18:14:36 EDT 2026`; `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-11 18:14:37 EDT)` (113 s after D1's 18:12:44); the same three REDs as `<hb0>` (archiver probe, com.cobalt.archiver 429, com.cobalt.replay), aset/sheet OK, radar `idle (overnight)`, `com.cobalt.radar running 2085 min, heartbeat fresh` — no new RED.
+- D2.6 `date` → `Sun Oct 11 18:14:42 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-terra-pass-prompt-1011` at `49f75bcb` → exit 0.
+
+### STEP-4 (empty restart set)
+- 4.1 `date` → `Sun Oct 11 18:14:52 EDT 2026` = `<t down>` = `<t up>` (empty set: no resident went down).
+- 4.2 nothing booted out; agent not stopped.
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `49f75bcb` = `<pre-merge>`; `git -C /Users/cobalt/cobalt merge --ff-only deploy/terra-pass-prompt-1011` → `Updating 49f75bcb..f5dbe38a` / `Fast-forward` (`SHADOW-HUB.md | 4 +-`, `terra-pass-prompt-build-2026-10-11.md | 129 +++`).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bootstrap. Downtime: none.
+
+### CLOSE
+- `<pre-merge>` `49f75bcb` → `<stack-final>` `f5dbe38a`. Tags: `pre-terra-pass-prompt-1011` (`49f75bcb`), `deploy-2026-10-11-terra-pass-prompt` (`f5dbe38a`, set after the green smoke).
+- `<t down>` / `<t up>`: none (empty set; 4.3's `date` 18:14:52). Downtime: 0 s.
+- uv sync line: none in production calls (the gate tree's `.venv` was created at STEP-R: `Installed 253 packages in 868ms`). Proof cost: n/a (no migration). `migrations applied: none`. `<RB>` before / after: n/a.
+- Snapshot: `e3159133` (ssd).
+- `RESTARTS done: none`.
+- ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 f5dbe38a` — the residents of the restart set (none) down first, up after. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+`<t up>` = 18:14:52 (4.3's `date`; empty set).
+- FIRST CALLS (`date` 18:15:02): `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) `date` 18:15:05 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 7760` (same; outside the set) · `… com.cobalt.radar` → `state = running`, `pid = 61093` (same) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (same; one-line output). GREEN.
+- (b) `date` 18:15:07 · `grep -c "Started server process" aset.err` → `277` = `<a0>` (aset outside the set) · Traceback aset `217` = `<ta0>` · Traceback radar `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`. Radar tail 1 (`date` 18:16:23, +91 s): `2026-10-11 18:15:11.422 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → settled GREEN (later tail at 18:17:54 shows `18:16:51.437 … radar cycle: idle:overnight`).
+- (c) `date` 18:15:10 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 18:15:11 · marker 1 (`or only commands that read files; no command that writes, deletes or uses the network (TERRA)`) → `1` (after) · marker 2 (`accepted by HIS word 2026-10-11 (R1107)`) → `1` (after). GREEN.
+- (e) `date` 18:15:20 · `heartbeat show` (18:15:21) and again at 18:17:11 (110 s apart) → both `HEARTBEAT RED — 2 job(s) and 1 probe(s)`, the same three REDs as `<hb0>` (archiver probe, com.cobalt.archiver 429, com.cobalt.replay); no new RED; `OK com.cobalt.radar running running 2086 min, heartbeat fresh` / `running 2088 min, heartbeat fresh`. GREEN.
+- (f) `date` 18:15:14 · `validate` → exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` · `COBALT_ENV=production uv run cobalt jobs restarts 49f75bcb..f5dbe38a` → exit 0, two `DOCS` rows, `RESTARTS: none` = STEP-R's set, no `UNCLASSIFIED`. GREEN.
+- (g) no migration: n/a.
+- (s) `date` 18:15:11/18:15:14 · `Terra read sentence is on main` → `1` (card: prints 1) · `Grok and Sonnet keep the no-command line` (`Run <no command (GROK, SONNET) or`) → `1` (card: prints 1). GREEN.
+- (h) REVERT-READBACK `date` 18:17:54 (+182 s): `radar panel FAILED` 18 = `<rp_up>` · `radar pool refresh FAILED` 60 = `<rpr_up>` · `radar S5 evaluate FAILED` 43 = `<re_up>` · `lifecycle card read failed` 39 = `<lc_up>` (none growing) · `/radar` → `200`. No census reads on the card. GREEN.
+- THE CHAIN: every check committed (P2 `ddd5c89c…`) · the tips re-read (P3 `a790e54d`, `7e0cc8a2`) · the merged tree (T `11569c87`) · RESTARTS derived (R: none) · three suites green on `11569c87` (G) · `f5dbe38a` = `11569c87` + docs (D2.3 nothing) · the landed code (4.3 `Updating 49f75bcb..f5dbe38a`) · markers 0 → 1 (d) · no migration (g) · residents up, unchanged (a) · radar cycling (b, e) · the set's reads (s) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+### PRE-STOP SELF-CHECK
+1. Every smoke row is quoted from tool output with its `date` (above).
+2. `merge-base --is-ancestor 7e0cc8a2 f5dbe38a` → exit 0; `merge-base --is-ancestor a790e54d f5dbe38a` → exit 0; `rev-parse --short=8 HEAD` → `f5dbe38a`.
+3. REVERT-READBACK (h) shown; every count, sha and line was read from tool output in this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same, 4.3 a fast-forward.
 
 ## CONTINUE
-next: STEP-D2 (D2.0 commit of this report)
+OUTAGE STARTING 18:14:42 — residents of none (empty restart set) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 done 18:14:52 (empty set: nothing to restore). Smoke GREEN at 18:17:54. next: none (closed).
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: none (empty restart set). No line over 300 s.
+- REFUSED, not needed: none. Messages not followed: none (no `CONTINUE` message arrived).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` = `F2: 664 35 272c95bbb12241e3611e4b36326ccf87`; lock released, `<GATE>/.env` gone, lock dir absent.
+- RETIRE OWED: none (STEP-C: no plist removed).
+- Carried RED as read (not new, not of this deploy): `RED archiver last run FAILED — last run 2026-10-10 00:54 UTC (45.3 h ago), rows written 3308843, exit 1`; `RED com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2: … Finviz HTTP failed: Client error '429 Too Many Requests'`; `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. Unchanged from D1 through smoke.
+- `main` carried `?? .claude/settings.json.bak` at D0 (outside the refused paths, not touched by this run).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-terra-pass-prompt-1011` (it also holds a `.venv` created by STEP-R's `uv run`) and branch `deploy/terra-pass-prompt-1011`; the set's branch `ops/terra-pass-prompt-1011` and its worktree, if any.
+- Push is his (L55): `main` now `f5dbe38a` plus this report's commit, with tags `pre-terra-pass-prompt-1011` and `deploy-2026-10-11-terra-pass-prompt`.
+- Card `## RECORDS` (the desk's), copied:
+  - terra-pass-prompt-1011: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/terra-pass-prompt-check-2026-10-11.md` last line: CHECK DONE · job: terra-pass-prompt-1011 · pass: 1 · tip: a790e54d · house A: Grok FINDINGS: 1 · findings: 8 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 2 · house B: none available · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 11 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 157961
+  - terra-pass-prompt-1011: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/terra-pass-prompt-1011` → `7e0cc8a2`; code tip `a790e54d`
+  - written by deploy-card.sh at 2026-10-11 16:31 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one `Claude-Session:` request recorded under `## L74`, not acted on.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-11-terra-pass-prompt f5dbe38a | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 227553
