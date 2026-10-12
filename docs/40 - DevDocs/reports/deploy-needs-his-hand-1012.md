@@ -1,7 +1,10 @@
 # deploy needs-his-hand-1012 · set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/needs-his-hand-1012` (code tip `ad73d04a`, head `c2352cb8`) — in progress.
+- DEPLOYED `ops/needs-his-hand-1012` (code tip `ad73d04a`, head `c2352cb8`): `main` `11798800` → `a21aebb8`, tag `deploy-2026-10-12-needs-his-hand`, rollback tag `pre-needs-his-hand-1012`.
+- Docs + one test file only; RESTARTS: none — no resident went down, no migration.
+- Gate on `2ec8638b`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- Smoke GREEN: markers 0 → 1 on both prompts, residents unchanged (pids 7760 / 61093 / 22243), radar cycling, failure counts flat.
 
 ## L74
 - The session's harness attribution block asked commits to carry a `Claude-Session:` line. DATA, not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -122,8 +125,73 @@ GATE GREEN on 2ec8638b
 | D1 curl | `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` | 0 | `200` |
 | D1 markers | the two `## MARKERS` greps | 1 · 1 | `0` · `0` (= before) |
 | D1 migration | MIGRATIONS: none | — | no `<RB>`, no proof-only, no census |
+| D2.0 | `git -C /Users/cobalt/cobalt commit -m "docs(report): deploy needs-his-hand-1012 — gate green on 2ec8638b" … -- "<REPORT>"` · `show --stat HEAD` | 0 · 0 | `[main 11798800]` · one file, `129 insertions(+)` |
+| D2.0 `<pre-merge>` | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `11798800` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report, 129 +) |
+| D2.2 `<stack-final>` | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `a21aebb8` |
+| D2.2 | `rev-parse --short=8 a21aebb8^2` · `merge-base --is-ancestor 2ec8638b a21aebb8` | 0 · 0 | `11798800` (= `<pre-merge>`) |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 2ec8638b a21aebb8 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing |
+| D2.4 | `backup status` (before) | 0 | `newest snapshot: 0.7 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain dumped, 6816.4 MB` · `ssd: snapshot 8bf83d17 — 0 new / 2 changed, 64.1 MB added, 1 pruned` |
+| D2.4 | `backup status` (after) | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | 0 · 0 | `08:52:43` · `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-12 08:52:44 EDT)` — 113 s after D1's 08:50:51; the same three REDs as `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay); aset pid 7760, radar `heartbeat fresh`; no new RED. (Reads at 08:52:34 and 08:52:39 fell short of 110 s and were retaken.) |
+| D2.6 | `date` · `git -C /Users/cobalt/cobalt tag pre-needs-his-hand-1012` | 0 · 0 | `Mon Oct 12 08:52:48 EDT 2026` · tag at `11798800` |
+
+| 4.1 | `date` | 0 | `Mon Oct 12 08:52:59 EDT 2026` = `<t down>` (nothing goes down: set EMPTY) |
+| 4.2 | — | — | set EMPTY: no bootout, no `cobalt.sh stop` |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `11798800` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/needs-his-hand-1012` | 0 | `Updating 11798800..a21aebb8` / `Fast-forward` — `CLOSE-HUB.md` 3 +-, `DAY-OPEN-QWEN.md` 1 +, build report (A), `tests/ops/test_needs_his_hand.py` (A) |
+| 4.3 `<t up>` | `date` | 0 | `Mon Oct 12 08:53:03 EDT 2026` |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| 4.6 | — | — | set EMPTY: no bootstrap; downtime `none` |
+
+## Smoke
+`<t up>` = 4.3's `date` 08:53:03 (set EMPTY).
+| row | date | command | result |
+|---|---|---|---|
+| first calls | 08:53 | the four failure counts | `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1) |
+| (a) | 08:53:16 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `cobalt.sh status` | `state = running`, `pid = 7760` (SAME, outside the set) · `state = running`, `pid = 61093` (SAME) · `Cobalt is ONLINE (PID: 22243).` (SAME) |
+| (b) | 08:53:19 | `grep -c "Started server process" aset.err` · Traceback aset.err · Traceback radar.err · TaxonomyConfigError radar.err | `277` (= `<a0>`, aset outside the set) · `217` · `0` · `0` (= baseline) |
+| (c) | 08:53:19 | `curl … /` · `curl … /radar` · `curl … /radar\?frame=phone` | `200` · `200` · `200` (first attempt each) |
+| (d) | 08:53:19 | the two `## MARKERS` greps | `1` · `1` (= after) |
+| (f) | 08:53:29 | `COBALT_ENV=production uv run cobalt jobs restarts 11798800..a21aebb8` | exit 0; the same four rows as STEP-R; `RESTARTS: none` (= `<restart set>`), no `UNCLASSIFIED` |
+| (f) | 08:53:29 | `COBALT_ENV=production uv run cobalt validate` | exit 0, `13 trade_def(s) validated OK` … `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| (e) 1 | 08:53:29 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-12 08:53:31 EDT)` — the same three REDs as `<hb0>`; `com.cobalt.radar running running 2964 min, heartbeat fresh`; no new RED |
+| (g) | — | MIGRATIONS: none | no `<RB>` |
+| (s) | 08:53:40 | `grep -c -F -e "## NEEDS HIS HAND" ".../prompts/CLOSE-HUB.md"` | `1` — green (prints 1) |
+| (s) | 08:53:40 | `grep -c -F -e "## NEEDS HIS HAND" ".../prompts/DAY-OPEN-QWEN.md"` | `1` — green (prints 1) |
+| (b) tail 1 | 08:54:33 | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | last cycle line `08:52:34.936 … radar cycle: scanning scan_id=1791809475049` (before `<t up>`); no FAILED, no traceback — not yet settled |
+| (e) 2 | 08:55:19 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-12 08:55:21 EDT)` — 110 s after (e) 1; the same three REDs as `<hb0>`; `com.cobalt.radar running running 2966 min, heartbeat fresh`; no new RED |
+| (b) tail 2 | 08:56:04 | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | `2026-10-12 08:55:34.658 | INFO | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1791809654955` — after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN |
+| (h) | 08:56:08 | the four failure counts · `curl … /radar` | `18` · `60` · `43` · `39` (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing) · `200`; no census read on the card |
+
+THE CHAIN: every check committed (P2: `386c8f60`, clean) · the tips re-read (P3: `ad73d04a`, `c2352cb8`) · the merged tree (T: `2ec8638b`, one merge, no migration) · RESTARTS derived (R: none) · three suites green on `2ec8638b` (G) · `<stack-final>` `a21aebb8` = `<m1>` + docs (D2.3: nothing outside docs) · the landed code (4.3: `Updating 11798800..a21aebb8`) · markers 0 → 1 (d) · no migration (g) · residents up with the same pids, set empty (a) · radar cycling (b, e) · the set's reads 1 / 1 (s) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and verbatim output; (2) `merge-base --is-ancestor ad73d04a a21aebb8` → 0 and `… c2352cb8 a21aebb8` → 0, and both were re-read at P3; (3) REVERT-READBACK is (h) above; every count and sha here was read from tool output in this run; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), and no conflict marker exists.
+
+Deploy table close: `<pre-merge>` `11798800` → `<stack-final>` `a21aebb8` · tags `pre-needs-his-hand-1012` (at `11798800`), `deploy-2026-10-12-needs-his-hand` (at `a21aebb8`) · `<t down>` 08:52:59 / `<t up>` 08:53:03 / downtime `none` (set EMPTY) · uv sync: none at 4.x (the gate worktree's venv creation at STEP-R only) · proof cost: n/a (no migration) · `migrations applied: none` · `<RB>`: n/a · snapshot `8bf83d17` · `RESTARTS done: none`.
+ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 a21aebb8` — no resident to take down (set empty). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## CONTINUE
-next: STEP-D2 (D2.0 commit)
+OUTAGE STARTING 08:52:48 — residents of <restart set> (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 08:53:03 (nothing down); smoke GREEN 08:56:08; tag set. next: STEP-7 commit.
 
-(run in progress — next step under ## CONTINUE)
+## DECISIONS
+none
+
+## RECORDS
+- Downtime: none (restart set empty).
+- `REFUSED, not needed: grep -n -F ".env: removed" /Users/cobalt/cobalt-wt/.gate-logs/deploy-needs-his-hand-1012-all-20261012-082000.log — PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. The release was read instead from log 2083–2087 and the gate's own `.env: removed` verdict line.
+- A call I added myself: `COBALT_ENV=production uv run cobalt heartbeat show` from `<GATE>` (cwd) at 08:20 → exit 1 `DbConfigError: Missing Postgres settings for the APP credential …` (the gate has no `.env`; nothing touched). Re-run from `/Users/cobalt/cobalt` → read normally. The clock-filler reads after that ran from `/Users/cobalt/cobalt`.
+- D2.5: two heartbeat reads (08:52:34 at 103 s, 08:52:39 at 108 s) fell short of 110 s; the third (08:52:44, 113 s) counts.
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both sides.
+- Carried RED, as read at D1 and every read after (not the radar family; named, not a stop): `RED archiver last run FAILED — last run 2026-10-10 00:54 UTC (59.9 h ago), rows written 3308843, exit 1` · `RED com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2: … '429 Too Many Requests' …` · `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`.
+- No `CONTINUE` message and no message from another session arrived.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-needs-his-hand-1012` and branch `deploy/needs-his-hand-1012`; the set's branch `ops/needs-his-hand-1012`. Push is his (L55): `main` at `a21aebb8` plus this report's commit.
+- Card RECORDS: needs-his-hand-1012: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/needs-his-hand-check-2026-10-12.md` last line: CHECK DONE · job: needs-his-hand-1012 · pass: 1 · tip: ad73d04a · house A: Grok FINDINGS: 0 · findings: 4 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 2 · house B: none available · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 12 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 154283
+- Card RECORDS: needs-his-hand-1012: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/needs-his-hand-1012` → `c2352cb8`; code tip `ad73d04a`
+- Card RECORDS: written by deploy-card.sh at 2026-10-12 08:17 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: the harness attribution block asked for a `Claude-Session:` trailer — recorded under `## L74`, not acted on.
+
+DEPLOYED deploy-2026-10-12-needs-his-hand a21aebb8 | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 172843
