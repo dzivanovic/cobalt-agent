@@ -8,7 +8,7 @@ REPORT: /Users/cobalt/cobalt-wt/launcher-shadow-check-1011/docs/40 - DevDocs/rep
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-shadow-check-check-2026-10-11.md
 HOUSE B: as needed
 DB: none
-RULINGS: 2026-10-11 R1127, 2026-10-11 R1130
+RULINGS: 2026-10-11 R1069
 SWEEP: 3 more found
 
 ## ROWS
