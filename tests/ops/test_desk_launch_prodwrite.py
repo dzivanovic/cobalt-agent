@@ -426,6 +426,27 @@ def test_p5_a_db_apply_card_whose_file_is_not_its_block_is_refused(desk, case):
     refused(desk, desk.run("prodwrite", str(desk.card), dry=False), text)
 
 
+def test_check_o3_a_staged_uncommitted_change_of_the_file_is_refused(desk):
+    changed = APPLY_SQL + 'UPDATE "user".x_settings SET v = 9;\n'
+    apply_card(desk, blocks=(changed,), sha=hashlib.sha256(changed.encode()).hexdigest())
+    (desk.prompts / APPLY_FILE).write_text(changed)
+    git(desk.repo, "add", "-A")
+    refused(desk, desk.run("prodwrite", str(desk.card), dry=False),
+            "db apply: the file changed since its commit: docs/40 - DevDocs/prompts/" + APPLY_FILE)
+
+
+def test_k1_a_file_deleted_in_head_and_restored_untracked_is_refused(desk):
+    apply_card(desk)
+    path = desk.prompts / APPLY_FILE
+    path.unlink()
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", "delete the apply file")
+    path.write_bytes(APPLY_SQL.encode())
+    done = desk.run("prodwrite", str(desk.card), dry=False)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: db apply:" in done.stderr, done.stderr
+
+
 def test_p6_another_verb_ignores_an_sql_section_and_prints_todays_line(desk):
     """Two-sided: P1's `settings load` card prints the same line with or without a `## SQL` section."""
     before = desk.run("prodwrite", str(desk.card))

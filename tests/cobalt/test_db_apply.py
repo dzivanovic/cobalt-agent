@@ -559,3 +559,23 @@ def test_v3_there_is_no_ddl_flag(monkeypatch):
     with pytest.raises(SystemExit) as raised:
         parse_cli(monkeypatch, ["db", "apply", "--side", "user", "--sha256", HEX, "--ddl", "yes", FILE])
     assert raised.value.code == 2
+
+
+# ---- check findings (CHECK-HUB, card 417) ------------------------------------------------------
+
+def test_check_o1_a_nul_byte_never_hides_text_from_the_check():
+    with pytest.raises(ApplyRefused):
+        check_file("UPDATE t SET a = 1\x00; DROP TABLE t")
+
+
+def test_check_o2_a_commit_that_fails_ends_in_a_failed_line_and_exit_1(capsys):
+    class CommitFails(FakeConn):
+        def commit(self):
+            self.events.append(("commit",))
+            raise RuntimeError("constructed deferred failure")
+
+    conn = CommitFails()
+    assert run(conn) == 1
+    out = capsys.readouterr()
+    assert "ROLLED BACK" in out.out + out.err
+    assert ("rollback",) in conn.events

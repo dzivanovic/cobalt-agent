@@ -445,6 +445,19 @@ def test_r5_a_db_apply_card_whose_file_is_not_proved_fails_naming_the_rule(desk,
     assert last_line(done) == f"FAILED: authorization mismatch — {want}", done.stdout
 
 
+def test_k2_a_file_deleted_in_head_and_restored_untracked_is_not_authorized(desk):
+    repo, _, env = desk
+    card = apply_card(repo)
+    path = repo / "docs" / "40 - DevDocs" / "prompts" / APPLY_FILE
+    path.unlink()
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "delete the apply file")
+    path.write_text(APPLY_SQL)
+    done = authorize(env, "prodwrite", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done).startswith("FAILED: authorization mismatch — SQL FILE"), done.stdout
+
+
 @pytest.mark.parametrize("args", [[], ["build"], ["judge", "x"], ["build", "/no/such/card.md"]])
 def test_a_bad_call_is_refused(desk, args):
     repo, card, env = desk
