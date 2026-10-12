@@ -7,8 +7,11 @@ are at `git show HEAD:`.
 
 from __future__ import annotations
 
+import re
 import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO = Path(__file__).resolve().parents[2]
 HUB_REL = "docs/40 - DevDocs/prompts/CHECK-HUB.md"
@@ -88,3 +91,27 @@ def test_l8_the_shadow_built_line_sits_directly_under_the_mechanical_rows_bullet
     assert at("## PREFLIGHT") < hits[0] < at("## 1. ")
     assert hits[0] == bullet + 1
     assert text[bullet] == head_lines()[at("- THE MECHANICAL ROWS", head_lines())]
+
+
+def test_build_report_case_count_matches_collection():
+    # card 386 F1 (check G3): the build report's cases line states the figure pytest collects.
+    report = REPO / "docs/40 - DevDocs/reports/launcher-shadow-check-build-2026-10-11.md"
+    hits = [ln for ln in report.read_text(encoding="utf-8").splitlines() if " cases across " in ln]
+    assert len(hits) == 1, hits
+    figure = int(re.search(r"\((\d+) cases across ", hits[0]).group(1))
+    command = re.search(r"`uv run pytest --collect-only ([^`]+)`", hits[0]).group(1)
+    files = re.findall(r"tests/ops/\w+\.py", command)
+    assert len(files) == 4, files
+    selector = re.search(r" -k (\S+)", command).group(1)
+
+    class Count:
+        items: list = []
+
+        def pytest_collection_finish(self, session):
+            Count.items = list(session.items)
+
+    code = pytest.main(["--collect-only", "-q", "-p", "no:cacheprovider", "--color=no",
+                        "--rootdir", str(REPO), *[str(REPO / f) for f in files], "-k", selector],
+                       plugins=[Count()])
+    assert code == 0
+    assert len(Count.items) == figure
