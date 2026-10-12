@@ -22,6 +22,11 @@
 #   WRITE RULING <date> R<n> row|committed|at HEAD
 #                        kind prodwrite only: the card's ONE `WRITE RULING: <date> R<n>` (the ruling
 #                        that names its production write, K3); absent or empty fails as `WRITE RULING`
+#   SQL FILE committed|SQL FILE unchanged|SQL SHA256|SQL CARD BLOCK
+#                        kind prodwrite, when the card's ONE `## ROWS` command is a `db apply` (card
+#                        2026-10-12 417 K2): the file `prompts/<last word>` is committed, unchanged
+#                        since, its `shasum -a 256` is the command's `--sha256`, and it is byte-equal
+#                        to the card's ONE `## SQL` block (a line ```sql, the lines, a line ```)
 # A row `<date> R<n>` is proved by: `grep -n "^| R<n> " $REPO/docs/40 - DevDocs/reports/cto-<date>.md`
 # → ONE line holding `HIS RULING` and `APPROVED` (row); `git -C $REPO log -1 --format=%H -S"| R<n> |"
 # -- <that file>` non-empty (committed); and that same line present in the file at HEAD, so an
@@ -250,6 +255,69 @@ if [ "$kind" = "prodwrite" ]; then
         row "WRITE RULING" "field WRITE RULING" 1 "WRITE RULING is not '<date> R<n>': '$w'" 1
     else
         prove "WRITE RULING" ${o% *} ${o#* }
+    fi
+fi
+
+# kind prodwrite, a `db apply` card (card 2026-10-12 417 K2): its file re-proved as the launcher
+# proves it (desk-launch.sh prodwrite arm) — committed, unchanged, its sha256 the command's, and
+# byte-equal to the card's ONE `## SQL` block. The ONE `## ROWS` command is read as the launcher
+# reads it; a card of any other verb prints no SQL row.
+if [ "$kind" = "prodwrite" ]; then
+    wrows=$(awk '/^## /{insec = ($0 ~ /^## ROWS[ \t]*$/); next}
+        insec && /^[|]/ {
+            gsub(/\\[|]/, "\001")
+            if ($0 ~ /^[|][ \t:|-]*$/) next
+            split($0, c, "|"); h = c[3]; gsub(/^[ \t]+|[ \t]+$/, "", h)
+            if (h == "command") next
+            print
+        }' "$card")
+    wcmd=""
+    if [ -n "$wrows" ] && [ "$(printf '%s\n' "$wrows" | grep -c '')" -eq 1 ]; then
+        wcmd=$(printf '%s\n' "$wrows" | awk -F'|' '{print $3}' | tr -d '`' | tr '\001' '|' \
+            | sed 's/^[[:space:]]*//; s/[[:space:]]*$//')
+    fi
+    wverb=${wcmd#"COBALT_ENV=production uv run cobalt "}
+    if [ "$wverb" != "$wcmd" ] && [ "$(printf '%s\n' "$wverb" | awk '{print $1 " " $2}')" = "db apply" ]; then
+        sql_file=$(printf '%s\n' "$wverb" | awk '{print $NF}')
+        sql_sha=$(printf '%s\n' "$wverb" | awk '{for (i = 1; i < NF; i++) if ($i == "--sha256") {print $(i + 1); exit}}')
+        sql_rel="docs/40 - DevDocs/prompts/$sql_file"
+        sql_path="$REPO/$sql_rel"
+
+        out=$(git -C "$REPO" log -1 --format=%H -- "$sql_rel" 2>&1)
+        rc=$?
+        ok=1
+        [ "$rc" -eq 0 ] && [ -n "$out" ] && ok=0
+        row "SQL FILE committed" "git -C $REPO log -1 --format=%H -- \"$sql_rel\"" "$rc" "$out" "$ok"
+
+        out=$(git -C "$REPO" diff --stat -- "$sql_rel" 2>&1)
+        rc=$?
+        ok=1
+        [ "$rc" -eq 0 ] && [ -z "$out" ] && [ -f "$sql_path" ] && ok=0
+        [ -f "$sql_path" ] || out="no such file: $sql_path"
+        row "SQL FILE unchanged" "git -C $REPO diff --stat -- \"$sql_rel\"" "$rc" "$out" "$ok"
+
+        out=$(shasum -a 256 "$sql_path" 2>&1)
+        rc=$?
+        ok=1
+        [ "$rc" -eq 0 ] && [ -n "$sql_sha" ] && [ "${out%% *}" = "$sql_sha" ] && ok=0
+        [ "$ok" -eq 0 ] || out="$out (the command's --sha256: ${sql_sha:-none})"
+        row "SQL SHA256" "shasum -a 256 \"$sql_path\"" "$rc" "$out" "$ok"
+
+        shape=$(awk '!fence && /^## / {insec = ($0 ~ /^## SQL[ \t]*$/); if (insec) secs++; next}
+            insec && /^```/ {fences++; if (fences == 1) opener = $0; else closer = $0; fence = !fence}
+            END {print ((secs == 1 && fences == 2 && opener == "```sql" && closer == "```") ? "one" : "not one")}' "$card")
+        ok=1
+        if [ "$shape" != "one" ]; then
+            out="the card's ## SQL section is not ONE fenced sql block"
+        elif awk '!fence && /^## / {insec = ($0 ~ /^## SQL[ \t]*$/); next}
+                insec && /^```/ {fence = !fence; next}
+                insec && fence {print}' "$card" | cmp -s - "$sql_path"; then
+            ok=0
+            out="the card's ## SQL block is the file byte for byte"
+        else
+            out="the card's ## SQL block is not the file byte for byte"
+        fi
+        row "SQL CARD BLOCK" "awk <the card's ## SQL block> | cmp -s - \"$sql_path\"" "$ok" "$out" "$ok"
     fi
 fi
 

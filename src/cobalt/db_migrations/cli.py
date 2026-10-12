@@ -1128,8 +1128,10 @@ def add_parser(sub) -> None:
     rebuild.set_defaults(func=cmd_dev_rebuild)
 
     from cobalt.db_query import add_query_parser
+    from cobalt.db_apply import add_apply_parser
 
     add_query_parser(gsub)
+    add_apply_parser(gsub)
 
 
 __all__ = [

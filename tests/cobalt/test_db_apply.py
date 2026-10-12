@@ -70,6 +70,16 @@ D1 = [
 ]
 
 
+def test_r2_a_nested_statement_that_is_not_dml_is_refused():
+    """(r2) on a constructed tree: the grammar nests no DDL under DML, so a CTE's query is swapped
+    for a DROP; the rule still names it."""
+    stmt = db_apply.parse("WITH d AS (DELETE FROM t RETURNING a) UPDATE u SET a = 0")["stmts"][0]["stmt"]
+    cte = stmt["UpdateStmt"]["withClause"]["ctes"][0]["CommonTableExpr"]
+    cte["ctequery"] = db_apply.parse("DROP TABLE t")["stmts"][0]["stmt"]
+    with pytest.raises(ApplyRefused, match="statement 1 refused: DropStmt is not INSERT, UPDATE, DELETE or MERGE"):
+        db_apply.check_statement(stmt, 1)
+
+
 @pytest.mark.parametrize("text,want", D1, ids=[t for t, _ in D1])
 def test_d1_every_statement_that_is_not_dml_is_refused_at_the_top(text, want):
     refused(text, want, "is not INSERT, UPDATE, DELETE or MERGE")
@@ -189,15 +199,44 @@ def test_d6_offsets_count_bytes_not_characters():
     assert split_statements("UPDATE t SET a = 'é';UPDATE t SET b = 1")[1].strip() == "UPDATE t SET b = 1"
 
 
+def test_d6_a_piece_that_does_not_reparse_to_its_checked_statement_is_refused():
+    """The re-parse fence: the tree checked is swapped for another statement's, so the text that
+    would run is not the text that was checked."""
+    text = "UPDATE t SET a = 1"
+    tree = db_apply.parse(text)
+    tree["stmts"][0]["stmt"] = db_apply.parse("DELETE FROM t")["stmts"][0]["stmt"]
+    with pytest.raises(ApplyRefused, match="statement 1 refused: its text does not parse alone to the statement checked"):
+        db_apply._pieces(text, tree)
+
+
 # ---- A1 D7 the constants -----------------------------------------------------------------------
 
-def test_d7_the_list_is_now_alone_and_the_grammar_is_postgres_16():
+def test_d7_the_list_is_now_alone_the_grammar_is_17_and_the_server_16():
     from pglast import parser as pg_parser
 
     assert db_apply.ALLOWED_FUNCTIONS == frozenset({("now",)})
-    assert db_apply.PARSER_PG_MAJOR == 16
-    assert json.loads(pg_parser.parse_sql_json("SELECT 1"))["version"] // 10000 == 16
+    assert db_apply.PARSER_PG_MAJOR == 17
+    assert json.loads(pg_parser.parse_sql_json("SELECT 1"))["version"] // 10000 == 17
+    assert db_apply.SERVER_PG_MAJOR == 16
     assert "db_query" not in SOURCE
+
+
+# ---- A1 D8 the parser parses each admitted kind ------------------------------------------------
+
+D8 = [
+    ("INSERT INTO t (a) VALUES (1)", "InsertStmt"),
+    ("UPDATE t SET a = 1", "UpdateStmt"),
+    ("DELETE FROM t WHERE a = 1", "DeleteStmt"),
+    ("MERGE INTO t USING s ON t.a = s.a WHEN MATCHED THEN UPDATE SET b = s.b", "MergeStmt"),
+    ("WITH d AS (DELETE FROM t RETURNING a) INSERT INTO u SELECT a FROM d", "InsertStmt"),
+    ("WITH d AS (DELETE FROM t RETURNING a) SELECT a FROM d", "SelectStmt"),
+]
+
+
+@pytest.mark.parametrize("text,node", D8, ids=[f"{n}-{i}" for i, (_, n) in enumerate(D8)])
+def test_each_admitted_kind_parses_to_its_top_node(text, node):
+    tree = db_apply.parse(text)
+    assert list(tree["stmts"][0]["stmt"]) == [node], tree
 
 
 # ---- A2 the file and its hash, before any connection -------------------------------------------
@@ -456,7 +495,7 @@ def test_t8_a_server_of_another_major_sends_no_statement(capsys):
     assert conn.sent == 0
     assert ("rollback",) in conn.events
     out = capsys.readouterr()
-    assert "FAILED: server is Postgres 17, the parser reads 16 — ROLLED BACK" in out.out + out.err
+    assert "FAILED: server is Postgres 17, apply is proved for 16 — ROLLED BACK" in out.out + out.err
 
 
 SENTINELS = ("sentinel-pg-pw-0417", "sentinel-app-pw-0417")

@@ -385,3 +385,6 @@ Test side only. Every with-DB test that runs `_apply` on its own `db.connect_mig
 
 ## 2026-10-06 — flake-fix-2 check (A2)
 `test_xl76_membership_harness.py` calls `open_migrated` inside its `try`, so a failed migration step still prints `XL76: harness_applies=False` (`test_migration_retry.py::test_xl76_reports_false_when_the_migration_step_fails`).
+
+## 2026-10-12 — db-apply-prod-1012
+`add_parser` registers `cobalt db apply` (`cobalt.db_apply.add_apply_parser`) beside `db query`, imported function-locally as that one is (`db_apply` imports `CODE_ROOT` from this module).
