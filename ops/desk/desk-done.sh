@@ -1,12 +1,12 @@
 #!/bin/sh
-# desk-done.sh <session id> "<report>" <build|check|deploy|devfix|close> [<tab>]
+# desk-done.sh <session id> "<report>" <build|check|deploy|devfix|close|shadow> [<tab>]
 # Closes a finished worker in one call (card 17 A5; checklist W8). Reads the report's last
 # non-blank line against the kind's stop words (as desk-watch.sh):
 #   a DONE line (build: BUILT; check: CHECK DONE; deploy: DEPLOYED; devfix: REBUILT;
-#   close: CLOSE PUSHED) -> `claude stop <id>`, `claude rm <id>`, and with a tab
-#   `herdr tab close <tab>`, each printed before it runs; a failing step stops the
-#   script with exit 1 naming it.
-#   a FAILED line of a build or a check -> REFUSED: the worker is kept for CONTINUE.
+#   close: CLOSE PUSHED; shadow: SHADOW BUILT or SHADOW ROLE, card 386 L9) -> `claude stop <id>`,
+#   `claude rm <id>`, and with a tab `herdr tab close <tab>`, each printed before it runs; a
+#   failing step stops the script with exit 1 naming it.
+#   a FAILED line of a build, a check or a shadow -> REFUSED: the worker is kept for CONTINUE.
 #   a FAILED line of a deploy, a devfix or a close -> closed like a DONE line.
 #   any other last line -> REFUSED: still running.
 # A session whose name in `claude agents --json` starts with "brain" or is "cto-desk" is
@@ -17,13 +17,15 @@ export LC_ALL=C
 refuse() { echo "REFUSED: $1" >&2; exit 1; }
 id="$1"; report="$2"; kind="$3"; tab="$4"
 [ -n "$id" ] && [ -n "$report" ] && [ -n "$kind" ] && [ $# -le 4 ] \
-  || refuse 'usage: desk-done.sh <session id> "<report>" <build|check|deploy|devfix|close> [<tab>]'
+  || refuse 'usage: desk-done.sh <session id> "<report>" <build|check|deploy|devfix|close|shadow> [<tab>]'
 case "$kind" in
   build)  done_re='^BUILT' ;;
   check)  done_re='^CHECK DONE' ;;
   deploy) done_re='^DEPLOYED' ;;
   devfix) done_re='^REBUILT' ;;
   close)  done_re='^CLOSE PUSHED' ;;
+  # card 386 L9: a shadow worker's FAILED line is kept for CONTINUE as a build's is (below)
+  shadow) done_re='^SHADOW (BUILT|ROLE)'; kind=build ;;
   *) refuse "unknown kind: $kind" ;;
 esac
 [ -f "$report" ] || refuse "no report: $report"
