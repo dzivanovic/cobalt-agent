@@ -3,7 +3,7 @@ LADDER: S4-P1 · F9
 BRANCH: shadow/s4-p1-1009-sonnet
 WORKTREE: s4-p1-1009-sonnet
 BASE: e4586978
-TIP:
+TIP: 51fe6947
 REPORT: /Users/cobalt/cobalt-wt/s4-p1-1009-sonnet/docs/40 - DevDocs/reports/s4-p1-1009-sonnet-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/s4-p1-1009-sonnet-check-2026-10-11.md
 HOUSE B: as needed

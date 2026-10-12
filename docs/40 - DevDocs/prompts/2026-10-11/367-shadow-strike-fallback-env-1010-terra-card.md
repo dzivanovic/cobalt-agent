@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-10.md R828
 BRANCH: shadow/strike-fallback-env-1010-terra
 WORKTREE: strike-fallback-env-1010-terra
 BASE: 8f4bbe28
-TIP:
+TIP: d02370df
 REPORT: /Users/cobalt/cobalt-wt/strike-fallback-env-1010-terra/docs/40 - DevDocs/reports/strike-fallback-env-1010-terra-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/strike-fallback-env-1010-terra-check-2026-10-11.md
 HOUSE B: as needed

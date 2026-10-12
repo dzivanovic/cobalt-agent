@@ -3,7 +3,7 @@ LADDER: S4-P1 · F9
 BRANCH: shadow/s4-p1-1009-terra
 WORKTREE: s4-p1-1009-terra
 BASE: e4586978
-TIP:
+TIP: 9e3a133b
 REPORT: /Users/cobalt/cobalt-wt/s4-p1-1009-terra/docs/40 - DevDocs/reports/s4-p1-1009-terra-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/s4-p1-1009-terra-check-2026-10-11.md
 HOUSE B: as needed

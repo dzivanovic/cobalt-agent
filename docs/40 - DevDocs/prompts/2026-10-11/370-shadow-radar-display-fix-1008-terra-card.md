@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/radar-cards-survey-2026-10-08-r2.md 2026-10-08 R6
 BRANCH: shadow/radar-display-fix-1008-terra
 WORKTREE: radar-display-fix-1008-terra
 BASE: 50b0cd87
-TIP:
+TIP: e544d94f
 REPORT: /Users/cobalt/cobalt-wt/radar-display-fix-1008-terra/docs/40 - DevDocs/reports/radar-display-fix-1008-terra-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-display-fix-1008-terra-check-2026-10-11.md
 HOUSE B: as needed
