@@ -12,6 +12,7 @@ real card, session list, database or `.env`.
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shlex
 import shutil
@@ -107,13 +108,14 @@ class Desk:
 
     def write_card(self, *, rows: str | None = None, cls: str = "K3, K5", branch: str = "main",
                    worktree: str = "none", ruling: str = "2026-01-02 R1", extra: str = "",
-                   section: bool = True) -> None:
+                   section: bool = True, tail: str = "") -> None:
         body = HEAD_ROW + (row() if rows is None else rows)
         self.card.write_text(
             f"JOB: x-write\nLADDER: OFF-LADDER — constructed\nCLASS: {cls}\nBRANCH: {branch}\n"
             f"WORKTREE: {worktree}\nBASE: {self.base}\nREPORT: {self.report}\nRULINGS: 2026-01-01 R1\n"
             f"WRITE RULING: {ruling}\n{extra}\n"
             + (f"## ROWS\n\n{body}\n" if section else "")
+            + tail
             + "## RECORDS\n- constructed\n"
         )
 
@@ -319,3 +321,118 @@ def test_p3_a_prompt_line_is_unchanged_by_the_fill(desk):
     done = desk.run("prompt", str(pfile))
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines()[-1] == line
+
+
+# ---- card 2026-10-12 417 K1: a `db apply` card quotes its file, proved at launch ---------------
+
+APPLY_FILE = "2026-01-02/1-x-apply.sql"
+APPLY_SQL = "UPDATE \"user\".x_settings SET v = 1 WHERE k = 'a';\nUPDATE \"user\".x_settings SET v = 2 WHERE k = 'b';\n"
+
+
+def apply_command(sha: str, *, prod: bool = True) -> str:
+    return (f"COBALT_ENV=production uv run cobalt db apply --side user{' --prod' if prod else ''} "
+            f"--sha256 {sha} {APPLY_FILE}")
+
+
+def sql_section(*blocks: str) -> str:
+    return "## SQL\n\n" + "".join(f"```sql\n{b}```\n\n" for b in blocks)
+
+
+def apply_card(desk: Desk, *, file_text: str = APPLY_SQL, blocks: tuple[str, ...] = (APPLY_SQL,),
+               sha: str | None = None, prod: bool = True, commit_file: bool = True) -> str:
+    """The `db apply` card and its file; the file committed with the card unless `commit_file` is false."""
+    path = desk.prompts / APPLY_FILE
+    raw = file_text.encode()
+    sha = sha or hashlib.sha256(raw).hexdigest()
+    command = apply_command(sha, prod=prod)
+    desk.write_card(rows=row(command), tail=sql_section(*blocks))
+    if commit_file:
+        path.write_bytes(raw)
+    desk.commit("apply card")
+    if not commit_file:
+        path.write_bytes(raw)
+    return command
+
+
+def test_p4_a_db_apply_card_whose_block_is_the_file_launches_with_its_one_write(desk):
+    """Two-sided: green on BASE and after (the fill is today's)."""
+    command = apply_card(desk)
+    done = desk.run("prodwrite", str(desk.card))
+    assert done.returncode == 0, done.stderr
+    allow = allow_of(done.stdout.splitlines()[-1])
+    assert allow.count(f"Bash({command})") == 1, allow
+    assert allow[-1] == f"Bash({command})", allow
+
+
+def p5_one_byte_off(desk):
+    apply_card(desk, blocks=(APPLY_SQL.replace("v = 2", "v = 3"),))
+    return "db apply: the card's ## SQL block is not the file byte for byte"
+
+
+def p5_absent(desk):
+    apply_card(desk)
+    (desk.prompts / APPLY_FILE).unlink()
+    desk.commit("file gone")
+    return f"db apply: no such file: {desk.prompts / APPLY_FILE}"
+
+
+def p5_uncommitted(desk):
+    apply_card(desk, commit_file=False)
+    return "db apply: the file is not committed: docs/40 - DevDocs/prompts/" + APPLY_FILE
+
+
+def p5_changed(desk):
+    apply_card(desk)
+    (desk.prompts / APPLY_FILE).write_text(APPLY_SQL + "UPDATE \"user\".x_settings SET v = 9;\n")
+    return "db apply: the file changed since its commit: docs/40 - DevDocs/prompts/" + APPLY_FILE
+
+
+def p5_other_hash(desk):
+    apply_card(desk, sha=hashlib.sha256(b"another file\n").hexdigest())
+    return "db apply: sha256 "
+
+
+def p5_no_prod(desk):
+    apply_card(desk, prod=False)
+    return "db apply: the command holds no ' --prod '"
+
+
+def p5_two_blocks(desk):
+    apply_card(desk, blocks=(APPLY_SQL, APPLY_SQL))
+    return "db apply: the card's ## SQL section is not ONE fenced sql block"
+
+
+def p5_no_last_newline(desk):
+    apply_card(desk, file_text=APPLY_SQL.rstrip("\n"))
+    return "db apply: the card's ## SQL block is not the file byte for byte"
+
+
+P5 = {
+    "one byte off": p5_one_byte_off,
+    "absent": p5_absent,
+    "uncommitted": p5_uncommitted,
+    "changed after commit": p5_changed,
+    "another hash": p5_other_hash,
+    "no prod": p5_no_prod,
+    "two blocks": p5_two_blocks,
+    "no last newline": p5_no_last_newline,
+}
+
+
+@pytest.mark.parametrize("case", list(P5))
+def test_p5_a_db_apply_card_whose_file_is_not_its_block_is_refused(desk, case):
+    """RED on BASE: every case launches (exit 0)."""
+    text = P5[case](desk)
+    refused(desk, desk.run("prodwrite", str(desk.card), dry=False), text)
+
+
+def test_p6_another_verb_ignores_an_sql_section_and_prints_todays_line(desk):
+    """Two-sided: P1's `settings load` card prints the same line with or without a `## SQL` section."""
+    before = desk.run("prodwrite", str(desk.card))
+    assert before.returncode == 0, before.stderr
+    desk.write_card(tail=sql_section("not the file\n", "nor this\n"))
+    desk.commit("sql section on a settings card")
+    after = desk.run("prodwrite", str(desk.card))
+    assert after.returncode == 0, after.stderr
+    assert after.stdout == before.stdout
+    assert allow_of(after.stdout.splitlines()[-1])[-1] == f"Bash({WRITE})"

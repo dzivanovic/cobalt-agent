@@ -7,6 +7,7 @@ desk reports holding approved rows, and a committed card. The real repo is never
 
 from __future__ import annotations
 
+import hashlib
 import os
 import subprocess
 from pathlib import Path
@@ -322,7 +323,8 @@ def test_check_o1_the_real_shadow_title_names_its_standing_row(desk):
 R4 = "| R4 | 09:20 ET | DESK RECORD: a note, not his. | RECORD |\n"
 
 
-def prodwrite_card(repo: Path, write_ruling: str | None = "2026-01-02 R2") -> Path:
+def prodwrite_card(repo: Path, write_ruling: str | None = "2026-01-02 R2", rows: str = "",
+                   tail: str = "") -> Path:
     """A constructed prodwrite card and PRODWRITE-HUB.md (its title cites R1), committed."""
     prompts = repo / "docs" / "40 - DevDocs" / "prompts"
     (prompts / "PRODWRITE-HUB.md").write_text(
@@ -332,7 +334,8 @@ def prodwrite_card(repo: Path, write_ruling: str | None = "2026-01-02 R2") -> Pa
     line = "" if write_ruling is None else f"WRITE RULING: {write_ruling}\n"
     card.write_text(
         "JOB: x-write\nLADDER: OFF-LADDER\nCLASS: K3\nBRANCH: main\nWORKTREE: none\nBASE: 0000aaaa\n"
-        f"REPORT: /nowhere/prodwrite-x-write.md\nRULINGS: 2026-01-02 R3\n{line}\n## ROWS\n| row | command |\n")
+        f"REPORT: /nowhere/prodwrite-x-write.md\nRULINGS: 2026-01-02 R3\n{line}\n## ROWS\n| row | command |\n"
+        f"{rows}{tail}")
     with (repo / "docs" / "40 - DevDocs" / "reports" / "cto-2026-01-02.md").open("a") as f:
         f.write(R4)
     git(repo, "add", "-A")
@@ -395,6 +398,51 @@ def test_r3_the_other_kinds_print_the_same_rows_as_before(desk, kind):
     assert done.returncode == 0, done.stdout + done.stderr
     names = [r.split(" · ")[0] for r in done.stdout.splitlines() if " · " in r]
     assert names == ROWS_BEFORE, names
+
+
+# ---- card 2026-10-12 417 K2: a `db apply` card's file re-proved at the seat's authorize step ---
+
+APPLY_FILE = "2026-01-02/1-x-apply.sql"
+APPLY_SQL = "UPDATE \"user\".x_settings SET v = 1 WHERE k = 'a';\n"
+SQL_ROWS = ["SQL FILE committed", "SQL FILE unchanged", "SQL SHA256", "SQL CARD BLOCK"]
+
+
+def apply_card(repo: Path, *, block: str = APPLY_SQL, sha: str | None = None) -> Path:
+    """A prodwrite card whose ONE row is a `db apply`, its `## SQL` block, and the file, committed."""
+    (repo / "docs" / "40 - DevDocs" / "prompts" / APPLY_FILE).write_text(APPLY_SQL)
+    sha = sha or hashlib.sha256(APPLY_SQL.encode()).hexdigest()
+    command = f"COBALT_ENV=production uv run cobalt db apply --side user --prod --sha256 {sha} {APPLY_FILE}"
+    return prodwrite_card(repo, rows=f"|---|---|\n| W1 | `{command}` |\n",
+                          tail=f"\n## SQL\n\n```sql\n{block}```\n")
+
+
+def test_r4_a_db_apply_card_prints_the_four_sql_rows_and_is_authorized(desk):
+    """RED on BASE: no SQL row printed."""
+    repo, _, env = desk
+    done = authorize(env, "prodwrite", apply_card(repo))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "AUTHORIZED"
+    names = [r.split(" · ")[0] for r in done.stdout.splitlines() if " · " in r]
+    assert names[-4:] == SQL_ROWS, names
+    assert names[-5] == "WRITE RULING 2026-01-02 R2 at HEAD", names
+
+
+@pytest.mark.parametrize("case", ["edited after commit", "another hash", "block one byte off"])
+def test_r5_a_db_apply_card_whose_file_is_not_proved_fails_naming_the_rule(desk, case):
+    """RED on BASE: AUTHORIZED."""
+    repo, _, env = desk
+    if case == "another hash":
+        card = apply_card(repo, sha=hashlib.sha256(b"another file\n").hexdigest())
+    elif case == "block one byte off":
+        card = apply_card(repo, block=APPLY_SQL.replace("v = 1", "v = 2"))
+    else:
+        card = apply_card(repo)
+        (repo / "docs" / "40 - DevDocs" / "prompts" / APPLY_FILE).write_text(APPLY_SQL + "-- edited\n")
+    done = authorize(env, "prodwrite", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    want = {"edited after commit": "SQL FILE unchanged", "another hash": "SQL SHA256",
+            "block one byte off": "SQL CARD BLOCK"}[case]
+    assert last_line(done) == f"FAILED: authorization mismatch — {want}", done.stdout
 
 
 @pytest.mark.parametrize("args", [[], ["build"], ["judge", "x"], ["build", "/no/such/card.md"]])
