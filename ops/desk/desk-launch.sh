@@ -1018,48 +1018,79 @@ lock_dir_free() {
 # tests/ops/test_deploy_card.py). held_n <line>: the n of the line's `held unfixed: <n>` when
 # n >= 1 (an exact number: `held unfixed: 10` is 10), else nothing.
 # held_rule <who> <check report> <its last line> <code tip> <branch head> <fix report or ''>:
-# the line carries `ready: NO` and `open: <n>`; `## RUNS` lists exactly n distinct ids, each a
-# line `- <id> · … HELD, NOT FIXED …` or a table row `| <id> | … | <verdict> |` whose last cell
-# holds `**HELD**` (the id trimmed, [A-Za-z0-9._-]+); the fix report lies under the reports folder, is read at
+# the line carries `ready: NO` and `open: <m>`, m >= n. The held ids (card 397, R1157) are the
+# union, each id counted once, of `## RUNS` lines `- <id> · … HELD, NOT FIXED …` and table rows
+# `| <id> | … | <verdict> |` whose last cell holds `**HELD**`, and of `## FIXES` lines
+# `- <id>: … HELD, NOT FIXED …` (from column 0; the id trimmed, [A-Za-z0-9._-]+); a `## RUNS`
+# bullet whose verdict is `**HELD**` alone is not one. There are exactly n, and an id twice in
+# one section is refused. The fix report lies under the reports folder, is read at
 # the branch head and ends `BUILT · … tip: <code tip>`; it holds, from column 0, exactly ONE line
 # per held id, `FIXED: <id> — <test id>` or `CARRIED: <id> — <test id> — R<n>`, and none for an
 # id the check does not list (<test id> = tests/<path>.py::<name>). A FIXED test exists at the
 # code tip with no xfail (no decorator of its def, no `pytestmark`); a CARRIED test exists there
-# with a decorator holding `xfail` and `strict=True`, and its R<n> is a `| R<n> |` row carrying
-# `DESK RECORD` in `reports/cto-<date>.md` at HEAD (<date> from the check report's file name).
+# with a decorator holding `xfail` and `strict=True`. When m > n it also holds exactly one line
+# `SETTLED: <id> — R<n>` for each of m - n distinct ids, each a `## RUNS` bullet or table row
+# whose verdict starts `REJECTED` or `UNSETTLED`, never a held id; a SETTLED line is no FIXED or
+# CARRIED line. The R<n> of a CARRIED or SETTLED line is a `| R<n> |` row carrying `DESK RECORD`:
+# the first such row of the `reports/cto-<date>.md` files at HEAD dated on or after the check
+# report's date (<date> from its file name), read newest first (R1160).
 # A static read: no test is run. The first refusal sets held_why (naming <who> and the id) and
 # returns 1; the check report is never written.
 held_n() {
     printf '%s\n' "$1" | grep -o -E '(^| )held unfixed: [0-9]+( |$)' | sed -n '1p' \
         | sed -e 's/^ *held unfixed: //' -e 's/ *$//' | grep -E '^[1-9][0-9]*$'
 }
+# held_row <R<n>> -> the `| R<n> |` line of the newest desk report in hr_ctos holding one, or nothing
+held_row() {
+    printf '%s\n' "$hr_ctos" | while IFS= read -r hr_cto; do
+        [ -n "$hr_cto" ] || continue
+        hr_hit=$(git -C "$REPO" show "HEAD:${hr_reports#"$REPO"/}/$hr_cto" 2>/dev/null \
+            | awk -v r="| $1 |" 'index($0, r) == 1' | sed -n '1p')
+        if [ -n "$hr_hit" ]; then
+            printf '%s\n' "$hr_hit"
+            break
+        fi
+    done
+}
 held_rule() {
     hr_who=$1 hr_check=$2 hr_last=$3 hr_tip=$4 hr_head=$5 hr_frep=$6
     held_why=""
     hr_reports="$REPO/docs/40 - DevDocs/reports"
     hr_n=$(held_n "$hr_last")
-    hr_ids=$(awk '/^## /{on = ($0 == "## RUNS"); next}
+    hr_runs=$(awk '/^## /{on = ($0 == "## RUNS"); next}
         on && /^- [A-Za-z0-9._-]+ · / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/ · .*/, ""); print}
         on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
             sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && index(v, "**HELD**")) print id}' "$hr_check")
+    hr_fixes=$(awk '/^## /{on = ($0 == "## FIXES"); next}
+        on && /^- [A-Za-z0-9._-]+: / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/: .*/, ""); print}' "$hr_check")
+    # the ids of `## RUNS`, then those of `## FIXES` that `## RUNS` does not name
+    hr_ids=$({ printf '%s\n' "$hr_runs" | sed 's/^/R /'; printf '%s\n' "$hr_fixes" | sed 's/^/F /'; } \
+        | awk '$2 == "" {next} $1 == "R" {r[$2] = 1; print $2; next} !r[$2] {print $2}')
     hr_k=$(printf '%s\n' "$hr_ids" | grep -c .)
-    hr_u=$(printf '%s\n' "$hr_ids" | grep . | sort -u | grep -c .)
     hr_list=$(printf '%s\n' "$hr_ids" | grep . | tr '\n' ' ' | sed 's/ *$//')
     hr_list=${hr_list:-none}
+    hr_where="## RUNS"
+    [ -z "$hr_fixes" ] || hr_where="## RUNS and ## FIXES"
+    hr_m=$(printf '%s\n' "$hr_last" | grep -o -E '(^| )open: [0-9]+( |$)' | sed -n '1p' \
+        | sed -e 's/^ *open: //' -e 's/ *$//' -e 's/^0*\([0-9]\)/\1/')
     if ! printf '%s\n' "$hr_last" | grep -q -E '(^| )ready: NO( |$)'; then
         held_why="$hr_who: the check's last line says 'held unfixed: $hr_n' (held ids: $hr_list) but not 'ready: NO': $hr_last"
         return 1
     fi
-    if ! printf '%s\n' "$hr_last" | grep -q -E "(^| )open: $hr_n( |\$)"; then
+    if [ -z "$hr_m" ] || [ "$hr_m" -lt "$hr_n" ]; then
         held_why="$hr_who: the check's last line says 'held unfixed: $hr_n' (held ids: $hr_list) but not 'open: $hr_n': $hr_last"
         return 1
     fi
     if [ "$hr_k" != "$hr_n" ]; then
-        held_why="$hr_who: the check $hr_check lists $hr_k HELD, NOT FIXED row(s) under ## RUNS ($hr_list), its last line says 'held unfixed: $hr_n'"
+        held_why="$hr_who: the check $hr_check lists $hr_k HELD, NOT FIXED row(s) under $hr_where ($hr_list), its last line says 'held unfixed: $hr_n'"
         return 1
     fi
-    if [ "$hr_u" != "$hr_k" ]; then
+    if [ -n "$(printf '%s\n' "$hr_runs" | grep . | sort | uniq -d)" ]; then
         held_why="$hr_who: the check $hr_check lists a held id twice under ## RUNS ($hr_list)"
+        return 1
+    fi
+    if [ -n "$(printf '%s\n' "$hr_fixes" | grep . | sort | uniq -d)" ]; then
+        held_why="$hr_who: the check $hr_check lists a held id twice under ## FIXES ($hr_list)"
         return 1
     fi
     if [ -z "$hr_frep" ]; then
@@ -1108,6 +1139,12 @@ $hr_ids
 HELD_IDS
     hr_date=$(printf '%s\n' "${hr_check##*/}" | sed -n 's/.*-\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)\.md$/\1/p')
     hr_desk="$hr_reports/cto-$hr_date.md"
+    # the desk reports a CARRIED or SETTLED R<n> is read in: dated on or after the check, newest first
+    hr_ctos=""
+    if [ -n "$hr_date" ]; then
+        hr_ctos=$(git -C "$REPO" ls-tree --name-only "HEAD:${hr_reports#"$REPO"/}" 2>/dev/null \
+            | grep -E '^cto-[0-9]{4}-[0-9]{2}-[0-9]{2}[.]md$' | awk -v d="cto-$hr_date.md" '$0 >= d' | sort -r)
+    fi
     while IFS=' ' read -r hr_kind hr_id hr_path hr_name hr_row; do
         [ -n "$hr_id" ] || continue
         hr_label=FIXED
@@ -1185,12 +1222,7 @@ HELD_IDS
                 return 1 ;;
         esac
         if [ "$hr_kind" = C ]; then
-            hr_rowline=""
-            if [ -n "$hr_date" ]; then
-                hr_rowline=$(git -C "$REPO" show "HEAD:${hr_desk#"$REPO"/}" 2>/dev/null \
-                    | awk -v r="| $hr_row |" 'index($0, r) == 1' | sed -n '1p')
-            fi
-            case "$hr_rowline" in
+            case "$(held_row "$hr_row")" in
                 *"DESK RECORD"*) ;;
                 *)
                     held_why="$hr_who: CARRIED $hr_id names $hr_row, which is no DESK RECORD row of $hr_desk"
@@ -1200,6 +1232,43 @@ HELD_IDS
     done <<HELD_LINES
 $hr_lines
 HELD_LINES
+    # `open:` past held unfixed: m - n REJECTED or UNSETTLED ids, one SETTLED line each (card 397)
+    hr_open=$(awk '/^## /{on = ($0 == "## RUNS"); next}
+        function opened(v) { sub(/^[ \t*]+/, "", v); return v ~ /^(REJECTED|UNSETTLED)/ }
+        on && /^- [A-Za-z0-9._-]+ · / {v = $0; while ((p = index(v, " · ")) > 0) v = substr(v, p + length(" · "))
+            if (opened(v)) {sub(/^- /, ""); sub(/ · .*/, ""); print}}
+        on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
+            sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && opened(v)) print id}' "$hr_check")
+    hr_settled=$(printf '%s\n' "$hr_blob" | sed -n -E 's#^SETTLED: ([A-Za-z0-9._-]+) — (R[0-9]+)$#\1 \2#p')
+    while IFS=' ' read -r hr_id hr_row; do
+        [ -n "$hr_id" ] || continue
+        if printf '%s\n' "$hr_ids" | grep -q -x -F -e "$hr_id"; then
+            held_why="$hr_who: the fix report $hr_frep settles $hr_id, which is a held id of the check $hr_check"
+            return 1
+        fi
+        if ! printf '%s\n' "$hr_open" | grep -q -x -F -e "$hr_id"; then
+            held_why="$hr_who: the fix report $hr_frep settles $hr_id, which is no REJECTED or UNSETTLED id under ## RUNS of the check $hr_check"
+            return 1
+        fi
+        hr_c=$(printf '%s\n' "$hr_settled" | awk -v id="$hr_id" '$1 == id' | grep -c .)
+        if [ "$hr_c" -ne 1 ]; then
+            held_why="$hr_who: SETTLED $hr_id has $hr_c SETTLED lines in the fix report $hr_frep"
+            return 1
+        fi
+        case "$(held_row "$hr_row")" in
+            *"DESK RECORD"*) ;;
+            *)
+                held_why="$hr_who: SETTLED $hr_id names $hr_row, which is no DESK RECORD row of $hr_desk"
+                return 1 ;;
+        esac
+    done <<HELD_SETTLED
+$hr_settled
+HELD_SETTLED
+    hr_s=$(printf '%s\n' "$hr_settled" | grep -c .)
+    if [ "$hr_s" -ne $((hr_m - hr_n)) ]; then
+        held_why="$hr_who: 'open: $hr_m' counts $((hr_m - hr_n)) open id(s) past held unfixed, $hr_s settled in the fix report $hr_frep"
+        return 1
+    fi
     return 0
 }
 # ---- end of THE RULE --------------------------------------------------------------------------
