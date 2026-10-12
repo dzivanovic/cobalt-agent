@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/stage-set-clear-1012
 WORKTREE: stage-set-clear-1012
-BASE: «FILL: BASE»
+BASE: 0cd1b802
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/stage-set-clear-1012/docs/40 - DevDocs/reports/stage-set-clear-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/stage-set-clear-check-2026-10-12.md
