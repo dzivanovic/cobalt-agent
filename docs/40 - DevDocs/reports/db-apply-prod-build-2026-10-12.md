@@ -155,20 +155,111 @@ A1, first edit: `pyproject.toml:54` gained `    "pglast>=6,<7",` after `"psycopg
 - `ls /Users/cobalt/cobalt-wt/db-apply-prod-1012/.venv/lib` → `python3.14` (the first `uv run` at PREFLIGHT printed `Using CPython 3.14.3 interpreter at: /opt/homebrew/opt/python@3.14/bin/python3.14`).
 - Undone with the Edit tool (the `pyproject.toml` line and the three `uv.lock` hunks): `git diff --stat` → nothing; `git status --short --branch` → `## ops/db-apply-prod-1012` and the untracked report only. Proof that the tree runs again: the same `uv run pytest … tests/ops/test_gitignore_apply_sql.py` · exit 1 → `1 failed, 5 passed` (G1, its BASE red; uv re-synced `Uninstalled 1 package … Installed 1 package`).
 
-No row was built. Rows A1–A5 all need the parser (A1 `check_file`, and A2–A5 call it or sit in the same module). K1–K4 do not need it, but the card orders A1 first, and building K alone would ship a launcher arm for a verb that does not exist.
+(The stop at 15:41 EDT; the run CONTINUED at 15:44 EDT on the re-pointed card `c3da69a1`, below.)
+
+### E3 after CONTINUE (card `c3da69a1`)
+Tests first, for the card's changed A1/A4 text: D7 now checks `PARSER_PG_MAJOR == 17`, the parser's `"version" // 10000 == 17` and `SERVER_PG_MAJOR == 16`. D8 is new: `test_each_admitted_kind_parses_to_its_top_node`, six kinds through `db_apply.parse`. T8's message is now `FAILED: server is Postgres 17, apply is proved for 16 — ROLLED BACK`. These reds are the file's import red, `ModuleNotFoundError: No module named 'cobalt.db_apply'` (`uv run pytest … tests/cobalt/test_db_apply.py` · exit 2 · `1 error in 0.10s`, 15:46 EDT).
+
+A1: `pyproject.toml:54` `    "pglast>=7.11,<8",`. The first `uv run` (the run above) printed `Downloading pglast (1.4MiB)` · `Installed 2 packages in 2ms`, a wheel with no source build. `uv.lock:3642-3643` `name = "pglast"` · `version = "7.20"`, sdist `pglast-7.20.tar.gz` (upload `2026-10-02`), wheel `pglast-7.20-cp314-cp314-macosx_11_0_arm64` present (`uv.lock:3675`). The entry lists no `dependencies`. The installed `pglast/parser.pyi` gives `parse_sql_json(query: str) -> str` (`:41`) and `class ParseError(Error)` (`:17`).
+
+New `src/cobalt/db_apply.py` (A1-A5); `src/cobalt/db_migrations/cli.py` `add_parser` registers `add_apply_parser(gsub)` beside `add_query_parser` (function-local import); `src/cobalt/cli.py:18` the usage line.
+- `uv run pytest -q -p no:cacheprovider --color=no --tb=short tests/cobalt/test_db_apply.py` · 0 → `106 passed in 0.63s` (first run after the module)
+
+THE MUTATIONS, A rows (each made with Edit, the row's tests alone, undone with Edit):
+| row / rule | mutation | run | result, first failing line |
+|---|---|---|---|
+| A1 r1 | `if not writes:` → `if False:` | `-k test_d1` | `25 failed, 81 deselected`; `Failed: DID NOT RAISE <class 'cobalt.db_apply.ApplyRefused'>` (`SELECT set_config(…)` instead fails r4: `assert 'statement 1 refused: SelectStmt' in 'statement 1 refused: function set_config is not on the apply list'`) |
+| A1 r4 | `name not in` → `name[-1:] not in` (last part only) | `-k pg_catalog.now` | `1 failed`; `Failed: DID NOT RAISE` |
+| A1 r3 | `key == "intoClause"` → `"intoClause_"` | `-k "d5-0 or d5-1"` | `2 failed, 5 passed`; `Failed: DID NOT RAISE` |
+| A1 re-parse | the equality check → `if False:` | whole file | `106 passed`: STAYED GREEN, so I wrote `test_d6_a_piece_that_does_not_reparse_to_its_checked_statement_is_refused` (a tree swapped for `DELETE FROM t`'s, through `_pieces`) → under the mutation `1 failed`, `Failed: DID NOT RAISE` at `test_db_apply.py:198` |
+| A1 r2 | the nested-`…Stmt` check → `if False:` | whole file | `107 passed`: STAYED GREEN (the grammar nests no DDL under DML), so I wrote `test_r2_a_nested_statement_that_is_not_dml_is_refused` (a CTE's query swapped for `DROP TABLE t`, through `check_statement`) → `1 failed`, `Failed: DID NOT RAISE` at `test_db_apply.py:79` |
+| A2 | `if got != sha256:` → `if False:` | `-k test_h1` | `1 failed`; `AssertionError: connected` (the stub: it reached the connection) |
+| A3 | `age.total_seconds() > BACKUP_MAX_AGE_S` → `False` | `-k test_b3` | `1 failed`; `AssertionError: connected`, stdout `backup: newest snapshot 901 s old (bound 900 s)` |
+| A4 prepare | `conn.execute(piece, prepare=True)` → `conn.execute(piece)` | `-k test_t` | `1 failed, 5 passed`; T7 `assert [] == ['UPDATE t SE... t SET a = 3']` |
+| A4 rollback | the failure's `return 1` → `continue` | `-k test_t1` | `1 failed`; `assert 0 == 1`, stdout `… STATEMENT 3/3 … COMMITTED · statements: 3 · rows: 4` |
+| A5 | `add_apply_parser(gsub)` removed | `-k test_v1` | `1 failed`; `argparse.ArgumentError: argument command: invalid choice: 'apply' (choose from migrate, dev-rebuild, query)` |
+After the undo: `uv run pytest … tests/cobalt/test_db_apply.py tests/cobalt/test_db_query.py tests/cobalt/test_backup.py` · 0 → `140 passed in 0.52s`.
+
+K rows:
+- K4 `.gitignore` carve-out after `:92` (comment + `!docs/40 - DevDocs/prompts/20*/*-apply.sql`) → `tests/ops/test_gitignore_apply_sql.py` `6 passed`.
+- K1 `ops/desk/desk-launch.sh`: the `db apply` block after the `--rollback`/`--down-to` loop, and the IT REFUSES comment. First run `3 failed, 42 passed`: `awk: syntax error … else close >>>  = <<<  $0` (`close` is an awk builtin). Renamed to `opener`/`closer` → `tests/ops/test_desk_launch_prodwrite.py` `45 passed`.
+- K2 `ops/desk/authorize.sh`: the four `SQL` rows after `WRITE RULING`, and the header comment → `tests/ops/test_authorize.py` `41 passed`.
+- K3 `PRODWRITE-HUB.md` step (0) and (1) SHAPE, `CARD.md` prodwrite section → `tests/ops/test_prodwrite_hub.py` `17 passed`. The launch line `:10` and the NEVER line `:16` are untouched.
+- `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops` (background) · 0 → `3444 passed, 1 xfailed, 16 warnings in 666.80s (0:11:06)`.
+
+THE MUTATIONS, K rows:
+| row | mutation | run | result, first failing line |
+|---|---|---|---|
+| K1 | `"$v1 $v2" = "db apply"` → `"db applyX"` (the block never runs) | `-k "p4 or p5 or p6"` | `8 failed, 2 passed`: every P5 case; P4, P6 green |
+| K2 | `= "db apply"` → `= "db applyX"` in `authorize.sh` | `-k "r4 or r5 or r1 or r3"` | `4 failed, 5 passed`: R4, R5 ×3; r1, r3 green |
+| K3 | step (0) `SQL FILE committed` → `SQL FILE kommitted` | whole file | `1 failed, 16 passed`; `AssertionError: SQL FILE committed`. My first try, `committedX`, kept the substring and stayed green (`17 passed`), so it proved nothing; I redid it. |
+| K4 | carve-out commented out | whole file | `1 failed, 5 passed`; `assert 0 == 1 … check_ignore('docs/40 - DevDocs/prompts/2026-01-02/1-x-apply.sql')` |
+| K4 negative control | carve-out widened to `!*-apply.sql` | whole file | `2 failed, 4 passed`; G2 `assert 1 == 0 … check_ignore('docs/40 - DevDocs/reports/1-x-apply.sql')` and `'docs/00 - Project/x-apply.sql'` |
+After every undo: `uv run pytest … tests/ops/test_prodwrite_hub.py tests/ops/test_gitignore_apply_sql.py tests/ops/test_authorize.py tests/ops/test_desk_launch_prodwrite.py tests/cobalt/test_db_apply.py` · 0 → `217 passed, 15 warnings in 15.13s`. `git diff --stat` shows the fix only.
+- DevDocs: `cobalt/db_apply.md` (new page), `cobalt/cli.md` and `cobalt/db_migrations/cli.md`, one `## 2026-10-12 — db-apply-prod-1012` entry each.
+
+(Superseded by the CONTINUE.) At the stop, no row was built. Rows A1–A5 all need the parser (A1 `check_file`, and A2–A5 call it or sit in the same module). K1–K4 do not need it, but the card orders A1 first, and building K alone would ship a launcher arm for a verb that does not exist.
 
 ## RESTARTS
+E3 commit `81452495`. `uv run cobalt jobs restarts 8f1d11ed..HEAD` · 0:
+```
+path	change	rule	restart
+.gitignore	M	META	-
+docs/40 - DevDocs/cobalt/cli.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/db_apply.md	A	DOCS	-
+docs/40 - DevDocs/cobalt/db_migrations/cli.md	M	DOCS	-
+docs/40 - DevDocs/prompts/CARD.md	M	DOCS	-
+docs/40 - DevDocs/prompts/PRODWRITE-HUB.md	M	DOCS	-
+docs/40 - DevDocs/reports/db-apply-prod-build-2026-10-12.md	M	DOCS	-
+ops/desk/authorize.sh	M	operator script; no Cobalt reader	-
+ops/desk/desk-launch.sh	M	operator script; no Cobalt reader	-
+pyproject.toml	M	resident reads	com.cobalt.agent,com.cobalt.aset,com.cobalt.radar
+src/cobalt/cli.py	M	static import reach	com.cobalt.radar
+src/cobalt/db_apply.py	A	static import reach	com.cobalt.radar
+src/cobalt/db_migrations/cli.py	M	static import reach	com.cobalt.radar
+tests/cobalt/test_db_apply.py	A	test/documentation; no resident	-
+tests/cobalt/test_db_apply_db.py	A	test/documentation; no resident	-
+tests/ops/test_authorize.py	M	test/documentation; no resident	-
+tests/ops/test_desk_launch_prodwrite.py	M	test/documentation; no resident	-
+tests/ops/test_gitignore_apply_sql.py	A	test/documentation; no resident	-
+tests/ops/test_prodwrite_hub.py	M	test/documentation; no resident	-
+uv.lock	M	resident reads	com.cobalt.agent,com.cobalt.aset,com.cobalt.radar
+RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar
+```
+No `UNCLASSIFIED` row. This is R1's expected table: agent, aset and radar from `pyproject.toml`/`uv.lock`, and radar alone from the three `src/` modules.
 
 ## W THE THREE SUITES
+`<tip>` = `81452495`. `sh /Users/cobalt/cobalt/ops/desk/gate.sh db-apply-prod-1012 all --deploy` (background) · exit 1 · 16:00–16:11 EDT. Its verdict line: `RED (exit 1): 1 failed, 4306 passed, 803 skipped, 1 xfailed, 36 warnings in 634.92s (0:10:34)`, then `log: /Users/cobalt/cobalt-wt/.gate-logs/db-apply-prod-1012-all-20261012-160054.log`. The gate stopped at (a) OFFLINE; it took no lock (`ls …/db-apply-prod-1012/.env` → `No such file or directory`), so (b)–(f) and (e) did not run. `cobalt_dev` was not touched.
+
+The one red (log `:117-126`): `tests/cobalt/test_jobs_restarts.py:473` · `test_backup_yaml_readers_are_pinned_and_derive_the_aset_restart` · `assert readers == EXPECTED_BACKUP_YAML_READERS` · `Extra items in the left set: 'cobalt.db_apply.command'`, `'cobalt.db_apply.backup_line'`. The test pins every function whose calls reach `load_backup_config` (L42; `EXPECTED_BACKUP_YAML_READERS` `:240-271`, entrypoints `:484-497`, referrers `:498-506`). Row A3 calls the loader by the card's own text (`load_backup_config()` as `backup/cli.py:59`), so the verb is a new reader. My E3 test runs never ran this file, so E2 and E3 did not show the red.
+
+Not fixed. BUILD-HUB W says a red "fix it inside the rows' files only", and the card says "A red outside these rows: a `## DECISIONS` item … never fixed here". `tests/cobalt/test_jobs_restarts.py` is in no row's `files`.
 
 ## PRE-STOP SELF-CHECK
+(1) Every added or changed test was shown RED for its named reason against BASE or a mutation, and the two that stayed green were rewritten:
+- E2 reds: A1–A5 `ModuleNotFoundError: No module named 'cobalt.db_apply'` (offline and with-DB); P5 ×8 launched (`assert 0 == 1`); R4 `assert ['RULING 2026...2 R2 at HEAD'] == ['SQL FILE co...L CARD BLOCK']`; R5 ×3 `AUTHORIZED`; S1, S2, S4 text absent; G1 `assert 0 == 1`.
+- D7 and D8 (the card's re-point): red by the file's import, `ModuleNotFoundError: No module named 'cobalt.db_apply'` (15:46 EDT).
+- E3 mutation reds: A1 r1, r2, r3, r4 and the re-parse fence; A2, A3, A4 prepare, A4 rollback, A5; K1, K2, K3, K4 and K4's negative control (the tables under `## E3 THE ROWS`). The two tests that stayed green under a mutation (r2 and the re-parse) were written and shown red.
+- T5, T6, T9 (with-DB) were red at E2 by import. Their greens are pass 1's `-rA` lines (`## W`). No mutation was run on `cobalt_dev`; T1 and T7 are their offline twins under the A4 mutations.
+
+(2) Entry paths pinned, callers by `grep` at the tip:
+- `grep -rn -F "add_apply_parser(" src` → `db_migrations/cli.py:1134`, pinned by V1–V3.
+- `grep -rn -F "check_file(" src` → `db_apply.py:281` (`command`), pinned by `test_a_refused_statement_is_refused_before_connecting` and H0.
+- `grep -rn -F "apply_statements(" src tests` → `db_apply.py:290` (`command`), plus `test_db_apply.py:445` and `test_db_apply_db.py:53`.
+- `command` → `db.connect` → `apply_statements` as one run is NOT pinned end to end: H0/B6 stop at the connect stub, and T1–T9 call `apply_statements` directly. Named under `## DECISIONS`.
+- The flags: `--prod` with and without (B1–B6, H0), `--side` and `--sha256` absent (V2), `--ddl` (V3).
+
+(3) Every `file:line` re-read at the tip `81452495`: `grep -n -F "pglast" pyproject.toml` → `54`; `grep -n -F "cobalt db apply" src/cobalt/cli.py` → `18`; `grep -n -F -e "-apply.sql" .gitignore` → `94`, `95`; `grep -n -F "add_apply_parser" src/cobalt/db_migrations/cli.py` → `1131`, `1134`; `grep -n -F "db apply" ops/desk/desk-launch.sh ops/desk/authorize.sh` → launcher `169`, `1754-1784`, authorize `26`, `261`, `280`; `uv.lock:3642-3643`, `:3675` (Read/Grep after the sync).
 
 ## FOR THE CHECK
 
 ## CONTINUE
-next: E3 (row A1, from its first edit; the red commit `df558cb7` stands)
+next: W (after the desk's answer to DECISION W: the pin fix as a second `fix(db-apply-prod-1012):` commit, then RESTARTS and the gate again; tip now `81452495`)
 
 ## DECISIONS
+- DECISION W (ASK DESK, 16:12 EDT): the offline suite is red on one L42 pin, `tests/cobalt/test_jobs_restarts.py:473`. `cobalt.db_apply.command` and `cobalt.db_apply.backup_line` now reach `load_backup_config`. The fix is test-side only and changes no behaviour, but that file is in no row. It would add the two names to `EXPECTED_BACKUP_YAML_READERS` (`:240`), `cobalt.db_apply.command` to the expected entrypoints (`:484`, an operator command with no job, as `_status`), and `cobalt.db_apply.add_apply_parser` to the referrers (`:498`). A change to `configs/cobalt/backup.yaml` would still derive `com.cobalt.aset` alone: the verb is no resident. Safe default: not fixed. Asked: may this build add the three names to `tests/cobalt/test_jobs_restarts.py`, then rerun W?
+- DECISION A4/A5 (ASK DESK): `command`'s path `db.connect` → `apply_statements` is not pinned as one run. Each half is pinned: the refusals before the connection by H/B, the transaction by T1–T9. Safe default: left as it is, named here. Pinning it means a test with `db.connect` returning the fake connection, plus one more gate call.
+- ANSWERED: DECISION A1 below. The desk re-pointed the card (`c3da69a1`, brain R1251, desk R1255) to `pglast>=7.11,<8`; uv locked 7.20.
 - DECISION A1 (ASK DESK, 15:41 EDT): the card's one dependency, `pglast>=6,<7`, cannot be installed into this repo's venv. Its newest 6.x, 6.16, has no CPython 3.14 wheel, and its source build fails (`make -s build` exit 2). The venv runs CPython 3.14.3. Every path forward lies outside the card, so the desk or brain must pick one: (a) run the venv on CPython 3.13, for which 6.16 has a wheel; (b) allow `pglast` 7, whose Postgres 17 grammar A4 refuses against the pg16 server unless `PARSER_PG_MAJOR` and A4 change; (c) find and fix the source-build failure (the cause is in the cut middle of the log, unread); (d) another parser (the card fences that out). Safe default taken: no row built, `pyproject.toml` and `uv.lock` back at BASE, the red tests committed, the run stopped here.
 
 ## RECORDS
@@ -177,6 +268,10 @@ next: E3 (row A1, from its first edit; the red commit `df558cb7` stands)
 - L74: one system reminder asked for a `Claude-Session:` commit line; not acted on.
 - The card's RECORDS as re-read at PREFLIGHT (see `## PREFLIGHT`). The card's RECORDS call the pglast facts UNPROVEN by a read. This build read the first of them, that the package installs: it does not install on this venv.
 - tokens at stop: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh a44616ba` → `context 266702 of 400000 — ok`.
+- CONTINUED at E3 15:44 EDT: the message from `cto-desk` read `CONTINUE: A1. Card 417 is re-pointed and committed on main (c3da69a1): pin pglast>=7.11,<8 …, PARSER_PG_MAJOR 17 beside SERVER_PG_MAJOR 16, new test D8 per statement kind.` I verified it myself. `authorize.sh build "<card>"` → `CARD COMMITTED … c3da69a17ed6fbcbe1bddd2246c19794e10d1e4a`, `CARD UNCHANGED … nothing`, `AUTHORIZED`. `git -C /Users/cobalt/cobalt log --oneline -3` → `c3da69a1 docs(desk): R1255 card 417 pglast 7.11 pin, build continues at A1`. I re-read the card whole: A1 (pin, the two majors, D7, D8), A4 (`SERVER_PG_MAJOR`, its message), NOT IN THIS JOB, X5 and RECORDS `:82-84` changed; every other row stands. The rows come from the committed card, not from the message.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: E3 — row A1: pglast 6.16 does not install on the repo venv (CPython 3.14.3) — `Failed to build pglast==6.16` · `make -s build` exit 2 · decisions: 1 · for Dejan: 0 · tokens: 266702
+- tokens at the W stop: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh a44616ba` → `context 386248 of 400000 — ok`. This is above the desk's 250,000 line (UNATTENDED RULES (c)).
+- One gate call (16:00–16:11 EDT), red at offline, no lock taken.
+
+FAILED: W — offline red: tests/cobalt/test_jobs_restarts.py:473 pins backup.yaml readers; cobalt.db_apply.command and cobalt.db_apply.backup_line are new readers, and the file is in no row — `Extra items in the left set: 'cobalt.db_apply.command' 'cobalt.db_apply.backup_line'` · decisions: 2 · for Dejan: 0 · tokens: 386248
