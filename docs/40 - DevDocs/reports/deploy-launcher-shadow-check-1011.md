@@ -1,7 +1,10 @@
 # deploy launcher-shadow-check-1011 — set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/launcher-shadow-check-1011` (code tip `66c4fefc`, head `ef754d0b`). Started 09:38 ET. Authorized; preflight green.
+- DEPLOYED at 10:12 ET: `ops/launcher-shadow-check-1011` (code tip `66c4fefc`, head `ef754d0b`) is on `main` at `1966c239`, tag `deploy-2026-10-12-launcher-shadow-check`.
+- The gate ran green on `c09a532f`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev` back at 0013 (F2 = F0).
+- RESTARTS: none, so no resident went down. Smoke GREEN: both markers 0 → 1, radar cycled at 10:13:54, and no failure count grew.
+- The check's one held finding (G3) passed P2 as FIXED in the fix round. No decision is open.
 
 ## L74
 - A system notice in this session asked that commits end with a `Claude-Session:` line. Recorded as data (L74); commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -142,17 +145,76 @@ GATE GREEN on c09a532f
 - `curl … /radar` → `200`. MARKERS again: `0`, `0` (before).
 - No migration: `<RB>`, census and D1-M not run.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "<REPORT>"` · `commit -m "docs(report): deploy launcher-shadow-check-1011 — gate green on c09a532f" …` → `[main 96e163ee] … 1 file changed, 158 insertions(+)`; `show --stat HEAD` lists that one file. `<pre-merge>` = `96e163ee`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `1966c239`; `rev-parse --short=8 1966c239^2` → `96e163ee` = `<pre-merge>`; `merge-base --is-ancestor c09a532f 1966c239` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat c09a532f 1966c239 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 0.7 h old`; `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6858.8 MB` · `ssd: snapshot b8e63b49 — 11 new / 2 changed, 133.9 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` 10:11:43 → heartbeat at 105 s; a second pair `date` 10:11:49 → `HEARTBEAT RED — 2 job(s) and 2 probe(s)  (2026-10-12 10:11:50 EDT)` at 111 s after D1: the same REDs as `<hb0>` — archiver, `RED  radar                    failed_stage bars: poll failures: 2` (carried family; `com.cobalt.radar running 3042 min, heartbeat fresh`), com.cobalt.archiver, com.cobalt.replay. No new RED; aset `pid 7760`, sheet HTTP 200.
+- D2.6 `date` → `Mon Oct 12 10:11:55 EDT 2026`. `git -C /Users/cobalt/cobalt tag pre-launcher-shadow-check-1011` at `96e163ee`.
+
+### STEP-4 (restart set EMPTY)
+- 4.1 `date` → `<t down>` = `Mon Oct 12 10:12:06 EDT 2026`.
+- 4.2 nothing booted out (empty set).
+- 4.3 `rev-parse --short=8 HEAD` → `96e163ee` = `<pre-merge>`; `git -C /Users/cobalt/cobalt merge --ff-only deploy/launcher-shadow-check-1011` → `Updating 96e163ee..1966c239` / `Fast-forward` (12 files, 768 insertions, 13 deletions).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bootstrap. `<t up>` = 4.3's `date` 10:12:06 ET; downtime: none.
+
+## Smoke
+- FIRST CALLS after `<t up>` (10:12:06): `<rp_up>` = 18 · `<rpr_up>` = 60 · `<re_up>` = 43 · `<lc_up>` = 39 (= D1).
+- (a) `date` 10:12:22 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 7760` (SAME, outside the set) · `… com.cobalt.radar` → `state = running`, `pid = 61093` (SAME) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (SAME). GREEN.
+- (b) `date` 10:12:25 · `grep -c "Started server process" aset.err` → `277` = `<a0>` (aset outside the set) · `Traceback` aset.err → `217` = `<ta0>` · `Traceback` radar.err → `0` = `<tr0>` · `TaxonomyConfigError` radar.err → `0` = `<tc0>`.
+- (c) `curl … https://cobalt.taild24291.ts.net/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS: marker 1 → `1`, marker 2 → `1` (after values). GREEN.
+- (s) SMOKE READS: `The shadow check wording is on main` → `grep -c -F -e "On a shadow card the check counts and holds findings exactly as on any card" ".../CHECK-HUB.md"` → `1` (exit 0; green = prints 1) · `The preflight takes a shadow stop line on main` → `grep -c -F -e "SHADOW BUILT · job:" "/Users/cobalt/cobalt/ops/desk/preflight.sh"` → `1` (exit 0). GREEN. The tests behind them ran in the gate: `offline 4199/0`, `with-DB 5096/0`, `live-note 146/0` (`## L68 GATE`).
+- (f) validate → as 4.5 (exit 0) · `COBALT_ENV=production uv run cobalt jobs restarts 96e163ee..1966c239` → exit 0, the same 12 rows as STEP-R, `RESTARTS: none` = `<restart set>`, no `UNCLASSIFIED`. GREEN.
+- (g) no migration.
+- (e) first read `date` 10:12:37 → `HEARTBEAT RED — 2 job(s) and 2 probe(s)  (2026-10-12 10:12:38 EDT)`; `RED  radar                    failed_stage bars: poll failures: 2; poll WFF stale since 2026-10-12T14:06:31.678942+00:00` (carried family); `com.cobalt.radar running 3043 min, heartbeat fresh`; the other REDs as `<hb0>`.
+
+- (e) second read `date` 10:14:32 → `HEARTBEAT RED — 2 job(s) and 2 probe(s)  (2026-10-12 10:14:35 EDT)` (117 s after the first): `RED  radar                    failed_stage bars: poll failures: 1; poll WFF stale since 2026-10-12T14:06:31.678942+00:00` (carried family); `com.cobalt.radar running 3045 min, heartbeat fresh`; archiver, com.cobalt.archiver, com.cobalt.replay as `<hb0>`. No new RED. GREEN.
+- (b) THE SPACED TAILS: `date` 10:13:36 (+90 s) · `tail -n 12 radar.err` → last cycle line `10:10:53.311 … radar cycle: scanning scan_id=1791814172671` (before `<t up>`), no failure line; `date` 10:15:06 (+180 s) · `tail -n 12 radar.err` → `2026-10-12 10:13:54.139 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1791814353333` (after `<t up>`), no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → SETTLED GREEN; the third tail is not needed. Traceback counts re-read 10:15:12: radar.err `0`, aset.err `217` (= baseline).
+- (h) REVERT-READBACK `date` 10:15:12 (`<t up>` + 186 s): `radar panel FAILED` `18` · `radar pool refresh FAILED` `60` · `radar S5 evaluate FAILED` `43` · `lifecycle card read failed` `39` — each = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing; `curl …/radar` → `200`; no census read on the card. GREEN.
+- THE CHAIN: every check committed (P2: check `86b9daa5`, fix report on `ef754d0b`, G3 FIXED) → the tips re-read (P3: `66c4fefc`, `ef754d0b`) → the merged tree `c09a532f` (T) → RESTARTS derived: none (R) → three suites green on `c09a532f`: offline 4199/0 · with-DB 5096/0 · live-note 146/0 (G) → `<stack-final>` `1966c239` = `<m1>` + docs (D2.3) → the landed code `96e163ee..1966c239` (4.3) → markers 0 → 1 (d) → no migration (g) → residents up, same pids (a) → radar cycling at 10:13:54 (b, e) → the set's reads print 1 (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+### CLOSE
+- `<pre-merge>` `96e163ee` → `<stack-final>` `1966c239`. Tags: `pre-launcher-shadow-check-1011` (at `96e163ee`), `deploy-2026-10-12-launcher-shadow-check` (at `1966c239`, after the green smoke).
+- `<t down>` / `<t up>` / seconds: none (the restart set is EMPTY; 4.3's `date` 10:12:06 ET).
+- uv sync: none in production; the gate's `.venv` was created in the gate worktree at STEP-R (`Installed 253 packages in 966ms`).
+- proof cost: none (no migration). `migrations applied: none`. `<RB>`: none before / none after.
+- Snapshot: `ssd: snapshot b8e63b49` (D2.4).
+- `RESTARTS done: none`.
+- THE ROLLBACK STRING (the desk's):
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 1966c239` — ONE revert of the main-into-gate merge (it carries the set's merge with it); no resident to take down (restart set none).
+  2. SCHEMA: none (no migration).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — git titles it `Reapply "Merge branch 'main' into deploy/launcher-shadow-check-1011"`.
+
+### PRE-STOP SELF-CHECK
+1. Every smoke row's evidence is quoted verbatim with its `date` (10:12:22, 10:12:25, 10:12:37, 10:13:36, 10:14:32, 10:15:06, 10:15:12) — `## Smoke`.
+2. Code tip and head re-read at P3 (`rev-parse` → `66c4fefc`, `ef754d0b`); `merge-base --is-ancestor 66c4fefc 1966c239` → exit 0; `merge-base --is-ancestor ef754d0b 1966c239` → exit 0.
+3. REVERT-READBACK shown at (h): the four counts `18` `60` `43` `39` = the `<t up>` counts. Every count, sha and `file:line` in this report was read from tool output this run (main tip `rev-parse --short=8 main` → `1966c239`).
+4. No conflict marker: STEP-T ran clean (`Merge made by the 'ort' strategy.`, no `UU`/`AA` path), D2.1 likewise.
+
 ## CONTINUE
-next: STEP-D2 (D2.0 commit)
+next: none (DEPLOYED)
 
 ## DECISIONS
-none yet
+none
 
 ## RECORDS
+- Downtime: none (restart set EMPTY; every resident kept its pid: aset 7760, radar 61093, agent 22243).
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both; the lock released by `gate.sh`.
+- RETIRE OWED: none (no plist removed).
+- The carried RED as read: `RED  radar                    failed_stage bars: poll failures: <1|2>`, from 10:12:38 with `; poll WFF stale since 2026-10-12T14:06:31.678942+00:00` — the carried family at D1, D2.5 and (e). Also standing, outside this deploy: `RED  archiver` / `com.cobalt.archiver` (Finviz `429 Too Many Requests`, last run 2026-10-10 00:54 UTC) and `com.cobalt.replay` (`archiver not done: state 'failed'`).
+- Cleanup owed (L46, the desk's): the gate worktree `/Users/cobalt/cobalt-wt/deploy-launcher-shadow-check-1011` (it now holds a `.venv`) and branch `deploy/launcher-shadow-check-1011`; the set's branch `ops/launcher-shadow-check-1011` and its worktree.
+- P2 reading: the fix report lives on the branch only, so `git log -1 -- <fix report>` on `main` prints nothing; it was read committed at the branch head (`log -1 ef754d0b -- <fix report>` → `ef754d0bf7f0…`) as P2 says the fix report is read there. It reaches `main` with this merge.
+- `?? .claude/settings.json.bak` on `main` at D0: outside the accepted and the refused paths of D0; recorded, not touched.
+- The allowlist probe's commit `26b3c146` was reset away at once (`reset --soft HEAD~1`, HEAD back to `012e38aa`).
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. The line was read with the Read tool instead (`:2088`).
 - (card) launcher-shadow-check-1011: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-shadow-check-build-2026-10-11.md` at `ef754d0b` last line: BUILT · job: launcher-shadow-check-1011 · tip: 66c4fefc | on a76d8855 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 10 of 10 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 115749
 - (card) launcher-shadow-check-1011: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-shadow-check-check-2026-10-11.md` last line: CHECK DONE · job: launcher-shadow-check-1011 · pass: 1 · tip: a8c18242 · house A: Grok FINDINGS: 5 · findings: 6 · dropped: 0 · held: 1 · fixed: 0 · held unfixed: 1 · open: 1 · house B: none (not needed) · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 13 · ready: NO · decisions: 3 · for Dejan: 0 · tokens: 236094
 - (card) launcher-shadow-check-1011: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/launcher-shadow-check-1011` → `ef754d0b`; code tip `66c4fefc`
 - (card) written by deploy-card.sh at 2026-10-12 09:36 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-12-launcher-shadow-check 1966c239 | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 205807
