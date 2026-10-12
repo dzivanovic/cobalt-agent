@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-12.md R1138
 BRANCH: ops/scratch-clean-1012
 WORKTREE: scratch-clean-1012
 BASE: 5e5fab02
-TIP:
+TIP: 382876bc
 REPORT: /Users/cobalt/cobalt-wt/scratch-clean-1012/docs/40 - DevDocs/reports/scratch-clean-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/scratch-clean-check-2026-10-12.md
-HOUSE B:
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-12 R1138
 CLASS: K1, K5
