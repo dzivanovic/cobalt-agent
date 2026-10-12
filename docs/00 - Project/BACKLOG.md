@@ -584,6 +584,7 @@ Cortex._run_ops routing · 0-Inbox policy (inbox = interface).
   40 - DevDocs / 50 - Roles / 90 - References / _archive; playground
   vault (0 - Inbox, 0 - Projects) untouched, out of scope (2026-08-26).
 - TRIAGE ruling session → TRIAGE.md (2026-08-22).
+- 2026-10-11 deploys: `house-seat-order`, `held-closed`, `shadow-hub`, `install-shadow-hub`, `held-table-row`, `terra-pass-prompt` (tags `deploy-2026-10-11-*`; see SPRINT-LADDER Status 2026-10-11).
 
 ## Taxonomy replay validation (v0.7 §13/§13.1)
 

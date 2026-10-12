@@ -19,6 +19,32 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-10-11 -->
+### 2026-10-11
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-10-11 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `gpt-5.6-sol` | codex · — | 11,925,376 | 0 | 40,784 | $11.16 | $0.00 |
+| `grok-4.7-build` | grok · — | 28,767,744 | 0 | 818,294 | $9.25 | $0.00 |
+| `gpt-5.6-terra` | codex · — | 4,285,440 | 0 | 52,915 | $2.51 | +$1.30 |
+| `claude-opus-5-5` | claude · — | 415,211,653 | 8,920,326 | 2,031,147 | **unpriced** | — |
+| `claude-sonnet-5-5` | claude · — | 433,511,420 | 7,539,522 | 2,200,848 | **unpriced** | — |
+| `claude-haiku-5-5` | claude · — | 203,406 | 27,268 | 6,723 | **unpriced** | — |
+| `gpt-6-astra` | codex · reviewer seat — read-only role (L33) | 31,360 | 0 | 173 | **unpriced** | — |
+
+**Day total (API-equivalent):** ≥ $22.92 · **920,505,665** tokens across 7 model(s), seats: claude, codex, grok
+**Fresh input tokens:** 4,931,266 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `claude-haiku-5-5`, `claude-opus-5-5`, `claude-sonnet-5-5`, `gpt-6-astra`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
+
+_Generated 2026-10-11 21:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20261011 --until 20261011 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-10-11 -->
+<!-- /cobalt:section seat-usage:2026-10-11 -->
 <!-- cobalt:section seat-usage:2026-10-10 -->
 ### 2026-10-10
 

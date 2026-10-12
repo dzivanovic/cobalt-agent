@@ -933,6 +933,34 @@ OFF-LADDER work of 2026-10-10 (ruled, not on a ladder line; each with the ruling
 | Model tribunal (R919) | DONE (FINAL awaits his word) | His R919, R920. Tribunal R1 DONE, derive DONE, FINAL `docs/30 - Design/MODEL-BY-COMPLEXITY-FINAL-2026-10-10.md` committed `3c3c37f6` (R989); brain closed S5, S6, S7 (R988). Asked him once. |
 | Standing rules of the day | RULED | 10-10 R849 (S5 pulled forward, option A), R855 (orphan-clean and ops-hand), R908 (several Grok sessions, one OpenAI seat), R919-R921 (model tribunal, OpenAI only there, check houses, via brain L79; LAWS L67), R969 (F4 FINAL, ops-hand D1-D5; LAWS L63). |
 
+### Status 2026-10-11
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1011` for 10-11 alone from `reports/cto-2026-10-11.md` rows R1007–R1125 (06:10 → 20:20 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-11*"` = `-held-closed`, `-held-table-row`, `-house-seat-order`, `-install-shadow-hub`, `-shadow-hub`, `-terra-pass-prompt`. The 10-10 close ran (`CLOSE PUSHED b3f6fa0b`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 | DONE-LIVE | Unchanged (see 10-08 to 10-10). B5 live alert proof still waits for the first trigger Monday 10-12 (R848). |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | Deploy approved R1009; not deployed on 10-11 (no tag); waits in the deploy queue (§5 OWED). |
+| S5 F5, F20, F21, F23 | NOT STARTED (FINALs APPROVED) | His R1055 approves the four FINALs (brain R1056); card drafters wait for the install and card 356 deploys; F20 build waits for spike Q3 and D2 (R1112: subscription everywhere). |
+| S5 F16 close | NOT STARTED | No row. |
+
+**Stop date: 2026-10-14 (S4, capped, day 4 of 7 on 10-11). S4: AT RISK.** Reason unchanged: F9 acceptance is proven only by a live trigger and B5 waits for Monday 10-12 (R848); the day's work was off-ladder bake-off and tooling, no S4 change.
+
+OFF-LADDER work of 2026-10-11 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| House seat order (card `298`) | DONE-LIVE | Brain R963, R964. `deploy-2026-10-11-house-seat-order` `2b516997` (R1057). |
+| Held-closed (card `317`) | DONE-LIVE | His R1009. `deploy-2026-10-11-held-closed` `48e73801` (R1039). |
+| SHADOW-HUB launcher (card `324`) | DONE-LIVE | His R1009, R1055, R1069. `deploy-2026-10-11-shadow-hub` `aeeab1e5` (R1070). |
+| Install shadow hub (card `355`) | DONE-LIVE | His R1069. `deploy-2026-10-11-install-shadow-hub` `182e896d` (R1091). |
+| Held-table-row (card `361`) | DONE-LIVE | Brain R1084. `deploy-2026-10-11-held-table-row` `30950adb` (R1090). |
+| Terra pass prompt (card `382`) | DONE-LIVE | His R1107. `deploy-2026-10-11-terra-pass-prompt` `f5dbe38a` (R1122). |
+| `--kill` hub card (card `284`) | BUILT-NOT-MERGED | Brain R1060. L67 read ready YES (R1072); deploy card `356` written, waits (R1093). |
+| https only (card `156`, deploy card `208`) | BUILT-NOT-MERGED | His R718; unchanged, after orphan-cause (card `256`) deploy. |
+| Model bake-off shadow arms (cards 365-373, 378, 379) | BUILDING | His R1019, R1069. Built: Sonnet LOW 366 `76d507e4`, Grok LOW 378 `2bf0c100`, Grok MID 368 `0c1c4e63`, Terra LOW 367 `f2d1e0bf`, Terra MID 370 `153e8f0d`; running: Terra HIGH 373 `87e4c048`, Grok MID 379 `8bfb888f`. Grok arm STOPPED on X1 real failure (R1120); Sonnet 369 and 372 rerun once. |
+| Live SDK spike (prompt 330) | DONE PARTIAL | His R1009; `c4dd3950` DONE (R1105): Q1, Q4 work, Q2 fails direct, Q3 = D2 ruled by him R1112 (subscription everywhere). |
+| Tribunals F5, F20, F21, F23 | DONE | FINALs approved R1055 (F23 FINAL `d2e1b40f`, R1052). |
+| Standing rules of the day | RULED | R1008, R1014, R1016, R1019 (bake-off routing, arms), R1069 (OpenAI, no stops), R1112 (spike D2). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

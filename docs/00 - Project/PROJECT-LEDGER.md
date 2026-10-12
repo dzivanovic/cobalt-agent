@@ -3938,3 +3938,126 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-10*"` = `deploy-2026-10-10-archiver-429`, `-launcher`, `-ops-hand`, `-ops-hand-install`, `-orphan-clean`, `-s4-p2`, `-strike-fallback-env`, `-tribunal-guard`, `-x29-fixture`.
 - STOP LINE (L35), `reports/close-2026-10-09.md`: `CLOSE PUSHED 88640167 · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-10.md` `## 8`.
+
+### 2026-10-11 — Model-by-complexity bake-off arms, SHADOW-HUB and SDK spike; six deploys; Grok X1 failure stops the Grok arm
+- R1007 06:10 RECORD: day rolled to 10-11; desk `5d30d765`; §5 OWED carried.
+- R1008 06:13 HIS RULING: bake-off must show per model which complexity it builds; `3c3c37f6` redone.
+- R1009 06:13 HIS RULING: Sol may sit as a check seat; builds and deploys waiting on his word approved.
+- R1010 06:16 LAUNCHED: card 317 check `4edb95fc`; brain asked for per-model redo.
+- R1011 06:14 DESK RECORD (brain): bake-off redo, same 3 cards, five models, one harness; SHADOW-HUB `--model`.
+- R1012 06:20 DESK RECORD (brain): R1009 approves live SDK spike; tribunals F5 F20 F21 F23 run now.
+- R1013 06:24 LAUNCHED: Opus drafter `5c2a34e2` for SHADOW-HUB card.
+- R1014 06:27 HIS RULING (via brain): bake-off is for routing, not exclusion.
+- R1015 06:30 LAUNCHED: Sonnet drafters 325-329 (F5, F20, F21, F23 triples, spike prompt).
+- R1016 06:33 HIS RULING (via brain): Grok 4.7 two cards per band plus role trials; Grok arm first.
+- R1017 06:36 ASKED: spike prompt 330 drafted; package pin unproven.
+- R1018 06:42 DESK RECORD (brain): spike pin proven at step 0; prompt 330 edited.
+- R1019 06:46 HIS RULING (via brain): no Opus or Sol builds; arms Grok, Sonnet, Terra.
+- R1020 06:50 ASKED: spike prompt 330 preflight READY YES; launch blocked by `dontAsk` refusal.
+- R1021 06:54 DESK RECORD (brain): ONE launcher card adds `shadow` and `spike` kinds.
+- R1022 06:58 LAUNCHED: card 324 drafted; Sonnet preflight 332.
+- R1023 07:02 DESK RECORD (brain): card 324 seat() row P4; no `.env` in worktree; Terra network off.
+- R1024 07:12 RECORD: card 324 amended `921b6bf5`; F5, F20, F23 triples drafted.
+- R1025 07:20 LAUNCHED: F21 triple drafted; preflight prompt 333 launched.
+- R1026 15:31 RECORD: triples preflight ready NO x4; hubs renamed 335-338; desk REFRESHED `0fb9fae3`.
+- R1027 06:33 LAUNCHED: desk `0fb9fae3`; fix drafter `8d2b1f34`.
+- R1028 06:34 DESK RECORD (brain): card 324 READY NO amendments; fresh preflight.
+- R1029 06:36 LAUNCHED: card 324 amended `4c985957`; preflight `8edc1074`.
+- R1030 06:40 LAUNCHED: triples fix 339 `bed0b360`; re-preflight `dd902ef6`.
+- R1031 06:38 LAUNCHED: F5 tribunal 335 `32893bc8`.
+- R1032 06:38 LAUNCHED: F20 tribunal 336 `dd511db8`.
+- R1033 06:38 LAUNCHED: F21 tribunal 337 `a173cbbb`.
+- R1034 06:42 RECORD: card 324 re-preflight `8edc1074` READY NO.
+- R1035 06:44 DESK RECORD (brain): card 324 P3 red fix; amend drafter 341.
+- R1036 06:47 LAUNCHED: card 324 AMENDED r2 `0ff103c5`; third preflight `c1fc0bed`.
+- R1037 06:52 LAUNCHED: card 324 preflight READY YES; Opus build `d8838e9f`.
+- R1038 07:00 LAUNCHED: card 317 check DONE ready YES; deploy hub `f671c5da`.
+- R1039 07:27 RECORD: DEPLOYED `deploy-2026-10-11-held-closed` `48e73801`.
+- R1040 07:27 RECORD: F5 hub 335 and F21 hub 337 DONE; F20 hub 336 relaunched `fa93fe15`.
+- R1041 07:28 LAUNCHED: F23 tribunal 338.
+- R1043 07:40 DESK RECORD (brain): card 298 `FIXED: O1` by a Sonnet worker in the 298 worktree.
+- R1044 07:52 DESK RECORD (brain): prompt 344 report written inside the 298 worktree.
+- R1045 08:05 DESK RECORD (brain): prompt 344 refused; row F1 drafted, fix round, then deploy.
+- R1046 08:25 DESK RECORD (brain): F21 R2-1 closed, no round 2; fold drafter prompt 347.
+- R1047 08:40 DESK RECORD (brain): F5 split goes to him, recommending A.
+- R1048 08:50 DESK RECORD (brain): F20 D6 = B one-time key; D4, D5 his law texts.
+- R1049 07:50 DESK RECORD (brain): card 324 check; his ONE line removes `test_zz_debug_tmp.py`.
+- R1050 07:50 LAUNCHED: desk `cfecf6dc`; card 298 build at FIX ROUND row F1 `ab5f93a7`.
+- R1051 08:50 LAUNCHED: F23 hub 338 DONE; derive `33e23981`; card 298 build DONE `26ad41af`.
+- R1052 08:58 RECORD: F23 FINAL committed `d2e1b40f`.
+- R1053 08:58 DESK RECORD (brain): F23 ESCALATE rulings; uv.lock seam doc; L66 superseded by R389 (fold owed).
+- R1054 08:59 DESK RECORD (brain): byte-identical retry of deploy-card.sh not done; his line owed.
+- R1055 09:04 HIS RULING: approves F5, F21, F20, F23 FINALs and card 324 sign-off; check 324 `b5439f2c`.
+- R1056 09:06 DESK RECORD (brain): R1055 reading; FINALs approved; F5 placement A; F20 D4-D6 B.
+- R1057 09:43 RECORD: DEPLOYED `deploy-2026-10-11-house-seat-order` `2b516997`.
+- R1058 09:43 LAUNCHED: card 324 check DONE ready YES `cd302109`; fold drafter `f42003ea`.
+- R1059 09:46 DESK RECORD (brain): card 324 one fix round (L75).
+- R1060 09:46 DESK RECORD (brain): card 284 read as plain check, Grok house A.
+- R1061 09:47 LAUNCHED: card 324 rows F1 F2 drafted `b02889d8`; preflight `8ebd6f4b`; card 284 read `431af02e`.
+- R1062 09:48 DESK RECORD (brain): card 284 stale stage dir moves by his ONE line.
+- R1063 09:49 LAUNCHED: card 324 build `5b9d297d` at F1 F2.
+- R1064 10:05 RECORD: card 324 fix round BUILT `90b8faad`; deploy-card.sh line to him.
+- R1065 10:08 DESK RECORD (brain): card 324 deploy as is, «SIGN stays; one install card follows.
+- R1066 10:12 DESK RECORD (brain): deploy-card.sh needs his ONE allow string.
+- R1067 10:20 DESK RECORD (brain): seven `ops/desk/` allow strings; his one python command.
+- R1068 10:16 RECORD: allow command ran; deploy-card.sh passed; card 353 written.
+- R1069 10:37 HIS RULING (via brain): OpenAI available, tribunal seats approved, no stops; deploy 324, install, three arms in parallel.
+- R1070 10:55 RECORD: DEPLOYED `deploy-2026-10-11-shadow-hub` `aeeab1e5`.
+- R1071 10:57 LAUNCHED: install card 355 drafted `5c9a1876`; build launched.
+- R1072 11:07 RECORD: card 284 L67 read DONE ready YES; deploy card 356 written.
+- R1073 11:15 DESK RECORD (brain): install card 355 E3 test renamed for R1069.
+- R1074 11:17 LAUNCHED: desk `0d37556a` took over from `cfecf6dc`; drafter prompt 357.
+- R1075 11:19 LAUNCHED: drafter `e9b2d4cf` card 355 S1; build relaunch at E3.
+- R1076 11:21 LAUNCHED: card 355 build `817cb5ef` at E3.
+- R1077 11:32 LAUNCHED: card 355 BUILT tip `78f8572c`; Grok check launching.
+- R1078 11:34 LAUNCHED: card 355 check `261a77c7`.
+- R1079 12:08 RECORD: card 355 check ready NO, O1 held; one same-card round (L75).
+- R1080 12:12 DESK RECORD (brain): row F1 sets SHADOW-HUB.md line 1; no preflight.
+- R1081 12:15 LAUNCHED: drafter `draft-355-fix-row` prompt 358.
+- R1082 12:19 LAUNCHED: row F1 drafted `197a92ea`; build at FIX ROUND F1.
+- R1083 12:28 RECORD: card 355 fix round BUILT `d4ec4fe3`; deploy-card.sh REFUSED.
+- R1084 12:30 DESK RECORD (brain): no bypass; card 361 teaches deploy-card.sh the table-row HELD finding.
+- R1085 12:31 LAUNCHED: drafter `draft-held-table-row` prompt 360.
+- R1086 12:47 LAUNCHED: card 361 drafted `49e83894`; Opus build.
+- R1087 12:58 LAUNCHED: card 361 BUILT tip `0188faa1`; Grok check launching.
+- R1088 13:34 RECORD: card 361 check DONE ready YES.
+- R1089 13:40 LAUNCHED: deploy card 362 written; deploy hub launching.
+- R1090 14:20 RECORD: DEPLOYED `deploy-2026-10-11-held-table-row` `30950adb`.
+- R1091 14:52 RECORD: DEPLOYED `deploy-2026-10-11-install-shadow-hub` `182e896d`.
+- R1092 14:58 LAUNCHED: prompt 330 live SDK spike (Opus, dontAsk).
+- R1093 15:05 RECORD: spike launch refused (workspace untrusted); card 356 deploy waits.
+- R1094 15:07 DESK RECORD (brain): arms GO; Sonnet drafter writes the 3x3 shadow cards.
+- R1095 15:14 LAUNCHED: drafters prompts 364 and 377.
+- R1096 15:35 RECORD: Grok 2nd cards drafted (378-380).
+- R1097 15:48 DESK RECORD (brain): X1 row 0 on LOW Grok card 365 and LOW Terra card 367 only.
+- R1098 16:05 RECORD: nine shadow cards 365-373 drafted `d0e98e70`.
+- R1099 16:10 LAUNCHED: shadow gate seats Grok 365, 378, 368, Sonnet 366, Terra 367.
+- R1100 16:22 LAUNCHED: gate seats Grok `5b7147c4`, Sonnet `76d507e4`, Terra `587da295`.
+- R1101 15:08 LAUNCHED: desk `32672091` took over from `0d37556a`; Grok 378 `2bf0c100`, 368 `0c1c4e63`.
+- R1102 15:12 LAUNCHED: live SDK spike `c4dd3950` (prompt 330).
+- R1103 15:20 DESK RECORD (brain): X1 on 365 harness INCOMPLETE, not a stop.
+- R1104 15:25 LAUNCHED: brain successor `b30b6df5` on handover 349.
+- R1105 15:26 RECORD: SDK spike DONE PARTIAL; `sdk-spike-live-2026-10-11.md`.
+- R1106 15:27 DESK RECORD (brain): Terra arm STOPPED (367 INCOMPLETE); decoy .env for future X1.
+- R1107 15:29 HIS RULING: "Approved grok and I approve terra read".
+- R1108 15:29 DESK RECORD (brain): spike D1 D3-D9 KEEP, D2 to him.
+- R1109 15:35 DESK RECORD (brain): Terra read; drafters 380, 381.
+- R1110 15:38 LAUNCHED: drafters `fd4c6ddb` (380) and `b7359df0` (381).
+- R1111 15:36 LAUNCHED: card 382 build `d08a28c5`; drafters DRAFTED.
+- R1112 15:39 HIS RULING: spike D2 = subscription everywhere, no API key; L27 clause owed to him.
+- R1113 15:46 LAUNCHED: drafter `draft-365-x1-probe-row`.
+- R1114 15:52 RECORD: Sonnet LOW 366 SHADOW BUILT `76d507e4`.
+- R1115 15:55 LAUNCHED: card 382 BUILT `a790e54d`; check `82b4a140`.
+- R1116 15:58 LAUNCHED: Grok MID 368 BUILT `0c1c4e63`; Grok MID 379 `8bfb888f`.
+- R1117 16:12 LAUNCHED: Grok LOW gate `b91a96e0` (365, probe-file X1).
+- R1118 16:25 RECORD: X1 re-run on Grok 365 FAILED; decoy broke lock scan.
+- R1119 16:28 RECORD: Grok LOW 378 SHADOW BUILT `2bf0c100`.
+- R1120 16:33 DESK RECORD (brain): X1 on Grok 365 a REAL failure; Grok arm STOPPED.
+- R1121 16:40 LAUNCHED: card 382 check DONE ready YES; deploy card 384 written.
+- R1122 18:25 LAUNCHED: DEPLOYED card 384 `deploy-2026-10-11-terra-pass-prompt` `f5dbe38a`; Terra LOW gate `f2d1e0bf`.
+- R1123 19:27 LAUNCHED: Terra LOW 367 BUILT `f2d1e0bf`; X1 PASS; Terra MID 370 `153e8f0d`.
+- R1124 20:13 LAUNCHED: Terra MID 370 BUILT; Terra HIGH 373 `87e4c048`.
+- R1125 20:20 RECORD: herdr tabs for brain and hubs.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-11*"` = `deploy-2026-10-11-held-closed`, `-held-table-row`, `-house-seat-order`, `-install-shadow-hub`, `-shadow-hub`, `-terra-pass-prompt`.
+- STOP LINE (L35), `reports/close-2026-10-10.md`: `CLOSE PUSHED b3f6fa0b · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-11.md` `## 8`.
