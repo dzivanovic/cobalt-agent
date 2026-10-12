@@ -190,7 +190,7 @@ def test_check_hub_seat_order_is_grok_gemini_and_openai_only_by_header():
     assert len([ln for ln in lines if ln.startswith(head)]) == 1
     assert not any("OpenAI up → A = OpenAI" in ln for ln in lines)
     assert not any("OpenAI (Sol, `gpt-5.6-sol`) · Grok" in ln for ln in lines)
-    assert len(lines) == 123
+    assert len(lines) == 127  # card 386 L2, L6 (two), L8: four shadow lines
 
 
 def test_check_hub_probe_step_calls_the_script_with_the_card():
