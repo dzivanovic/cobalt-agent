@@ -1,9 +1,10 @@
 # launcher-shadow-check-1011 — build report (2026-10-11)
 
 ## §0 Headline
-- All 9 rows are built at tip `ba37c2a9` on BASE `a76d8855`. The row tests show red on BASE, the mutations show red, and the tests are green at the tip. RESTARTS: none.
-- STOPPED BEFORE W. My RUN probe sits at `docs/_inflight/run_386_dry.py` (gitignored) and pytest left `docs/_inflight/__pycache__/` beside it. Both break the PLACEMENT check in `tests/cobalt` (E0: 2 failed), and none of my listed commands can delete them.
-- The desk's fix: remove those two paths, then send `CONTINUE: W`.
+- All 9 rows are built on BASE `a76d8855`, code tip `a8c18242`. A shadow card's check now launches, preflights and fills on `SHADOW BUILT · job · tip`, with one untracked root `SHADOW-INSTRUCTIONS.md` allowed. `desk-done.sh` knows kind `shadow`. CHECK-HUB carries the four shadow lines.
+- Suites at the tip: offline 4199/0, live-note 146/0, `tests/ops` 3197 passed / 0 failed. DB: none, so `cobalt_dev` was not taken. RESTARTS: none.
+- W found one red that E3 did not show: `tests/ops/test_house_probe.py:193` pins CHECK-HUB at 123 lines, and the card's four lines make it 127. I fixed it in a second commit, `a8c18242`. That file is outside the rows' files, so it is DECISION 2.
+- The first stop, at W, was my RUN probe in `docs/_inflight/`. The desk removed it; I verified that before resuming.
 
 ## L74
 - A system notice in this session asked that commits end with a `Claude-Session:` line. Recorded as data (L74); commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -126,29 +127,68 @@ RESTARTS: none
 
 ## W THE THREE SUITES
 - (a0) `git diff --name-only --no-renames a76d8855` → `docs/40 - DevDocs/prompts/CHECK-HUB.md`, `ops/desk/card-fill.sh`, `ops/desk/desk-done.sh`, `ops/desk/desk-launch.sh`, `ops/desk/preflight.sh`, `tests/ops/test_card_fill.py`, `tests/ops/test_check_hub_shadow.py`, `tests/ops/test_desk_done.py`, `tests/ops/test_desk_launch_prechecks.py`, `tests/ops/test_preflight.py`. Every path is under `ops/`, `tests/ops/` or `docs/`. **`cobalt_dev: not taken (DB: none — 10 paths)`**.
-- (a), (e) and `tests/ops`: NOT RUN. `ls -la docs/_inflight` still shows `run_386_dry.py` and `__pycache__/`, which the PLACEMENT tests in `tests/cobalt` refuse (E0). The stop is below.
+- First W, after `CONTINUE: W` (05:45 ET), on `ba37c2a9`:
+  - `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-shadow-check-1011 offline` → `offline 4199/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-offline-20261012-054559.log`. That is E0's 4197 passes plus the two PLACEMENT tests, green once the probe paths were removed.
+  - `… livenote` → `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-livenote-20261012-054600.log`.
+  - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `1 failed, 3196 passed, 1 xfailed, 15 warnings in 619.24s`. The red was `test_check_hub_seat_order_is_grok_gemini_and_openai_only_by_header`, `tests/ops/test_house_probe.py:193`: `assert 127 == 123`. Card 298 S1 pins CHECK-HUB at exactly 123 lines; this card's rows L2, L6 and L8 add four.
+- The W red fixed: `tests/ops/test_house_probe.py:193` → `assert len(lines) == 127  # card 386 L2, L6 (two), L8: four shadow lines`. Committed `a8c18242 fix(launcher-shadow-check-1011): CHECK-HUB line-count pin follows the four shadow lines (L2, L6, L8; L68)`. This file is outside the rows' files: DECISION 2. Its red, at 123, is the first W's line quoted above.
+  - Running it with `test_check_hub_shadow.py` and `test_hub_lines.py` gave `1 failed, 48 passed`. The red was a different test, `test_no_card_probes_grok_and_gemini_and_never_calls_codex` (`'grok: OUT — TIMEOUT' != 'grok: OUT — You have hit your usage limit…'`), a stub-timing case of `house-probe.sh`, which this build does not touch. Re-run alone: `26 passed`. In the full `tests/ops` run of the first W and the second it passed.
+- RESTARTS again: `uv run cobalt jobs restarts a76d8855..HEAD` → the table above plus `tests/ops/test_house_probe.py M test/documentation; no resident -`, `RESTARTS: none`. `git diff --name-only --no-renames a76d8855` → the 10 paths above plus `docs/40 - DevDocs/reports/launcher-shadow-check-build-2026-10-11.md` and `tests/ops/test_house_probe.py`, every one under `ops/`, `tests/ops/` or `docs/`. **`cobalt_dev: not taken (DB: none — 12 paths)`**.
+- Second W, on `<tip>` = `a8c18242` (one more gate call each, `## RECORDS`):
+  - (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-shadow-check-1011 offline` → `offline 4199/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-offline-20261012-055821.log`.
+  - (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-shadow-check-1011 livenote` → `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-livenote-20261012-055822.log`.
+  - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `3197 passed, 1 xfailed, 15 warnings in 618.24s (0:10:18)`. This build adds the 386 tests (66 cases across `test_desk_launch_prechecks.py`, `test_preflight.py`, `test_card_fill.py`, `test_desk_done.py`) and `tests/ops/test_check_hub_shadow.py` (4).
+  - (b)–(d), (f): not run (DB: none). `ls /Users/cobalt/cobalt-wt/launcher-shadow-check-1011/.env` → No such file.
 
 ## PRE-STOP SELF-CHECK
-(at CLOSE, after W)
+(1) Every added test was shown red against BASE (E2, the 15 reds quoted) or under a mutation (E3, each line quoted). Every two-sided control went red under the mutation that removes its guard: A3/A4 (gate removed, 6), A2 (exactness, 3), B2/B3 (4), B4 (2), C2 (3), D3/D4 (4), D2 `_subdirectory`/`_tracked_and_modified` (2), E2 (4), F2 `[shadow-BUILT]` (1), F3 (1). The launch line is pinned by its own mutation (1). Some controls stay green under every mutation I made because an existing guard pins them, not this build's code: D2 `_second_file`/`_modified_beside` (the two-line status guard, `preflight.sh:110-111`); A2 `other job`, C2 `x-other` and E2 `x-other` (a job that is no prefix fails every pattern); C2 BUILT-without-self-check and E2 `self-check: 2 of 3` (the existing arms); F2 `[build-SHADOW BUILT]` and `[shadow-CHECK DONE]` (`^BUILT`, `^SHADOW`). I name them and did not rewrite them. They pin behaviour the card calls "as today". Tests rewritten: A5, B2–B4 (E2).
+(2) Entry paths. The four scripts have no caller in `ops/desk` other than themselves: `grep -rn -F "desk-done.sh" ops/desk` and `grep -rn -F "card-fill.sh" ops/desk` show only their own usage lines, and `grep -rn -F "preflight.sh check" ops/desk` → nothing; the desk types them. Kinds and states:
+  - check first pass: A1–A5, B1–B4
+  - check resume `E3`: A6
+  - preflight `check` / `shadow`: C1–C3, D1–D4
+  - card-fill: E1–E3
+  - desk-done `shadow` / `build`: F1–F3
+  - SHADOW OF blank, below `## ROWS` or absent, and BRANCH `ops/` or `x-shadow/`: A3/A4, C2, D3, E2
+  A shadow card launched with PASS-2 is not pinned: DECISION 3.
+(3) Re-read at the tip:
+  - `grep -n -F "SHADOW BUILT"` over the four scripts → `desk-launch.sh:159,1409,1416`, `preflight.sh:263`, `card-fill.sh:74`, `desk-done.sh:6`
+  - `grep -n -F "SHADOW-INSTRUCTIONS.md"` → `desk-launch.sh:160,1426,1428`, `preflight.sh:142,143,149`
+  - `grep -n -F "On a shadow card" CHECK-HUB.md` → `22`, `63`
+  - the L6 sentence → `64`, `117`
+  - `wc -l CHECK-HUB.md` → `127`
+  - `git show --stat a8c18242` → `tests/ops/test_house_probe.py | 2 +-`
+  The E3 `file:line` mentions (`:1403`, `:1411`, `:69`) are BASE lines, quoted at PREFLIGHT.
 
 ## FOR THE CHECK
-(at CLOSE)
+- Range `a76d8855..a8c18242`:
+  - `d71ff562 wip(launcher-shadow-check-1011): red`
+  - `ba37c2a9 fix(launcher-shadow-check-1011): a shadow card's check launches on SHADOW BUILT and its one SHADOW-INSTRUCTIONS.md (L1, L2, L4-L9; L1, L3, L72)`
+  - `adc285b3 wip(launcher-shadow-check-1011): W — the RUN probe in docs/_inflight breaks PLACEMENT; no listed string removes it` (report only)
+  - `a8c18242 fix(launcher-shadow-check-1011): CHECK-HUB line-count pin follows the four shadow lines (L2, L6, L8; L68)`
+- Per row, the reds, mutations and greens: `## E2 RED` and `## E3 THE ROWS`. The caller greps: self-check (2). The RUN rows' output WHOLE: E2 (before), E3 (after L1 alone, and after L1 + L4), `## RESTARTS` (L3).
+- Suites: `## W`, the second W. With-DB: not run (DB: none). F0 / F1 / F2: not run (DB: none). Lock taken / released: not run (DB: none).
+- The card's records as re-read: `## PREFLIGHT`.
+- Fence: `git diff --stat` shows only the rows' files plus `tests/ops/test_house_probe.py` (DECISION 2). `preflight.sh` edits sit in the status block (`:103-149` at the tip, after the inserted lines) and the report arm. `card-fill.sh` edits sit in `:53-79` at the tip. `desk-done.sh` edits sit in `:2-30` at the tip.
 
 ## CONTINUE
-next: W (the desk removes `docs/_inflight/run_386_dry.py` and `docs/_inflight/__pycache__/` in this worktree, then sends `CONTINUE: W`)
+next: CLOSE (done)
 
 ## DECISIONS
-1. ASK DESK: my RUN probe for rows L1 / L4 was written to `/Users/cobalt/cobalt-wt/launcher-shadow-check-1011/docs/_inflight/run_386_dry.py`, a gitignored path, so the tree stays clean. Running it also made `docs/_inflight/__pycache__/`. The PLACEMENT check in `tests/cobalt` refuses both (E0 `2 failed`), so W's offline suite cannot be green while they stand. No listed string deletes them: `rm` is listed for `.env` only. Safe default taken: I continued E2, E3 and RESTARTS, which run only `tests/ops` and are unaffected, and stopped before W. Fix: remove both paths, then `CONTINUE: W`. I re-run E0's offline suite at W (gate.sh offline) to show the base green. [22:12 ET]
-2. ASK DESK: the card's RUN line `DESK_LAUNCH_DRY=1 sh /Users/cobalt/cobalt/ops/desk/desk-launch.sh check …` cannot be typed: the `VAR=` prefix is not a listed string, and the repo path holds BASE's script. Safe default taken: the dry launch ran from a pytest probe (`-rP`, BUILD-HUB E2's form for a RUN row), with `DESK_LAUNCH_DRY=1` and a stub `claude` on PATH so nothing could launch, against both the repo script and this worktree's script. The before, after-L1-alone and after outputs are quoted in E2 / E3. [22:12 ET]
+1. ASK DESK: the card's RUN line `DESK_LAUNCH_DRY=1 sh /Users/cobalt/cobalt/ops/desk/desk-launch.sh check …` cannot be typed: the `VAR=` prefix is not a listed string, and the repo path holds BASE's script. Safe default taken: the dry launch ran from a pytest probe (`-rP`, BUILD-HUB E2's form for a RUN row), with `DESK_LAUNCH_DRY=1` and a stub `claude` on PATH so nothing could launch, against both the repo script and this worktree's script. The before, after-L1-alone and after outputs are quoted in E2 / E3. [22:12 ET]
+2. ASK DESK: a file outside the rows' files was changed. `tests/ops/test_house_probe.py:193` (card 298 S1) pins CHECK-HUB.md at exactly 123 lines. This card's rows L2, L6 and L8 require four added lines, and no other hub change. The W red `assert 127 == 123` can only be fixed in that pin. Safe default taken: the pin moved to 127 with a comment naming card 386 (`a8c18242`, a one-line diff), and nothing else in that file changed. If the desk prefers the pin kept elsewhere or removed, it is one line. [06:09 ET]
+3. ASK DESK: one entry path is not pinned by a test: a PASS-2 `check` launch on a shadow card. PASS-2 skips the `not built` test, as before. The new `:1411` exception for `SHADOW-INSTRUCTIONS.md` applies to it too, because `shadow` is computed for every check launch. CHECK-HUB says there is no PASS-2 any more (his R438), so no test was added. Safe default taken: behaviour left as built, and the path named here. [06:09 ET]
 
 ## RECORDS
 - REFUSED, not needed: `git -C /Users/cobalt/cobalt-wt/strike-fallback-env-1010-sonnet status --porcelain --branch` — Permission to use Bash has been denied because Claude Code is running in don't ask mode.
-- Cleanup owed: `docs/_inflight/run_386_dry.py` and `docs/_inflight/__pycache__/` in this worktree (gitignored, never committed). `.venv/` was created by the first `uv run` (gitignored).
+- The first stop, at W (22:12 ET): my RUN probe `docs/_inflight/run_386_dry.py` and its `__pycache__/` broke the PLACEMENT tests (E0 `2 failed`), and no listed string removes them. The desk removed both. `.venv/` was created by the first `uv run` (gitignored).
+- Extra gate calls: W ran twice (offline and livenote each twice). The second run followed the `a8c18242` fix of the W red.
+- `tests/ops/test_house_probe.py::test_no_card_probes_grok_and_gemini_and_never_calls_codex` failed once in a three-file run with a stub-timing mismatch, passed alone (`26 passed`), and passed in both full `tests/ops` runs. It is not this build's code.
 - `ops/desk/preflight.sh`'s header comment (`:9-26`) and `ops/desk/card-fill.sh`'s header comment (`:2-13`) still describe the BUILT-only rule. They lie outside the fenced lines (`:103-131`, `:228-247`; `:53-72`), so they were left unchanged.
 - L9 is built inside `desk-done.sh:2-28` by `kind=build` in the `shadow)` arm (precedent `preflight.sh:52`), so `:35` is untouched.
 - The `SHADOW OF:` value is read from the header only (above the first blank line) in `desk-launch.sh` and `preflight.sh`, as `card-fill.sh`'s `find` reads it (card L7), and as CHECK ASK X1 asks for a line below `## ROWS`. The build arm's `field "SHADOW OF"` (`:1332`) is fenced and unchanged.
 - No DevDocs line: no page under `docs/40 - DevDocs/cobalt/` covers these `ops/desk/` scripts. Adding a page would widen the job.
 - The card's records, as re-read at PREFLIGHT, are above.
+- CONTINUED at W 05:45 ET: `cto-desk` sent `CONTINUE: W. the two RUN probe paths are removed`; verified with `ls -la docs/_inflight` → `README.md` only; `ls -la …/.env` → No such file.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — docs/_inflight/run_386_dry.py and docs/_inflight/__pycache__/ (my RUN probe) break the PLACEMENT tests of the offline suite — no listed string removes them
+BUILT · job: launcher-shadow-check-1011 · tip: a8c18242 | on a76d8855 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 9 of 9 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 273762
