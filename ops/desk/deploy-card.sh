@@ -148,8 +148,9 @@ field() {
 # id the check does not list (<test id> = tests/<path>.py::<name>). A FIXED test exists at the
 # code tip with no xfail (no decorator of its def, no `pytestmark`); a CARRIED test exists there
 # with a decorator holding `xfail` and `strict=True`. When m > n it also holds exactly one line
-# `SETTLED: <id> — R<n>` for each of m - n distinct ids, each a `## RUNS` bullet or table row
-# whose verdict starts `REJECTED` or `UNSETTLED`, never a held id; a SETTLED line is no FIXED or
+# `SETTLED: <id> — R<n>` for each of m - n distinct ids, each a `## RUNS` bullet one of whose
+# ` · ` fields after the id, or a table row whose last cell, starts `REJECTED` or `UNSETTLED`
+# (a verdict may quote ` · `), never a held id; a SETTLED line is no FIXED or
 # CARRIED line. The R<n> of a CARRIED or SETTLED line is a `| R<n> |` row carrying `DESK RECORD`:
 # the first such row of the `reports/cto-<date>.md` files at HEAD dated on or after the check
 # report's date (<date> from its file name), read newest first (R1160).
@@ -354,8 +355,8 @@ HELD_LINES
     # `open:` past held unfixed: m - n REJECTED or UNSETTLED ids, one SETTLED line each (R1157 (2))
     hr_open=$(awk '/^## /{on = ($0 == "## RUNS"); next}
         function opened(v) { sub(/^[ \t*]+/, "", v); return v ~ /^(REJECTED|UNSETTLED)/ }
-        on && /^- [A-Za-z0-9._-]+ · / {v = $0; while ((p = index(v, " · ")) > 0) v = substr(v, p + length(" · "))
-            if (opened(v)) {sub(/^- /, ""); sub(/ · .*/, ""); print}}
+        on && /^- [A-Za-z0-9._-]+ · / {v = $0; o = 0; while ((p = index(v, " · ")) > 0) {v = substr(v, p + length(" · ")); if (opened(v)) o = 1}
+            if (o) {sub(/^- /, ""); sub(/ · .*/, ""); print}}
         on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
             sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && opened(v)) print id}' "$hr_check")
     hr_settled=$(printf '%s\n' "$hr_blob" | sed -n -E 's#^SETTLED: ([A-Za-z0-9._-]+) — (R[0-9]+)$#\1 \2#p')
