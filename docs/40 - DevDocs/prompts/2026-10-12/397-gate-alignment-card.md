@@ -10,7 +10,7 @@ REPORT: /Users/cobalt/cobalt-wt/gate-alignment-1012/docs/40 - DevDocs/reports/ga
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gate-alignment-check-2026-10-12.md
 HOUSE B:
 DB: none
-RULINGS: 2026-10-12 R1138, 2026-10-12 R1157
+RULINGS: 2026-10-12 R1138
 
 ## ROWS
 
