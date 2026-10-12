@@ -1,0 +1,36 @@
+# recut-archive preflight 2026-10-12 — card 434 `recut-archive-1012`
+
+Read-only. Reads at `main` HEAD `6a97a036`; the card's BASE `0990393f` (no diff `0990393f..HEAD` in `ops/ src/ tests/ configs/ pyproject.toml`).
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | `git log -- <card>`; `git diff HEAD --stat -- <card>` | committed in `6a97a036`; diff empty | OK |
+| 2 | `grep -n FILL <card>` | no line; `TIP:` empty by design (CARD.md:18, build) | OK |
+| 3 | card header; `cto-2026-10-12.md:147` | `CLASS: K5`; `RULINGS: 2026-10-12 R1138`; R1138 row `HIS RULING · APPROVED` | OK |
+| 4 | card A1 quote vs `433-draft-recut-archive.md:6` | the brain's row, word for word, from "`desk-launch.sh recut <card>`: when a prior deploy" to "refused both before and after." | OK |
+| 5 | `git show HEAD:ops/desk/gate-clean.sh`; `grep` | the refusal `tag pre-$job exists: the deploy got that far` is `gate-clean.sh:89-90`; the recut arm reaches it at `desk-launch.sh:1919` (`sh "$here/gate-clean.sh" "$card"`); `desk-launch.sh` itself holds no such text; the card cites it so | OK |
+| 6 | every card anchor read against HEAD | right: recut arm `:1847-1935`, `:1850-1866`, `:1895-1898`, `:1917-1919`, `:1920`, header `:22-23` `:65-73`, `refuse` `:208`, `here` `:250`, `:346-348`, `:1007-1013`, `:1844`, `:485-508`, `:1993-2020`, gate-clean `:60-71` `:74-83` `:86-96` `:99-102` `:105-109`, job-clean `:12-26` `:40-173`, test file `:55-152` `:110-113` `:167-210` `:213-220` `:237-241` `:255-263`, test_gate_clean `:167-177` `:478-510` `:623-633`, DEPLOY-HUB `:5` `:9` `:11` `:50` `:115` `:127-133` `:165` `:173` `:179-181`, 256 report `:117` `:130-136` `:146` `:152` `:182` `:248`, restarts.py `:38` `:225-228` `:230-233` `:246`, settings.json line 29. WRONG: `$bt` is `:1874` (card `:1873`, which is `$bw`); `$br` is `:1875` (card `:1874`); cto rows R1277-R1279 are `:8-10` (card `:7-9`); R1138 is `:147` (card `:146`); OWED is `:153-154` (card `:153`) | FAIL |
+| 7 | `wc -l` of the seven files | 2023 / 109 / 212 / 338 / 745 / 181 / 248 = the card's | OK |
+| 8 | order read: tests (a)-(g) → `job-clean.sh salvage` → `branch -m` → `tag` new → `tag -d` | salvage inspects and refuses before any change (`job-clean.sh:97-124`), so a refusal leaves tree, branch, tag as they were; a failure after the tree is gone (branch or tag step) is printed and loses no commit (branch and tag still hold `S`, `P`); `tag -d` comes only after `$at^{commit}` reads `P` | OK |
+| 9 | the card's tests RA1-RA6 and each failing reason on BASE | RA1: exit 1 `REFUSED: tag pre-x-deploy exists` (gate-clean); RA2 (i)(ii): stderr lacks `— not archived:`; RA3 (a)-(f): same; RA4: refusal is gate-clean's; RA5: refused at the pre tag; RA6: `tag "$at"` absent. Each reason is real (gate-clean `:89` fires before `:92` and `:99`). BUT: the card names SIX tests (twelve cases), not seven; archive test (g) NAMES FREE has no test (no case makes `$at` or `$ab` pre-exist, no `check-ref-format` case); test (f)'s lock-directory half has none (RA3 (f) is `.env` only) | FAIL |
+| 10 | RA2 (i) tag `x-tag`, (ii) attempt-2 card + `DEPLOYED` line in `deploy-2026-01-02-1.md` | before (BASE): refused by gate-clean (`:86-88` for x-tag; `:89-90` for (ii)); after: test (a) refuses, `$br.md` is `deploy-2026-01-02-1.md` so the line is read; refs, gate, card untouched | OK |
+| 11 | `job-clean.sh:139-170`, card ARCHIVE steps | nothing deleted: tag kept as `archive/pre-<job>-<stamp>` (256: `archive/pre-aset-orphan-1010-<stamp>` at `8199fa13`), branch kept as `archive/<BRANCH>-<stamp>` (256: `archive/deploy/aset-orphan-1010-<stamp>` at `a617c402`), a dirty tree on `wip/<wt>-salvage-<date>`; test (e) (S not on main) means salvage never takes its `branch -d` path | OK |
+| 12 | `git show HEAD:.claude/settings.json:29`; `STANDING-LIST.md`; R412 (`cto-2026-10-05-words.md:27`) | the desk runs the script under `Bash(sh /Users/cobalt/.claude/ops/*)`; `git tag <name> <sha>`, `tag -d`, `branch -m` run inside the script, as `gate-clean.sh` already runs `branch -D` and `worktree remove --force`; no seat's `--allowedTools` string is added; card `## NOT IN THIS JOB` forbids one | OK |
+| 13 | drafter decisions 3 and 4 vs `STANDING-LIST.md:122`, `DEPLOY-HUB.md:11` | `:122` limits the deploy HUB's five tag strings ("any other tag (an earlier deploy's rollback anchor)"); the script is not that seat and no string of that list changes. `DEPLOY-HUB.md:11` holds `tag pre-<job>` and `tag -d pre-<job>` for the hub only; `branch -m` and a tag with a sha are on no seat line, none needed. Both defaults read right | OK |
+| 14 | `restarts.py:38,225-233,246`; card R2 | changed paths and homes: `ops/desk/desk-launch.sh` → "operator script; no Cobalt reader"; `tests/ops/test_desk_launch_recut.py` → "test/documentation; no resident"; `docs/` reports → `DOCS`; `RESTARTS: none` justified | OK |
+| 15 | card `## READ` last bullet; `desk-launch.sh:116,498,1840,1844` | the card's own deploy is a `deploy` card; no deploy hub is needed beyond the usual one, and none blocks it: only `close` (`:498`) and `prodwrite` (`:1844`) refuse a live `deploy-hub-` session, `deploy` does not; the 256 hub is gone (R1278). What runs first: this preflight, build, check; then 434's deploy (one at a time, R1181); then recut 256; then F4 card 304 | OK |
+| 16 | drafter `## DECISIONS` 1-5 vs card rows | each has a default; the card follows all five: worktree first (A1 THE ARCHIVE (1)-(3)), (b)/(c) report check, no new seat string, no list change, no first-parent exception in (e) | OK |
+
+## ISSUES
+- FAIL #6: fix the five anchors: `$bt` `:1874`, `$br` `:1875`, cto R1277-R1279 `:8-10`, R1138 `:147`, OWED `:153-154` (R1280 added a row above them in the card's own commit).
+- FAIL #9: name the seventh test: a case from `stale_256` with `archive/pre-x-deploy-<stamp>` (or the branch name) already present, asserting `— not archived:` naming the name and nothing changed (stamp fixed by stubbing `date` on PATH, or the ref created for the current minute), and a lock-directory case (`$WT/.cobalt_dev.lock/owner` = `x-gate`) beside RA3 (f). Say "six tests" or list seven.
+- NOTE RA2 (i): only `x-tag` exists, no `DEPLOYED` report line; the card asserts stderr holds `DEPLOYED`. Pin the wording of test (a)'s message to carry `DEPLOYED` for both the tag and the report-line cases.
+- NOTE RA6: the arm holds nested `;;` (e.g. `:1853`, `:1861`); the slice must end at the arm's own `    ;;` (`:1935`). A comment that names `gate-clean.sh` (`:1917`) must not count as a call.
+- NOTE RA2 (ii): run `stale_256` before the by-hand recut (`:255-263` moves the gate and renames the branch), or the helper's `git -C gate` path is gone.
+- NOTE: `show-ref` absent does not catch a directory/file clash (a branch named `archive` or `archive/deploy`); `branch -m` then fails after the tree is removed and the arm prints `REFUSED: recut: the archive stopped at …`. No ref is lost; the card already words this.
+- NOTE: the classes behind `RESTARTS: none` stand in the R2 row, not in `## RECORDS`.
+- NOTE: `main` carries uncommitted modified files at this read (`.claude/settings.json`, `configs/cobalt/rules.yaml`, six docs reports); the desk's to settle before the card's deploy hub starts.
+
+PREFLIGHT DONE · card: recut-archive-1012 · checks: 16 · fails: 2 · ready: NO
