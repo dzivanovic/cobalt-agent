@@ -183,3 +183,154 @@ def test_a_bad_call_is_refused(job, args):
     done = subprocess.run(["sh", str(STAGE), *args], env=env, capture_output=True, text=True, timeout=60)
     assert done.returncode == 1
     assert done.stderr.startswith("REFUSED: ")
+
+
+# Card 413 T1: a re-check of the same JOB clears its own prior staging, and nothing else.
+CHECK_A = "docs/40 - DevDocs/reports/x-job-check-a.md"
+CHECK_B = "docs/40 - DevDocs/reports/x-job-check-b.md"
+
+
+def prior_staging(job, *, dest=None, report="main", change=True):
+    """A first check staged at `dest`, its hub and house files beside it; then the card names a new check report.
+
+    report: "main" (the prior check report committed on main), "untracked" (never committed),
+    "branch" (committed only on the job branch, never on main).
+    """
+    wt, repo, job_wt, base, tip, card, env, fixture_dest = job
+    dest = dest or fixture_dest
+    card.write_text(card.read_text().replace(
+        "TREE STATE:", f"CHECK REPORT: {repo / CHECK_A}\nTREE STATE:"))
+    if report == "branch":
+        write(job_wt / CHECK_A, "# check a\n")
+        git(job_wt, "add", "--", CHECK_A)
+        git(job_wt, "commit", "-q", "-m", "check a on the job branch")
+    else:
+        write(repo / CHECK_A, "# check a\n")
+    paths = [str(card.relative_to(repo))] + ([CHECK_A] if report == "main" else [])
+    git(repo, "add", "--", *paths)
+    git(repo, "commit", "-q", "-m", "card with check a")
+    done = stage(env, card, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    (dest / "HOUSE-INSTRUCTIONS.md").write_text("instructions\n")
+    (dest / "house-a.md").write_text("FINDINGS: 0\n")
+    (dest / "files" / "extra.md").write_text("a stage-copy copy\n")
+    if change:
+        card.write_text(card.read_text().replace(
+            f"CHECK REPORT: {repo / CHECK_A}", f"CHECK REPORT: {repo / CHECK_B}"))
+        git(repo, "add", "--", str(card.relative_to(repo)))
+        git(repo, "commit", "-q", "-m", "card with check b")
+    return dest
+
+
+def snapshot(root: Path) -> dict:
+    seen = {}
+    for dirpath, dirnames, filenames in os.walk(root):
+        for name in dirnames + filenames:
+            p = Path(dirpath) / name
+            rel = str(p.relative_to(root))
+            if p.is_symlink():
+                seen[rel] = ("link", os.readlink(p))
+            elif p.is_dir():
+                seen[rel] = ("dir",)
+            else:
+                seen[rel] = ("file", p.read_bytes())
+    return seen
+
+
+def test_c1_a_recheck_clears_its_own_prior_staging(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job)
+    done = stage(env, card, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.splitlines()
+    assert lines[0] == f"cleared: {dest} (prior check {repo / CHECK_A})"
+    assert lines[-1].startswith("STAGED ")
+    assert not (dest / "HOUSE-INSTRUCTIONS.md").exists()
+    assert not (dest / "house-a.md").exists()
+    assert not (dest / "files" / "extra.md").exists()
+    staged_card = (dest / "files" / card.name).read_bytes()
+    assert staged_card == blob(repo, f"HEAD:{card.relative_to(repo)}")
+    assert f"CHECK REPORT: {repo / CHECK_B}".encode() in staged_card
+
+
+def _foreign_file(dest):
+    (dest / "notes.txt").write_text("notes\n")
+
+
+def _symlink_in_wt(dest):
+    os.symlink("/etc/hosts", dest / "files" / "wt" / "link")
+
+
+def _env_in_wt(dest):
+    (dest / "files" / "wt" / ".ENV").write_text("COBALT_TEST_CONSTRUCTED=1\n")
+
+
+def _git_dir_in_files(dest):
+    (dest / "files" / ".git").mkdir()
+    (dest / "files" / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+
+
+def _card_copy_one_byte(dest):
+    copy = next(p for p in (dest / "files").iterdir() if p.name.endswith("-card.md"))
+    copy.write_text(copy.read_text().replace("| row | what |", "| row | whAt |"))
+
+
+@pytest.mark.parametrize("case, kwargs, spoil", [
+    ("c2-foreign-file", {}, _foreign_file),
+    ("c3-prior-report-untracked", {"report": "untracked"}, None),
+    ("c4-prior-report-off-main", {"report": "branch"}, None),
+    ("c5-symlink", {}, _symlink_in_wt),
+    ("c6-dot-env", {}, _env_in_wt),
+    ("c7-dot-git", {}, _git_dir_in_files),
+    ("c8-card-copy-edited", {}, _card_copy_one_byte),
+    ("c9-prior-is-this-check", {"change": False}, None),
+])
+def test_c2_c9_a_dest_that_fails_a_test_is_refused_and_untouched(job, case, kwargs, spoil):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, **kwargs)
+    if spoil:
+        spoil(dest)
+    before = snapshot(dest)
+    done = stage(env, card, dest)
+    assert done.returncode == 1, case + done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), case + done.stderr
+    assert "cleared:" not in done.stdout, case
+    assert snapshot(dest) == before, case
+
+
+def test_c10_a_range_refusal_comes_before_the_clear(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job)
+    write(job_wt / "configs" / ".env", "COBALT_TEST_CONSTRUCTED=1\n")
+    git(job_wt, "add", "-f", "configs/.env")
+    git(job_wt, "commit", "-q", "-m", "an env in the diff")
+    new_tip = git(job_wt, "rev-parse", "--short=8", "HEAD")
+    card.write_text(card.read_text().replace(f"TIP: {tip}", f"TIP: {new_tip}"))
+    git(repo, "add", "--", str(card.relative_to(repo)))
+    git(repo, "commit", "-q", "-m", "card at the new tip")
+    done = stage(env, card, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith("REFUSED: ")
+    assert "cleared:" not in done.stdout
+    assert (dest / "house-a.md").read_text() == "FINDINGS: 0\n"
+
+
+def test_c11_another_jobs_folder_is_not_cleared(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    other = dest.parent / "other-check"
+    prior_staging(job, dest=other)
+    before = snapshot(other)
+    done = stage(env, card, other)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {other}")
+    assert "cleared:" not in done.stdout
+    assert snapshot(other) == before
+
+
+def test_c12_the_script_removes_only_by_its_two_rm_rf_lines():
+    text = STAGE.read_text()
+    assert "git clean" not in text
+    assert "-delete" not in text
+    removing = [ln for ln in text.splitlines() if "rm -r" in ln]
+    assert len(removing) == 2, removing
+    assert all("rm -rf" in ln for ln in removing), removing
