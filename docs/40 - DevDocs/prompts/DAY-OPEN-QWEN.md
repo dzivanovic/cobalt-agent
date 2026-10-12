@@ -26,4 +26,5 @@ If it fails: continue with S1–S7 below.
 
 ## VERDICT
 Table: check | verdict PASS/FAIL/KNOWN/ERROR | one-line evidence. OVERALL: RED if any ERROR, else AMBER if any FAIL, else GREEN (KNOWN never lowers). Last line: `NEXT: the desk reads this report and states the plate.` Write the report, print the table, stop.
+Above that last line the report carries `## NEEDS HIS HAND` (on the S0 path too: append it to the file the command wrote): `none` when nothing is owed; else one entry per item: what was blocked · by which rule or tool · why no seat could do it · the exact line he types · what it unblocks. Work around the blocked ITEM, never around a permission check. An item for his hand is raised by day only; at night it waits in this section and the rest runs.
 /no_think
