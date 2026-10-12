@@ -268,6 +268,10 @@ EXPECTED_BACKUP_YAML_READERS = frozenset({
     "cobalt.voice.turn.default_deps",
     "cobalt.voice.cli.cmd_turn",
     "cobalt.voice.cli._run",
+    # card 2026-10-12 417 (A6): `cobalt db apply --prod` checks the backup
+    # (db_apply.backup_line), an operator command with no job.
+    "cobalt.db_apply.command",
+    "cobalt.db_apply.backup_line",
 })
 
 
@@ -494,6 +498,7 @@ def test_backup_yaml_readers_are_pinned_and_derive_the_aset_restart(monkeypatch)
         "cobalt.voice.web.voice_status",
         "cobalt.voice.web.voice_startup",
         "cobalt.voice.cli.cmd_turn",
+        "cobalt.db_apply.command",
     }, sorted(entrypoints)
     assert referrers == {
         "cobalt.backup.cli.add_parser",
@@ -503,6 +508,7 @@ def test_backup_yaml_readers_are_pinned_and_derive_the_aset_restart(monkeypatch)
         "cobalt.voice.web.<module>",
         "cobalt.aset.web.<module>",
         "cobalt.voice.cli.add_parser",
+        "cobalt.db_apply.add_apply_parser",
     }, sorted(referrers)
     # No import-time read: nothing reads the file at module scope, so no
     # resident's static import reach (the classifier's own walk) can read it

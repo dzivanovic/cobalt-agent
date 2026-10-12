@@ -117,3 +117,6 @@ object. The first no-flag test passed on the first DB read alone.
 
 ## 2026-10-09 — s4-p1-1009
 `cobalt strike …` registered (`strike_cli.add_parser(sub)`, after `voice_cli`); `_cmd_validate` prints the strike block (`strike.config.validate_command_lines`) right after the archiver's, and a `StrikeConfigError` there prints `FAILED: <key or unit>` and exits 1.
+
+## 2026-10-12 — db-apply-prod-1012
+The usage block names `cobalt db apply --side {user,system} [--prod] --sha256 <hex> <date>/<nn>-<name>-apply.sql` under the `db migrate` line (the verb is `db_apply.py`, registered by `db_migrations/cli.py`).

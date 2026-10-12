@@ -15,6 +15,7 @@ Two command groups:
     cobalt daymode show/propose/decide/attest
 
     cobalt db migrate [--allow-prod] [--rollback]
+    cobalt db apply --side {user,system} [--prod] --sha256 <hex> <date>/<nn>-<name>-apply.sql
     cobalt taxonomy load [--dry-run]
     cobalt settings load --from <dir> | --from-git <commit> --dry-run|--apply
     cobalt settings show

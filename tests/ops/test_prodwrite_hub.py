@@ -157,6 +157,40 @@ def test_standing_list_holds_one_section_nine_citing_r1138():
     assert "2026-10-12 R1138" in heads[0], heads[0]
 
 
+# ---- card 2026-10-12 417 K3: the hub and the card format say the `db apply` proof -------------
+
+SQL_ROWS = ["SQL FILE committed", "SQL FILE unchanged", "SQL SHA256", "SQL CARD BLOCK"]
+
+
+def section(text: str, head: str) -> str:
+    return text.split(f"\n{head}", 1)[1].split("\n## ", 1)[0]
+
+
+def test_s1_step_zero_names_the_four_sql_rows():
+    step0 = section(HUB.read_text(encoding="utf-8"), "## (0) AUTHORIZATION")
+    for name in SQL_ROWS:
+        assert name in step0, name
+
+
+def test_s2_shape_reproves_the_hash_and_the_card_block():
+    shape = section(HUB.read_text(encoding="utf-8"), "## (1) SHAPE")
+    assert "--sha256" in shape
+    assert "## SQL" in shape
+
+
+def test_s3_the_never_line_is_unchanged_by_db_apply():
+    (never,) = [ln for ln in HUB.read_text(encoding="utf-8").splitlines() if ln.startswith("NEVER:")]
+    assert "a production schema change" in never
+    assert "DDL" not in never and "db apply" not in never
+
+
+def test_s4_card_md_names_the_sql_section_and_the_apply_file():
+    text = (HUBS / "CARD.md").read_text(encoding="utf-8")
+    prodwrite = section(text, "## A PRODWRITE CARD, IN SHORT")
+    assert "## SQL" in prodwrite
+    assert "-apply.sql" in prodwrite
+
+
 def test_shape_reproves_the_verb_the_characters_and_the_table():
     shape = HUB.read_text(encoding="utf-8").split("\n## (1) SHAPE", 1)[1].split("\n## ", 1)[0]
     assert "db migrate" in shape

@@ -166,7 +166,11 @@
 #     user.<name>; a `count read` not a `--side` `db query` with ` --prod ` naming the table, or
 #     holding % $ or a backtick; `expected rows` not digits; `backup` not exactly the backup run;
 #     `inverse` not none nor a cobalt command; a live deploy-hub- or prodwrite- session (desk-list.sh
-#     beside this script; unreadable = refused). Its line runs dontAsk, stated once;
+#     beside this script; unreadable = refused). A `db apply` command (card 2026-10-12 417 K1) also
+#     needs ` --prod `, ` --sha256 <64 lower hex> ` and a last word <date>/<nn>-<name>-apply.sql
+#     naming a file under $PROMPTS that is committed, unchanged, of that sha256, and byte-equal to
+#     the card's ONE `## SQL` block (a line ```sql, the lines, a line ```). Its line runs dontAsk,
+#     stated once;
 #   - a resume (a NEW worker at a CONTINUE step; a deploy's STEP-D0) while another worktree's .env
 #     exists. ONE EXCEPTION (scratch D1): the job's OWN worktree's .env, and for a deploy its own
 #     lock directory, are skipped — the fixed file's RECOVERY clears them first;
@@ -1747,6 +1751,43 @@ prodwrite)
             --rollback*|--down-to*) refuse "the write $w has its own home (a production schema rollback is his)" ;;
         esac
     done
+    # card 2026-10-12 417 K1: a `db apply` runs a committed file the card quotes byte for byte, and
+    # the command's --sha256 is that file's
+    if [ "$v1 $v2" = "db apply" ]; then
+        case "$command " in
+            *" --prod "*) ;;
+            *) refuse "db apply: the command holds no ' --prod '" ;;
+        esac
+        pw_sha=$(printf '%s\n' "$verb" | awk '{for (i = 1; i < NF; i++) if ($i == "--sha256") {print $(i + 1); exit}}')
+        case "$pw_sha" in
+            ""|*[!0123456789abcdef]*) refuse "db apply: no ' --sha256 <64 lower-case hex> ' in the command" ;;
+        esac
+        [ "${#pw_sha}" -eq 64 ] || refuse "db apply: no ' --sha256 <64 lower-case hex> ' in the command"
+        pw_file=$(printf '%s\n' "$verb" | awk '{print $NF}')
+        printf '%s\n' "$pw_file" | grep -q -x -E '20[0-9]{2}-[0-9]{2}-[0-9]{2}/[0-9]+-[a-z0-9-]+-apply\.sql' \
+            || refuse "db apply: the last word '$pw_file' is not <date>/<nn>-<name>-apply.sql"
+        pw_rel="docs/40 - DevDocs/prompts/$pw_file"
+        [ -f "$PROMPTS/$pw_file" ] || refuse "db apply: no such file: $PROMPTS/$pw_file"
+        [ -n "$(git -C "$REPO" log -1 --format=%H -- "$pw_rel" 2>/dev/null)" ] \
+            || refuse "db apply: the file is not committed: $pw_rel"
+        # committed means in HEAD (a path deleted there and written back untracked is not), and
+        # unchanged is against HEAD, so a staged edit is a change (check 417 A1, O3)
+        git -C "$REPO" cat-file -e "HEAD:$pw_rel" 2>/dev/null \
+            || refuse "db apply: the file is not committed: $pw_rel"
+        git -C "$REPO" diff --quiet HEAD -- "$pw_rel" \
+            || refuse "db apply: the file changed since its commit: $pw_rel"
+        pw_got=$(shasum -a 256 "$PROMPTS/$pw_file" | awk '{print $1}')
+        [ "$pw_got" = "$pw_sha" ] || refuse "db apply: sha256 $pw_got of the file is not the command's $pw_sha"
+        # ONE `## SQL` section holding ONE block: a line ```sql, the lines, a line ```
+        pw_shape=$(awk '!fence && /^## / {insec = ($0 ~ /^## SQL[ \t]*$/); if (insec) secs++; next}
+            insec && /^```/ {fences++; if (fences == 1) opener = $0; else closer = $0; fence = !fence}
+            END {print ((secs == 1 && fences == 2 && opener == "```sql" && closer == "```") ? "one" : "not one")}' "$card")
+        [ "$pw_shape" = "one" ] || refuse "db apply: the card's ## SQL section is not ONE fenced sql block"
+        awk '!fence && /^## / {insec = ($0 ~ /^## SQL[ \t]*$/); next}
+            insec && /^```/ {fence = !fence; next}
+            insec && fence {print}' "$card" | cmp -s - "$PROMPTS/$pw_file" \
+            || refuse "db apply: the card's ## SQL block is not the file byte for byte"
+    fi
     table_bad=""
     case "$table" in
         system.*|user.*) ;;
