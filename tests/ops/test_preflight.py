@@ -419,6 +419,135 @@ def test_s4_kind_shadow_runs_the_build_rows(job):
     assert rules(done) == ["clock", "status", "head", "diff", "main repo", "env here", "env anywhere"]
 
 
+# ---- card 386 L5 / L6: a shadow card's check (SHADOW BUILT, the one SHADOW-INSTRUCTIONS.md) ----
+SHADOW_LAST = (
+    "SHADOW BUILT · job: x-job · tip: {tip} | on base | offline 1/0 | decisions: 0 · builder: x · "
+    "gate: x-job-gate · passes: 1 · suites at first run: green · builder tokens: UNKNOWN · wall: 1"
+)
+SHADOW_EXPECTED = "status: clean but SHADOW-INSTRUCTIONS.md (untracked, expected on a shadow card)"
+
+
+def write_shadow_card(card: Path, job_wt: Path, base: str, tip: str = "", branch: str = "shadow/x-job",
+                      shadow_of: bool = True) -> None:
+    """write_card made a shadow card: `BRANCH: <branch>` (the worktree's branch renamed to it) and a
+    `SHADOW OF:` line in the header."""
+    write_card(card, job_wt, base, tip)
+    if branch != "ops/x-job":
+        git(job_wt, "branch", "-m", branch)
+    text = card.read_text().replace("BRANCH: ops/x-job\n", f"BRANCH: {branch}\n")
+    if shadow_of:
+        text = text.replace("\n\n## ROWS\n", "\nSHADOW OF: /x/original-card.md\n\n## ROWS\n")
+    card.write_text(text)
+
+
+def test_386_c1_a_shadow_check_whose_report_ends_shadow_built_passes(job):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, SHADOW_LAST)
+    write_shadow_card(card, job_wt, base, tip)
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+    assert rules(done) == ["clock", "status", "head", "env here", "env anywhere", "report", "range"]
+    assert "(recorded)" not in done.stdout
+
+
+@pytest.mark.parametrize("last,branch,shadow_of", [
+    (SHADOW_LAST, "ops/x-job", False),                                    # a non-shadow card
+    (SHADOW_LAST, "ops/x-job", True),                                     # SHADOW OF, BRANCH not shadow/
+    (SHADOW_LAST, "shadow/x-job", False),                                 # shadow/ BRANCH, no SHADOW OF
+    (GOOD_LAST.replace(" | self-check: 3 of 3", ""), "ops/x-job", False),  # BUILT with no self-check
+    (SHADOW_LAST.replace("job: x-job", "job: x-other"), "shadow/x-job", True),
+    (SHADOW_LAST.replace("job: x-job", "job: x-jobber"), "shadow/x-job", True),
+    (SHADOW_LAST.replace("tip: {tip}", "tip: 0000beef"), "shadow/x-job", True),
+    (SHADOW_LAST.replace("tip: {tip}", "tip: {tip}9"), "shadow/x-job", True),
+])
+def test_386_c2_a_shadow_built_line_off_a_shadow_card_or_of_another_job_or_tip_fails(job, last, branch, shadow_of):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, last)
+    write_shadow_card(card, job_wt, base, tip, branch=branch, shadow_of=shadow_of)
+    done = preflight(env, "check", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: report"
+
+
+def test_386_c3_a_shadow_check_whose_report_ends_built_still_records_its_self_check(job):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST.replace("self-check: 3 of 3", "self-check: 2 of 3"))
+    write_shadow_card(card, job_wt, base, tip)
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "report: self-check 2 of 3 (recorded)" in done.stdout.splitlines()
+
+
+def test_386_d1_a_shadow_check_with_its_untracked_instructions_passes_and_records_it(job):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, SHADOW_LAST)
+    write_shadow_card(card, job_wt, base, tip)
+    (job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+    assert rules(done) == ["clock", "status", "head", "env here", "env anywhere", "report", "range"]
+    assert SHADOW_EXPECTED in done.stdout.splitlines()
+    assert "?? SHADOW-INSTRUCTIONS.md" in done.stdout  # the status output, quoted in the row
+
+
+def _second_file(job_wt: Path) -> None:
+    (job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    (job_wt / "extra.txt").write_text("x\n")
+
+
+def _subdirectory(job_wt: Path) -> None:
+    (job_wt / "sub").mkdir()
+    (job_wt / "sub" / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+
+
+def _modified_beside(job_wt: Path) -> None:
+    (job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    (job_wt / "src" / "a.py").write_text("A = 9\n")
+
+
+def _tracked_and_modified(job_wt: Path) -> None:
+    (job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    commit(job_wt, "docs(x-job): tracked instructions")
+    (job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# changed\n")
+
+
+@pytest.mark.parametrize("dirty", [_second_file, _subdirectory, _modified_beside, _tracked_and_modified])
+def test_386_d2_any_other_dirt_on_a_shadow_check_fails_status(job, dirty):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, SHADOW_LAST)
+    write_shadow_card(card, job_wt, base, tip)
+    dirty(job_wt)
+    done = preflight(env, "check", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+    assert SHADOW_EXPECTED not in done.stdout
+
+
+@pytest.mark.parametrize("branch,shadow_of", [("ops/x-job", False), ("ops/x-job", True), ("shadow/x-job", False)])
+def test_386_d3_the_instructions_file_on_a_card_that_is_not_a_shadow_card_fails_status(job, branch, shadow_of):
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, GOOD_LAST)
+    write_shadow_card(card, job_wt, base, tip, branch=branch, shadow_of=shadow_of)
+    (job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    done = preflight(env, "check", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+    assert SHADOW_EXPECTED not in done.stdout
+
+
+def test_386_d4_kind_shadow_build_rows_still_fail_on_the_instructions_file(job):
+    """The gate seat's build rows (card 324 S4) are unchanged: the file is not expected there."""
+    wt, repo, job_wt, base, card, env = job
+    write_shadow_card(card, job_wt, base)
+    (job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    done = preflight(env, "shadow", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last_line(done) == "FAILED PREFLIGHT: status"
+    assert SHADOW_EXPECTED not in done.stdout
+
+
 @pytest.mark.parametrize("args", [[], ["build"], ["deploy", "x"], ["build", "/no/such/card.md"]])
 def test_a_bad_call_is_refused(job, args):
     wt, repo, job_wt, base, card, env = job

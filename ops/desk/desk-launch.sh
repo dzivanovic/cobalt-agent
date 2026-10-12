@@ -155,8 +155,11 @@
 #     HOUSE A / HOUSE B line names after `overruled`, that is not ONE line of
 #     $REPORTS/cto-<date>.md starting `| R<n> |` with HIS RULING and APPROVED, committed so;
 #   - kind check, not PASS-2 (L2): a build report whose last non-blank line does not start
-#     `BUILT · job: <JOB> · tip: <TIP>`; on a first pass-1 launch, a branch head that TIP is not
-#     an ancestor of, or that adds more than docs past TIP (check O2);
+#     `BUILT · job: <JOB> · tip: <TIP>` (on a shadow card — a header `SHADOW OF:` and a `shadow/`
+#     BRANCH — also `SHADOW BUILT · job: <JOB> · tip: <TIP>`, card 386 L1); a worktree that is not
+#     clean (a shadow card's one untracked root SHADOW-INSTRUCTIONS.md excepted, card 386 L4); on a
+#     first pass-1 launch, a branch head that TIP is not an ancestor of, or that adds more than docs
+#     past TIP (check O2);
 #   - kind deploy, not STEP-D0 (L3): a `## SHIPS` table with no row, or a TIP head that is the
 #     branch head of no row (R41); a `## SHIPS` row whose branch head TIP does not list (check O1),
 #     whose check report is absent, uncommitted or changed, whose last line lacks a literal of the row or names another tip, whose branch head
@@ -1463,13 +1466,25 @@ check)
     elif [ -z "$pass2" ] && [ -z "$step" ]; then
         [ ! -e "$creport" ] || refuse "the check report already exists: a second pass is PASS-2, a new worker names its CONTINUE step"
     fi
+    # card 386 L1: a shadow card is one whose header (above the first blank line) holds a non-empty
+    # `SHADOW OF:` and whose BRANCH starts `shadow/`
+    shadow=""
+    case "$branch" in
+        shadow/?*)
+            [ -z "$(sed -n '/^[[:space:]]*$/q; s/^SHADOW OF: *//p' "$card" | sed -n '1p' | sed 's/[[:space:]]*$//')" ] \
+                || shadow=1
+            ;;
+    esac
     # the build is built (card 21 L2): the build report's last non-blank line starts
-    # `BUILT · job: <JOB> · tip: <TIP>`; a PASS-2 launch keeps the test it has (above)
+    # `BUILT · job: <JOB> · tip: <TIP>`, or on a shadow card `SHADOW BUILT · job: <JOB> · tip: <TIP>`
+    # (card 386 L1, SHADOW-HUB's stop line); a PASS-2 launch keeps the test it has (above)
     if [ -z "$pass2" ]; then
         [ -f "$report" ] || refuse "not built — no build report: $report"
         last=$(grep -v '^[[:space:]]*$' "$report" | tail -n 1)
         case "$last" in
             "BUILT · job: $job · tip: $tip"|"BUILT · job: $job · tip: $tip "*) ;;
+            "SHADOW BUILT · job: $job · tip: $tip"|"SHADOW BUILT · job: $job · tip: $tip "*)
+                [ -n "$shadow" ] || refuse "not built — $last" ;;
             *) refuse "not built — $last" ;;
         esac
     fi
@@ -1478,7 +1493,10 @@ check)
     [ -f "$report" ] || refuse "the build report does not exist: $report"
     head=$(git -C "$WT/$wt" rev-parse --abbrev-ref HEAD) || refuse "$WT/$wt is not a git worktree"
     [ "$head" = "$branch" ] || refuse "$WT/$wt is on '$head', the card says '$branch'"
-    [ -z "$(git -C "$WT/$wt" status --porcelain)" ] || refuse "$WT/$wt is not clean (the check session commits there)"
+    # card 386 L4: on a shadow card the ONE untracked SHADOW-INSTRUCTIONS.md at the root is not dirt
+    dirt=$(git -C "$WT/$wt" status --porcelain)
+    [ -z "$shadow" ] || [ "$dirt" != "?? SHADOW-INSTRUCTIONS.md" ] || dirt=""
+    [ -z "$dirt" ] || refuse "$WT/$wt is not clean (the check session commits there)"
     # a first pass-1 launch: the branch head is TIP or adds docs only past it (CHECK-HUB.md
     # PREFLIGHT; check O2). A resume or a PASS-2 sits on the check's own commits and is not re-read
     if [ -z "$pass2" ] && [ -z "$step" ]; then

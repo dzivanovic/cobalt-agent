@@ -50,7 +50,7 @@ def find(key):
 def value(i):
     return header[i].split(":", 1)[1].strip()
 
-at = {k: find(k) for k in ("JOB", "REPORT", "TIP", "CHECK REPORT", "HOUSE B", "HOUSE A")}
+at = {k: find(k) for k in ("JOB", "REPORT", "TIP", "CHECK REPORT", "HOUSE B", "HOUSE A", "BRANCH", "SHADOW OF")}
 for key in ("JOB", "REPORT", "TIP", "CHECK REPORT", "HOUSE B"):
     if at[key] is None:
         refuse("the card's header has no %s line" % key)
@@ -64,10 +64,17 @@ try:
 except OSError as e:
     refuse("cannot read the REPORT %s (%s)" % (report, e.strerror))
 last = next((line for line in reversed(text.split("\n")) if line.strip()), "")
+# card 386 L7: a shadow card (a header SHADOW OF and a BRANCH starting shadow/) may end in
+# SHADOW-HUB's stop line, which carries no self-check field
+shadow = (at["SHADOW OF"] is not None and value(at["SHADOW OF"]) != ""
+          and at["BRANCH"] is not None and re.match(r"shadow/.", value(at["BRANCH"])) is not None)
 m = re.match(r"BUILT · job: (\S+) · tip: ([0-9a-f]{8})(?=\s|$)", last)
+shadow_built = None
+if m is None and shadow:
+    m = shadow_built = re.match(r"SHADOW BUILT · job: (\S+) · tip: ([0-9a-f]{8})(?=\s|$)", last)
 if not m or m.group(1) != job:
     refuse("the report's last line is not a BUILT line of job %s: %s" % (job, last))
-if "self-check: 3 of 3" not in last:
+if shadow_built is None and "self-check: 3 of 3" not in last:
     refuse("the BUILT line does not carry self-check: 3 of 3: %s" % last)
 tip = m.group(2)
 

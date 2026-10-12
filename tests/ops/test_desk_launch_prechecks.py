@@ -367,6 +367,143 @@ def test_l2_a_pass_2_launch_keeps_the_test_it_has(desk):
     assert desk.called() == [str(desk.job_wt)]
 
 
+# ---- card 386 L1 / L4: a shadow card's check (SHADOW BUILT, the one SHADOW-INSTRUCTIONS.md) ----
+
+
+def shadow_card(desk: Desk, branch: str = "shadow/x-job", shadow_of: str = "header") -> None:
+    """The fixture card made a shadow card: its worktree's branch renamed, `BRANCH:` rewritten and,
+    with `shadow_of` "header", a `SHADOW OF:` line in the header ("body": below `## ROWS`;
+    "blank": an empty one; "none": no line). Committed on desk.repo."""
+    if branch != "ops/x-job":
+        git(desk.job_wt, "branch", "-m", branch)
+    text = desk.card.read_text().replace("BRANCH: ops/x-job\n", f"BRANCH: {branch}\n")
+    if shadow_of == "header":
+        text = text.replace("\n\n## ROWS\n", f"\nSHADOW OF: {desk.devfix}\n\n## ROWS\n")
+    elif shadow_of == "blank":
+        text = text.replace("\n\n## ROWS\n", "\nSHADOW OF:\n\n## ROWS\n")
+    elif shadow_of == "body":
+        text += f"SHADOW OF: {desk.devfix}\n"
+    if text != desk.card.read_text():
+        desk.card.write_text(text)
+        desk.commit("shadow card")
+
+
+def shadow_built(desk: Desk, tip: str | None = None, job: str = "x-job", suffix: bool = True) -> str:
+    """SHADOW-HUB :61's stop line (366's shape): `| ` after the tip, no `self-check:` field."""
+    line = f"SHADOW BUILT · job: {job} · tip: {tip or desk.tip}"
+    if suffix:
+        line += (f" | on {desk.base} | offline 1/0 | decisions: 0 · builder: x · gate: x-job-gate · "
+                 "passes: 1 · suites at first run: green · builder tokens: UNKNOWN · wall: 1")
+    return line
+
+
+def test_386_a1_a_shadow_card_launches_on_its_shadow_built_line(desk):
+    shadow_card(desk)
+    desk.write_build_report(shadow_built(desk))
+    done = desk.launch("check", str(desk.card))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.job_wt)]
+
+
+@pytest.mark.parametrize("variant,launches", [
+    ("other job", False),
+    ("other tip", False),
+    ("tip9", False),
+    ("job prefix", False),
+    ("bare", True),
+])
+def test_386_a2_job_and_tip_are_exact_as_for_built(desk, variant, launches):
+    shadow_card(desk)
+    last = {
+        "other job": shadow_built(desk, job="x-other"),
+        "other tip": shadow_built(desk, tip=OTHER_TIP),
+        "tip9": shadow_built(desk, tip=desk.tip + "9"),
+        "job prefix": shadow_built(desk, job="x-jobber"),
+        "bare": shadow_built(desk, suffix=False),
+    }[variant]
+    desk.write_build_report(last)
+    done = desk.launch("check", str(desk.card))
+    if launches:
+        assert done.returncode == 0, done.stderr
+        assert desk.called() == [str(desk.job_wt)]
+    else:
+        refused(desk, done, f"not built — {last}")
+
+
+@pytest.mark.parametrize("branch,shadow_of", [
+    ("ops/x-job", "none"),      # A3: the non-shadow fixture card
+    ("ops/x-job", "header"),    # A4: SHADOW OF but a BRANCH not starting shadow/
+    ("shadow/x-job", "none"),   # a shadow/ BRANCH but no SHADOW OF line
+    ("shadow/x-job", "blank"),  # an empty SHADOW OF line (check X1)
+    ("shadow/x-job", "body"),   # SHADOW OF only below ## ROWS (check X1)
+    ("x-shadow/x-job", "header"),  # shadow/ inside the BRANCH, not at its start
+])
+def test_386_a3_a4_a_shadow_built_line_on_a_card_that_is_not_a_shadow_card_refuses(desk, branch, shadow_of):
+    shadow_card(desk, branch=branch, shadow_of=shadow_of)
+    last = shadow_built(desk)
+    desk.write_build_report(last)
+    refused(desk, desk.launch("check", str(desk.card)), f"not built — {last}")
+
+
+def test_386_a5_a_shadow_card_may_still_end_built(desk):
+    shadow_card(desk)  # the fixture's report ends desk.built_line()
+    done = desk.launch("check", str(desk.card))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.job_wt)]
+
+
+def test_386_a6_a_shadow_check_resume_still_needs_the_built_line(desk):
+    shadow_card(desk)
+    desk.write_build_report("FAILED: W — x")
+    refused(desk, desk.launch("check", str(desk.card), "E3"), "not built — FAILED: W — x")
+
+
+def test_386_b1_a_shadow_tree_with_its_untracked_instructions_launches(desk):
+    shadow_card(desk)
+    desk.write_build_report(shadow_built(desk))
+    (desk.job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    done = desk.launch("check", str(desk.card))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.job_wt)]
+
+
+def _tracked_then_modified(desk: Desk) -> None:
+    (desk.job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    desk.commit_job("tracked instructions")
+    (desk.job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# changed\n")
+
+
+def _in_a_subdirectory(desk: Desk) -> None:
+    (desk.job_wt / "sub").mkdir()
+    (desk.job_wt / "sub" / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+
+
+def _with_a_second_file(desk: Desk) -> None:
+    (desk.job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    (desk.job_wt / "extra.txt").write_text("x\n")
+
+
+def _beside_a_modified_tracked_file(desk: Desk) -> None:
+    (desk.job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    (desk.job_wt / "src" / "x.py").write_text("X = 2\n")
+
+
+@pytest.mark.parametrize("dirty", [_with_a_second_file, _tracked_then_modified, _in_a_subdirectory,
+                                   _beside_a_modified_tracked_file])
+def test_386_b2_b3_any_other_dirt_on_a_shadow_tree_refuses(desk, dirty):
+    """The report ends BUILT (A5), so BASE reaches the clean-tree test too: green on both sides."""
+    shadow_card(desk)
+    dirty(desk)
+    refused(desk, desk.launch("check", str(desk.card)), f"{desk.job_wt} is not clean (the check session commits there)")
+
+
+@pytest.mark.parametrize("branch,shadow_of", [("ops/x-job", "none"), ("ops/x-job", "header")])
+def test_386_b4_the_instructions_file_on_a_card_that_is_not_a_shadow_card_refuses(desk, branch, shadow_of):
+    shadow_card(desk, branch=branch, shadow_of=shadow_of)  # the report ends desk.built_line()
+    (desk.job_wt / "SHADOW-INSTRUCTIONS.md").write_text("# constructed\n")
+    refused(desk, desk.launch("check", str(desk.card)), f"{desk.job_wt} is not clean (the check session commits there)")
+
+
 def test_x1_a_check_whose_branch_adds_code_past_its_tip_refuses(desk):
     """CHECK-HUB.md PREFLIGHT: HEAD is TIP or a docs-only commit above it (check O2)."""
     (desk.job_wt / "src" / "y.py").write_text("Y = 1\n")

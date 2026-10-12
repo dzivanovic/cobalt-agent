@@ -160,6 +160,48 @@ def test_a_failing_stop_ends_the_script_with_no_rm(stubs):
     assert recorded(calls) == ["claude stop aaaa1111"]
 
 
+# ---- card 386 L9: kind shadow, the shadow gate seat's and role trial's stop words ---------------
+
+
+@pytest.mark.parametrize("last", [
+    "SHADOW BUILT · job: x-job · tip: 1a2b3c4d | on 0f0e0d0c | wall: 1",
+    "SHADOW ROLE · drafter · builder: grok-4.7 · wall: 1",
+])
+def test_386_f1_a_shadow_stop_line_stops_removes_and_closes_the_tab_in_order(stubs, last):
+    report, calls, stop_exit, agents, env = stubs
+    report.write_text("# x\n\n" + last + "\n\n")
+    done = done_("aaaa1111", str(report), "shadow", "w2:tGX", env=env)
+    assert done.returncode == 0, done.stderr
+    assert recorded(calls) == [
+        "claude stop aaaa1111",
+        "claude rm aaaa1111",
+        "herdr tab close w2:tGX",
+    ]
+
+
+@pytest.mark.parametrize("kind,last", [
+    ("build", "SHADOW BUILT · job: x-job · tip: 1a2b3c4d"),
+    ("shadow", "BUILT · job: x-job · tip: 1a2b3c4d"),
+    ("shadow", "CHECK DONE · job: x"),
+])
+def test_386_f2_a_stop_line_of_the_other_kind_is_refused(stubs, kind, last):
+    report, calls, stop_exit, agents, env = stubs
+    report.write_text(last + "\n")
+    done = done_("aaaa1111", str(report), kind, env=env)
+    assert done.returncode == 1
+    assert done.stderr.startswith("REFUSED: still running"), done.stderr
+    assert recorded(calls) == []
+
+
+def test_386_f3_a_failed_shadow_is_kept_for_continue(stubs):
+    report, calls, stop_exit, agents, env = stubs
+    report.write_text("FAILED: x — y\n")
+    done = done_("aaaa1111", str(report), "shadow", "w2:tGX", env=env)
+    assert done.returncode == 1
+    assert done.stderr.startswith("REFUSED: FAILED — the worker is kept for CONTINUE"), done.stderr
+    assert recorded(calls) == []
+
+
 def test_a_bad_kind_is_refused(stubs):
     report, calls, stop_exit, agents, env = stubs
     report.write_text("BUILT · job: x\n")

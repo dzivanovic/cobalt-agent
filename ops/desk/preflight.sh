@@ -104,6 +104,18 @@ out=$(git status --short --branch 2>&1)
 rc=$?
 ok=1
 expected=""
+# card 386 L5 / L6: a check of a shadow card — a header (above the first blank line) `SHADOW OF:`
+# and a BRANCH starting shadow/; kind shadow runs the build rows and never is one
+shadow=""
+if [ "$kind" = check ]; then
+    case "$branch" in
+        shadow/?*)
+            [ -z "$(sed -n '/^[[:space:]]*$/q; s/^SHADOW OF: *//p' "$card" | sed -n '1p' | sed 's/[[:space:]]*$//')" ] \
+                || shadow=1
+            ;;
+    esac
+fi
+shadow_expected=""
 [ "$rc" -eq 0 ] && [ "$out" = "## $branch" ] && ok=0
 # card 03c M1: the card's own report (a check's: REPORT or CHECK REPORT), untracked, as the ONE
 # line under the branch line — the hub's first Write makes it before PREFLIGHT. Nothing else.
@@ -127,8 +139,14 @@ $(field "CHECK REPORT")"
     done <<OWN
 $own
 OWN
+    # card 386 L6: on a shadow card the ONE untracked SHADOW-INSTRUCTIONS.md at the worktree root
+    if [ "$ok" -ne 0 ] && [ -n "$shadow" ] && [ "$other" = "?? SHADOW-INSTRUCTIONS.md" ]; then
+        ok=0
+        shadow_expected=1
+    fi
 fi
 row status "git status --short --branch" "$rc" "$out" "$ok"
+[ -z "$shadow_expected" ] || printf 'status: clean but SHADOW-INSTRUCTIONS.md (untracked, expected on a shadow card)\n'
 [ -z "$expected" ] || printf 'status: clean but the report (untracked, expected)\n'
 
 head=$(git rev-parse --verify -q HEAD)
@@ -240,6 +258,13 @@ if [ "$kind" = check ]; then
                         k=${k%%" of 3"*}
                         ;;
                 esac
+                ;;
+            # card 386 L5: a shadow card's SHADOW-HUB stop line carries no self-check field
+            "SHADOW BUILT · job: $job · tip: $tip"|"SHADOW BUILT · job: $job · tip: $tip "*)
+                if [ -n "$shadow" ]; then
+                    ok=0
+                    k=3
+                fi
                 ;;
         esac
         row report "tail -n 3 \"$report\"" 0 "$last" "$ok"
