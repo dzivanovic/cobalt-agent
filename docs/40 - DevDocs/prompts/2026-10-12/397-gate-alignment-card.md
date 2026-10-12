@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/gate-alignment-1012
 WORKTREE: gate-alignment-1012
 BASE: b5462afd
-TIP:
+TIP: f47fb5d7
 REPORT: /Users/cobalt/cobalt-wt/gate-alignment-1012/docs/40 - DevDocs/reports/gate-alignment-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gate-alignment-check-2026-10-12.md
-HOUSE B:
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-12 R1138
 

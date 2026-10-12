@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/prodwrite-seat-1012
 WORKTREE: prodwrite-seat-1012
 BASE: 86b9daa5
-TIP:
+TIP: 89fd13c5
 REPORT: /Users/cobalt/cobalt-wt/prodwrite-seat-1012/docs/40 - DevDocs/reports/prodwrite-seat-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/prodwrite-seat-check-2026-10-12.md
-HOUSE B:
+HOUSE B: as needed
 DB: none
 RULINGS: 2026-10-12 R1138
 
