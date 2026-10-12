@@ -16,3 +16,8 @@ New module. The order is A2, A1, A3, A4:
   - (r4) every `FuncCall`, by its full name, is in `ALLOWED_FUNCTIONS = {("now",)}`.
 - **A3, the backup.** Only with `--prod`: `COBALT_ENV=production`, a database dump armed, and the newest snapshot no older than `BACKUP_MAX_AGE_S = 900`. Without `--prod` it prints `backup: not checked (not --prod)`.
 - **A4, the transaction.** `apply_statements(conn, statements, *, side)` sets `SET LOCAL statement_timeout = '60s'` and `lock_timeout = '5s'`. It requires the server major to equal `SERVER_PG_MAJOR = 16` and `current_user` to be the side role. It then sends each piece with `prepare=True` (the extended protocol, one command per piece), printing `STATEMENT i/n` before it and `ROWS i` after it. After the last piece it commits and prints `COMMITTED · statements · rows`. Any failure prints `FAILED at statement i: … — ROLLED BACK` and exits 1.
+
+## 2026-10-12 — check of db-apply-prod-1012 (O1, O2)
+
+- `parse` refuses a text holding a NUL byte (`does not parse: the text holds a NUL byte`). The parser reads a C string, so a NUL ended the checked text while the piece kept the bytes after it.
+- `apply_statements` also ends a failure of the preamble (`FAILED before statement 1: … — ROLLED BACK`) or of the commit (`FAILED at commit: … — ROLLED BACK`, e.g. a deferred constraint) in one line and exit 1, never a traceback.

@@ -287,14 +287,17 @@ if [ "$kind" = "prodwrite" ]; then
         rc=$?
         ok=1
         [ "$rc" -eq 0 ] && [ -n "$out" ] && ok=0
+        # committed means in HEAD: a path deleted there and written back untracked is not (check 417 A2)
+        git -C "$REPO" cat-file -e "HEAD:$sql_rel" 2>/dev/null || { ok=1; out="$out (not in HEAD)"; }
         row "SQL FILE committed" "git -C $REPO log -1 --format=%H -- \"$sql_rel\"" "$rc" "$out" "$ok"
 
-        out=$(git -C "$REPO" diff --stat -- "$sql_rel" 2>&1)
+        # unchanged against HEAD, so a staged edit is a change (check 417 O3)
+        out=$(git -C "$REPO" diff --stat HEAD -- "$sql_rel" 2>&1)
         rc=$?
         ok=1
         [ "$rc" -eq 0 ] && [ -z "$out" ] && [ -f "$sql_path" ] && ok=0
         [ -f "$sql_path" ] || out="no such file: $sql_path"
-        row "SQL FILE unchanged" "git -C $REPO diff --stat -- \"$sql_rel\"" "$rc" "$out" "$ok"
+        row "SQL FILE unchanged" "git -C $REPO diff --stat HEAD -- \"$sql_rel\"" "$rc" "$out" "$ok"
 
         out=$(shasum -a 256 "$sql_path" 2>&1)
         rc=$?

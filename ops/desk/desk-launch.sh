@@ -1770,7 +1770,12 @@ prodwrite)
         [ -f "$PROMPTS/$pw_file" ] || refuse "db apply: no such file: $PROMPTS/$pw_file"
         [ -n "$(git -C "$REPO" log -1 --format=%H -- "$pw_rel" 2>/dev/null)" ] \
             || refuse "db apply: the file is not committed: $pw_rel"
-        git -C "$REPO" diff --quiet -- "$pw_rel" || refuse "db apply: the file changed since its commit: $pw_rel"
+        # committed means in HEAD (a path deleted there and written back untracked is not), and
+        # unchanged is against HEAD, so a staged edit is a change (check 417 A1, O3)
+        git -C "$REPO" cat-file -e "HEAD:$pw_rel" 2>/dev/null \
+            || refuse "db apply: the file is not committed: $pw_rel"
+        git -C "$REPO" diff --quiet HEAD -- "$pw_rel" \
+            || refuse "db apply: the file changed since its commit: $pw_rel"
         pw_got=$(shasum -a 256 "$PROMPTS/$pw_file" | awk '{print $1}')
         [ "$pw_got" = "$pw_sha" ] || refuse "db apply: sha256 $pw_got of the file is not the command's $pw_sha"
         # ONE `## SQL` section holding ONE block: a line ```sql, the lines, a line ```

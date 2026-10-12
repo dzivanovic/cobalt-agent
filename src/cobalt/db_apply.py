@@ -79,6 +79,11 @@ class ApplyRefused(RuntimeError):
 def parse(text: str) -> dict:
     """The whole parse of `text`, refused unless it parses, on the expected
     grammar, to at least one statement."""
+    # The parser reads a C string: a NUL would end the text it checks while
+    # the piece kept the bytes after it (check 417 O1). Postgres's own query
+    # text cannot carry one either.
+    if "\x00" in text:
+        raise ApplyRefused("does not parse: the text holds a NUL byte")
     try:
         tree = json.loads(pg_parser.parse_sql_json(text))
     except pg_parser.ParseError as e:
@@ -234,14 +239,19 @@ def apply_statements(conn, statements: list[str], *, side: Side | str) -> int:
     n = len(statements)
     conn.autocommit = False
     try:
-        conn.execute(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'")
-        conn.execute(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'")
-        major = int(conn.execute("SHOW server_version_num").fetchone()[0]) // 10000
+        try:
+            conn.execute(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'")
+            conn.execute(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'")
+            major = int(conn.execute("SHOW server_version_num").fetchone()[0]) // 10000
+            current = conn.execute("SELECT current_user").fetchone()[0]
+        except Exception as e:
+            conn.rollback()
+            print(f"FAILED before statement 1: {type(e).__name__}: {e} — ROLLED BACK")
+            return 1
         if major != SERVER_PG_MAJOR:
             conn.rollback()
             print(f"FAILED: server is Postgres {major}, apply is proved for {SERVER_PG_MAJOR} — ROLLED BACK")
             return 1
-        current = conn.execute("SELECT current_user").fetchone()[0]
         if current != side.role:
             conn.rollback()
             print(f"FAILED: current_user is {current!r}, not {side.role!r} — ROLLED BACK")
@@ -257,7 +267,12 @@ def apply_statements(conn, statements: list[str], *, side: Side | str) -> int:
                 return 1
             print(f"ROWS {i}: {cursor.rowcount}")
             total += max(cursor.rowcount, 0)
-        conn.commit()
+        try:
+            conn.commit()
+        except Exception as e:  # a deferred constraint fails here, not at its statement
+            conn.rollback()
+            print(f"FAILED at commit: {type(e).__name__}: {e} — ROLLED BACK")
+            return 1
         print(f"COMMITTED · statements: {n} · rows: {total}")
         return 0
     finally:
