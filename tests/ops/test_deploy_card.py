@@ -1038,6 +1038,15 @@ def test_g2_a_row_outside_the_days_on_or_after_the_check_is_refused(tmp_path, da
                  f"alpha: {who} names R7, which is no DESK RECORD row of {desk.reports / 'cto-2026-01-02.md'}")
 
 
+def test_o1_a_rejected_verdict_quoting_a_dot_separator_is_settled(tmp_path):
+    desk = Desk(tmp_path)
+    runs = (HELD_RUN.format(id="O1") + "\n"
+            + "- O2 · own · `uv run pytest -q tests/x.py` · `1 failed` · **REJECTED — row X1 \"a · b\"**\n")
+    fixed, head, report = held_round(desk, open="2", runs_text=runs, lines=[FIXED_O1, SETTLED_O2])
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+
+
 # ---- card 361 T1: the held-id read takes a table row marked **HELD** (R1084) -------------------
 
 TABLE_HEAD = "| id | source | run | output | verdict |\n|---|---|---|---|---|\n"
