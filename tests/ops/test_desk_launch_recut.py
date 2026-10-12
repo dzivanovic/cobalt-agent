@@ -336,3 +336,270 @@ def test_card03_l5_a_third_argument_is_refused_before_anything_runs(desk, extra)
 def test_the_header_names_the_recut_kind():
     text = LAUNCH.read_text()
     assert 'desk-launch.sh recut "<absolute deploy card path>"' in text
+
+
+# ---- card 2026-10-12 434 A1: a FAILED prior deploy's stale refs are archived, then the recut runs --
+
+LINE_256 = (
+    "FAILED PREFLIGHT: main moved outside docs since the cut — 55 paths (…); the desk re-cuts the "
+    "gate · rollback: not used · aset: UP · radar: not in the set · decisions: 4 · for Dejan: 0 · "
+    "tokens: 100737"
+)
+PRE_REFUSAL = "tag pre-x-deploy exists: the deploy got that far"
+NOT_ARCHIVED = PRE_REFUSAL + " — not archived: "
+
+
+def short(repo: Path, rev: str) -> str:
+    return git(repo, "rev-parse", "--short=8", rev)
+
+
+def stale_256(desk: Desk) -> tuple[str, str]:
+    """The 256 shape (deploy-aset-orphan-1010.md :130, :132, :146, :248): the report committed on
+    main (D2.0, `<pre-merge>` = P), `pre-<job>` at P (D2.6), main merged into the gate (D2.1,
+    `<stack-final>` = S, S^2 = P), then the report FAILED and committed on main."""
+    desk.report.write_text("# deploy (constructed)\n\n## Deploy table\n- D2.0 gate green\n")
+    desk.commit("docs(report): deploy x-deploy — gate green")
+    p = short(desk.repo, "main")
+    git(desk.repo, "tag", "pre-x-deploy", "main")
+    git(desk.gate, "merge", "-q", "--no-edit", "main")
+    s = short(desk.gate, "HEAD")
+    desk.report.write_text(
+        "# deploy (constructed)\n\n## Deploy table\n"
+        f"- D2.0 … `rev-parse --short=8 main` → `{p}` = `<pre-merge>`.\n"
+        f"- D2.2 `<stack-final>` = `{s}`; `rev-parse --short=8 {s}^2` → `{p}` = `<pre-merge>`.\n\n"
+        f"{LINE_256}\n"
+    )
+    desk.commit("deploy report")
+    return p, s
+
+
+def refs(repo: Path) -> str:
+    return git(repo, "for-each-ref", "--format=%(refname) %(objectname)")
+
+
+def worktrees(repo: Path) -> str:
+    return git(repo, "worktree", "list", "--porcelain")
+
+
+def archive_refs(repo: Path) -> list[str]:
+    out = git(repo, "for-each-ref", "--format=%(refname)", "refs/tags/archive", "refs/heads/archive")
+    return out.splitlines()
+
+
+def nothing_archived(desk: Desk, done: subprocess.CompletedProcess, old_card: str,
+                     before: tuple[str, str], gate: Path) -> None:
+    """Exit 1 by the archive's own refusal; refs, trees, card and desk report as they were."""
+    refused(desk, done, NOT_ARCHIVED, old_card)
+    assert (refs(desk.repo), worktrees(desk.repo)) == before
+    assert gate.is_dir()
+    assert "ARCHIVE:" not in done.stdout
+
+
+def test_ra1_the_256_state_is_archived_then_recut(desk):
+    """RED on BASE: exit 1, `REFUSED: tag pre-x-deploy exists: the deploy got that far`."""
+    p, s = stale_256(desk)
+    done = desk.recut()
+    assert done.returncode == 0, done.stdout + done.stderr
+    out = done.stdout.splitlines()
+
+    i_run = out.index(f"RUN: sh {LAUNCH.parent}/job-clean.sh salvage x-gate")
+    i_salv = out.index(f"job-clean salvage: removed {desk.gate}; deleted none; kept deploy/x-deploy")
+    i_branch = index_of(out, r"^ARCHIVE: branch deploy/x-deploy -> archive/deploy/x-deploy-\d{8}-\d{4} \("
+                        + s + r"\)$")
+    i_tag = index_of(out, r"^ARCHIVE: tag pre-x-deploy -> archive/pre-x-deploy-\d{8}-\d{4} \(" + p + r"\)$")
+    i_done = out.index("ARCHIVE: x-deploy done; recut proceeds")
+    i_values = out.index("RECUT: x-deploy attempt 2")
+    assert i_run < i_salv < i_branch < i_tag < i_done < i_values
+    assert not any(line.startswith("gate-clean:") for line in out), done.stdout
+
+    # the archive: both names under archive/, on the same commits, one stamp
+    stamp = re.search(r"archive/pre-x-deploy-(\d{8}-\d{4})", out[i_tag]).group(1)
+    assert f"archive/deploy/x-deploy-{stamp}" in out[i_branch]
+    assert short(desk.repo, f"refs/tags/archive/pre-x-deploy-{stamp}^{{commit}}") == p
+    assert short(desk.repo, f"refs/heads/archive/deploy/x-deploy-{stamp}") == s
+    assert not has_ref(desk.repo, "refs/tags/pre-x-deploy")
+    assert not has_ref(desk.repo, "refs/heads/deploy/x-deploy")
+    assert not desk.gate.exists()
+    assert str(desk.gate) not in worktrees(desk.repo)
+
+    # then the recut as today (:178-193): the four values, the commit, the row, the launch
+    new_report = desk.reports / "deploy-2026-01-02-1-attempt2.md"
+    assert out[i_values + 1:i_values + 5] == [
+        "BRANCH: deploy/x-deploy -> deploy/x-deploy-attempt2",
+        "WORKTREE: x-gate -> x-gate-attempt2",
+        "TAG: x-tag -> x-tag-attempt2",
+        f"REPORT: {desk.report} -> {new_report}",
+    ]
+    i_commit = index_of(out, r"docs\(desk\): RECUT x-deploy attempt 2")
+    i_row = index_of(out, r"^\| R2 \| \d\d:\d\d ET \| RECUT x-deploy attempt 2 — FAILED PREFLIGHT: .* \| RECORD \|$")
+    i_launch = out.index(f"git -C {desk.repo} worktree add -b deploy/x-deploy-attempt2 {desk.wt}/x-gate-attempt2 main")
+    assert i_values < i_commit < i_row < i_launch
+    assert out[i_launch + 1] == f"cd {desk.repo}"
+    assert out[i_launch + 2].startswith("claude --bg ")
+    assert done.stderr.splitlines()[-1] == f'WATCH: sh {LAUNCH.parent}/desk-watch.sh deploy "{desk.card}"'
+    assert desk.header()["BRANCH"] == "deploy/x-deploy-attempt2"
+    assert desk.called() == []
+
+
+def recut_by_hand_to_attempt2(desk: Desk) -> Path:
+    """As :255-263, with the REPORT moved to attempt 2 too: the gate moved, the branch renamed."""
+    report2 = desk.reports / "deploy-2026-01-02-1-attempt2.md"
+    report2.write_text(f"# deploy attempt 2 (constructed)\n\n{LINE_256}\n")
+    desk.card.write_text(desk.card.read_text()
+                         .replace("BRANCH: deploy/x-deploy\n", "BRANCH: deploy/x-deploy-attempt2\n")
+                         .replace("WORKTREE: x-gate\n", "WORKTREE: x-gate-attempt2\n")
+                         .replace("TAG: x-tag\n", "TAG: x-tag-attempt2\n")
+                         .replace(f"REPORT: {desk.report}\n", f"REPORT: {report2}\n"))
+    desk.commit("the card at attempt 2")
+    gate2 = desk.wt / "x-gate-attempt2"
+    git(desk.repo, "worktree", "move", str(desk.gate), str(gate2))
+    git(desk.repo, "branch", "-m", "deploy/x-deploy", "deploy/x-deploy-attempt2")
+    return gate2
+
+
+@pytest.mark.parametrize("case", ["(i) the deploy tag exists", "(ii) an earlier attempt's report DEPLOYED"])
+def test_ra2_a_deployed_prior_is_refused_before_and_after(desk, case):
+    """RED on BASE: stderr lacks `— not archived:` (gate-clean's own refusal)."""
+    p, s = stale_256(desk)
+    gate, branch = desk.gate, "deploy/x-deploy"
+    if case.startswith("(i)"):
+        git(desk.repo, "tag", "x-tag", "main")
+    else:
+        gate, branch = recut_by_hand_to_attempt2(desk), "deploy/x-deploy-attempt2"
+        desk.report.write_text(desk.report.read_text()
+                               + f"\nDEPLOYED x-tag {p} | set: x-job · constructed\n")
+        desk.commit("an earlier attempt DEPLOYED (constructed)")
+    old, before = desk.card.read_text(), (refs(desk.repo), worktrees(desk.repo))
+    done = desk.recut()
+    nothing_archived(desk, done, old, before, gate)
+    assert short(desk.repo, "refs/tags/pre-x-deploy^{commit}") == p
+    assert short(desk.repo, f"refs/heads/{branch}") == s
+    assert archive_refs(desk.repo) == []
+    assert NOT_ARCHIVED + "DEPLOYED" in done.stderr, done.stderr
+
+
+def _ra3_tag_moved(desk, p, s):
+    git(desk.repo, "tag", "-f", "pre-x-deploy", "main")  # main is one commit past P (the report)
+    assert short(desk.repo, "refs/tags/pre-x-deploy^{commit}") != p
+
+
+def _ra3_gate_moved_on(desk, p, s):
+    git(desk.gate, "commit", "-q", "--allow-empty", "-m", "one more on the gate")
+
+
+def _ra3_report_off(desk, p, s):
+    other = short(desk.repo, f"{s}^1")
+    desk.report.write_text(desk.report.read_text().replace(s, other))
+    desk.commit("the report names another stack-final")
+
+
+def _ra3_main_holds_gate(desk, p, s):
+    git(desk.repo, "merge", "-q", "--no-ff", "--no-edit", "deploy/x-deploy")
+
+
+def _ra3_gate_switched(desk, p, s):
+    git(desk.gate, "switch", "-q", "-c", "x-other")
+
+
+def _ra3_env(desk, p, s):
+    (desk.gate / ".env").write_text("X=constructed\n")
+
+
+def _ra3_lock(desk, p, s):
+    lock = desk.wt / ".cobalt_dev.lock"
+    lock.mkdir()
+    (lock / "owner").write_text("x-gate\n")
+
+
+@pytest.mark.parametrize("move, reason", [
+    pytest.param(_ra3_tag_moved, "is not the report's <pre-merge>", id="(a) tag moved"),
+    pytest.param(_ra3_gate_moved_on, "is not the report's <stack-final>", id="(b) gate moved on"),
+    pytest.param(_ra3_report_off, "is not the report's <stack-final>", id="(c) report names another"),
+    pytest.param(_ra3_main_holds_gate, "main contains the gate's head", id="(d) main holds the gate"),
+    pytest.param(_ra3_gate_switched, "with deploy/x-deploy checked out", id="(e) gate switched"),
+    pytest.param(_ra3_env, "/.env exists", id="(f) .env in the gate"),
+    pytest.param(_ra3_lock, "the lock directory", id="(g) lock owned by the gate"),
+])
+def test_ra3_a_ref_off_its_report_is_refused_before_and_after(desk, move, reason):
+    """RED on BASE: stderr lacks `— not archived:` (gate-clean's own refusal)."""
+    p, s = stale_256(desk)
+    move(desk, p, s)
+    old, before = desk.card.read_text(), (refs(desk.repo), worktrees(desk.repo))
+    done = desk.recut()
+    nothing_archived(desk, done, old, before, desk.gate)
+    assert archive_refs(desk.repo) == []
+    refusal = [ln for ln in done.stderr.splitlines() if ln.startswith("REFUSED: " + NOT_ARCHIVED)]
+    assert len(refusal) == 1 and reason in refusal[0], done.stderr
+
+
+def test_ra4_a_salvage_refusal_archives_nothing(desk):
+    """RED on BASE: the refusal is gate-clean's."""
+    stale_256(desk)
+    git(desk.repo, "worktree", "lock", str(desk.gate))
+    old, before = desk.card.read_text(), (refs(desk.repo), worktrees(desk.repo))
+    done = desk.recut()
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "INSPECT: locked: yes" in done.stdout.splitlines(), done.stdout
+    assert f"REFUSED: recut: job-clean.sh salvage refused; nothing archived: {desk.gate}" in done.stderr, done.stderr
+    assert (refs(desk.repo), worktrees(desk.repo)) == before
+    assert desk.gate.is_dir() and desk.card.read_text() == old
+    assert archive_refs(desk.repo) == [] and "ARCHIVE:" not in done.stdout
+    assert "RECUT" not in desk.today.read_text()
+
+
+def test_ra5_a_dirty_gate_is_kept_on_a_wip_branch(desk):
+    """RED on BASE: refused at the pre tag."""
+    p, s = stale_256(desk)
+    (desk.gate / "notes.txt").write_text("constructed\n")
+    done = desk.recut()
+    assert done.returncode == 0, done.stdout + done.stderr
+    wips = git(desk.repo, "for-each-ref", "--format=%(refname:short)", "refs/heads/wip").splitlines()
+    assert len(wips) == 1 and re.fullmatch(r"wip/x-gate-salvage-\d{8}", wips[0]), wips
+    assert git(desk.repo, "show", f"{wips[0]}:notes.txt") == "constructed"
+    out = done.stdout.splitlines()
+    index_of(out, r"^ARCHIVE: branch deploy/x-deploy -> archive/deploy/x-deploy-\d{8}-\d{4} \(" + s + r"\)$")
+    index_of(out, r"^ARCHIVE: tag pre-x-deploy -> archive/pre-x-deploy-\d{8}-\d{4} \(" + p + r"\)$")
+    assert "ARCHIVE: x-deploy done; recut proceeds" in out
+    assert not desk.gate.exists()
+
+
+def recut_arm() -> list[str]:
+    """The recut arm: from `recut)` at column 0 to its own `    ;;`, comment lines dropped."""
+    lines = LAUNCH.read_text().splitlines()
+    start = lines.index("recut)")
+    end = lines.index("    ;;", start)
+    return [ln for ln in lines[start:end + 1] if not ln.lstrip().startswith("#")]
+
+
+def test_ra6_the_recut_arm_deletes_no_ref_it_did_not_copy():
+    """RED on BASE: `tag "$at"` absent."""
+    arm = recut_arm()
+    made = [i for i, ln in enumerate(arm) if 'tag "$at"' in ln]
+    dropped = [i for i, ln in enumerate(arm) if "tag -d" in ln]
+    assert made, "no `tag \"$at\"` in the recut arm"
+    assert len(dropped) == 1 and dropped[0] > made[0], (made, dropped)
+    for word in ("branch -D", "branch -d", "worktree remove"):
+        assert not any(word in ln for ln in arm), word
+    # gate-clean.sh: step 1's two lines only (its RUN line and its call)
+    calls = [ln.strip() for ln in arm if "gate-clean.sh" in ln]
+    assert calls == ["printf 'RUN: sh %s/gate-clean.sh \"%s\"\\n' \"$here\" \"$card\"",
+                     'sh "$here/gate-clean.sh" "$card" || exit 1'], calls
+
+
+@pytest.mark.parametrize("taken", ["tag archive/pre-x-deploy-20261012-1930",
+                                   "branch archive/deploy/x-deploy-20261012-1930"])
+def test_ra7_an_archive_name_already_present_is_refused(desk, taken):
+    """Archive test (g). RED on BASE: stderr lacks `— not archived:`."""
+    stale_256(desk)
+    stub = desk.wt.parent / "bin"
+    (stub / "date").write_text(
+        '#!/bin/sh\nif [ "$*" = "+%Y%m%d-%H%M" ]; then echo 20261012-1930; exit 0; fi\nexec /bin/date "$@"\n')
+    (stub / "date").chmod(0o755)
+    what, name = taken.split(" ")
+    git(desk.repo, what, name, "main")
+    old, before = desk.card.read_text(), (refs(desk.repo), worktrees(desk.repo))
+    done = desk.recut()
+    nothing_archived(desk, done, old, before, desk.gate)
+    assert archive_refs(desk.repo) == [f"refs/{'tags' if what == 'tag' else 'heads'}/{name}"]
+    refusal = [ln for ln in done.stderr.splitlines() if ln.startswith("REFUSED: " + NOT_ARCHIVED)]
+    assert len(refusal) == 1 and name in refusal[0], done.stderr
