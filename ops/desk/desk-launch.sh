@@ -42,6 +42,8 @@
 #        desk-size guard, and in its `shadow)` arm beside build's)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh spike "<absolute prompt path>"         (the scratch-dir
 #        research seat on SPIKE-HUB.md, in /Users/cobalt/cobalt-wt/sdk-spike-1010; card 324 P2)
+#   sh /Users/cobalt/.claude/ops/desk-launch.sh prodwrite "<absolute card path>"       (the production-
+#        write seat on PRODWRITE-HUB.md, from /Users/cobalt/cobalt: ONE approved write, K3; card 392 W2)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh install-ops                            (links the ops
 #        scripts into /Users/cobalt/.claude/ops; the desk runs it after a deploy; launches nothing)
 # The desk types no `cd`, no `git worktree add` and no `claude --bg`: its own `claude --bg`
@@ -79,6 +81,8 @@
 #           with `--fable`, its one ` --model claude-opus-5-5 ` becomes ` --model claude-fable-5-1 `.
 #   close : `cd /Users/cobalt/cobalt`; CLOSE-HUB.md's `claude --bg` line, `<date>` and `<mmdd>`
 #           filled (a resume: its message starting `CONTINUE: <step>. `).
+#   prodwrite: `cd /Users/cobalt/cobalt`; PRODWRITE-HUB.md's `claude --bg` line with <card>, <job>
+#           and <prod write> (the ONE "Bash(<the card's command>)") filled; no worktree.
 #   install-ops: no launch. Every regular file ops/desk/*.sh and ops/desk/*.py of the repo
 #           (/Users/cobalt/cobalt) is linked into the link folder (/Users/cobalt/.claude/ops, or
 #           $COBALT_OPS_LINK_DIR in tests/ops/test_install_ops.py) as <link folder>/<name> ->
@@ -103,7 +107,7 @@
 #
 # IT REFUSES (exit 1, "REFUSED: <reason>" on stderr, nothing run):
 #   - to run at all from a path that holds a space (install under /Users/cobalt/.claude/ops/);
-#   - a kind that is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops; a fixed file, a wake-up
+#   - a kind that is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops, prodwrite; a fixed file, a wake-up
 #     file or a prompt file still a draft, not committed on main, or changed since its commit;
 #   - kind `recut`: any argument after the card ("recut takes one argument, the card"), before
 #     the desk-size guard;
@@ -116,7 +120,11 @@
 #     in their `git -C <path>` spelling, and the whole-git `Bash(git *)`), `uv run`,
 #     `launchctl`, `COBALT_ENV=` (card 21 F5: a string in --disallowedTools is never one; one in
 #     --allowedTools passes when the prompt's one `RULINGS:` line cites rows that are HIS RULING +
-#     APPROVED and committed, L7a); a line without the two dialog denies (L63), without
+#     APPROVED and committed, L7a — but card 392 W6: an --allowedTools string holding
+#     `COBALT_ENV=production` other than exactly `Bash(COBALT_ENV=production uv run cobalt db query *)`
+#     is refused whatever RULINGS says, a production write being the prodwrite seat's, K3; read
+#     with its quotes cut, and an allow list holding $, a backtick or a backslash refused, check O2); a line
+#     without the two dialog denies (L63), without
 #     `--remote-control` and `--name`, or that reads another file than the one named; a card
 #     or a fixed file handed over as a prompt; a prompt that names no cwd; a line that names
 #     `--name brain` or `--remote-control brain` (the brain seat launches by the kind `brain` only);
@@ -146,6 +154,18 @@
 #     $REPORTS/devfix-<name>.md, or already present on a first launch; BASE not a commit on main;
 #     the cobalt_dev lock held (any worktree's .env, or the lock directory); a worktree on
 #     another branch than the card's;
+#   - kind `prodwrite` (card 2026-10-12 392 W2; his R1138, K3), each before the line is filled: TAG
+#     set; CLASS without K3; BRANCH not main or WORKTREE not none; BASE not 8 hex on main, or
+#     production code past it (a diff outside docs/); REPORT not $REPORTS/prodwrite-<name>.md, or
+#     present; ANY resume step ("a prodwrite never resumes"); WRITE RULING empty, or not ONE row of
+#     his (ruling_row); `## ROWS` without exactly ONE data row of 7 cells; a `command` empty, not a
+#     `COBALT_ENV=production uv run cobalt ` command, holding a character the line cannot carry
+#     (" ' \ $ ` | & ; < > * ? % # or a newline), or of the verb db migrate, db query, db
+#     dev-rebuild or backup, or with a --rollback / --down-to word; a `table` not system.<name> or
+#     user.<name>; a `count read` not a `--side` `db query` with ` --prod ` naming the table, or
+#     holding % $ or a backtick; `expected rows` not digits; `backup` not exactly the backup run;
+#     `inverse` not none nor a cobalt command; a live deploy-hub- or prodwrite- session (desk-list.sh
+#     beside this script; unreadable = refused). Its line runs dontAsk, stated once;
 #   - a resume (a NEW worker at a CONTINUE step; a deploy's STEP-D0) while another worktree's .env
 #     exists. ONE EXCEPTION (scratch D1): the job's OWN worktree's .env, and for a deploy its own
 #     lock directory, are skipped — the fixed file's RECOVERY clears them first;
@@ -316,7 +336,7 @@ tool_list() {
 }'
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | ops-hand | shadow <card> --model <id> | spike <prompt file>"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | ops-hand | shadow <card> --model <id> | spike <prompt file> | prodwrite <card>"
 kind=$1
 # recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
 # 10-03, ASK DESK 13: an ignored argument is a guess)
@@ -581,6 +601,21 @@ brain
     if [ "$(grep -c '^RULINGS:' "$pfile")" -eq 1 ] && [ -n "$prulings" ] && [ "$prulings" != "none" ]; then
         ( ruling_items "$prulings" ) 2>/dev/null && ruled=1
     fi
+    # card 392 W6 (his R1138, K3): a production string allowed on a prompt line is refused whatever
+    # RULINGS says, but the one production read; production writes are the prodwrite seat's.
+    # Check O2: the list is read as eval hands it to claude — its quotes cut, so a split
+    # `"…COBALT_ENV="production"…"` is one string; and a `$`, backtick or backslash, which eval
+    # expands into a string no check here reads, is refused in it
+    pw_allow=$(tool_list "$line" allow)
+    case "$pw_allow" in
+        *[\$\`\\]*) refuse "a production string on a prompt line: production writes are the prodwrite seat's (K3): the allow list holds \$, a backtick or a backslash, which eval expands" ;;
+    esac
+    pw_bad=$(printf '%s\n' "$pw_allow" | tr -d "\"'" | awk '{
+        s = $0; r = "Bash(COBALT_ENV=production uv run cobalt db query *)"
+        while ((k = index(s, r)) > 0) s = substr(s, 1, k - 1) " " substr(s, k + length(r))
+        if (index(s, "COBALT_ENV=production")) print s
+    }')
+    [ -z "$pw_bad" ] || refuse "a production string on a prompt line: production writes are the prodwrite seat's (K3): $pw_bad"
     for w in "git add" "git commit" "git merge" "Bash(git *)" "uv run" "launchctl" "COBALT_ENV="; do
         case "$scan" in
             *"$w"*)
@@ -868,7 +903,7 @@ if [ "$kind" = "install-ops" ]; then
     exit 0
 fi
 
-[ "$#" -ge 2 ] && [ "$#" -le 4 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix|recut> <absolute card path> [PASS-2] [<resume step>]"
+[ "$#" -ge 2 ] && [ "$#" -le 4 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix|recut|prodwrite> <absolute card path> [PASS-2] [<resume step>]"
 card=$2
 step=""
 pass2=""
@@ -889,7 +924,8 @@ case "$kind" in
     deploy|recut) fixed="$PROMPTS/DEPLOY-HUB.md" ;;
     devfix) fixed="$PROMPTS/DEVFIX-HUB.md" ;;
     shadow) fixed="$PROMPTS/SHADOW-HUB.md" ;;
-    *) refuse "kind '$kind' is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops" ;;
+    prodwrite) fixed="$PROMPTS/PRODWRITE-HUB.md" ;;
+    *) refuse "kind '$kind' is none of build, check, deploy, devfix, recut, desk, prompt, brain, close, install-ops, prodwrite" ;;
 esac
 [ -f "$fixed" ] || refuse "the fixed file is not installed: $fixed"
 if grep -q '«INSTALL' "$fixed"; then
@@ -1378,6 +1414,7 @@ ship_cell() {
 
 merges=""
 prod=""
+prodw=""
 table=""
 proof=""
 case "$kind" in
@@ -1602,6 +1639,136 @@ devfix)
     lock_free
     lock_dir_free
     ;;
+prodwrite)
+    # card 2026-10-12 392 W2 (his R1138, K3): ONE approved production write; every refusal runs here,
+    # before the line is filled, and the one string filled is "Bash(<the card's command>)"
+    [ -z "$step" ] || refuse "a prodwrite never resumes: a stopped write is a new card"
+    [ -z "$tag" ] || refuse "this is a deploy card (TAG is set); kind 'prodwrite' needs a prodwrite card"
+    pw_class=$(field CLASS)
+    case " $(printf '%s' "$pw_class" | tr ',;' '  ') " in
+        *" K3 "*) ;;
+        *) refuse "prodwrite: CLASS '$pw_class' does not name K3" ;;
+    esac
+    [ "$branch" = "main" ] || refuse "prodwrite: BRANCH '$branch' is not main"
+    [ "$wt" = "none" ] || refuse "prodwrite: WORKTREE '$wt' is not none"
+    hex8 BASE "$base"
+    commit_exists BASE "$base"
+    git -C "$REPO" merge-base --is-ancestor "$base" main || refuse "BASE '$base' is not a commit on main"
+    git -C "$REPO" diff --quiet "$base" HEAD -- . ':(exclude)docs' \
+        || refuse "production code moved since BASE '$base': the write runs on BASE's code"
+    report_bad=""
+    case "$report" in
+        "$REPORTS"/prodwrite-*.md) ;;
+        *) report_bad=1 ;;
+    esac
+    case "${report#"$REPORTS"/}" in
+        */*|*[!ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789._-]*) report_bad=1 ;;
+    esac
+    [ -z "$report_bad" ] || refuse "incomplete card: a prodwrite REPORT must be $REPORTS/prodwrite-<name>.md"
+    [ ! -e "$report" ] || refuse "the prodwrite report already exists: $report (a stopped write is a new card)"
+    # THE RULING ROW: one row of his, as RULINGS is proved (ruling_row's own text on a refusal)
+    wruling=$(field "WRITE RULING")
+    [ -n "$wruling" ] || refuse "incomplete card: 'WRITE RULING' is empty"
+    ruling_row "$wruling"
+    # THE WRITE ROW: the data rows of `## ROWS`, the header (cell 2 `command`) and `---` lines
+    # skipped; a `\|` inside a cell is kept as one character (\001), never a cell boundary
+    wrows=$(awk '/^## /{insec = ($0 ~ /^## ROWS[ \t]*$/); next}
+        insec && /^[|]/ {
+            gsub(/\\[|]/, "\001")
+            if ($0 ~ /^[|][ \t:|-]*$/) next
+            split($0, c, "|"); h = c[3]; gsub(/^[ \t]+|[ \t]+$/, "", h)
+            if (h == "command") next
+            print
+        }' "$card")
+    k=$(printf '%s' "$wrows" | grep -c '')
+    [ "$k" -eq 1 ] || refuse "the write row is unnamed: ## ROWS holds $k rows"
+    [ "$(printf '%s\n' "$wrows" | awk -F'|' '{print NF}')" -eq 9 ] \
+        || refuse "the write row is not one row of 7 cells: $(printf '%s' "$wrows" | tr '\001' '|')"
+    # pw_cell <n>: the n-th '|' field of the write row, backticks cut (as ship_cell), blanks trimmed
+    pw_cell() {
+        printf '%s\n' "$wrows" | awk -F'|' -v i="$1" '{print $i}' | tr -d '`' | tr '\001' '|' \
+            | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
+    }
+    command=$(pw_cell 3)
+    table=$(pw_cell 4)
+    pw_count=$(pw_cell 5)
+    pw_expected=$(pw_cell 6)
+    pw_backup=$(pw_cell 7)
+    pw_inverse=$(pw_cell 8)
+    pw_prefix="COBALT_ENV=production uv run cobalt "
+    [ -n "$command" ] || refuse "the write row is unnamed: its command cell is empty"
+    case "$command" in
+        "$pw_prefix"?*) ;;
+        *) refuse "the write is not a cobalt command: '$command'" ;;
+    esac
+    # the shadow builder rule (above) and the rest: nothing eval, sed or a glob reads inside the string
+    case "$command" in
+        *[\"\'\\\$\`\|\&\;\<\>\*\?%#]*) refuse "the write holds a character the line cannot carry: '$command'" ;;
+    esac
+    verb=${command#"$pw_prefix"}
+    v1=$(printf '%s\n' "$verb" | awk '{print $1}')
+    v2=$(printf '%s\n' "$verb" | awk '{print $2}')
+    case "$v1" in
+        -*) refuse "the write's first word is an option, not a verb: '$v1'" ;;
+        backup) refuse "the write backup has its own home (the seat's backup step; a restore is never this seat's)" ;;
+    esac
+    case "$v1 $v2" in
+        "db migrate"|"db query"|"db dev-rebuild") refuse "the write $v1 $v2 has its own home" ;;
+    esac
+    for w in $verb; do
+        case "$w" in
+            --rollback*|--down-to*) refuse "the write $w has its own home (a production schema rollback is his)" ;;
+        esac
+    done
+    table_bad=""
+    case "$table" in
+        system.*|user.*) ;;
+        *) table_bad=1 ;;
+    esac
+    case "${table#*.}" in
+        ""|*[!abcdefghijklmnopqrstuvwxyz0123456789_]*) table_bad=1 ;;
+    esac
+    [ -z "$table_bad" ] || refuse "incomplete card: the write row's table '$table' is not system.<name> or user.<name> with <name> in [a-z0-9_]"
+    case "$pw_count" in
+        "COBALT_ENV=production uv run cobalt db query --side "?*) ;;
+        *) refuse "the count read is not a production 'db query --side' read: '$pw_count'" ;;
+    esac
+    case "$pw_count" in
+        *" --prod "*) ;;
+        *) refuse "the count read holds no ' --prod ': '$pw_count'" ;;
+    esac
+    case "$pw_count" in
+        *"$table"*) ;;
+        *) refuse "the count read does not name the table $table: '$pw_count'" ;;
+    esac
+    case "$pw_count" in
+        *[%\$\`]*) refuse "the count read holds %, \$ or a backtick: '$pw_count'" ;;
+    esac
+    case "$pw_expected" in
+        ""|*[!0123456789]*) refuse "the write row's expected rows '$pw_expected' is not digits" ;;
+    esac
+    [ "$pw_backup" = "COBALT_ENV=production uv run cobalt backup run" ] \
+        || refuse "the backup step is missing: the backup cell is '$pw_backup', not 'COBALT_ENV=production uv run cobalt backup run'"
+    case "$pw_inverse" in
+        none|"$pw_prefix"?*) ;;
+        *) refuse "the write row's inverse is neither none nor a cobalt command: '$pw_inverse'" ;;
+    esac
+    # one production seat at a time: never beside a deploy hub or another prodwrite (desk-list.sh
+    # beside this script, read as the brain kind reads it; unreadable = refused)
+    list="$(dirname "$0")/desk-list.sh"
+    rows=$(sh "$list" 2>/dev/null) || refuse "prodwrite: the session list is unreadable ($list); a production write never launches beside a session it cannot rule out"
+    live=$(printf '%s\n' "$rows" | while IFS= read -r row; do
+        rest=${row#* · }
+        name=${rest%% · *}
+        if [ "$rest" != "$row" ]; then
+            case "$name" in
+                (deploy-hub-*|prodwrite-*) printf '%s ' "${row%% · *}" ;;
+            esac
+        fi
+    done)
+    [ -z "$live" ] || refuse "prodwrite: a deploy-hub- or prodwrite- session is live (${live% }): one production seat at a time"
+    prodw="\"Bash($command)\""
+    ;;
 recut)
     # RECUT (card 2026-10-03/03 adoption-scripts L5): a deploy whose gate FAILED, in ONE call
     need TAG
@@ -1706,6 +1873,7 @@ line=$(grep '^claude --bg ' "$fixed" | sed \
     -e "s|<proof test>|$proof|g" \
     -e "s|<tip merges>|$merges|" \
     -e "s|<prod migrate strings>|$prod|" \
+    -e "s|<prod write>|$prodw|" \
     -e "s|<model>|$model|g" \
     -e "s|<builder allow>|$builder|g")
 if [ -n "$step" ]; then
@@ -1721,15 +1889,16 @@ fi
 case "$line" in
     *"<"*|*">"*) refuse "the launch line still holds an unfilled token" ;;
 esac
-if [ "$kind" = "shadow" ]; then
-    # card 324 S2: the gate seat runs dontAsk, stated once, and nothing wider
+if [ "$kind" = "shadow" ] || [ "$kind" = "prodwrite" ]; then
+    # card 324 S2: the gate seat runs dontAsk, stated once, and nothing wider; card 392 W2: so does
+    # the production-write seat
     case "$line" in
-        *bypassPermissions*) refuse "shadow: bypassPermissions on the line (L55)" ;;
+        *bypassPermissions*) refuse "$kind: bypassPermissions on the line (L55)" ;;
     esac
     pm_n=$(printf '%s\n' "$line" | grep -o -e '--permission-mode' | wc -l | tr -d ' ')
-    [ "$pm_n" -eq 1 ] || refuse "shadow: the line states --permission-mode $pm_n times, not once"
+    [ "$pm_n" -eq 1 ] || refuse "$kind: the line states --permission-mode $pm_n times, not once"
     pm=$(printf '%s\n' "$line" | sed -n 's/.*--permission-mode[ =]*\([^ ]*\).*/\1/p' | tr -d "\"'")
-    [ "$pm" = "dontAsk" ] || refuse "shadow: permission mode '$pm' is not dontAsk"
+    [ "$pm" = "dontAsk" ] || refuse "$kind: permission mode '$pm' is not dontAsk"
 fi
 
 check_paths "$line"
@@ -1755,6 +1924,10 @@ devfix)
     [ -d "$WT/$wt" ] || add="git -C $REPO worktree add -b $branch $WT/$wt $base"
     dir="$WT/$wt"
     note="reminder: the devfix holds the cobalt_dev lock from its first step to its stop line (L76); no deploy launch until then; watch: wait-stop-line.sh <its REPORT> '^(REBUILT|FAILED)'; the report is the desk's to commit"
+    ;;
+prodwrite)
+    dir="$REPO"
+    note="reminder: the report is the desk's to commit; a FAILED write is never re-run: read its backup line"
     ;;
 esac
 

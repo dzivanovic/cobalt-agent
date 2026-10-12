@@ -137,3 +137,11 @@ Header: `JOB`, `LADDER`, `BRANCH` (gate branch), `WORKTREE` (gate worktree), `BA
 
 ## A DEVFIX CARD, IN SHORT (the values `DEVFIX-HUB.md` reads; launched by `desk-launch.sh devfix "<card>"`)
 One dev-maintenance run on `cobalt_dev`: `cobalt db dev-rebuild <TABLE>` dry, then real, then `<PROOF TEST>`, under the one lock; no git write, no schema level change, no row deleted. Header: `JOB`, `LADDER`, `BRANCH`, `WORKTREE`, `BASE` (8 hex, on `main`), `REPORT` (`reports/devfix-<…>.md`), `RULINGS`, `TABLE`, `PROOF TEST`. Body: no `## ROWS`; `## RECORDS` optional. `desk-launch.sh` refuses a bad `TABLE`, `PROOF TEST` or `REPORT`, a report already present on a first launch, a held lock, a card or fixed file uncommitted or changed, and a worktree on another branch.
+
+## A PRODWRITE CARD, IN SHORT (the values `PRODWRITE-HUB.md` reads; launched by `desk-launch.sh prodwrite "<card>"`)
+ONE approved production write (class K3, his 2026-10-12 R1138): backup first, the write once, verify by count, report. Header: `JOB`, `LADDER`, `CLASS` (holds `K3`), `BRANCH: main`, `WORKTREE: none`, `BASE` (8 hex, on `main`; no code past it), `REPORT` (`reports/prodwrite-<name>.md`), `RULINGS`, `WRITE RULING: <date> R<n>` (ONE row of his, `HIS RULING` + `APPROVED`, committed). Body: `## ROWS` with ONE row:
+
+| row | command | table | count read | expected rows | backup | inverse |
+|---|---|---|---|---|---|---|
+
+`command`: a `COBALT_ENV=production uv run cobalt …` command, not a `db migrate`, `db query`, `db dev-rebuild` or `backup` verb, holding none of `" ' \ $` `` ` `` `| & ; < > * ? % #`; `table`: `system.<name>` or `user.<name>`; `count read`: a `COBALT_ENV=production uv run cobalt db query --side … --prod …` read naming the table; `expected rows`: digits; `backup`: exactly `COBALT_ENV=production uv run cobalt backup run`; `inverse`: `none` or the `cobalt` command that undoes the write. `## RECORDS` optional. `desk-launch.sh` refuses anything else (card 392 W2), a report already present, any resume, and a live `deploy-hub-` or `prodwrite-` session.
