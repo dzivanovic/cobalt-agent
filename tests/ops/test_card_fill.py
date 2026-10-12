@@ -134,6 +134,83 @@ def test_a_card_with_no_report_is_refused(desk):
     assert card.read_bytes() == before
 
 
+# ---- card 386 L7: a shadow card filled from its SHADOW BUILT line (SHADOW-HUB :61) ---------------
+SHADOW_STOP = (
+    "SHADOW BUILT · job: x-job · tip: 1a2b3c4d | on 0f0e0d0c | offline 9/0 | decisions: 0 · builder: x · "
+    "gate: x-job-gate · passes: 1 · suites at first run: green · builder tokens: UNKNOWN · wall: 1"
+)
+SHADOW_OF = "SHADOW OF: /x/original-card.md\n"
+
+
+def make_shadow(card: Path, branch: str = "shadow/x-job", shadow_of: str = "header") -> None:
+    """`BRANCH: <branch>`; `shadow_of` "header" adds the SHADOW OF line above the first blank line,
+    "body" below it, "none" not at all."""
+    text = card.read_text().replace("BRANCH: ops/x-job\n", f"BRANCH: {branch}\n")
+    if shadow_of == "header":
+        text = text.replace("RULINGS: 2026-01-02 R1\n", "RULINGS: 2026-01-02 R1\n" + SHADOW_OF)
+    elif shadow_of == "body":
+        text += SHADOW_OF
+    card.write_text(text)
+
+
+def test_386_e1_a_shadow_card_is_filled_from_its_shadow_built_line(desk):
+    card, report, reports, env = desk
+    make_shadow(card)
+    report.write_text("# build\n\n## RECORDS\n\n" + SHADOW_STOP + "\n\n")
+    done = fill(str(card), env=env)
+    assert done.returncode == 0, done.stderr
+    lines = card.read_text().split("\n")
+    assert "TIP: 1a2b3c4d" in lines
+    assert "HOUSE B: as needed" in lines
+    assert card.read_text().endswith("RULINGS: 2026-01-02 R1\n" + SHADOW_OF + BODY)
+    assert "TIP: → TIP: 1a2b3c4d" in done.stdout
+
+
+@pytest.mark.parametrize(
+    "last,branch,shadow_of",
+    [
+        (SHADOW_STOP, "ops/x-job", "none"),       # a non-shadow card
+        (SHADOW_STOP, "ops/x-job", "header"),     # SHADOW OF, BRANCH not shadow/
+        (SHADOW_STOP, "shadow/x-job", "none"),    # shadow/ BRANCH, no SHADOW OF
+        (SHADOW_STOP, "shadow/x-job", "body"),    # SHADOW OF below the header
+        (SHADOW_STOP.replace("job: x-job", "job: x-other"), "shadow/x-job", "header"),
+        (SHADOW_STOP.replace("job: x-job", "job: x-jobber"), "shadow/x-job", "header"),
+        (SHADOW_STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4"), "shadow/x-job", "header"),
+        (SHADOW_STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4d5"), "shadow/x-job", "header"),
+        (STOP.replace("self-check: 3 of 3", "self-check: 2 of 3"), "ops/x-job", "none"),
+    ],
+)
+def test_386_e2_a_shadow_built_line_off_a_shadow_card_or_of_another_job_or_tip_is_refused(desk, last, branch, shadow_of):
+    card, report, reports, env = desk
+    make_shadow(card, branch, shadow_of)
+    report.write_text("# build\n\n" + last + "\n")
+    before = card.read_bytes()
+    done = fill(str(card), env=env)
+    assert done.returncode == 1
+    assert done.stderr.startswith("REFUSED: "), done.stderr
+    assert card.read_bytes() == before
+
+
+def test_386_e2_a_shadow_card_with_a_full_built_line_still_fills(desk):
+    card, report, reports, env = desk
+    make_shadow(card)
+    done = fill(str(card), env=env)
+    assert done.returncode == 0, done.stderr
+    assert "TIP: 1a2b3c4d" in card.read_text().split("\n")
+
+
+def test_386_e3_a_second_shadow_run_changes_nothing(desk):
+    card, report, reports, env = desk
+    make_shadow(card)
+    report.write_text("# build\n\n" + SHADOW_STOP + "\n")
+    assert fill(str(card), env=env).returncode == 0
+    before = card.read_bytes()
+    done = fill(str(card), env=env)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == "nothing changed"
+    assert card.read_bytes() == before
+
+
 @pytest.mark.parametrize("value", ["2026-01-02", "R1", "2026-1-2 R1", "2026-01-02 R1 x"])
 def test_a_bad_no_house_value_is_refused(desk, value):
     card, report, reports, env = desk
