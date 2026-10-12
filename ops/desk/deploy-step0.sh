@@ -355,7 +355,7 @@ HELD_IDS
     done <<HELD_LINES
 $hr_lines
 HELD_LINES
-    # `open:` past held unfixed: m - n REJECTED or UNSETTLED ids, one SETTLED line each (card 397)
+    # `open:` past held unfixed: m - n REJECTED or UNSETTLED ids, one SETTLED line each (R1157 (2))
     hr_open=$(awk '/^## /{on = ($0 == "## RUNS"); next}
         function opened(v) { sub(/^[ \t*]+/, "", v); return v ~ /^(REJECTED|UNSETTLED)/ }
         on && /^- [A-Za-z0-9._-]+ · / {v = $0; while ((p = index(v, " · ")) > 0) v = substr(v, p + length(" · "))

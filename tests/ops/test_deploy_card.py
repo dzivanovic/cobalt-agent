@@ -873,6 +873,16 @@ def test_g1_an_id_twice_under_fixes_is_refused(tmp_path, held, reason):
     _fix_refused(desk, ("--fix-report", f"alpha={report}"), reason.format(check=desk.check["alpha"]))
 
 
+def test_g1_the_rule_header_names_card_397_once():
+    """The card's DEPLOY PROOF: `grep -c -F "card 397"` → 1 in each script, in THE RULE's header
+    comment. RED on BASE: `assert 0 == 1`."""
+    for name in ("deploy-card.sh", "desk-launch.sh", "deploy-step0.sh"):
+        text = (REPO / "ops" / "desk" / name).read_text()
+        assert text.count("card 397") == 1, name
+        header = rule_text(REPO / "ops" / "desk" / name).split("\nheld_n() {")[0]
+        assert "card 397" in header, name
+
+
 def test_g1_an_id_held_in_both_sections_counts_once(tmp_path):
     """Pin, green on BASE and after: a `HELD, NOT FIXED` RUNS bullet and its FIXES row are one id."""
     desk = Desk(tmp_path)
