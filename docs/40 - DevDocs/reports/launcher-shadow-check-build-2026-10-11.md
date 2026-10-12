@@ -137,7 +137,7 @@ RESTARTS: none
 - Second W, on `<tip>` = `a8c18242` (one more gate call each, `## RECORDS`):
   - (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-shadow-check-1011 offline` → `offline 4199/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-offline-20261012-055821.log`.
   - (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-shadow-check-1011 livenote` → `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-livenote-20261012-055822.log`.
-  - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `3197 passed, 1 xfailed, 15 warnings in 618.24s (0:10:18)`. This build adds the 386 tests (66 cases across `test_desk_launch_prechecks.py`, `test_preflight.py`, `test_card_fill.py`, `test_desk_done.py`) and `tests/ops/test_check_hub_shadow.py` (4).
+  - `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `3197 passed, 1 xfailed, 15 warnings in 618.24s (0:10:18)`. This build adds the 386 tests (58 cases across `test_desk_launch_prechecks.py`, `test_preflight.py`, `test_card_fill.py`, `test_desk_done.py`: `uv run pytest --collect-only -q -p no:cacheprovider --color=no tests/ops/test_desk_launch_prechecks.py tests/ops/test_preflight.py tests/ops/test_card_fill.py tests/ops/test_desk_done.py -k 386` → `58/268 tests collected (210 deselected) in 0.03s`) and `tests/ops/test_check_hub_shadow.py` (4).
   - (b)–(d), (f): not run (DB: none). `ls /Users/cobalt/cobalt-wt/launcher-shadow-check-1011/.env` → No such file.
 
 ## PRE-STOP SELF-CHECK
@@ -190,5 +190,7 @@ next: CLOSE (done)
 - The card's records, as re-read at PREFLIGHT, are above.
 - CONTINUED at W 05:45 ET: `cto-desk` sent `CONTINUE: W. the two RUN probe paths are removed`; verified with `ls -la docs/_inflight` → `README.md` only; `ls -la …/.env` → No such file.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
+
+FIXED: G3 — tests/ops/test_check_hub_shadow.py::test_l2_the_launch_line_is_unchanged
 
 BUILT · job: launcher-shadow-check-1011 · tip: a8c18242 | on a76d8855 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 9 of 9 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 273762
