@@ -4,7 +4,7 @@ CLASS: K3, K5
 INSTALL: none
 BRANCH: ops/db-apply-prod-1012
 WORKTREE: db-apply-prod-1012
-BASE: «FILL: main HEAD at the build launch, 8 hex»
+BASE: 8f1d11ed
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/db-apply-prod-1012/docs/40 - DevDocs/reports/db-apply-prod-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/db-apply-prod-check-2026-10-12.md
