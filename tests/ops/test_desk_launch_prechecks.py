@@ -1234,6 +1234,23 @@ def test_o2_a_production_write_spelled_for_eval_is_refused(desk, tmp_path, extra
     refused(desk, launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)), PROD_REFUSAL)
 
 
+@pytest.mark.parametrize("extra", ["Bash(COBALT_ENV=prod*)", "Bash(COBALT_ENV=*)"])
+def test_check_o1_a_glob_reaching_production_on_a_ruled_prompt_is_refused(desk, tmp_path, extra):
+    line = with_allow(extra)
+    refused(desk, launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)), PROD_REFUSAL)
+
+
+def test_f6_a_ruled_allow_string_wider_than_the_exact_production_read_is_refused(desk, tmp_path):
+    line = with_allow(
+        "Bash(COBALT_ENV=production uv run cobalt db query *); uv run cobalt settings load --apply x.yaml"
+    )
+    refused(
+        desk,
+        launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)),
+        PROD_REFUSAL,
+    )
+
+
 def test_f5_a_ruled_write_line_still_runs_auto_or_plan_only(desk, tmp_path):
     """His row widens the write strings only; the permission-mode refusal stands."""
     line = SURVEY_LINE.replace("--permission-mode auto", "--permission-mode dontAsk")

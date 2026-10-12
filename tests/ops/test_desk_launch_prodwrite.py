@@ -267,6 +267,23 @@ def test_p2_an_unreadable_session_list_is_refused(desk):
     refused(desk, desk.run("prodwrite", str(desk.card), dry=False), "prodwrite: the session list is unreadable")
 
 
+def test_check_o2_a_count_read_of_a_longer_table_name_is_refused(desk):
+    other = 'COBALT_ENV=production uv run cobalt db query --side user --prod "SELECT count(*) FROM user.x_settings_old"'
+    desk.write_card(rows=row(count=other))
+    desk.commit("o2")
+    refused(desk, desk.run("prodwrite", str(desk.card), dry=False), "the count read does not name the table")
+
+
+def test_p2_a_count_read_that_only_contains_the_table_name_is_refused(desk):
+    desk.write_card(rows=row(table="user.x"))
+    desk.commit("count names a longer table")
+    refused(
+        desk,
+        desk.run("prodwrite", str(desk.card), dry=False),
+        "the count read does not name the table user.x",
+    )
+
+
 def test_p2_negative_control_other_live_sessions_do_not_block(desk):
     desk.live([(DESK, "cto-desk"), ("aaaa0002", "x-job-build"), ("aaaa0003", "brain")])
     done = desk.run("prodwrite", str(desk.card))
