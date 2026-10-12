@@ -3,6 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-09.md R808
 BRANCH: shadow/archiver-429-grok
 WORKTREE: archiver-429-grok
 BASE: fa968552
+TIP: 3e60d5f6
 REPORT: /Users/cobalt/cobalt-wt/archiver-429-grok/docs/40 - DevDocs/reports/archiver-429-grok-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/archiver-429-grok-check-2026-10-11.md
 HOUSE B: as needed
