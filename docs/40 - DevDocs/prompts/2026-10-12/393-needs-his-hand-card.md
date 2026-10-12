@@ -4,7 +4,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-12.md R1138
 BRANCH: ops/needs-his-hand-1012
 WORKTREE: needs-his-hand-1012
 BASE: 6468fb5e
-TIP:
+TIP: ad73d04a
 REPORT: /Users/cobalt/cobalt-wt/needs-his-hand-1012/docs/40 - DevDocs/reports/needs-his-hand-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/needs-his-hand-check-2026-10-12.md
 HOUSE B: as needed
