@@ -189,8 +189,9 @@ next: CLOSE (done)
 - No DevDocs line: no page under `docs/40 - DevDocs/cobalt/` covers these `ops/desk/` scripts. Adding a page would widen the job.
 - The card's records, as re-read at PREFLIGHT, are above.
 - CONTINUED at W 05:45 ET: `cto-desk` sent `CONTINUE: W. the two RUN probe paths are removed`; verified with `ls -la docs/_inflight` → `README.md` only; `ls -la …/.env` → No such file.
+- CONTINUED at F1 06:55 ET (`CONTINUE: FIX ROUND row F1`, a new session on wip `418af955`): `.env` No such file; `uv run pytest --collect-only … -k 386` → `58/268 tests collected (210 deselected) in 0.03s`. F1: test `66c4fefc`, red with `:140` set back to 66 (`assert 58 == 66`), green on 58 (`test_check_hub_shadow.py test_hub_lines.py test_house_probe.py` → `50 passed`); `RESTARTS: none`. Gate pass on `66c4fefc` (DB: none form): `gate.sh … offline` → `offline 4199/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-offline-20261012-065653.log`; `gate.sh … livenote` → `live-note 146/0`, `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-shadow-check-1011-livenote-20261012-065654.log`; `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `3198 passed, 1 xfailed, 16 warnings in 624.98s (0:10:24)`; `.env` No such file.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FIXED: G3 — tests/ops/test_check_hub_shadow.py::test_l2_the_launch_line_is_unchanged
+FIXED: G3 — tests/ops/test_check_hub_shadow.py::test_build_report_case_count_matches_collection
 
-BUILT · job: launcher-shadow-check-1011 · tip: a8c18242 | on a76d8855 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 9 of 9 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 273762
+BUILT · job: launcher-shadow-check-1011 · tip: 66c4fefc | on a76d8855 | migration: none | offline 4199/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 10 of 10 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 115749
