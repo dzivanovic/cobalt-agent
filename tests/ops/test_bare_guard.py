@@ -218,19 +218,42 @@ HUB_FILE = {
     "check": "CHECK-HUB.md",
     "deploy": "DEPLOY-HUB.md",
     "devfix": "DEVFIX-HUB.md",
+    "prodwrite": "PRODWRITE-HUB.md",
 }
 
+# card 392 W3: the prodwrite card's ONE write row (constructed command, table and count)
+PW_WRITE = "COBALT_ENV=production uv run cobalt settings load --apply x.yaml"
+PW_HEAD = "| row | command | table | count read | expected rows | backup | inverse |\n|---|---|---|---|---|---|---|\n"
 
-def make_seat(roots, kind, *, cwd=None, files=DEFAULT_FILES, first=None) -> dict:
+
+def pw_row(command: str = PW_WRITE, rid: str = "P1") -> str:
+    return (f"| {rid} | `{command}` | `user.x_settings` | `COBALT_ENV=production uv run cobalt db query "
+            '--side user --prod "SELECT count(*) FROM user.x_settings"` | 3 | '
+            "`COBALT_ENV=production uv run cobalt backup run` | none |\n")
+
+
+def pw_report(roots) -> Path:
+    return roots.repo / "docs" / "40 - DevDocs" / "reports" / "prodwrite-x-write.md"
+
+
+def prodwrite_card_text(roots, rows: str | None = None) -> str:
+    return (
+        "JOB: x-write\nCLASS: K3\nBRANCH: main\nWORKTREE: none\nBASE: 0000000a\n"
+        f"REPORT: {pw_report(roots)}\nRULINGS: 2026-01-01 R1\nWRITE RULING: 2026-01-01 R1\n\n"
+        f"## ROWS\n\n{PW_HEAD}{pw_row() if rows is None else rows}\n## RECORDS\n- constructed\n"
+    )
+
+
+def make_seat(roots, kind, *, cwd=None, files=DEFAULT_FILES, first=None, rows=None) -> dict:
     """A constructed seat: cwd + transcript. kind None = no transcript, cwd outside both roots."""
     p = prompts(roots)
     if kind in HUB_FILE:
         card = p / "2026-01-01" / f"01-{kind}-card.md"
         card.parent.mkdir(parents=True, exist_ok=True)
-        card.write_text(card_text(roots, files))
+        card.write_text(prodwrite_card_text(roots, rows) if kind == "prodwrite" else card_text(roots, files))
         hub = p / HUB_FILE[kind]
         text = f"Read '{hub}' and follow it exactly. CARD: '{card}'"
-        default_cwd = roots.repo if kind == "deploy" else roots.wt / JOB_WT
+        default_cwd = roots.repo if kind in ("deploy", "prodwrite") else roots.wt / JOB_WT
     elif kind == "desk":
         text = "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it exactly."
         default_cwd = roots.repo
@@ -412,6 +435,103 @@ def test_g2_the_deploy_hub_and_an_unknown_seat_are_allowed(roots, kind, command)
 )
 def test_g2_a_dev_call_from_a_build_is_allowed(roots, command):
     assert_allowed(run(command, make_seat(roots, "build")))
+
+
+# ---- card 392 W3: G2 for the prodwrite seat only (his 2026-10-12 R1138, K3) ------------------
+
+PW_PASSES = [
+    PW_WRITE,
+    "COBALT_ENV=production uv run cobalt backup run",
+    "COBALT_ENV=production uv run cobalt backup status",
+    'COBALT_ENV=production uv run cobalt db query --side user --prod "SELECT 1"',
+]
+
+
+@pytest.mark.parametrize("command", PW_PASSES)
+def test_q1_the_prodwrite_seat_runs_its_write_the_backup_and_the_read(roots, command):
+    assert_allowed(run(command, make_seat(roots, "prodwrite")))
+
+
+PW_DENIED = [
+    PW_WRITE + " --force",
+    "COBALT_ENV=production uv run cobalt settings load --apply y.yaml",
+    "COBALT_ENV=production uv run cobalt db migrate --allow-prod",
+    "COBALT_ENV=production uv run cobalt backup restore a b --into /tmp/x",
+    "COBALT_ENV=production uv run cobalt validate",
+]
+
+
+@pytest.mark.parametrize("command", PW_DENIED)
+def test_q2_any_other_production_command_from_the_prodwrite_seat_is_g2(roots, command):
+    """RED on BASE: the seat reading PRODWRITE-HUB.md from the repo is kind None, and all pass."""
+    assert_denied(run(command, make_seat(roots, "prodwrite")), G2_ROUTE)
+
+
+@pytest.mark.parametrize("rows", ["two", "none"])
+@pytest.mark.parametrize("command", [PW_WRITE, "COBALT_ENV=production uv run cobalt backup run"])
+def test_q2_a_card_with_two_rows_or_none_names_no_write(roots, rows, command):
+    """No one write row: the card's command and the backup are G2 (the one db query read stays R686's)."""
+    body = pw_row() + pw_row("COBALT_ENV=production uv run cobalt settings load --apply y.yaml", "P2") if rows == "two" else ""
+    assert_denied(run(command, make_seat(roots, "prodwrite", rows=body)), G2_ROUTE)
+
+
+def test_q3_the_prodwrite_seat_writes_its_report_only(roots):
+    """RED on BASE: kind None meets no G5."""
+    seat = make_seat(roots, "prodwrite")
+    assert_allowed(write(pw_report(roots), seat))
+    assert_denied(write(prompts(roots) / "2026-01-01" / "01-prodwrite-card.md", seat), G5_FENCE)
+    assert_denied(write(roots.repo / "docs" / "40 - DevDocs" / "reports" / "prodwrite-other.md", seat), G5_FENCE)
+    assert_denied(edit(roots.repo / "src" / "x.py", seat), G5_FENCE)
+
+
+def test_q4_the_prodwrite_seat_launches_nothing(roots):
+    """RED on BASE: kind None meets no G7."""
+    assert_denied(run("claude --bg x", make_seat(roots, "prodwrite")), G7_ROUTE)
+
+
+Q5_SEATS = [(k, False) for k in ["build", "check", "devfix", "shadow", "desk", "brain", "worker", "ops-hand"]] + [
+    (k, True) for k in ["build", "check", "devfix", "shadow"]  # the seats that read a card
+]
+
+
+@pytest.mark.parametrize("kind,card", Q5_SEATS)
+def test_q5_the_same_write_from_any_other_seat_is_g2(roots, kind, card):
+    """Two-sided (green on BASE and after): only the prodwrite kind passes its card's command."""
+    if kind == "shadow":
+        seat = shadow_seat(roots)
+        path = prompts(roots) / "2026-01-01" / "02-job-grok-card.md"
+    elif kind == "ops-hand":
+        seat, path = ops_hand_seat(roots), None
+    else:
+        seat = unstamped_seat(roots, kind)
+        path = prompts(roots) / "2026-01-01" / f"01-{kind}-card.md" if kind in HUB_FILE else None
+    if card:
+        path.write_text(prodwrite_card_text(roots))
+    assert_denied(run(PW_WRITE, seat), G2_ROUTE)
+
+
+def test_o1_a_worktree_copy_named_prodwrite_hub_is_not_the_seat(roots):
+    p = prompts(roots)
+    card = p / "2026-01-01" / "01-prodwrite-card.md"
+    card.parent.mkdir(parents=True, exist_ok=True)
+    card.write_text(prodwrite_card_text(roots))
+    hub = roots.wt / JOB_WT / "docs" / "40 - DevDocs" / "prompts" / "PRODWRITE-HUB.md"
+    seat = make_seat(roots, "worker", cwd=roots.wt / JOB_WT,
+                     first=f"Read '{hub}' and follow it exactly. CARD: '{card}'")
+    assert_denied(run(PW_WRITE, seat), G2_ROUTE)
+
+
+def test_o3_the_prodwrite_seat_writes_no_file_through_git_output(roots):
+    seat = make_seat(roots, "prodwrite")
+    for command in (f"git -C {roots.repo} diff --output={roots.repo}/src/x.py HEAD",
+                    f"git -C {roots.repo} log --output={roots.repo}/src/x.py -1"):
+        done = run(command, seat)
+        assert done.returncode == 2, (command, done.returncode, done.stderr)
+
+
+def test_q2_a_short_second_row_still_names_the_write(roots):
+    body = pw_row() + "| P2 | not | seven |\n"
+    assert_denied(run(PW_WRITE, make_seat(roots, "prodwrite", rows=body)), G2_ROUTE)
 
 
 # ---- card 21 guard-g2 (his 2026-10-06 R511): a marked seat's production db query ---------

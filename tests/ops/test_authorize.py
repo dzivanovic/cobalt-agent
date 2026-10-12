@@ -317,6 +317,86 @@ def test_check_o1_the_real_shadow_title_names_its_standing_row(desk):
     assert "the title names no INSTALL: <date> R<n>" not in done.stdout, done.stdout
 
 
+# ---- card 392 W4: kind prodwrite, its rows as deploy's plus the WRITE RULING row --------------
+
+R4 = "| R4 | 09:20 ET | DESK RECORD: a note, not his. | RECORD |\n"
+
+
+def prodwrite_card(repo: Path, write_ruling: str | None = "2026-01-02 R2") -> Path:
+    """A constructed prodwrite card and PRODWRITE-HUB.md (its title cites R1), committed."""
+    prompts = repo / "docs" / "40 - DevDocs" / "prompts"
+    (prompts / "PRODWRITE-HUB.md").write_text(
+        "# PRODWRITE-HUB — the production-write seat (INSTALLED 2026-01-01 · STANDING = INSTALL: "
+        "2026-01-01 R1)\n\nbody\n")
+    card = prompts / "2026-01-02" / "07-x-write-card.md"
+    line = "" if write_ruling is None else f"WRITE RULING: {write_ruling}\n"
+    card.write_text(
+        "JOB: x-write\nLADDER: OFF-LADDER\nCLASS: K3\nBRANCH: main\nWORKTREE: none\nBASE: 0000aaaa\n"
+        f"REPORT: /nowhere/prodwrite-x-write.md\nRULINGS: 2026-01-02 R3\n{line}\n## ROWS\n| row | command |\n")
+    with (repo / "docs" / "40 - DevDocs" / "reports" / "cto-2026-01-02.md").open("a") as f:
+        f.write(R4)
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "prodwrite")
+    return card
+
+
+def test_r1_a_prodwrite_card_with_his_write_ruling_is_authorized(desk):
+    """RED on BASE: REFUSED: kind 'prodwrite' is none of build, check, deploy, shadow."""
+    repo, _, env = desk
+    done = authorize(env, "prodwrite", prodwrite_card(repo))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "AUTHORIZED"
+    assert "PRODWRITE-HUB.md" in done.stdout
+    for rule in ("row", "committed", "at HEAD"):
+        assert f"WRITE RULING 2026-01-02 R2 {rule} · " in done.stdout, (rule, done.stdout)
+
+
+@pytest.mark.parametrize("case", ["desk record", "no row", "approved uncommitted", "absent"])
+def test_r2_a_write_ruling_that_is_not_his_fails_naming_it(desk, case):
+    """Both sides: refused (kind) on BASE, `FAILED: authorization mismatch — WRITE RULING …` after."""
+    repo, _, env = desk
+    if case == "approved uncommitted":
+        reports = repo / "docs" / "40 - DevDocs" / "reports"
+        (reports / "cto-2026-01-02.md").write_text(
+            "| row |\n" + R2.replace("HIS RULING · APPROVED", "HIS RULING · PROPOSED") + R3)
+        git(repo, "add", "-A")
+        git(repo, "commit", "-q", "-m", "proposed")
+    ruling = {"desk record": "2026-01-02 R4", "no row": "2026-01-02 R9", "absent": None}.get(case, "2026-01-02 R2")
+    card = prodwrite_card(repo, ruling)
+    if case == "approved uncommitted":
+        path = repo / "docs" / "40 - DevDocs" / "reports" / "cto-2026-01-02.md"
+        path.write_text(path.read_text().replace("HIS RULING · PROPOSED", "HIS RULING · APPROVED"))
+    done = authorize(env, "prodwrite", card)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr == "", done.stderr  # not a bad call: the kind is known
+    assert last_line(done).startswith("FAILED: authorization mismatch — WRITE RULING"), done.stdout
+    want = {"desk record": "WRITE RULING 2026-01-02 R4 row", "no row": "WRITE RULING 2026-01-02 R9 row",
+            "approved uncommitted": "WRITE RULING 2026-01-02 R2 committed", "absent": "WRITE RULING"}[case]
+    assert last_line(done) == f"FAILED: authorization mismatch — {want}", done.stdout
+
+
+ROWS_BEFORE = [
+    "INSTALLED", "PLACEHOLDER", "CARD COMMITTED", "CARD UNCHANGED",
+    "STANDING LIST 2026-01-01 R1 row", "STANDING LIST 2026-01-01 R1 committed", "STANDING LIST 2026-01-01 R1 at HEAD",
+    "RULING 2026-01-02 R2 row", "RULING 2026-01-02 R2 committed", "RULING 2026-01-02 R2 at HEAD",
+]
+
+
+@pytest.mark.parametrize("kind", ["build", "check", "deploy", "shadow"])
+def test_r3_the_other_kinds_print_the_same_rows_as_before(desk, kind):
+    """Two-sided: green on BASE and after; no WRITE RULING row for any other kind."""
+    repo, card, env = desk
+    (repo / "docs" / "40 - DevDocs" / "prompts" / "SHADOW-HUB.md").write_text(
+        TITLE.replace("BUILD-HUB", "SHADOW-HUB") + "\nbody\n")
+    card.write_text(card_text() + "WRITE RULING: 2026-01-02 R3\n")
+    git(repo, "add", "-A")
+    git(repo, "commit", "-q", "-m", "shadow hub")
+    done = authorize(env, kind, card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    names = [r.split(" · ")[0] for r in done.stdout.splitlines() if " · " in r]
+    assert names == ROWS_BEFORE, names
+
+
 @pytest.mark.parametrize("args", [[], ["build"], ["judge", "x"], ["build", "/no/such/card.md"]])
 def test_a_bad_call_is_refused(desk, args):
     repo, card, env = desk

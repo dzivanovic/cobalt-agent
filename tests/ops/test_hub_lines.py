@@ -84,11 +84,61 @@ def test_each_line_carries_the_two_class_strings_once_and_no_string_they_replace
     assert "sh /Users/cobalt/.claude/ops/" not in line
 
 
-@pytest.mark.parametrize("name", ["BUILD-HUB.md", "CHECK-HUB.md", "DEVFIX-HUB.md"])
+@pytest.mark.parametrize("name", ["BUILD-HUB.md", "CHECK-HUB.md", "DEVFIX-HUB.md", "SHADOW-HUB.md"])
 def test_build_check_and_devfix_deny_every_production_string(name):
     line = hub_line(name)
     assert tools(line, "--disallowedTools").count(PROD_DENY) == 1
     assert [s for s in tools(line, "--allowedTools") if "COBALT_ENV=production" in s] == []
+
+
+# ---- card 392 W7: the production write is the prodwrite seat's; no other line carries one ------
+
+# today's production allow strings of each other launch line (card 392 RECORDS)
+PROD_ALLOW_TODAY = {
+    "BUILD-HUB.md": [],
+    "CHECK-HUB.md": [],
+    "DEVFIX-HUB.md": [],
+    "SHADOW-HUB.md": [],
+    "DEPLOY-HUB.md": [
+        "Bash(COBALT_ENV=production uv run cobalt validate)",
+        "Bash(COBALT_ENV=production uv run cobalt jobs restarts *)",
+        "Bash(COBALT_ENV=production uv run cobalt heartbeat show*)",
+        "Bash(COBALT_ENV=production uv run cobalt backup run*)",
+        "Bash(COBALT_ENV=production uv run cobalt backup status*)",
+    ],
+    "CLOSE-HUB.md": [
+        "Bash(COBALT_ENV=production uv run cobalt validate*)",
+        "Bash(COBALT_ENV=production uv run cobalt heartbeat show*)",
+    ],
+    "BRAIN-HUB.md": [],
+    "OPS-HAND.md": [],
+    "SPIKE-HUB.md": [],
+    "CTO-DESK-WAKEUP.md": [],
+}
+
+
+def launch_line(name: str) -> str:
+    """The `claude --bg ` line of a fixed file; for the wake-up, the backticked span of its `- LAUNCH` line."""
+    if name != "CTO-DESK-WAKEUP.md":
+        return hub_line(name)
+    (launch,) = [ln for ln in (HUBS / name).read_text(encoding="utf-8").splitlines() if ln.startswith("- LAUNCH ")]
+    span = launch.split("`claude --bg ", 1)[1].split("`", 1)[0]
+    return "claude --bg " + span
+
+
+def production_allow(line: str) -> list[str]:
+    return [s for s in tools(line, "--allowedTools") if "COBALT_ENV=production" in s]
+
+
+@pytest.mark.parametrize("name", sorted(PROD_ALLOW_TODAY))
+def test_w7_no_other_line_carries_the_prod_write_token_or_a_new_production_string(name):
+    line = launch_line(name)
+    assert "<prod write>" not in line, name
+    assert production_allow(line) == PROD_ALLOW_TODAY[name], (name, production_allow(line))
+    if not PROD_ALLOW_TODAY[name] and name in ("BUILD-HUB.md", "CHECK-HUB.md", "DEVFIX-HUB.md", "SHADOW-HUB.md"):
+        assert tools(line, "--disallowedTools").count(PROD_DENY) == 1, name
+    if name == "DEPLOY-HUB.md":
+        assert line.count("<prod migrate strings>") == 1
 
 
 @pytest.mark.parametrize("name", sorted(KINDS.values()))
