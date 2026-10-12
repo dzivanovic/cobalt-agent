@@ -2,7 +2,14 @@
 # stage-set.sh "<card>" "<dest folder>" — a check's whole reading set staged in ONE call for a house
 # that reads only inside agy-trial (CHECK-HUB.md `## 1` (1)–(3); card 19 worker-steps S4).
 #
-# The dest must sit under $WT/agy-trial/scratch/ and be empty or absent. Everything is read from
+# The dest must sit under $WT/agy-trial/scratch/ and be empty or absent, or be this JOB's own prior
+# staging (card 413 T1): exactly $SCRATCH/tribunal-bars-0920/<JOB>-check, holding only diff.md,
+# rulings.md, house-*.md, HOUSE-INSTRUCTIONS.md (regular files) and the folder files; no link,
+# fifo, .git or .env anywhere in it; its files/<card name> a version of the card committed on main,
+# whose JOB is this JOB and whose CHECK REPORT is committed on main and is not the card's current
+# CHECK REPORT. That dest is cleared, after every refusal below and before the first write, with
+# `cleared: <dest> (prior check <report>)` on stdout first. Any test missed: `REFUSED: the dest
+# is not empty: <dest> — not cleared: <the test>`, the dest untouched. Everything is read from
 # git, never from the working files:
 #   diff.md                 the heading line `## 1` (1) gives, then `git log -p <BASE>..<TIP> -- .
 #                           ":(exclude)docs"` run in the job worktree $WT/<WORKTREE>
@@ -57,7 +64,7 @@ esac
 card_rel=${card#"$REPO"/}
 
 field() {
-    sed -n "s/^$1: *//p" "$card" | sed -n '1p' | sed 's/[[:space:]]*$//'
+    sed -n "s/^$1: *//p" "${2:-$card}" | sed -n '1p' | sed 's/[[:space:]]*$//'
 }
 for k in WORKTREE BASE TIP REPORT RULINGS; do
     [ -n "$(field "$k")" ] || refuse "the card's $k is empty"
@@ -80,9 +87,48 @@ report_rel=${report#"$job"/}
 git -C "$job" rev-parse --verify -q "$base^{commit}" >/dev/null || refuse "BASE '$base' is not a commit"
 git -C "$job" rev-parse --verify -q "$tip^{commit}" >/dev/null || refuse "TIP '$tip' is not a commit"
 
+# clearable: every test of card 413 T1, read before anything is removed. Sets $prior, or $miss to
+# the first test missed.
+clearable() {
+    miss=""
+    prior=""
+    name=$(field JOB)
+    [ -n "$name" ] || { miss="the card's JOB is empty"; return; }
+    [ "$dest" = "$SCRATCH/tribunal-bars-0920/$name-check" ] || { miss="not this job's check folder $SCRATCH/tribunal-bars-0920/$name-check"; return; }
+    out=$(find "$dest" -mindepth 1 -maxdepth 1 ! -name diff.md ! -name rulings.md ! -name files ! -name HOUSE-INSTRUCTIONS.md ! -name 'house-*.md') || { miss="find failed"; return; }
+    [ -z "$out" ] || { miss="an entry the check did not write: $out"; return; }
+    out=$(find "$dest" -mindepth 1 -maxdepth 1 -name files ! -type d) || { miss="find failed"; return; }
+    [ -z "$out" ] || { miss="files is not a folder"; return; }
+    out=$(find "$dest" -mindepth 1 -maxdepth 1 ! -name files ! -type f) || { miss="find failed"; return; }
+    [ -z "$out" ] || { miss="an entry that is not a regular file: $out"; return; }
+    out=$(find "$dest" ! -type f ! -type d) || { miss="find failed"; return; }
+    [ -z "$out" ] || { miss="an entry neither a file nor a folder: $out"; return; }
+    out=$(find "$dest" \( -iname .git -o -iname .env -o -iname '.env.*' \)) || { miss="find failed"; return; }
+    [ -z "$out" ] || { miss="a .git or .env entry: $out"; return; }
+    copied="$dest/files/$(basename "$card")"
+    [ -f "$copied" ] || { miss="no prior card copy: $copied"; return; }
+    b=$(git -C "$REPO" hash-object --no-filters "$copied") || { miss="git hash-object failed on $copied"; return; }
+    [ -n "$(git -C "$REPO" log --format=%h --find-object="$b" main -- "$card_rel")" ] \
+        || { miss="the prior card copy is no version of the card on main"; return; }
+    [ "$(field JOB "$copied")" = "$name" ] || { miss="the prior card copy's JOB is not $name"; return; }
+    prior=$(field "CHECK REPORT" "$copied")
+    case "$prior" in
+        *..*) miss="the prior CHECK REPORT holds '..': $prior"; return ;;
+        "$REPO/docs/40 - DevDocs/reports/"?*) ;;
+        *) miss="the prior CHECK REPORT is not under $REPO/docs/40 - DevDocs/reports/: $prior"; return ;;
+    esac
+    git -C "$REPO" cat-file -e "main:${prior#"$REPO"/}" 2>/dev/null || { miss="the prior check report is not committed on main: $prior"; return; }
+    [ "$prior" != "$(field "CHECK REPORT")" ] || { miss="the prior check report is this check's own: $prior"; return; }
+}
+
+clear=""
 if [ -e "$dest" ]; then
     [ -d "$dest" ] || refuse "the dest is not a folder: $dest"
-    [ -z "$(ls -A "$dest")" ] || refuse "the dest is not empty: $dest"
+    if [ -n "$(ls -A "$dest")" ]; then
+        clearable
+        [ -z "$miss" ] || refuse "the dest is not empty: $dest — not cleared: $miss"
+        clear=1
+    fi
     existed=1
 else
     existed=""
@@ -105,6 +151,11 @@ fail() {
     exit 1
 }
 
+if [ -n "$clear" ]; then
+    printf 'cleared: %s (prior check %s)\n' "$dest" "$prior"
+    rm -rf -- "$dest"
+    mkdir -- "$dest" || fail "mkdir failed: $dest"
+fi
 mkdir -p "$dest/files/wt" || fail "mkdir failed: $dest"
 
 # copy <git dir> <rev:path> <dest file>: written from git show, proved by hash-object
