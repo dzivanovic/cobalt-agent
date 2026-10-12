@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/db-apply-prod-1012
 WORKTREE: db-apply-prod-1012
 BASE: 8f1d11ed
-TIP:
+TIP: dfcf2097
 REPORT: /Users/cobalt/cobalt-wt/db-apply-prod-1012/docs/40 - DevDocs/reports/db-apply-prod-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/db-apply-prod-check-2026-10-12.md
-HOUSE B:
+HOUSE B: as needed
 RULINGS: 2026-10-12 R1138
 
 ## ROWS
