@@ -70,6 +70,52 @@ def test_t6_both_statements_commit_together(scratch, capsys):
     assert rows() == [(1, 11), (2, 21), (3, 31), (4, 1)]
 
 
+E2E = {
+    # (a) one refused statement
+    "a": (f"DROP TABLE {T}\n", 2, ["REFUSED: statement 1 refused: DropStmt"], None),
+    # (b) a refused statement after an allowed one: nothing is sent
+    "b": (f"{BUMP};\nDROP TABLE {T}\n", 2, ["REFUSED: statement 2 refused: DropStmt"], None),
+    # (c) an allowed file: one transaction, row counts echoed
+    "c": (f"{BUMP};\nINSERT INTO {T} VALUES (4, 1)\n", 0,
+          ["ROWS 1: 3", "ROWS 2: 1", "COMMITTED · statements: 2 · rows: 4"],
+          [(1, 11), (2, 21), (3, 31), (4, 1)]),
+}
+
+
+@requires_db
+@pytest.mark.parametrize("case", list(E2E))
+def test_command_end_to_end_checks_the_whole_file_before_any_statement_runs(scratch, tmp_path, monkeypatch, capsys, case):
+    """A7: `command` through db.connect → the allowlist → apply_statements on cobalt_dev."""
+    import argparse
+    import hashlib
+
+    import cobalt.db_apply as db_apply
+
+    text, code, wants, after = E2E[case]
+    name = "2026-10-12/1-e2e-apply.sql"
+    (tmp_path / "2026-10-12").mkdir()
+    (tmp_path / name).write_bytes(text.encode())
+    monkeypatch.setattr(db_apply, "PROMPTS_ROOT", tmp_path)
+    monkeypatch.setenv("COBALT_ENV", "dev")
+    ns = argparse.Namespace(file=name, sha256=hashlib.sha256(text.encode()).hexdigest(), side="user", prod=False)
+    before = rows()
+    if code:
+        with pytest.raises(SystemExit) as raised:
+            db_apply.command(ns)
+        assert raised.value.code == code
+    else:
+        db_apply.command(ns)
+    out = capsys.readouterr()
+    text_out = out.out + out.err
+    for want in wants:
+        assert want in text_out, (want, text_out)
+    if code:
+        assert "STATEMENT 1/" not in text_out, text_out
+        assert rows() == before
+    else:
+        assert rows() == after
+
+
 @requires_db
 def test_t9_the_server_refuses_two_commands_in_one_prepared_piece(scratch, capsys):
     assert apply([f"{BUMP}; {BUMP}"]) == 1
