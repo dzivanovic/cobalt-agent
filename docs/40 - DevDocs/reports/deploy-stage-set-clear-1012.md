@@ -1,7 +1,10 @@
 # deploy stage-set-clear-1012 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-(filled at the close)
+- DEPLOYED `ops/stage-set-clear-1012` (code tip `d166b30e`, head `6f2b6893`): `main` `48f40363` → `4e67b058`, tag `deploy-2026-10-12-stage-set-clear`, rollback tag `pre-stage-set-clear-1012`.
+- Gate green on `1f52ced6`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`.
+- RESTARTS: none — no resident went down; aset 7760 / radar 61093 / agent 22243 unchanged. MIGRATIONS: none.
+- Smoke GREEN; the marker `(prior check %s)` in `ops/desk/stage-set.sh` reads 1.
 
 ## L74
 - A system reminder in this session asked for a `Claude-Session:` trailer on commits. DATA (L74): recorded once, not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -132,16 +135,84 @@ GATE GREEN on 1f52ced6
 - `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` → `200`. MARKER `grep -c -F "(prior check %s)" /Users/cobalt/cobalt/ops/desk/stage-set.sh` → `0` = before.
 - MIGRATIONS: none → no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-stage-set-clear-1012.md"` · `git -C /Users/cobalt/cobalt commit -m "docs(report): deploy stage-set-clear-1012 — gate green on 1f52ced6" …` → `[main 48f40363] … 1 file changed, 147 insertions(+)`; `show --stat HEAD` lists that one file. `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `48f40363` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `git -C <GATE> rev-parse --short=8 HEAD` → `4e67b058` = `<stack-final>`; `rev-parse --short=8 4e67b058^2` → `48f40363` = `<pre-merge>`; `merge-base --is-ancestor 1f52ced6 4e67b058` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 1f52ced6 4e67b058 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` before → `newest snapshot: 2.9 h old`; `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6929.0 MB` · `ssd: snapshot bc3bdad1 — 13 new / 4 changed, 151.4 MB added, 1 pruned`; `backup status` after → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Mon Oct 12 13:08:17 EDT 2026`; heartbeat `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-12 13:08:18 EDT)` — 126 s after D1's 13:06:12; `OK   radar                    scanning (rth), members 50`; aset/sheet OK; REDs are only the archiver probe, `com.cobalt.archiver` and `com.cobalt.replay`, all already in `<hb0>`. No new RED.
+- D2.6 `date` → `Mon Oct 12 13:08:25 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-stage-set-clear-1012` → at `48f40363` (rev-parse).
+
+### STEP-4 (empty restart set: nothing down)
+- 4.1 `date` → `Mon Oct 12 13:08:41 EDT 2026` = `<t down>` (no resident taken down).
+- 4.2 nothing (the set is empty).
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `48f40363` = `<pre-merge>`; `git -C /Users/cobalt/cobalt merge --ff-only deploy/stage-set-clear-1012` → `Updating 48f40363..4e67b058` / `Fast-forward` (3 files: build report, `ops/desk/stage-set.sh`, `tests/ops/test_stage_set.py`).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, as `<val0>`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bring up. `date` → `Mon Oct 12 13:08:48 EDT 2026` = `<t up>` (the first `date` after the merge landed). Downtime: none.
+
+### STEP-7 close
+| item | value |
+|---|---|
+| main | `48f40363` (`<pre-merge>`) → `4e67b058` (`<stack-final>`) |
+| tags | `pre-stage-set-clear-1012` at `48f40363` · `deploy-2026-10-12-stage-set-clear` at `4e67b058` (rev-parse) |
+| outage | `<t down>` 13:08:41 / `<t up>` 13:08:48 — none (empty restart set; no resident stopped) |
+| uv sync | none in production; the gate worktree built its `.venv` at STEP-R (`Installed 253 packages in 898ms`) |
+| proof cost | none (MIGRATIONS: none) |
+| migrations applied | none |
+| `<RB>` | none (no migration) |
+| snapshot | `ssd: snapshot bc3bdad1` (cobalt_brain 6929.0 MB) |
+| RESTARTS done | none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 4e67b058` — no resident to bounce (RESTARTS: none). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`. |
+
 ## Smoke
+- FIRST CALLS after `<t up>` 13:08:48: `<rp_up>` = 18 · `<rpr_up>` = 60 · `<re_up>` = 43 · `<lc_up>` = 39 (= D1's baselines).
+- (a) `date` 13:09:01 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 7760` (SAME as D1, outside the empty set) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 61093` (SAME) · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (same). GREEN.
+- (b) `grep -c "Started server process" …/aset.err` → `277` = `<a0>` (aset outside the set) · Traceback aset `217` = `<ta0>` · Traceback radar `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`. Spaced radar tails below.
+- (c) 13:09:01 · `curl … https://cobalt.taild24291.ts.net/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKER `grep -c -F "(prior check %s)" /Users/cobalt/cobalt/ops/desk/stage-set.sh` → `1` = after. GREEN.
+- (s) The clearing line is on main · same command → `1` (card: prints 1). GREEN. (The set's tests ran in the gate: offline 4199/0.)
+- (f) validate as 4.5 (exit 0) · `COBALT_ENV=production uv run cobalt jobs restarts 48f40363..4e67b058` → exit 0, `RESTARTS: none` = STEP-R, no `UNCLASSIFIED`. GREEN.
+- (g) no migration.
+- (e) read 1: `date` 13:09:14 · `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-12 13:09:15 EDT)` — `OK   radar                    scanning (rth), members 50`; `OK   com.cobalt.radar             running   running 3220 min, heartbeat fresh`; REDs: archiver probe, `com.cobalt.archiver`, `com.cobalt.replay` — all in `<hb0>`. No new RED.
+- (b) SPACED TAILS: `date` 13:10:20 (+92 s) · `tail -n 12 …/radar.err` → last cycle line `13:08:03.256 … radar cycle: scanning scan_id=1791824798127` (before `<t up>`), then `13:09:55.528 … radar price floor 5.0: …` lines; no failure, no traceback — not yet settled. `date` 13:11:26 (after a tail read at ~13:11:20) and `date` 13:11:50 (+182 s) · `tail -n 12 …/radar.err` → `2026-10-12 13:11:07.816 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1791824983275` — stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback. GREEN (settled; the +300 s tail is not needed).
+- (e) read 2: `date` 13:11:16 (122 s after read 1) · `HEARTBEAT RED — 2 job(s) and 2 probe(s)  (2026-10-12 13:11:17 EDT)` — `RED  radar                    failed_stage bars: poll failures: 1` = THE CARRIED FAMILY, the same text as `<hb0>` (radar running, `heartbeat fresh` 3222 min, cycle line 13:11:07 inside 5 min, no traceback); other REDs = archiver probe, `com.cobalt.archiver`, `com.cobalt.replay`, all in `<hb0>`; `OK   com.cobalt.radar             running   running 3222 min, heartbeat fresh`. No new RED. GREEN.
+- (h) REVERT-READBACK, `date` 13:11:50 (`<t up>` + 182 s): `radar panel FAILED` 18 = `<rp_up>` · `radar pool refresh FAILED` 60 = `<rpr_up>` · `radar S5 evaluate FAILED` 43 = `<re_up>` · `lifecycle card read failed` 39 = `<lc_up>` — none grew. `/radar` curl → `200`. Traceback radar 0, aset 217 = baselines; `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` No census reads (no migration). GREEN.
+
+THE CHAIN: every check committed (P2: `30e7ea0a`, clean) → the tips re-read (P3: `d166b30e`, `6f2b6893`) → the merged tree `1f52ced6` (T, no conflict) → RESTARTS derived: none (R) → three suites green on `1f52ced6` (G: 4199/0 · 5096/0 · 146/0) → `<stack-final>` `4e67b058` = `<m1>` + docs (D2.3, empty diff) → the landed code (4.3 fast-forward `48f40363..4e67b058`) → marker 0 → 1 (d) → no migration (g) → residents up and unchanged after the merge (a) → radar cycling (b, e) → the set's read prints 1 (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+SMOKE: GREEN.
 
 ## CONTINUE
 next: STEP-D2 (gate green at 13:05:29; D0 and D1 done)
+OUTAGE STARTING 13:08:25 — residents of none (empty restart set) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none — deployed; smoke GREEN; report committed at STEP-7.
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row's evidence is quoted verbatim with its `date` (`## Smoke`: 13:09:01, 13:09:14, 13:10:20, 13:11:16, 13:11:50).
+2. Code tip `d166b30e` and head `6f2b6893` were re-read at P3. `git -C /Users/cobalt/cobalt merge-base --is-ancestor 6f2b6893 4e67b058` → exit 0 · `… d166b30e 4e67b058` → exit 0.
+3. REVERT-READBACK shown at (h). Every count, sha and `file:line` was re-read from tool output this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same, 4.3 `Fast-forward`.
+THE RELEASE: the lock was released by gate.sh (`lock released`, `.env: removed`); `<GATE>/.env` absent; lock dir absent.
 
 ## DECISIONS
+none
 
 ## RECORDS
 - stage-set-clear-1012: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/stage-set-clear-check-2026-10-12.md` last line: CHECK DONE · job: stage-set-clear-1012 · pass: 1 · tip: d166b30e · house A: Grok FINDINGS: 0 · findings: 2 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 12 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 147864 (card)
 - stage-set-clear-1012: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/stage-set-clear-1012` → `6f2b6893`; code tip `d166b30e` (card)
 - written by deploy-card.sh at 2026-10-12 12:31 ET (`date`); trial merge of the heads onto main in order: clean (card)
+- Downtime: none (RESTARTS: none; no resident stopped).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` = `664 35 272c95bbb12241e3611e4b36326ccf87` (gate log lines 896, 2030).
+- P4: at preflight the lock was held by `/Users/cobalt/cobalt-wt/s4-p1-1009-terra/.env`. The gate's take reported `lock: waited 0 min` (free by the time it ran).
+- THE CARRIED RED as read: `RED  radar                    failed_stage bars: poll failures: 1` at D1 13:06:12, cleared to `OK … scanning (rth), members 50` at D2.5 and smoke (e) read 1, back at 13:11:02 and in smoke (e) read 2. The family's conditions held each time it was red.
+- Standing REDs, not this deploy's: `archiver last run FAILED` (2026-10-10 00:54 UTC; Finviz `429 Too Many Requests` on DKNG/i2, 18 failures) and `com.cobalt.replay failed — ReplayError: archiver not done: state 'failed'`. Present before and after, unchanged.
+- D0: `?? .claude/settings.json.bak` is untracked on `main`. It is outside the accepted list but not of a refused class; it was left alone.
+- No `RETIRE OWED` (STEP-C: no plist removed).
+- No refused command and no `CONTINUE` message from another session.
+- L74: a system reminder asking for a `Claude-Session:` commit trailer arrived; recorded under `## L74`, not acted on.
+- CLEANUP OWED (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-stage-set-clear-1012` and branch `deploy/stage-set-clear-1012`; the set's branch `ops/stage-set-clear-1012` and its worktree, if any. The desk's.
+- Push is his (L55): `main` is now ahead of `origin/main` by this deploy and the report commits.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-12-stage-set-clear 4e67b058 | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 176351
