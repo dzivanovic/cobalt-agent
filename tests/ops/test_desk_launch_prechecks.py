@@ -826,6 +826,38 @@ def test_h2_a_held_row_missing_one_proof_is_refused(desk, kw, reason):
     assert not desk.gate_left()
 
 
+# ---- card 397 G1: a held id is read from ## RUNS or ## FIXES (R1157 (1)) ----------------------
+
+G1_RUNS = ("- O1 · own · `uv run pytest -q tests/x_test.py` · `1 failed` · **HELD**.\n\n"
+           "## FIXES\n- O1: **HELD, NOT FIXED — `ops/x.sh`**\n")
+
+
+def test_g1_a_held_id_under_fixes_closed_by_its_fixed_line_launches(desk):
+    """RED on BASE: `REFUSED: deploy ops/x-job: the check … lists 0 HELD, NOT FIXED row(s) under
+    ## RUNS (none), its last line says 'held unfixed: 1'`."""
+    held_round(desk, lines=[FIXED_O1], runs_text=G1_RUNS)
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode == 0, done.stderr
+    assert "REFUSED" not in done.stderr, done.stderr
+
+
+def test_g1_a_held_id_under_fixes_with_no_fixed_line_is_refused(desk):
+    """Exit 1 on BASE (`lists 0 … (none)`) and after, for the reason below."""
+    tip, frep = held_round(desk, lines=[], runs_text=G1_RUNS)
+    refused(desk, desk.launch("deploy", str(desk.deploy), dry=True),
+            f"deploy ops/x-job: held id O1 has no FIXED line in the fix report {frep}")
+    assert not desk.gate_left()
+
+
+def test_g1_a_fixed_line_naming_an_absent_test_is_refused(desk):
+    """Exit 1 on BASE (`lists 0 … (none)`) and after, for the reason below."""
+    tip, frep = held_round(desk, lines=[FIXED_O1], runs_text=G1_RUNS,
+                           tests={"tests/x_test.py": "def test_other():\n    pass\n"})
+    refused(desk, desk.launch("deploy", str(desk.deploy), dry=True),
+            f"deploy ops/x-job: FIXED test tests/x_test.py::test_o1 of O1 is absent at {tip}")
+    assert not desk.gate_left()
+
+
 def test_h2_a_held_check_at_the_code_tip_without_a_fix_report_is_refused(desk):
     """RED on BASE: the check's tip is the code tip, so `:973` short-circuits and it launches."""
     held_round(desk, lines=[], fix=False)
