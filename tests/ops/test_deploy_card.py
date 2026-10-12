@@ -618,9 +618,9 @@ CARRIED_O1 = "CARRIED: O1 — tests/x.py::test_o1 — R7"
 def held_round(desk: Desk, *, lines: list[str], tests: dict[str, str] | None = None,
                runs: tuple[str, ...] = ("O1",), held: str = "1", open: str | None = None,
                desk_rows: tuple[str, ...] = (DESK_ROW,),
-               runs_text: str | None = None) -> tuple[str, str, Path]:
+               runs_text: str | None = None, last: str | None = None) -> tuple[str, str, Path]:
     """Alpha's check lists `runs` as `HELD, NOT FIXED` rows under `## RUNS` (or carries
-    `runs_text` there instead, when given) and its last line
+    `runs_text` there instead, when given) and its last line (`last`, when given)
     says `held unfixed: <held>`, `open: <open>` (default `held`), `ready: NO`. A fix round then
     moves alpha's code past the check, writing `tests` (path → text) in the fix commit; its fix
     report, on the branch head only, carries `lines` above its `BUILT ·` line. The check report
@@ -647,7 +647,8 @@ def held_round(desk: Desk, *, lines: list[str], tests: dict[str, str] | None = N
     if runs_text is None:
         runs_text = "".join(HELD_RUN.format(id=i) + "\n" for i in runs)
     check.write_text(f"# check alpha\n\n## RUNS\n{runs_text}\n## OPEN\n- constructed\n\n"
-                     + check_line(desk.tip["alpha"], "NO", held, held if open is None else open))
+                     + (f"{last}\n" if last is not None
+                        else check_line(desk.tip["alpha"], "NO", held, held if open is None else open)))
     desk.card["alpha"].write_text(desk.card["alpha"].read_text().replace(str(desk.check["alpha"]), str(check)))
     desk.check["alpha"] = check
     (desk.reports / "cto-2026-01-02.md").write_text(
@@ -804,6 +805,227 @@ def test_h1_the_rule_is_one_text_in_the_three_scripts():
              for name in ("deploy-card.sh", "desk-launch.sh", "deploy-step0.sh")]
     assert "held_rule() {" in texts[0]
     assert texts[0] == texts[1] == texts[2]
+
+
+# ---- card 397 G1: a held id is read from ## RUNS or ## FIXES (R1157 (1)) ----------------------
+
+HELD_ALONE_RUN = "- {id} · own · `uv run pytest -q tests/x.py` · `1 failed` · **HELD**."
+FIXES_HELD = "- {id}: **HELD, NOT FIXED — `ops/x.sh`**"
+G1_RUNS = HELD_ALONE_RUN.format(id="O1") + "\n\n## FIXES\n" + FIXES_HELD.format(id="O1") + "\n"
+CHECK_386 = "docs/40 - DevDocs/reports/launcher-shadow-check-check-2026-10-11.md"
+
+
+def test_g1_a_held_id_under_fixes_closed_by_its_fixed_line_writes_the_card(tmp_path):
+    """RED on BASE: exit 1, `REFUSED: alpha: the check … lists 0 HELD, NOT FIXED row(s) under
+    ## RUNS (none), its last line says 'held unfixed: 1'`."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[FIXED_O1], runs_text=G1_RUNS)
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+    assert held_cells(desk)[6] == "`held unfixed: 1` and `ready: NO`"
+
+
+def test_g1_the_386_check_lines_and_its_f1_line_write_the_card(tmp_path):
+    """Card 386's check `## RUNS` and `## FIXES` (`:163-173`), its corrected stop line (`:230`,
+    `tip:` set to the fixture's) and its F1 line (the fixture's plain test). RED on BASE: the
+    same `lists 0 … (none)` refusal."""
+    text = git(REPO, "show", f"HEAD:{CHECK_386}").splitlines()
+    assert (text[162], text[171]) == ("## RUNS", "## FIXES")
+    runs_text = "".join(f"{ln}\n" for ln in text[163:173])
+    last = [ln for ln in text if ln.strip()][-1]
+    assert " · tip: a8c18242 · " in last and " · held unfixed: 1 · open: 1 · " in last
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(
+        desk, lines=["FIXED: G3 — tests/x.py::test_o1"], runs_text=runs_text,
+        last=last.replace(" · tip: a8c18242 · ", f" · tip: {desk.tip['alpha']} · "))
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+    assert held_cells(desk)[6] == "`held unfixed: 1` and `ready: NO`"
+
+
+def test_g1_a_held_id_under_fixes_with_no_fixed_line_is_refused(tmp_path):
+    """Exit 1 on BASE (`lists 0 … (none)`) and after, for the reason below."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[], runs_text=G1_RUNS)
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: held id O1 has no FIXED line in the fix report {report}")
+
+
+def test_g1_a_fixed_line_naming_an_absent_test_is_refused(tmp_path):
+    """Exit 1 on BASE (`lists 0 … (none)`) and after, for the reason below."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[FIXED_O1], runs_text=G1_RUNS,
+                                     tests={"tests/x.py": "def test_other():\n    pass\n"})
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: FIXED test tests/x.py::test_o1 of O1 is absent at {fixed}")
+
+
+@pytest.mark.parametrize("held, reason", [
+    pytest.param("1", "alpha: the check {check} lists 2 HELD, NOT FIXED row(s) under ## RUNS and ## FIXES "
+                      "(O1 O1), its last line says 'held unfixed: 1'", id="n 1"),
+    pytest.param("2", "alpha: the check {check} lists a held id twice under ## FIXES (O1 O1)", id="n 2"),
+])
+def test_g1_an_id_twice_under_fixes_is_refused(tmp_path, held, reason):
+    """Exit 1 on BASE (`lists 0 … (none)`) and after, for the reason given."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[FIXED_O1], held=held,
+                                     runs_text=G1_RUNS + FIXES_HELD.format(id="O1") + "\n")
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"), reason.format(check=desk.check["alpha"]))
+
+
+def test_g1_an_id_held_in_both_sections_counts_once(tmp_path):
+    """Pin, green on BASE and after: a `HELD, NOT FIXED` RUNS bullet and its FIXES row are one id."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(
+        desk, lines=[FIXED_O1],
+        runs_text=HELD_RUN.format(id="O1") + "\n\n## FIXES\n" + FIXES_HELD.format(id="O1") + "\n")
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+
+
+# ---- card 397 G2: `open:` past held unfixed is settled by a desk record (R1157 (2), R1160) -------
+
+REJECTED_RUN = "- {id} · own · `uv run pytest -q tests/x.py` · `1 failed` · **REJECTED — row X1 \"constructed\"**"
+G2_RUNS = "".join(f"{r}\n" for r in (HELD_RUN.format(id="O1"), REJECTED_RUN.format(id="O2"),
+                                     REJECTED_RUN.format(id="O3")))
+SETTLED_O2 = "SETTLED: O2 — R7"
+SETTLED_O3 = "SETTLED: O3 — R7"
+
+
+def desk_day(desk: Desk, name: str, *rows: str) -> Path:
+    """One more desk report, `name` under the reports folder, holding `rows`, committed on main."""
+    path = desk.reports / name
+    path.write_text("| # | time | row | status |\n|---|---|---|---|\n" + "".join(f"{r}\n" for r in rows))
+    git(desk.repo, "add", "-A")
+    git(desk.repo, "commit", "-q", "-m", f"desk report {name}")
+    return path
+
+
+def test_g2_rejected_ids_settled_by_a_desk_record_are_not_counted_open(tmp_path):
+    """RED on BASE: `REFUSED: alpha: the check's last line says 'held unfixed: 1' (held ids: O1)
+    but not 'open: 1'`."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, open="3", runs_text=G2_RUNS,
+                                     lines=[FIXED_O1, SETTLED_O2, SETTLED_O3])
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+    assert held_cells(desk)[6] == "`held unfixed: 1` and `ready: NO`"
+
+
+def test_g2_an_unsettled_table_row_is_settled_like_a_rejected_bullet(tmp_path):
+    """RED on BASE: `… but not 'open: 1'`."""
+    desk = Desk(tmp_path)
+    rows = (HELD_RUN.format(id="O1") + "\n" + TABLE_HEAD
+            + "| O2 | own | `tests/x.py::test_o2` | `1 failed` | UNSETTLED — not on the list (constructed) |\n")
+    fixed, head, report = held_round(desk, open="2", runs_text=rows, lines=[FIXED_O1, SETTLED_O2])
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+
+
+def test_g2_an_open_rejected_id_without_a_settled_line_is_refused(tmp_path):
+    """Exit 1 on BASE (`not 'open: 1'`) and after, for the reason below."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, open="3", runs_text=G2_RUNS, lines=[FIXED_O1, SETTLED_O2])
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: 'open: 3' counts 2 open id(s) past held unfixed, 1 settled in the fix report {report}")
+
+
+def test_g2_a_settled_line_naming_a_row_that_is_no_desk_record_is_refused(tmp_path):
+    """Exit 1 on BASE (`not 'open: 1'`) and after, for the reason below."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, open="3", runs_text=G2_RUNS,
+                                     lines=[FIXED_O1, SETTLED_O2, "SETTLED: O3 — R8"])
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: SETTLED O3 names R8, which is no DESK RECORD row of {desk.reports / 'cto-2026-01-02.md'}")
+
+
+def test_g2_a_settled_line_naming_a_held_id_is_refused(tmp_path):
+    """Exit 1 on BASE (`not 'open: 1'`) and after, for the reason below."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, open="3", runs_text=G2_RUNS,
+                                     lines=[FIXED_O1, SETTLED_O2, "SETTLED: O1 — R7"])
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: the fix report {report} settles O1, which is a held id of the check {desk.check['alpha']}")
+
+
+@pytest.mark.parametrize("kw, reason", [
+    pytest.param({"open": "3", "lines": [FIXED_O1, SETTLED_O2, SETTLED_O3, SETTLED_O3]},
+                 "alpha: SETTLED O3 has 2 SETTLED lines in the fix report {report}", id="two lines for one id"),
+    pytest.param({"open": "2", "lines": [FIXED_O1, SETTLED_O2, "SETTLED: O4 — R7"],
+                  "runs_text": G2_RUNS + "- O4 · own · `x` · `1 passed` · **NOT HELD**\n"},
+                 "alpha: the fix report {report} settles O4, which is no REJECTED or UNSETTLED id under "
+                 "## RUNS of the check {check}", id="a NOT HELD id"),
+    pytest.param({"open": "2", "lines": [FIXED_O1, SETTLED_O2, "SETTLED: O9 — R7"]},
+                 "alpha: the fix report {report} settles O9, which is no REJECTED or UNSETTLED id under "
+                 "## RUNS of the check {check}", id="an id the check does not list"),
+    pytest.param({"open": "1", "lines": [FIXED_O1, SETTLED_O2]},
+                 "alpha: 'open: 1' counts 0 open id(s) past held unfixed, 1 settled in the fix report {report}",
+                 id="a settled line with open equal to n"),
+    pytest.param({"open": "4", "lines": [FIXED_O1, SETTLED_O2, SETTLED_O3]},
+                 "alpha: 'open: 4' counts 3 open id(s) past held unfixed, 2 settled in the fix report {report}",
+                 id="fewer settled than m - n"),
+])
+def test_g2_a_settled_line_missing_one_proof_is_refused(tmp_path, kw, reason):
+    """Check ask X2. Exit 1 on BASE (`not 'open: 1'`, or `open: 1` with no SETTLED read at all
+    for `a settled line with open equal to n`) and after, for the reason given."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, **{"runs_text": G2_RUNS, **kw})
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 reason.format(report=report, check=desk.check["alpha"]))
+
+
+def test_g2_open_below_held_unfixed_keeps_todays_text(tmp_path):
+    """Pin, green on BASE and after: `open: 0` against `held unfixed: 1`."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, open="0", lines=[FIXED_O1])
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 "alpha: the check's last line says 'held unfixed: 1' (held ids: O1) but not 'open: 1'")
+
+
+# ---- R1160 (the brain row): R<k> is found in a desk report dated on or after the check ----------
+
+def test_g2_a_settled_row_recorded_the_next_day_is_accepted(tmp_path):
+    """RED on BASE: `… but not 'open: 1'`."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, open="3", runs_text=G2_RUNS, desk_rows=(),
+                                     lines=[FIXED_O1, SETTLED_O2, SETTLED_O3])
+    desk_day(desk, "cto-2026-01-03.md", DESK_ROW)
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+
+
+def test_g2_a_carried_row_recorded_the_next_day_is_accepted(tmp_path):
+    """RED on BASE: `REFUSED: alpha: CARRIED O1 names R7, which is no DESK RECORD row of
+    …/cto-2026-01-02.md`."""
+    desk = Desk(tmp_path)
+    fixed, head, report = held_round(desk, lines=[CARRIED_O1], tests={"tests/x.py": STRICT_TEST}, desk_rows=())
+    desk_day(desk, "cto-2026-01-03.md", DESK_ROW)
+    done = desk.run("--fix-report", f"alpha={report}")
+    assert done.returncode == 0, done.stderr
+
+
+@pytest.mark.parametrize("days, lines", [
+    pytest.param((("cto-2026-01-01.md", DESK_ROW),), [CARRIED_O1], id="CARRIED, the day before"),
+    pytest.param((("cto-2026-01-03-words.md", DESK_ROW),), [CARRIED_O1], id="CARRIED, a words file"),
+    pytest.param((("cto-2026-01-03.md", "| R7 | 09:00 ET | a note on O1 (constructed). | APPLIED |"),
+                  ("cto-2026-01-02.md", DESK_ROW)), [CARRIED_O1], id="CARRIED, newest first"),
+    pytest.param((), [CARRIED_O1], id="CARRIED, in no desk report"),
+    pytest.param((("cto-2026-01-01.md", DESK_ROW),), [FIXED_O1, SETTLED_O2, SETTLED_O3],
+                 id="SETTLED, the day before"),
+    pytest.param((), [FIXED_O1, SETTLED_O2, SETTLED_O3], id="SETTLED, in no desk report"),
+])
+def test_g2_a_row_outside_the_days_on_or_after_the_check_is_refused(tmp_path, days, lines):
+    """Exit 1 on BASE and after: R7 is no DESK RECORD row found on or after the check's day."""
+    desk = Desk(tmp_path)
+    settled = lines[0] == FIXED_O1
+    fixed, head, report = held_round(
+        desk, lines=lines, desk_rows=(),
+        **({"open": "3", "runs_text": G2_RUNS} if settled else {"tests": {"tests/x.py": STRICT_TEST}}))
+    for name, row in days:
+        desk_day(desk, name, row)
+    who = "SETTLED O2" if settled else "CARRIED O1"
+    _fix_refused(desk, ("--fix-report", f"alpha={report}"),
+                 f"alpha: {who} names R7, which is no DESK RECORD row of {desk.reports / 'cto-2026-01-02.md'}")
 
 
 # ---- card 361 T1: the held-id read takes a table row marked **HELD** (R1084) -------------------

@@ -836,6 +836,36 @@ def test_h3_a_held_row_missing_one_proof_fails_p2(desk, kw, reason):
         in last_line(done), done.stdout
 
 
+# ---- card 397 G1: a held id is read from ## RUNS or ## FIXES (R1157 (1)) ----------------------
+
+G1_RUNS = ("- O1 · own · `uv run pytest -q tests/x_test.py` · `1 failed` · **HELD**.\n\n"
+           "## FIXES\n- O1: **HELD, NOT FIXED — `ops/x.sh`**\n")
+
+
+def test_g1_a_held_id_under_fixes_closed_by_its_fixed_line_passes_p2(desk):
+    """RED on BASE: `FAILED STEP-0: P2 check 1 — ops/alpha: the check … lists 0 HELD, NOT FIXED
+    row(s) under ## RUNS (none), its last line says 'held unfixed: 1'`."""
+    held_round(desk, lines=[FIXED_O1], runs_text=G1_RUNS)
+    done = desk.run()
+    assert done.returncode == 0, done.stdout
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+
+
+@pytest.mark.parametrize("kw, reason", [
+    pytest.param({"lines": []}, "ops/alpha: held id O1 has no FIXED line in the fix report {frep}",
+                 id="no FIXED line"),
+    pytest.param({"lines": [FIXED_O1], "tests": {"tests/x_test.py": "def test_other():\n    pass\n"}},
+                 "ops/alpha: FIXED test tests/x_test.py::test_o1 of O1 is absent at {tip}", id="test absent"),
+])
+def test_g1_a_held_id_under_fixes_missing_one_proof_fails_p2(desk, kw, reason):
+    """Exit 1 on BASE (`lists 0 … (none)`) and after, for the reason given."""
+    frep = held_round(desk, runs_text=G1_RUNS, **kw)
+    done = desk.run()
+    assert done.returncode == 1, done.stdout
+    assert last_line(done).startswith("FAILED STEP-0: P2 check 1 — "), done.stdout
+    assert reason.format(frep=frep, tip=desk.tip["alpha"]) in last_line(done), done.stdout
+
+
 def test_h3_a_held_check_at_the_code_tip_without_a_fix_report_fails_p2(desk):
     """RED on BASE: P2 fails on `lacks 'held unfixed: 0'` (the clean pair prefixed to every row,
     `:340`), never naming the id."""
