@@ -4,7 +4,7 @@ CLASS: K3, K5
 INSTALL: none
 BRANCH: ops/prodwrite-seat-1012b
 WORKTREE: prodwrite-seat-1012b
-BASE: 86b9daa5
+BASE: 7744ece9
 TIP: 89fd13c5
 REPORT: /Users/cobalt/cobalt-wt/prodwrite-seat-1012b/docs/40 - DevDocs/reports/prodwrite-seat-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/prodwrite-seat-check-2026-10-12.md
