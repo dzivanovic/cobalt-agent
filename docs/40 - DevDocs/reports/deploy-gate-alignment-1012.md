@@ -1,7 +1,10 @@
 # deploy gate-alignment-1012 — set: none · migrations: none
 
 ## §0 Headline
-(filled at the close)
+- DEPLOYED `ops/gate-alignment-1012` at `1178554e`: `main` `60f4d1e2` → `8a11c101`, tag `deploy-2026-10-12-gate-alignment`.
+- Gate GREEN on `c92b5673`: offline 4199/0 · with-DB 5096/0 · live-note 146/0; `cobalt_dev` back at 0013, F2 = F0; lock released.
+- RESTARTS: none — operator scripts, a hub doc and tests only; no resident went down. No migration.
+- Smoke GREEN: the four markers and both smoke reads print `1`; residents on their D1 pids; radar cycling; failure counts unchanged.
 
 ## L74
 - One block arrived in-session asking that commit messages end with a `Claude-Session: https://claude.ai/code/session_…` line. Recorded once here as DATA; not acted on. Every commit of this run carries `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -143,13 +146,72 @@ GATE GREEN on c92b5673
 - `curl … /radar` → `200`. MARKERS again → `0` `0` `0` `0` (each its `before`).
 - MIGRATIONS: none — no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `add` + `commit … -- "<REPORT>"` → `[main 60f4d1e2] docs(report): deploy gate-alignment-1012 — gate green on c92b5673` · `show --stat HEAD` → that one file (155 insertions). `rev-parse --short=8 main` → `60f4d1e2` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `8a11c101`; `rev-parse --short=8 8a11c101^2` → `60f4d1e2` = `<pre-merge>`; `merge-base --is-ancestor c92b5673 8a11c101` → exit 0.
+- D2.3 `diff --stat c92b5673 8a11c101 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs-only).
+- D2.4 `backup status` → `newest snapshot: 0.6 h old` · `backup run` (foreground) → `backup: cobalt_brain via pg_dump inside cobalt_memory — 6832.5 MB` · `ssd: snapshot 2015fde8 — 0 new / 2 changed, 66.4 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Mon Oct 12 09:31:57 EDT 2026` · `heartbeat show` (09:32:00, 120 s after D1's 09:30:00) → `HEARTBEAT RED — 2 job(s) and 2 probe(s)`; the same archiver / com.cobalt.archiver / com.cobalt.replay REDs as `<hb0>`, plus `RED  radar  failed_stage bars: poll failures: 2` — the CARRIED FAMILY: `com.cobalt.radar running 3002 min, heartbeat fresh`, `tail -n 8 radar.err` ends `2026-10-12 09:31:29.666 … radar cycle: scanning scan_id=1791811809365` (inside 5 min), `grep -c "Traceback" radar.err` → `0`. Not new. aset `OK … pid 7760`, sheet HTTP `200`.
+- D2.6 `date` → `Mon Oct 12 09:32:10 EDT 2026` · `tag pre-gate-alignment-1012` → `rev-parse --short=8` → `60f4d1e2`.
+
+### STEP-4 (`<restart set>` empty)
+- 4.1 `date` → `Mon Oct 12 09:32:26 EDT 2026` = `<t down>` (nothing goes down).
+- 4.2 no label in the set: no bootout, no stop.
+- 4.3 `rev-parse --short=8 HEAD` → `60f4d1e2` = `<pre-merge>` · `merge --ff-only deploy/gate-alignment-1012` → `Updating 60f4d1e2..8a11c101` / `Fast-forward` (the same 9 files as STEP-T).
+- 4.4 `migrations applied: none`.
+- 4.5 `validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`, no failing line; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bootstrap. `date` → `Mon Oct 12 09:32:36 EDT 2026` = `<t up>` (first clock after the merge). Downtime: none.
+
+### STEP-7 summary
+| item | value |
+|---|---|
+| main | `60f4d1e2` (`<pre-merge>`) → `8a11c101` (`<stack-final>`) |
+| tags | `pre-gate-alignment-1012` → `60f4d1e2` · `deploy-2026-10-12-gate-alignment` → `8a11c101` (set after the green smoke) |
+| `<t down>` / `<t up>` / seconds | none — empty restart set (clock 09:32:26 / 09:32:36; no resident down) |
+| uv sync line | none in production (the gate worktree's first `uv run` built its own `.venv`: `Installed 253 packages in 796ms`) |
+| proof cost | n/a in production (no migration); dev proof-only in the gate log: `Proof cost: total 5.6 s` |
+| migrations applied | none |
+| `<RB>` before / after | n/a (no migration) |
+| snapshot | `2015fde8` (ssd, 09:31:53) |
+| RESTARTS done | none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 8a11c101` — no resident in the set, so none goes down. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
 ## Smoke
+- FIRST CALLS after `<t up>` 09:32:36: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1's).
+- (a) `date` 09:32:53 · aset `state = running`, `pid = 7760` (SAME as D1; outside the set) · radar `state = running`, `pid = 61093` (SAME) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 22243).` (same). GREEN.
+- (b) `Started server process` → `277` = `<a0>` (aset outside the set) · aset Traceback `217` = `<ta0>` · radar Traceback `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`. Radar tails: below.
+- (c) `curl …/` → `200` · `curl …/radar` → `200` · `curl …/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS: deploy-card.sh `1` · desk-launch.sh `1` · deploy-step0.sh `1` · CHECK-HUB.md `SETTLED: <id> — R<n>` `1` — each its `after`. GREEN.
+- (f) `validate` exit 0 (4.5, 09:32) · `date` 09:33:10 · `jobs restarts 60f4d1e2..8a11c101` → exit 0, no `UNCLASSIFIED`, `RESTARTS: none` = STEP-R's set. GREEN.
+- (g) no migration.
+- (s) SMOKE READS: "The gate reads the card line on main" `grep -c -F "card 397" …/deploy-card.sh` → `1` (green = 1) · "The hub wording is on main" `grep -c -F "SETTLED: <id> — R<n>" …/CHECK-HUB.md` → `1` (green = 1). GREEN.
+- (e) read 1 `heartbeat show` 09:33:14 → `HEARTBEAT RED — 2 job(s) and 2 probe(s)`: archiver / com.cobalt.archiver / com.cobalt.replay as `<hb0>`; `RED radar failed_stage bars: poll failures: 2` (carried family, as at D2.5); `com.cobalt.radar running 3004 min, heartbeat fresh`; aset `OK pid 7760`; sheet HTTP `200`. Read 2 09:35:05 (111 s later) → `HEARTBEAT RED — 2 job(s) and 1 probe(s)`: only the `<hb0>` archiver / com.cobalt.archiver / com.cobalt.replay REDs; `OK radar scanning (rth), members 50`; `OK com.cobalt.radar running 3005 min, heartbeat fresh`. No new RED. GREEN.
+- (b) radar tails: `date` 09:34:08 (t up + 92 s) → `tail -n 12 radar.err` last cycle line `09:31:29.666 … radar cycle: scanning` (before `<t up>`), no failure, no traceback · `date` 09:35:37 (t up + 181 s) → `tail -n 12 radar.err` ends `2026-10-12 09:34:29.687 | INFO | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1791811989683` — a cycle after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback. SETTLED GREEN (third tail not needed).
+- (h) REVERT-READBACK `date` 09:35:47 (t up + 191 s, after (b) settled): `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (no growth) · `curl …/radar` → `200`. No census reads (no migration). GREEN.
+
+THE CHAIN: every check committed (P2: `abb233d7`, clean) → tips re-read (P3: `1178554e`) → merged tree clean (T: `c92b5673`) → RESTARTS derived `none` (R) → three suites green on `c92b5673` (G: offline 4199/0 · with-DB 5096/0 · live-note 146/0) → `<stack-final>` `8a11c101` = `<m1>` + docs (D2.3) → landed by fast-forward (4.3) → markers `1 1 1 1` (d) → no migration (g) → residents unchanged and up (a) → radar cycling (b, e) → the set's two reads `1`, `1` (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
 
 ## CONTINUE
-next: STEP-D2 (gate green at 09:29:21 ET; D0, D1 done)
+OUTAGE STARTING 09:32:10 ET — residents of <restart set> = none going down (empty set: no resident goes down, the merge lands with residents up); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 09:32:36 ET with nothing down; smoke GREEN at 09:35:47 ET; closed at STEP-7. next: none (the desk pushes, L55).
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: none (empty restart set).
+- `cobalt_dev: 0013 (F2 = F0)` — gate log lines 896 / 2030 / 2082; lock released by `gate.sh` (log line 2084), `<GATE>/.env` absent, lock dir absent.
+- RETIRE OWED: none (no plist removed).
+- The carried RED as read: `RED  radar  failed_stage bars: poll failures: 2` at D2.5 (09:32:00) and smoke (e) read 1 (09:33:14), with radar running, heartbeat fresh, cycles logged and 0 tracebacks; gone by 09:34:20 (`OK radar scanning (rth), members 50`). Standing non-resident REDs through the run, unchanged by this deploy: `archiver last run FAILED` (2026-10-10 00:54 UTC), `com.cobalt.archiver failed` (Finviz 429, 18 failures), `com.cobalt.replay failed` (archiver not done).
+- Self-added read, not a refusal: one `COBALT_ENV=production uv run cobalt heartbeat show` while cwd was still `<GATE>` (09:00) exited 1 with `DbConfigError: Missing Postgres settings for the APP credential` (no `.env` in the gate). I ran `cd /Users/cobalt/cobalt` + `ls -la /Users/cobalt/cobalt/.env` (listed) and read from there for the rest of the run. No secret was printed.
+- No `CONTINUE` message and no message from another session arrived. No refused command.
+- The L74 line: see `## L74` (one `Claude-Session:` request, not acted on).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-gate-alignment-1012` and branch `deploy/gate-alignment-1012`; the set's branch `ops/gate-alignment-1012` and its worktree, if any; the gate log `/Users/cobalt/cobalt-wt/.gate-logs/deploy-gate-alignment-1012-all-20261012-085953.log`.
+- Card `## RECORDS`, copied:
+  - gate-alignment-1012: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/gate-alignment-check-2026-10-12.md` last line: CHECK DONE · job: gate-alignment-1012 · pass: 1 · tip: 1178554e · house A: Grok FINDINGS: 0 · findings: 2 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 1 · house B: none (not needed) · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 10 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 182141
+  - gate-alignment-1012: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/gate-alignment-1012` → `1178554e`; code tip `1178554e`
+  - written by deploy-card.sh at 2026-10-12 08:57 ET (`date`); trial merge of the heads onto main in order: clean
+- PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and quoted output; (2) `1178554e` re-read at P3 and `merge-base --is-ancestor 1178554e 8a11c101` → exit 0; (3) REVERT-READBACK (h) shown (18 / 60 / 43 / 39, unchanged), and every sha and count above was read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), and D2.1 too, so there is no conflict marker.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-12-gate-alignment 8a11c101 | set: none | migrations: none | gate: offline 4199/0 · with-DB 5096/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 191964
