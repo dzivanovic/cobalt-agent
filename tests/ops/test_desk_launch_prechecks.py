@@ -1202,6 +1202,55 @@ def test_f5_a_write_string_allowed_without_his_row_is_refused_as_today(desk, tmp
         assert "REFUSED: write string 'git add' " in done.stderr, done.stderr
 
 
+# ---- card 392 W6: no prompt line carries a production write, whatever RULINGS says (K3) ------
+
+PROD_REFUSAL = "a production string on a prompt line: production writes are the prodwrite seat's (K3)"
+
+
+def with_allow(extra: str) -> str:
+    return SURVEY_LINE.replace("\"Bash(ls *)\" ", f"\"Bash(ls *)\" \"{extra}\" ", 1)
+
+
+def test_f6_a_ruled_prompt_allowing_a_production_write_is_refused(desk, tmp_path):
+    """RED on BASE: it launches (F5 passes a ruled COBALT_ENV= string)."""
+    line = with_allow("Bash(COBALT_ENV=production uv run cobalt settings load *)")
+    refused(desk, launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)), PROD_REFUSAL)
+
+
+def test_f7_a_ruled_prompt_allowing_the_production_read_launches(desk, tmp_path):
+    """Two-sided: green on BASE and after."""
+    line = with_allow("Bash(COBALT_ENV=production uv run cobalt db query *)")
+    done = launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.repo)]
+
+
+@pytest.mark.parametrize("extra", [
+    'Bash(COBALT_ENV="production" uv run cobalt settings load *)',
+    'Bash(COBALT_ENV=${{x:-production}} uv run cobalt settings load *)',
+])
+def test_o2_a_production_write_spelled_for_eval_is_refused(desk, tmp_path, extra):
+    line = with_allow(extra)
+    refused(desk, launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)), PROD_REFUSAL)
+
+
+@pytest.mark.parametrize("extra", ["Bash(COBALT_ENV=prod*)", "Bash(COBALT_ENV=*)"])
+def test_check_o1_a_glob_reaching_production_on_a_ruled_prompt_is_refused(desk, tmp_path, extra):
+    line = with_allow(extra)
+    refused(desk, launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)), PROD_REFUSAL)
+
+
+def test_f6_a_ruled_allow_string_wider_than_the_exact_production_read_is_refused(desk, tmp_path):
+    line = with_allow(
+        "Bash(COBALT_ENV=production uv run cobalt db query *); uv run cobalt settings load --apply x.yaml"
+    )
+    refused(
+        desk,
+        launch_prompt(desk, tmp_path, survey_prompt(desk, "2026-01-02 R1", line)),
+        PROD_REFUSAL,
+    )
+
+
 def test_f5_a_ruled_write_line_still_runs_auto_or_plan_only(desk, tmp_path):
     """His row widens the write strings only; the permission-mode refusal stands."""
     line = SURVEY_LINE.replace("--permission-mode auto", "--permission-mode dontAsk")

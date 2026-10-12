@@ -17,7 +17,12 @@
 # shadow (its CARD read as a build's, its `MODEL:` the row of `## BUILDERS` whose one command passes
 # G7 while the card's worktree holds no .env; G5: SHADOW-INSTRUCTIONS.md and its REPORT only), and
 # `Read '<…>/SPIKE-HUB.md'` kind spike (G5: its scratch dir only; no G4) (card 2026-10-11 324 S3,
-# S7, P3). Otherwise the cwd: the repo
+# S7, P3). `Read '<repo>/docs/40 - DevDocs/prompts/PRODWRITE-HUB.md'` names kind prodwrite whatever
+# the cwd, and a copy of that name elsewhere names nothing (card 2026-10-12 392 W3, his R1138, K3;
+# check O1): G2 passes it, byte for byte, its CARD's ONE `## ROWS` command, `backup run`,
+# `backup status` and the one db query read, and no other production command (a card with two
+# write rows or none: the read only); G5 its card's REPORT only; G7 binds it as a worker. Every
+# other kind's G2 is as before. Otherwise the cwd: the repo
 # with CTO-DESK-WAKEUP.md = desk, the repo with a prompt under prompts/20*/ = brain, a worktree
 # under the worktree root = worker; anything else is UNKNOWN, and an unknown seat meets only the
 # kind-free rules G1, G3, G6.
@@ -94,14 +99,23 @@ HUBS = {
     "DEVFIX-HUB.md": "devfix",
     "SHADOW-HUB.md": "shadow",
     "SPIKE-HUB.md": "spike",
+    "PRODWRITE-HUB.md": "prodwrite",
 }
-WORKERS = ("build", "check", "devfix", "deploy", "worker", "shadow", "spike")
-GIT_SHAPED = ("build", "check", "devfix", "worker", "shadow")
+WORKERS = ("build", "check", "devfix", "deploy", "worker", "shadow", "spike", "prodwrite")
+# prodwrite (check O3): its `git -C … diff*`/`log*` strings write no file through `--output`
+GIT_SHAPED = ("build", "check", "devfix", "worker", "shadow", "prodwrite")
 # card 2026-10-11 324: the shadow gate seat (S3, S7) and the spike seat (P3)
 SHADOW = "shadow"
 SPIKE = "spike"
 SPIKE_DIR = "sdk-spike-1010"
 SHADOW_FILE = "SHADOW-INSTRUCTIONS.md"
+# card 2026-10-12 392 W3 (his R1138, K3): the production-write seat and the two backup strings its
+# hub lists; G2 passes it these, its card's ONE command and the one db query read, nothing else
+PRODWRITE = "prodwrite"
+PRODWRITE_BACKUP = (
+    "COBALT_ENV=production uv run cobalt backup run",
+    "COBALT_ENV=production uv run cobalt backup status",
+)
 WT_TOKEN = "/Users/cobalt/cobalt-wt/<worktree>"
 PASS_PROMPT = '"<pass prompt>"'
 # the one double-quoted prompt a builder call carries: nothing in it that bash expands or ends early
@@ -739,7 +753,7 @@ def first_message(transcript):
 
 
 def read_card(path):
-    card = {"job": None, "worktree": None, "report": None, "check report": None, "files": []}
+    card = {"job": None, "worktree": None, "report": None, "check report": None, "files": [], "command": None}
     try:
         with open(path, encoding="utf-8") as f:
             text = f.read()
@@ -754,12 +768,20 @@ def read_card(path):
         if m and os.path.isabs(m.group(1)):
             card[key] = os.path.normpath(m.group(1))
     m = re.search(r"^## ROWS[ \t]*$(.*?)(?=^## |\Z)", text, re.M | re.S)
+    writes = []
     for line in (m.group(1) if m else "").splitlines():
         if not line.startswith("|"):
             continue
         cells = [c.strip() for c in re.split(r"(?<!\\)\|", line.strip().strip("|"))]
         if cells:
             card["files"] += re.findall(r"`([^`]+)`", cells[-1])
+        # card 392 W3: a prodwrite card's data rows (the header and `---` lines skipped); every
+        # row counts, of any width (check A1: a short second row is still a second row)
+        if not re.fullmatch(r"[\s:|-]*", line) and not (len(cells) == 7 and cells[1] == "command"):
+            writes.append(cells[1].replace("`", "") if len(cells) == 7 else "")
+    # the ONE write row's command (a row of 7 cells); two rows or none name no command
+    if len(writes) == 1 and writes[0]:
+        card["command"] = writes[0]
     return card
 
 
@@ -776,7 +798,10 @@ def seat(event):
     hub = os.path.basename(prompt)
     in_repo = bool(cwd) and under(cwd, REPO_ROOT)
     wt = worktree_of(cwd)
-    if hub in HUBS:
+    # check O1: the production-write seat is named by the repo's own hub only, never by a copy
+    # elsewhere with its name
+    pw_hub = hub == "PRODWRITE-HUB.md" and os.path.normpath(prompt) != os.path.join(REPO_ROOT, DOCS, "prompts", hub)
+    if hub in HUBS and not pw_hub:
         kind = HUBS[hub]
     elif hub == OPS_HAND_FILE:
         kind = OPS_HAND  # card 231 H1: the first message's Read names it, whatever the cwd
@@ -1071,7 +1096,14 @@ def bash_rules(command, s):
     # check O1, A2, B2: G2 also reads the words bash makes (a `#` inside a word starts no comment),
     # with each $"…" read as "…" (A7, B1)
     prod_segs = segs + [bash_words(unlocale(x)) for x in segments(command, cuts)]
-    if kind is not None and kind != "deploy" and (PROD.search(command) or any(prod_word(ws) for ws in prod_segs)) and not prod_read(command):
+    if kind == PRODWRITE:
+        # card 392 W3: the seat's production commands are, byte for byte, its card's ONE command
+        # (when the card names exactly one), the two backup strings while it does, or the one read
+        write = s["card"]["command"]
+        named = (write,) + PRODWRITE_BACKUP if write else ()
+        if (PROD.search(command) or any(prod_word(ws) for ws in prod_segs)) and command not in named and not prod_read(command):
+            return "G2", ROUTE["G2"]
+    elif kind is not None and kind != "deploy" and (PROD.search(command) or any(prod_word(ws) for ws in prod_segs)) and not prod_read(command):
         return "G2", ROUTE["G2"]
     if kind in GIT_SHAPED and any(git_problem(ws) for ws in segs):
         return "G4", ROUTE["G4"]
@@ -1246,6 +1278,13 @@ def g5(s, path):
     if kind == SPIKE:
         # card 324 P3: the spike seat writes only its scratch dir
         return None if under(path, os.path.join(WT_ROOT, SPIKE_DIR)) and path != os.path.join(WT_ROOT, SPIKE_DIR) else ROUTE["G5 fence"]
+    if kind == PRODWRITE:
+        # card 392 W3: the production-write seat writes its card's REPORT and nothing else
+        if os.path.islink(path):
+            return ROUTE["G5 fence"]  # a link named as the report writes where it points
+        if s["card"]["report"] and path == s["card"]["report"]:
+            return None
+        return ROUTE["G5 fence"]
     if kind in WORKERS:
         if under(path, VAULT_ROOT):
             return ROUTE["G5 fence"]

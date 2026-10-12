@@ -231,3 +231,22 @@ Deny: `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)` (standing). `desk-la
 | `Bash(launchctl print *)` | the desk's `launchctl print gui/<uid>/…` reads | read only | writes nothing |
 
 Deny (17): `AskUserQuestion`, `EnterWorktree`, `Write`, `Edit`, `NotebookEdit`, `Agent`, `Monitor`, `CronCreate`, `RemoteTrigger`, `ScheduleWakeup`, `Skill`, `WebFetch`, `mcp__*`, `Artifact*`, `Bash(git *)`, `Bash(claude *)`, `Bash(sudo *)`. The `kill` and `launchctl kickstart` of its class are no allow string: each is the desk's command, typed whole, on his tap (G12 admits only the class; his tap is "Yes" only, D4).
+
+## 9. `PRODWRITE-HUB.md` — THE PRODUCTION-WRITE SEAT, ONE approved write per card (card `prompts/2026-10-12/392-prodwrite-seat-card.md`; approved as class K3 + K5, his 2026-10-12 R1138, `hands-off-answer-2026-10-12.md`): 16 allow, 5 deny · `--model claude-opus-5-5` · `--permission-mode dontAsk` · `--remote-control prodwrite-<job> --name prodwrite-<job>` · launched from `/Users/cobalt/cobalt` by `desk-launch.sh prodwrite "<card>"` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt`
+
+NEW as a launch line, inside K3 (an approved production write, by one dedicated seat, backup first, report after) and K5 (its allow and deny strings, guard rule and launcher refusals, by card): no further word of his. The ONE `<prod write>` string is filled by `desk-launch.sh` from the card's ONE `## ROWS` row, after every refusal of the kind (card 392 W2), and is the only production write any line carries; the guard's kind `prodwrite` (`bare-guard.py` G2, G5) passes that command byte for byte and nothing wider. No class (a) string, no git write, no `launchctl`, no `.env` string.
+
+| string | for | can touch | never touches |
+|---|---|---|---|
+| `Read` · `Grep` | the card, the laws, the hub | read only | writes nothing |
+| `Edit(//Users/cobalt/cobalt/docs/40 - DevDocs/reports/prodwrite-*)` | CLASS (c): the Edit and Write tools on this kind's own report (the desk commits it) | `reports/prodwrite-*` files only (the guard: its card's `REPORT` only) | code, configs, the prompts, `cto-<date>.md`, a worktree, the vault |
+| `Bash(sh /Users/cobalt/cobalt/ops/desk/authorize.sh prodwrite *)` | step (0): the AUTHORIZATION table, the `WRITE RULING` row among it | read only | — |
+| `Bash(sh /Users/cobalt/cobalt/ops/desk/desk-context.sh *)` | the stop line's token figure | read only | — |
+| `Bash(git -C /Users/cobalt/cobalt log*)` · `Bash(git -C /Users/cobalt/cobalt diff*)` · `Bash(git -C /Users/cobalt/cobalt rev-parse*)` | step (1): the code that runs is `BASE`'s | read only | — |
+| `Bash(ls *)` · `Bash(grep *)` · `Bash(tail *)` · `Bash(date*)` | reads, the clock | read only | never `.env`'s contents |
+| `Bash(COBALT_ENV=production uv run cobalt backup status)` | step (2): a database dump armed | read only | — |
+| `Bash(COBALT_ENV=production uv run cobalt backup run)` | step (2): the snapshot before the write | writes a backup snapshot of production | production's data |
+| `Bash(COBALT_ENV=production uv run cobalt db query *)` | steps (3) and (5): the card's `count read`, before and after | read only (`BEGIN READ ONLY`, `src/cobalt/db_query.py`) | writes nothing |
+| `<prod write>` → `"Bash(<the card's command>)"` | step (4): THE ONE WRITE, typed once | what that `cobalt` verb writes, in production | any other command; a `db migrate`, `db query`, `db dev-rebuild` or `backup` verb (refused at launch) |
+
+Deny (5): `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`, and `Bash(COBALT_ENV=production uv run cobalt db migrate*)` · `Bash(COBALT_ENV=production uv run cobalt backup restore*)` (a schema change and a restore are never this seat's). Every other line keeps its production deny or its named set (`tests/ops/test_hub_lines.py`, card 392 W7).

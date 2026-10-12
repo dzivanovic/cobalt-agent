@@ -122,6 +122,38 @@ def test_a_last_line_that_is_no_stop_line_of_its_kind_is_refused(stubs, kind, la
     assert recorded(calls) == []
 
 
+WRITTEN = "WRITTEN · job: x-write · rows: 3 · backup: local/1a2b3c4d"
+
+
+def test_d1_a_written_prodwrite_report_stops_removes_and_closes_the_tab_in_order(stubs):
+    """Card 392 W5. RED on BASE: REFUSED: unknown kind: prodwrite."""
+    report, calls, stop_exit, agents, env = stubs
+    report.write_text(f"# x\n\n{WRITTEN}\n\n")
+    done = done_("aaaa1111", str(report), "prodwrite", "w2:tGX", env=env)
+    assert done.returncode == 0, done.stderr
+    assert recorded(calls) == ["claude stop aaaa1111", "claude rm aaaa1111", "herdr tab close w2:tGX"]
+
+
+def test_d2_a_failed_prodwrite_is_refused_and_kept(stubs):
+    """Card 392 W5, both sides: refused (unknown kind) on BASE; refused and kept after."""
+    report, calls, stop_exit, agents, env = stubs
+    report.write_text("FAILED: verify — before 3 after 4 expected 3 · backup: local/1a2b3c4d\n")
+    done = done_("aaaa1111", str(report), "prodwrite", env=env)
+    assert done.returncode == 1
+    assert done.stderr.startswith("REFUSED: "), done.stderr
+    assert recorded(calls) == []
+
+
+def test_d2_a_build_on_a_written_line_is_still_running(stubs):
+    """Two-sided: green on BASE and after."""
+    report, calls, stop_exit, agents, env = stubs
+    report.write_text(f"{WRITTEN}\n")
+    done = done_("aaaa1111", str(report), "build", env=env)
+    assert done.returncode == 1
+    assert done.stderr.startswith("REFUSED: still running"), done.stderr
+    assert recorded(calls) == []
+
+
 def test_a_missing_report_is_refused(stubs):
     report, calls, stop_exit, agents, env = stubs
     done = done_("aaaa1111", str(report), "build", env=env)

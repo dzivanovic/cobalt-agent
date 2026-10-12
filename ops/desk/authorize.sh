@@ -1,7 +1,8 @@
 #!/bin/sh
-# authorize.sh <build|check|deploy|shadow> "<card>" — the AUTHORIZATION block of the kind's fixed file
-# (BUILD-HUB.md, CHECK-HUB.md, DEPLOY-HUB.md or SHADOW-HUB.md) run as ONE call (card 19 worker-steps S1;
-# shadow: card 2026-10-11 324 S4). Read-only.
+# authorize.sh <build|check|deploy|shadow|prodwrite> "<card>" — the AUTHORIZATION block of the kind's
+# fixed file (BUILD-HUB.md, CHECK-HUB.md, DEPLOY-HUB.md, SHADOW-HUB.md or PRODWRITE-HUB.md) run as ONE
+# call (card 19 worker-steps S1; shadow: card 2026-10-11 324 S4; prodwrite: card 2026-10-12 392 W4).
+# Read-only.
 #
 # Prints one row per rule, `rule · command · exit · result` (the result is the first line the
 # command printed, or `nothing`):
@@ -18,6 +19,9 @@
 #                        every column-0 HOUSE line that ends `overruled <date> R<n>`
 #   HOUSE A OpenAI <date> R<n> row|committed|at HEAD
 #                        a HOUSE A line `OpenAI — his <date> R<n>` (the Sol probe, his OpenAI meter)
+#   WRITE RULING <date> R<n> row|committed|at HEAD
+#                        kind prodwrite only: the card's ONE `WRITE RULING: <date> R<n>` (the ruling
+#                        that names its production write, K3); absent or empty fails as `WRITE RULING`
 # A row `<date> R<n>` is proved by: `grep -n "^| R<n> " $REPO/docs/40 - DevDocs/reports/cto-<date>.md`
 # → ONE line holding `HIS RULING` and `APPROVED` (row); `git -C $REPO log -1 --format=%H -S"| R<n> |"
 # -- <that file>` non-empty (committed); and that same line present in the file at HEAD, so an
@@ -42,14 +46,17 @@ refuse() {
     exit 1
 }
 
-[ "$#" -eq 2 ] || refuse "usage: authorize.sh <build|check|deploy|shadow> <card>"
+[ "$#" -eq 2 ] || refuse "usage: authorize.sh <build|check|deploy|shadow|prodwrite> <card>"
+kind=$1
 case "$1" in
     build) hub=BUILD-HUB.md ;;
     check) hub=CHECK-HUB.md ;;
     deploy) hub=DEPLOY-HUB.md ;;
     # card 2026-10-11 324 S4: the shadow gate seat, its rows as build's
     shadow) hub=SHADOW-HUB.md ;;
-    *) refuse "kind '$1' is none of build, check, deploy, shadow" ;;
+    # card 2026-10-12 392 W4: the production-write seat, its rows as deploy's plus WRITE RULING
+    prodwrite) hub=PRODWRITE-HUB.md ;;
+    *) refuse "kind '$1' is none of build, check, deploy, shadow, prodwrite" ;;
 esac
 fixed="$PROMPTS/$hub"
 card=$2
@@ -232,6 +239,19 @@ for v in "$@"; do
         prove "HOUSE A OpenAI" ${o% *} ${o#* }
     fi
 done
+
+# kind prodwrite (card 392 W4): the ONE ruling that names the write, proved as every RULINGS row
+if [ "$kind" = "prodwrite" ]; then
+    w=$(field "WRITE RULING")
+    o=$(printf '%s\n' "$w" | sed -n 's/^\(20[0-9][0-9]-[0-9][0-9]-[0-9][0-9]\) \(R[0-9][0-9]*\)$/\1 \2/p')
+    if [ "$(grep -c '^WRITE RULING:' "$card")" -ne 1 ]; then
+        row "WRITE RULING" "field WRITE RULING" 1 "not ONE 'WRITE RULING:' line in the card" 1
+    elif [ -z "$o" ]; then
+        row "WRITE RULING" "field WRITE RULING" 1 "WRITE RULING is not '<date> R<n>': '$w'" 1
+    else
+        prove "WRITE RULING" ${o% *} ${o#* }
+    fi
+fi
 
 if [ -z "$failed" ]; then
     printf 'AUTHORIZED\n'

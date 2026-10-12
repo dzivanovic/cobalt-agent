@@ -101,6 +101,27 @@ def test_a_report_already_at_its_stop_line_returns_at_once(card):
     assert time.monotonic() - started < 5
 
 
+WRITTEN = "WRITTEN · job: x · rows: 3 · backup: local/1a2b3c4d"
+
+
+def test_v1_kind_prodwrite_returns_its_written_line(card):
+    """Card 392 W5. RED on BASE: REFUSED: unknown kind: prodwrite."""
+    card, build, check, env = card
+    build.write_text(f"# x\n\nbody\n\n{WRITTEN}\n\n")
+    done = watch("prodwrite", str(card), "30", env=env)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.strip() == WRITTEN
+
+
+def test_v2_kind_deploy_does_not_take_a_written_line(card):
+    """Card 392 W5, two-sided: green on BASE and after."""
+    card, build, check, env = card
+    build.write_text(f"# x\n\n{WRITTEN}\n")
+    done = watch("deploy", str(card), "2", env=env)
+    assert done.returncode == 2, done.stdout + done.stderr
+    assert done.stdout.startswith("STILL RUNNING after 2s"), done.stdout
+
+
 def test_a_changed_last_line_that_matches_returns_it(card):
     card, build, check, env = card
     build.write_text("# x\n\n(run in progress)\n")
