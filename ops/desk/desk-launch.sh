@@ -123,7 +123,8 @@
 #     APPROVED and committed, L7a — but card 392 W6: an --allowedTools string holding
 #     `COBALT_ENV=production` other than exactly `Bash(COBALT_ENV=production uv run cobalt db query *)`
 #     is refused whatever RULINGS says, a production write being the prodwrite seat's, K3; read
-#     with its quotes cut, and an allow list holding $, a backtick or a backslash refused, check O2); a line
+#     with its quotes cut, and an allow list holding $, a backtick or a backslash refused, check O2;
+#     each string judged whole, and a `COBALT_ENV` glob refused, check O1, A1); a line
 #     without the two dialog denies (L63), without
 #     `--remote-control` and `--name`, or that reads another file than the one named; a card
 #     or a fixed file handed over as a prompt; a prompt that names no cwd; a line that names
@@ -610,10 +611,36 @@ brain
     case "$pw_allow" in
         *[\$\`\\]*) refuse "a production string on a prompt line: production writes are the prodwrite seat's (K3): the allow list holds \$, a backtick or a backslash, which eval expands" ;;
     esac
-    pw_bad=$(printf '%s\n' "$pw_allow" | tr -d "\"'" | awk '{
-        s = $0; r = "Bash(COBALT_ENV=production uv run cobalt db query *)"
-        while ((k = index(s, r)) > 0) s = substr(s, 1, k - 1) " " substr(s, k + length(r))
-        if (index(s, "COBALT_ENV=production")) print s
+    # Check O1, A1: each string is read whole, as the shell splits it (a "…" or '…' span is one
+    # word, its quotes cut): only the read, exactly, passes; any other string holding
+    # `COBALT_ENV=production`, or a `COBALT_ENV` not followed by `=<plain value>` (a glob such as
+    # `COBALT_ENV=prod*` or `COBALT_ENV=*` reaches production), is refused
+    pw_bad=$(printf '%s\n' "$pw_allow" | awk -v sq="'" '
+    function judge(t,    u, v, k, c, j) {
+        u = ""
+        for (j = 1; j <= length(t); j++) {
+            c = substr(t, j, 1)
+            if (c != "\"" && c != sq) u = u c
+        }
+        if (u == "Bash(COBALT_ENV=production uv run cobalt db query *)") return
+        if (index(u, "COBALT_ENV=production")) { print u; return }
+        v = u
+        while ((k = index(v, "COBALT_ENV")) > 0) {
+            v = substr(v, k + 10)
+            if (v !~ /^=[A-Za-z0-9_.-]+([ )]|$)/) { print u; return }
+        }
+    }
+    {
+        s = $0; n = length(s); tok = ""; q = ""
+        for (i = 1; i <= n + 1; i++) {
+            c = (i <= n) ? substr(s, i, 1) : " "
+            if (q == "" && (c == "\"" || c == sq)) q = c
+            else if (q != "" && c == q) q = ""
+            if (c == " " && q == "") {
+                if (tok != "") judge(tok)
+                tok = ""
+            } else tok = tok c
+        }
     }')
     [ -z "$pw_bad" ] || refuse "a production string on a prompt line: production writes are the prodwrite seat's (K3): $pw_bad"
     for w in "git add" "git commit" "git merge" "Bash(git *)" "uv run" "launchctl" "COBALT_ENV="; do
@@ -1737,10 +1764,17 @@ prodwrite)
         *" --prod "*) ;;
         *) refuse "the count read holds no ' --prod ': '$pw_count'" ;;
     esac
-    case "$pw_count" in
-        *"$table"*) ;;
-        *) refuse "the count read does not name the table $table: '$pw_count'" ;;
-    esac
+    # check O2, A2: the table named as a whole name, never as the start of a longer one
+    pw_named=$(printf '%s\n' "$pw_count" | awk -v t="$table" '{
+        s = $0; off = 0
+        while ((k = index(s, t)) > 0) {
+            b = (off + k > 1) ? substr($0, off + k - 1, 1) : ""
+            a = substr(s, k + length(t), 1)
+            if (b !~ /[A-Za-z0-9_.]/ && a !~ /[A-Za-z0-9_]/) { print "named"; exit }
+            off += k; s = substr(s, k + 1)
+        }
+    }')
+    [ -n "$pw_named" ] || refuse "the count read does not name the table $table: '$pw_count'"
     case "$pw_count" in
         *[%\$\`]*) refuse "the count read holds %, \$ or a backtick: '$pw_count'" ;;
     esac
