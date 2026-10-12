@@ -18,10 +18,12 @@ TICKERS: none
 | 1 | `ops/prodwrite-seat-1012b` | `27313211` | `27313211` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/prodwrite-seat-1012b-check-2026-10-12.md` | `held unfixed: 0` and `ready: YES` | |
 
 ## MARKERS
-- «FILL: markers for prodwrite-seat-1012 (its job card has no ## DEPLOY PROOF)»
+- `grep -c -F -e "prodwrite" "/Users/cobalt/cobalt/ops/desk/desk-launch.sh"` · before count `0` · after a count of `1` or more (the launcher kind)
+- `grep -c -F -e "WRITTEN · job:" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/PRODWRITE-HUB.md"` · before the file is absent · after count `1` (the seat's stop line)
 
 ## SMOKE READS
-- «FILL: smoke reads for prodwrite-seat-1012 (its job card has no ## DEPLOY PROOF)»
+- The launcher kind is on main · `grep -c -F -e "prodwrite" "/Users/cobalt/cobalt/ops/desk/desk-launch.sh"` · prints a count of 1 or more
+- The seat's hub is on main · `grep -c -F -e "WRITTEN · job:" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/PRODWRITE-HUB.md"` · prints 1
 
 ## RECORDS
 - prodwrite-seat-1012: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/prodwrite-seat-1012b-check-2026-10-12.md` last line: CHECK DONE · job: prodwrite-seat-1012 · pass: 1 · tip: 27313211 · house A: Grok FINDINGS: 2 · findings: 4 · dropped: 0 · held: 4 · fixed: 4 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 4199/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 18 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 236510
