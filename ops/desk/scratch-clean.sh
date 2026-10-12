@@ -16,8 +16,10 @@
 #           directory; never the tmp directory itself;
 #   (6) never .git: no component named .git in any case, no .git entry anywhere below a directory;
 #   (7) never .env (the cobalt_dev lock, L76): no component that names .env as bare-guard.py
-#       is_env reads it (any case, a glob name matching .env), no such entry below a directory;
-#   (8) git proves it: root (a) `ls-files --error-unmatch` fails (nothing tracked at or below it)
+#       is_env reads it (any case, a glob name matching .env, a name holding a brace), no such
+#       entry below a directory;
+#   (8) git proves it: root (a) the parent's `rev-parse --show-toplevel` is $WT/<name> (no nested
+#       repo), `ls-files --error-unmatch` fails (nothing tracked at or below it)
 #       and `status --porcelain --ignored -unormal` prints lines, every one `?? ` or `!! `;
 #       root (b) the parent is not inside a git work tree.
 # Then `RUN: rm -rf -- <path>` first, the one removal, a proof the path is gone, and the last line
@@ -49,10 +51,14 @@ plain() {
 }
 
 # forbidden NAME -> prints `.git` or `.env` when NAME is one, in any case (is_env: a dot name
-# that, read as a glob, matches .env)
+# that, read as a glob, matches .env; a name holding a brace may expand to .env, as is_env
+# brace-expands it: refused as .env, check G1)
 forbidden() {
     lc=$(printf '%s' "$1" | tr 'A-Z' 'a-z')
     [ "$lc" != ".git" ] || { printf '.git'; return 0; }
+    case "$lc" in
+        *[{}]*) printf '.env'; return 0 ;;
+    esac
     case "$lc" in
         .*) case ".env" in $lc) printf '.env'; return 0 ;; esac ;;
     esac
@@ -135,6 +141,9 @@ set +f
 
 # ---- (8) git proves it ---------------------------------------------------------------------------
 if [ "$root" = wt ]; then
+    # a nested repo's work tree is never the worktree's, ignored or not (check O4)
+    top=$(git -C "${p%/*}" rev-parse --show-toplevel 2>/dev/null)
+    [ "$top" = "$tree" ] || refuse "$p sits inside another git work tree ($top), not $tree"
     if git --literal-pathspecs -C "$tree" ls-files --error-unmatch -- "$rel" >/dev/null 2>&1; then
         refuse "$p is tracked, or holds a tracked file"
     fi
