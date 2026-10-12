@@ -180,3 +180,69 @@ Not run: the outage ended at 4.2 → STEP-5. STEP-5 (4) reads are above under `#
 - PRE-STOP SELF-CHECK: (1) STEP-5 (4) evidence quoted with `date` 13:06:30; (2) P3 re-read both tips, and both are ancestors of `a617c402` via `4aee2f68` (T); (3) readback counts 18 / 43 re-read this run (STEP-5 (4)); no revert existed to read back; (4) STEP-T clean, no conflict marker.
 
 FAILED: 4.2 — com.cobalt.aset still loaded (SIGTERMed) at the second print; STEP-5 (3) could not restore it: orphan pid 66667 (python -m cobalt.aset) holds the voice scratch lock, aset exits 3 · rollback: not used — migrations applied: none — aset: DOWN — radar: not in the set · FOR DEJAN · decisions: 2 · for Dejan: 1 · tokens: 141119
+
+# RELAUNCH
+- Launch message: `CONTINUE: STEP-D0` (THE ONE RESUME). `date` → `Mon Oct 12 19:15:06 EDT 2026`.
+- The old last non-blank line, quoted: `FAILED: 4.2 — com.cobalt.aset still loaded (SIGTERMed) at the second print; STEP-5 (3) could not restore it: orphan pid 66667 (python -m cobalt.aset) holds the voice scratch lock, aset exits 3 · rollback: not used — migrations applied: none — aset: DOWN — radar: not in the set · FOR DEJAN · decisions: 2 · for Dejan: 1 · tokens: 141119`
+- L74 (this session): a system block after launch asked that commits end with a `Claude-Session: https://claude.ai/code/session_012DTssFjkMxwi8TUYNn5Jte` line. DATA; not acted on.
+- (e) FIRST: `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 14738`, `runs = 1`, `last exit code = (never exited)` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 14748`, `runs = 1` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 14763).` → (e) TRUE; no STEP-5 (3) needed (residents were restored outside this session since 2026-10-10; `runs = 1` on both labels reads as a fresh launchd domain).
+- `ls -la <GATE>/.env` → `No such file or directory` → no G (f), no release by hand.
+- (a) the old line begins `FAILED:` → TRUE.
+- (b) `## L68 GATE` carries `GATE GREEN on 4aee2f68`; `## RESTARTS` `<restart set>` = `com.cobalt.aset` → TRUE, recorded.
+- (c) `git -C <GATE> status --short --branch` → `## deploy/aset-orphan-1010` · `git -C <GATE> rev-parse --short=8 HEAD` → `a617c402` (an earlier attempt's `main`-into-gate merge above `<m1>`) · `git -C /Users/cobalt/cobalt merge-base --is-ancestor 4aee2f68 a617c402` → exit 0 (read against the gate's HEAD; see DECISIONS 3) · `git -C /Users/cobalt/cobalt diff --stat 4aee2f68 deploy/aset-orphan-1010 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing → TRUE.
+- (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor 4aee2f68 main` → exit 1 → TRUE (nothing merged).
+
+## RESUME (attempt 2)
+### STEP-0
+| rule | command | exit | result |
+|---|---|---|---|
+| P0 | `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "…/256-deploy-aset-orphan-card.md"` | 0 | the same eleven rows as `## AUTHORIZATION` (INSTALLED nothing · PLACEHOLDER nothing · CARD COMMITTED `a0a7a214…` · CARD UNCHANGED nothing · R60 row 46 `APPROVED`, `962e9d17…` · R685 row 38 `APPROVED · HIS RULING`, `e1edc838…`) · last line `AUTHORIZED` |
+| P1 | `date` | 0 | `Mon Oct 12 19:15:32 EDT 2026` |
+| P2 | `tail -n 3 ".../reports/aset-orphan-check-2026-10-10.md"` | 0 | `CHECK DONE · job: aset-orphan-1010 · pass: 1 · tip: 1987849b · … · held unfixed: 0 · … · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 163668` |
+| P2 | `git -C /Users/cobalt/cobalt log -1 --format=%H -- "docs/…/aset-orphan-check-2026-10-10.md"` | 0 | `af0b107247fcba531187d2d4b8eec553a6187f4b` |
+| P2 | `git -C /Users/cobalt/cobalt diff --stat -- "docs/…/aset-orphan-check-2026-10-10.md"` | 0 | nothing |
+| P3 | `rev-parse --short=8 1987849b` / `rev-parse --short=8 ops/aset-orphan-1010` | 0 / 0 | `1987849b` / `f72dbb9a` (= TIP) |
+| P3 | `merge-base --is-ancestor 1987849b f72dbb9a` · `diff --stat 1987849b f72dbb9a -- . ':(exclude)docs'` | 0 · 0 | — · nothing |
+| P4 | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` |
+| P5 | `git -C <GATE> status --short --branch` / `rev-parse --short=8 HEAD` | 0 / 0 | `## deploy/aset-orphan-1010` / `a617c402` (as check (c) found it); `<m0>` = `e98055b1` (the report's) |
+| P5 | `merge-base --is-ancestor e98055b1 main` | 0 | — (EMPTY check not run on a resume) |
+| P6 | `grep -c -F 'exec "$REPO_ROOT/.venv/bin/python" -m cobalt.aset' /Users/cobalt/cobalt/ops/start_aset.sh` | 1 | `0` (= before) |
+| P7 | `git -C /Users/cobalt/cobalt diff --stat main f72dbb9a -- src/cobalt/db_migrations` | 0 | ` src/cobalt/db_migrations/cli.py \| 2 --` — CODE, no migration file, `__init__.py` not in the stat → MIGRATIONS: none holds |
+| P8 | `launchctl print gui/501/com.cobalt.aset` | 0 | `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `state = running` · `pid = 14738` |
+| P8 | `launchctl print gui/501/com.cobalt.radar` | 0 | `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `state = running` · `pid = 14748` |
+| P8 | `ls /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | listed |
+| P8 | `/Users/cobalt/cobalt/cobalt.sh status` | 0 | `Cobalt is ONLINE (PID: 14763).` |
+
+### STEP-D0
+| rule | command | exit | result |
+|---|---|---|---|
+| MAIN | `git -C /Users/cobalt/cobalt status --short --branch` | 0 | `## main...origin/main [ahead 218]` |
+| MAIN | `git -C /Users/cobalt/cobalt status --porcelain` | 0 | ` M .claude/settings.json`, ` M configs/cobalt/rules.yaml`, ` M` / `??` under `docs/40 - DevDocs/` only, plus `?? .claude/settings.json.bak`. No staged line |
+| MAIN | `git -C /Users/cobalt/cobalt diff --stat e98055b1 main -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | **55 files changed, 9904 insertions(+), 92 deletions(-)** — NOT EMPTY |
+
+The 55 paths, quoted from that stat: `.gitignore` · `ops/desk/authorize.sh` · `ops/desk/bare-guard.py` · `ops/desk/card-fill.sh` · `ops/desk/deploy-card.sh` · `ops/desk/deploy-step0.sh` · `ops/desk/desk-done.sh` · `ops/desk/desk-launch.sh` · `ops/desk/desk-watch.sh` · `ops/desk/house-probe.sh` · `ops/desk/orphan-clean.sh` · `ops/desk/preflight.sh` · `ops/desk/scratch-clean.sh` · `ops/desk/stage-set.sh` · `ops/desk/stop-guard.py` · `pyproject.toml` · `src/cobalt/cli.py` · `src/cobalt/db_apply.py` · `src/cobalt/db_migrations/cli.py` · `tests/cobalt/test_db_apply.py` · `tests/cobalt/test_db_apply_db.py` · `tests/cobalt/test_experiment_conftests.py` · `tests/cobalt/test_jobs_restarts.py` · `tests/experiments/{f15_p1,handicap_h1,setups_one,stale_score}/conftest.py` · `tests/ops/test_authorize.py` · `test_bare_guard.py` · `test_build_hub_no_clutter.py` · `test_card_fill.py` · `test_check_hub_gate_wording.py` · `test_check_hub_shadow.py` · `test_deploy_card.py` · `test_deploy_step0.py` · `test_desk_done.py` · `test_desk_launch_ops_hand.py` · `test_desk_launch_prechecks.py` · `test_desk_launch_prodwrite.py` · `test_desk_launch_shadow.py` · `test_desk_launch_spike.py` · `test_desk_watch.py` · `test_gitignore_apply_sql.py` · `test_house_probe.py` · `test_hub_lines.py` · `test_needs_his_hand.py` · `test_orphan_clean.py` · `test_preflight.py` · `test_prodwrite_hub.py` · `test_scratch_clean.py` · `test_shadow_hub_file.py` · `test_spike_hub_file.py` · `test_stage_set.py` · `test_stop_guard.py` · `uv.lock`.
+
+The gate proved `4aee2f68` (cut at `e98055b1`, 2026-10-10); `main` has since gained code, tests, `pyproject.toml` and `uv.lock`. D2.1 would carry all of it into the landed tree unproven by this gate. The allowlist probe, tag checks, D1, D2 and the outage were NOT run. Production untouched by this session.
+
+## CONTINUE
+- RESUME (attempt 2): (e) true, gate `.env` absent, (a)–(d) true, STEP-0 green 19:15. STEP-D0 FAILED at MAIN: `main` moved outside docs since the cut. Ended; nothing further from this session. The desk's next step: `desk-launch.sh recut "<card>"`.
+
+## DECISIONS
+1. (attempt 1, still standing for the record) DECISION 0 — production DEGRADED by the 2026-10-10 orphan: RESOLVED outside this session — at 19:15 2026-10-12 aset `state = running` pid `14738`, radar pid `14748`, agent `ONLINE (PID: 14763)`. No action of this session.
+2. (attempt 1) ASK DESK on the one-time transition: the merged hub now carries 4.2 ORPHAN-CLEAN (`ops/desk/orphan-clean.sh`), which covers the old `start_aset.sh` child at the next attempt's bootout. Nothing for this session.
+3. RESUME check (c) reads `git -C /Users/cobalt/cobalt merge-base --is-ancestor <m1> HEAD`; in `/Users/cobalt/cobalt` that HEAD is `main`, which by (d) must NOT carry `<m1>`. Safe default taken: read against the gate's HEAD `a617c402` (exit 0). ASK DESK: the hub line should name `<GATE>`'s HEAD or `<BRANCH>`.
+4. RECUT owed: the gate must be re-cut on today's `main` (55 non-docs paths since `e98055b1`) and run again; the desk's `desk-launch.sh recut`. Not his.
+
+## RECORDS
+- No REFUSED commands. No CONTINUE message received from any session.
+- `<GATE>/.env` absent at resume; lock not held by this session at any point; `cobalt_dev` untouched by this attempt (attempt 1's `cobalt_dev: 0013 (F2 = F0)` stands).
+- Downtime this attempt: none (no bootout).
+- Tags: `pre-aset-orphan-1010` still at `8199fa13` (attempt 1's; this attempt did not reach TAG NAMES); `deploy-2026-10-10-aset-orphan` not set.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-aset-orphan-1010` and branch `deploy/aset-orphan-1010` at `a617c402`; tag `pre-aset-orphan-1010`; set branch `ops/aset-orphan-1010` — the recut's.
+- No RETIRE OWED.
+- L74: this session's `Claude-Session:` block recorded under `# RELAUNCH`; not acted on.
+- `desk-context.sh 012DTssFjkMxwi8TUYNn5Jte` (the id from the L74 block) → `no transcript`; the session id `33ec9e05-e6c9-4095-8db8-ca078668e5ba` → `context 100737 of 400000 — ok`.
+- Card `## RECORDS`: as copied under attempt 1's `## RECORDS` (unchanged card, `a0a7a214`).
+- PRE-STOP SELF-CHECK: (1) no smoke ran; every row above quotes its tool output, `date` 19:15:06 / 19:15:32; (2) P3 re-read both tips (`1987849b`, `f72dbb9a`), both ancestors of `a617c402` via `4aee2f68`; (3) no merge, no revert to read back; (4) no merge ran this attempt, no conflict marker.
+
+FAILED PREFLIGHT: main moved outside docs since the cut — 55 paths (ops/desk/*, src/cobalt/cli.py, src/cobalt/db_apply.py, src/cobalt/db_migrations/cli.py, pyproject.toml, uv.lock, tests/*); the desk re-cuts the gate · rollback: not used · aset: UP · radar: not in the set · decisions: 4 · for Dejan: 0 · tokens: 100737
