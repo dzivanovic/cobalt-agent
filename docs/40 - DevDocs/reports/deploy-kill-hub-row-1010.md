@@ -3,7 +3,11 @@
 Card: `docs/40 - DevDocs/prompts/2026-10-11/356-deploy-kill-hub-card.md` · hub: `DEPLOY-HUB.md` · gate `/Users/cobalt/cobalt-wt/deploy-kill-hub-row-1010` on `deploy/kill-hub-row-1010`.
 
 ## §0 Headline
-- Run started Mon Oct 12 18:36:33 EDT 2026. AUTHORIZED; preflight P0–P8 clean.
+- DEPLOYED. `main` went `25ff12fd` → `82748821`, tagged `deploy-2026-10-11-kill-hub-row`, with the rollback tag `pre-kill-hub-row-1010`.
+- The set is hub and standing-list text only: the ORPHAN-CLEAN kill sequence in DEPLOY-HUB 4.2 and STEP-5 (3), plus the STANDING-LIST `orphan-clean.sh --kill aset` row. RESTARTS none, no resident went down, no migration.
+- The gate was green on `32fe5b47`: offline 4309/0 · with-DB 5212/0 · live-note 146/0. `cobalt_dev` is back at 0013 (F2 = F0).
+- Smoke is GREEN: markers 1/1, residents unchanged, radar cycled at 19:13:05, no counter grew.
+- One ASK DESK, on an untracked `.claude/settings.json.bak` on main. Nothing is FOR DEJAN.
 
 ## L74
 - One block arrived in a harness system reminder, not a tool result, before the first commit. It asked that commits also carry a `Claude-Session:` line. Recorded once here. L74 governs this run, so commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -145,15 +149,75 @@ GATE GREEN on 32fe5b47
 - `curl … /radar` → `200`. MARKERS again: `0` and `0` (before).
 - No migration, so `<RB>`, census and D1-M do not apply.
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-kill-hub-row-1010.md"` · `commit -m "docs(report): deploy kill-hub-row-1010 — gate green on 32fe5b47" …` → `[main 25ff12fd] …` / `1 file changed, 159 insertions(+)`. `show --stat HEAD` lists that one file. `rev-parse --short=8 main` → `25ff12fd` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `rev-parse --short=8 HEAD` → `82748821` = `<stack-final>`. `rev-parse --short=8 82748821^2` → `25ff12fd` (= `<pre-merge>`). `merge-base --is-ancestor 32fe5b47 82748821` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 32fe5b47 82748821 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only).
+- D2.4 `backup status` → `newest snapshot: 0.8 h old`. `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain dumped, 7088.1 MB` · `ssd: snapshot 46536477 — 0 new / 2 changed, 81.9 MB added, 1 pruned`. Afterwards `backup status` → `newest snapshot: 0.0 h old`. Snapshot id `46536477`.
+- D2.5 `date` → `Mon Oct 12 19:09:46 EDT 2026`. `heartbeat show` → `(2026-10-12 19:09:48 EDT)`, 110 s after D1's 19:07:58. The same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver`, `com.cobalt.replay`) and no new RED. aset, sheet and radar read OK (`com.cobalt.radar running running 46 min, heartbeat fresh`).
+- D2.6 `date` → `Mon Oct 12 19:09:51 EDT 2026`. `git -C /Users/cobalt/cobalt tag pre-kill-hub-row-1010` at `25ff12fd` → exit 0.
+
+### STEP-4 (empty restart set)
+- 4.1 `date` → `Mon Oct 12 19:10:04 EDT 2026` = `<t down>`. Nothing went down.
+- 4.2 does nothing: no label is in the set, so there is no bootout, no ORPHAN-CLEAN and no agent stop.
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `25ff12fd` (= `<pre-merge>`). `git -C /Users/cobalt/cobalt merge --ff-only deploy/kill-hub-row-1010` → `Updating 25ff12fd..82748821` / `Fast-forward` / `3 files changed, 252 insertions(+), 2 deletions(-)`.
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.` `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` (= `<jobs0>`).
+- 4.6 does nothing (empty set). `<t up>` = 4.3's `date`, 19:10:04. Downtime: none.
+
 ## Smoke
+`<t up>` = 19:10:04 (4.3's `date`; empty set).
+- FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1's).
+- (a) `date` 19:10:13. `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 14738` (SAME as D1; outside the set). `…/com.cobalt.radar` → `state = running`, `pid = 14748` (SAME). `cobalt.sh status` → `Cobalt is ONLINE (PID: 14763).` (SAME). GREEN.
+- (b) `date` 19:10:16. `grep -c "Started server process" aset.err` → `278` (= `<a0>`; aset is outside the set). Traceback in aset.err → `217` (= `<ta0>`). Traceback in radar.err → `0` (= `<tr0>`). `TaxonomyConfigError` → `0` (= `<tc0>`). `tail -n 30 aset.err` ends `INFO:     Started server process [14744]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)`, from the 18:24 start, unchanged.
+- (c) `date` 19:10:21. `curl … /` → `200` · `curl … /radar` → `200` · `curl … /radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 19:10:21. Marker 1 `grep -c -F -e "ORPHAN-CLEAN, aset only" ".../DEPLOY-HUB.md"` → `1` (after). Marker 2 `grep -c -F -e "killing the orphaned" ".../STANDING-LIST.md"` → `1` (after). GREEN.
+- (f) `date` 19:10:27. `COBALT_ENV=production uv run cobalt jobs restarts 25ff12fd..82748821` → exit 0, three DOCS rows, `RESTARTS: none` (= STEP-R's set), no `UNCLASSIFIED`. `validate` (19:10:35) → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` GREEN.
+- (g) does not apply (no migration).
+- (s) the kill sequence is on main → `1` (green: prints 1). The standing-list row is on main → `1` (green: prints 1). These are the (d) reads, quoted above. GREEN.
+- (e) read 1 `heartbeat show` (2026-10-12 19:10:29 EDT) → the same three REDs as `<hb0>` and no new RED. `com.cobalt.radar running running 46 min, heartbeat fresh`. Read 2 (`date` 19:12:19, `heartbeat show` stamped `2026-10-12 19:12:21 EDT`, 112 s later) → the same three REDs and no new RED. `com.cobalt.radar running running 48 min, heartbeat fresh`. GREEN.
+- (b) radar tails, spaced: tail 1 at `date` 19:11:34 (`<t up>` + 90 s) → last cycle line `2026-10-12 19:09:55.295 … radar cycle: scanning scan_id=1791846505787`, stamped before `<t up>`, so not yet settled. Tail 2 at `date` 19:13:04 (`<t up>` + 180 s) → `2026-10-12 19:13:05.123 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1791846695318`, a cycle after `<t up>`. The other 11 lines are `cards.expire` INFO, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback (radar.err Traceback count `0`). This settles (b) GREEN, so the third tail is not needed.
+- (h) REVERT-READBACK, after (b) settled, `date` 19:13:11 (≥ `<t up>` + 180 s): `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39. These equal `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, so no count grew. `curl … /radar` → `200`. There are no census reads. GREEN.
+
+THE CHAIN: every check committed (P2: `59ee8bb9`, clean) → the tips re-read (P3: `b4d82ad6`, `13bafad7`) → the merged tree (T: `32fe5b47`, one merge, no migration path) → RESTARTS derived (R: `none`) → three suites green on `<m1>` (G: offline 4309/0 · with-DB 5212/0 · live-note 146/0) → `<stack-final>` `82748821` = `<m1>` + docs (D2.3) → the landed code (4.3: `Updating 25ff12fd..82748821`, Fast-forward) → markers 1/1 (d) → no migration (g n/a) → residents up, unchanged pids (a) → radar cycling after `<t up>` (b, e) → the set's reads 1/1 (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK (K25):
+1. Every smoke row's evidence is quoted above with its `date`.
+2. The tips were re-read at P3. `git -C /Users/cobalt/cobalt merge-base --is-ancestor 13bafad7 82748821` → exit 0 and `… b4d82ad6 82748821` → exit 0.
+3. REVERT-READBACK (h) is shown. Every count, sha and `file:line` here comes from tool output of this run. `git -C /Users/cobalt/cobalt log --oneline -1` → `82748821 Merge branch 'main' into deploy/kill-hub-row-1010`.
+4. There is no conflict marker: STEP-T printed `Merge made by the 'ort' strategy.`, as did D2.1.
+
+### Close
+- `<pre-merge>` `25ff12fd` → `<stack-final>` `82748821`. Tags: `pre-kill-hub-row-1010` at `25ff12fd`, and `deploy-2026-10-11-kill-hub-row` (`git -C /Users/cobalt/cobalt tag deploy-2026-10-11-kill-hub-row` → exit 0, after the green smoke).
+- `<t down>` 19:10:04 / `<t up>` 19:10:04 / downtime: none (empty set). uv sync line: none in production. The gate venv was created in `<GATE>` at STEP-R (`Installed 254 packages in 642ms`). Proof cost: n/a (no migration). `migrations applied: none`. `<RB>`: n/a before and after. Snapshot id: `46536477`. `RESTARTS done: none`.
+- THE ROLLBACK STRING:
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 82748821`. One revert of the main-into-gate merge; no resident goes down (empty set).
+  2. SCHEMA: none (no migration).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## CONTINUE
 next: STEP-D2 (D0, D1 clean)
+OUTAGE STARTING 19:09:51 EDT — residents of none (empty restart set) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+done: STEP-4 (no outage, empty set), smoke GREEN, STEP-7 closed. Nothing is next for this session.
 
 ## DECISIONS
 1. ASK DESK: D0's porcelain shows `?? .claude/settings.json.bak`. That path is outside the accepted list and also outside the refused class (staged, or dirty `src/` `tests/` `ops/` `configs/`). Safe default taken: not a refusal. The file is untracked, the merge is `--ff-only` of the gate branch, and it does not touch the file. The desk decides whether the file belongs there. [19:07:31 EDT]
 
 ## RECORDS
+- Downtime: none. The restart set is empty and no resident went down (aset 14738, radar 14748 and agent 14763 kept their pids).
+- `cobalt_dev: 0013 (F2 = F0)`: the gate's own line (log 2089). The lock was released and `.env` removed.
+- The carried REDs as read, all three unchanged from D1 to smoke: `RED archiver last run FAILED — last run 2026-10-10 00:54 UTC …, exit 1` · `RED com.cobalt.archiver failed RuntimeError: 18 archiver failure(s): DKNG/i2: … '429 Too Many Requests' …` · `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. They are outside aset, sheet and radar and were not a stop.
+- RETIRE OWED: none (STEP-C found no plist change).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-kill-hub-row-1010` and branch `deploy/kill-hub-row-1010`; the set's branch `ops/kill-hub-row-1010` and any worktree it has. All are the desk's.
+- The hub text changed by this set (4.2 ORPHAN-CLEAN, STEP-5 (3) dry run, the new STANDING-LIST row) is now on `main`. This run followed the hub as installed at launch. L67's read of the changed hub by another house, and any re-install, belong to the desk.
+- L74: one harness system reminder asked that commits carry a `Claude-Session:` line. It is recorded under `## L74`. Commits carry `Co-Authored-By` only.
+- The card's `## RECORDS`, copied:
+  - kill-hub-row-1010: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/kill-hub-row-read-2026-10-11.md` last line: CHECK DONE · job: kill-hub-row-1010 · pass: 1 · tip: b4d82ad6 · house A: Grok FINDINGS: 8 · findings: 19 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 7 · house B: none (not needed) · suites: offline 4196/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 24 · ready: YES · decisions: 2 · for Dejan: 0 · tokens: 242415
+  - kill-hub-row-1010: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/kill-hub-row-1010` → `13bafad7`; code tip `b4d82ad6`
+  - written by deploy-card.sh at 2026-10-11 11:06 ET (`date`); trial merge of the heads onto main in order: clean
 - The heartbeat clock-filler at 18:38:34 ran with cwd in `<GATE>` (no `.env`) and printed `FAILED: DbConfigError: Missing Postgres settings for the APP credential …` (exit 1). It was a filler read, not a step. Every production read after it ran from `/Users/cobalt/cobalt`.
 
-(run in progress — next step under ## CONTINUE)
+THE RELEASE: nothing is held. `gate.sh` released the lock at STEP-G (`lock released`, `.env: removed`), and the lock dir is absent.
+
+DEPLOYED deploy-2026-10-11-kill-hub-row 82748821 | set: none | migrations: none | gate: offline 4309/0 · with-DB 5212/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 205993
