@@ -450,6 +450,30 @@ def test_r10_a_job_tmp_git_work_tree_is_refused(desk):
     removed(desk, plain)
 
 
+# ---- check findings ----------------------------------------------------------------------------------
+
+
+def test_o4_a_file_tracked_by_an_ignored_nested_repo_is_refused(desk):
+    nested = desk.job_wt / "docs" / "_inflight" / "clone"
+    f = desk.put(nested / "t.md", "nested tracked\n")
+    git(nested, "init", "-q", "-b", "main")
+    git(nested, "add", "-A")
+    git(nested, "commit", "-q", "-m", "n")
+    done = desk.run(str(f))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert f.read_text() == "nested tracked\n"
+
+
+def test_c1_a_brace_name_is_env_reads_is_not_removed(desk):
+    cache = desk.job_wt / "src" / "pkg" / "__pycache__"
+    desk.put(cache / "mod.pyc", "x")
+    desk.put(cache / ".{env,x}", "COBALT_TEST_CONSTRUCTED=1\n")
+    done = desk.run(str(cache))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "RUN:" not in done.stdout
+    assert (cache / ".{env,x}").read_text() == "COBALT_TEST_CONSTRUCTED=1\n"
+
+
 # ---- SOURCE ------------------------------------------------------------------------------------------
 
 
