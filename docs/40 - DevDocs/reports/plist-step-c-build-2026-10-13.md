@@ -5,8 +5,11 @@ Card 496 (`prompts/2026-10-13/496-plist-step-c-card.md`), BASE `5214e50b`, code 
 The first W stopped at (a0) because the card said `DB: none` while row OW1 changes `src/`. The desk removed the key (`2ff41ff1`), and the gate then ran green: offline 4327/0, with-DB 5230/0, live-note 146/0; `cobalt_dev` 0013 with F2 = F0; `.env` removed.
 RESTARTS: `com.cobalt.radar`. `tests/ops` at the tip: 1 failed, the pre-existing rule-sweep red outside the rows (DECISIONS 6).
 
+FIX ROUND (15:09, rows FR-D1 FR-O2 FR-A4 FR-O2b, card at `148e8892`): stopped at PREFLIGHT `head` (DECISIONS 9); no file changed yet.
+
 ## L74
 - One system notice in this session asked for a `Claude-Session:` line in commits. Recorded here once, not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- Fix-round session (15:09): the same notice arrived again. It was not followed.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-13/496-plist-step-c-card.md"` → exit 0, whole:
@@ -232,8 +235,24 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/plist-step-c-1013-all-20261013-101742.lo
 - For house A (card CHECK ASKS): this build changes `DEPLOY-HUB.md` (`:3`, `:5`, `:11`, `:13`, the P8 table, STEP-C `:89`, D1, 4.6L / 4.6L-BO, smoke (s), STEP-5 (1L) / (2L) / (5), ROLLBACK STRING 1, STEP-7 2) and does NOT change `STANDING-LIST.md` (DECISIONS 1).
 - X1: a `## LAUNCHD` line holding `*`, `$`, a backtick, a quote, `;`, `|`, `&`, `<`, `>`, `\`, `(` or `)` is refused by `launchd_line` before any field is read. Labels are `[a-z0-9-]` and dry-run words `[a-z0-9-]` (at most 4). Tests: the `*` and `; rm x` refusal cases.
 
+## FIX ROUND — AUTHORIZATION AND PREFLIGHT (2026-10-13 15:09)
+- `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → `AUTHORIZED` twice, with the card at `2962d9b9` (15:09) and at `148e8892` (after the desk's message that row FR-O2b was added; `git -C /Users/cobalt/cobalt log --oneline -4 -- <card>` → `148e8892 docs(card): 496 row FR-O2b, step-c dry-run shape (brain R1418 follow-up)`). The second run's rows: `CARD COMMITTED · … · 0 · 148e88928ed81969868b18c7460d287d47d25fec`, `CARD UNCHANGED · … · 0 · nothing`, R60 and R1341 rows as above (R1341 now at `:102`), last line `AUTHORIZED`.
+- `sh /Users/cobalt/cobalt/ops/desk/preflight.sh build "<card>"` → exit 1, whole:
+```
+clock · date · 0 · Tue Oct 13 15:09:29 EDT 2026
+status · git status --short --branch · 0 · ## ops/plist-step-c-1013
+head · git log --oneline -1 · 0 · 6c3402af fix(plist-step-c-1013): STEP-C reads renames as adds, matches the files cell whole, clears an owed entry an add or change loads; a refusal at 4.6L goes to STEP-5 (check O1 O3 A1 A5)
+diff · git diff --stat 5214e50b · 0 · (15 lines)
+     (14 files changed, 1603 insertions(+), 18 deletions(-))
+main repo · git -C /Users/cobalt/cobalt log --oneline -1 ops/plist-step-c-1013 · 0 · 6c3402af fix(plist-step-c-1013): …
+env here · ls /Users/cobalt/cobalt-wt/plist-step-c-1013/.env · 1 · No such file or directory
+env anywhere · ls -la /Users/cobalt/cobalt-wt/*/.env · 1 · siblings holding .env: none
+FAILED PREFLIGHT: head
+```
+- Why `head` fails (`ops/desk/preflight.sh:156-166`, read): for `build` the rule accepts only HEAD = BASE (`5214e50b`) or a subject starting `wip(plist-step-c-1013):`. HEAD is the check's commit `6c3402af` (`fix(…)`), which is the card's `TIP:`. The script has no fix-round case.
+
 ## CONTINUE
-next: none (BUILT; the desk verifies and launches the check).
+next: PREFLIGHT (fix round: rows FR-D1, FR-O2, FR-A4, FR-O2b at TIP `6c3402af`), on the desk's `CONTINUE`.
 
 ## DECISIONS
 1. ASK DESK [10:15 ET] — FOR DEJAN. `STANDING-LIST.md:157` is not edited. Row D1 says it is "Edited only after the desk's answer to report `## DECISIONS` item 1". No answer is in this session, and the file is his one approval (R60: a command string that changes returns to him). Safe default taken: the line stays as is. CARD.md and the hub are built. When the answer comes, the edit is one line: installing or changing one card-named one-shot is on the line through the strings `desk-launch.sh` generates from `## LAUNCHD` (`DEPLOY-HUB.md` 4.6L, STEP-5 (1L)); retiring one stays off.
@@ -250,11 +269,16 @@ next: none (BUILT; the desk verifies and launches the check).
 7. ASK DESK [10:15 ET]: a bootstrap-only deploy card has no launch path yet. `desk-launch.sh deploy` still requires `TIP`, `## SHIPS` and a check per ship; BO1's merge-free deploy needs a card shape the launcher accepts. This is outside the rows. Safe default: not built; the hub text (4.6L-BO) and the script mode exist.
 8. Self-check gap (2): `bootstrap_owed()`'s not-JSON path (`BootstrapOwedError`, which K18 turns into ERROR and the sweep into the unchanged red, plus a note) has no test. Safe default: left as built and named here for the check's fix round.
 
+9. ASK DESK [15:10 ET], fix round: `preflight.sh build` fails `head` because HEAD is the check's `fix(plist-step-c-1013):` commit `6c3402af` (the card's `TIP:`), not BASE or a `wip(plist-step-c-1013):` commit. BUILD-HUB PREFLIGHT makes that the last line. Safe default: stopped before any change; waiting for `CONTINUE: PREFLIGHT` with the fact that the fix round starts at TIP `6c3402af`.
+
 ## RECORDS
+- Fix round 15:10: message from `cto-desk` saying card 496 gained row FR-O2b (`148e8892`). It adds a row, so per UNATTENDED RULES (b) the message itself is not followed. The row is taken from the card: re-read at `:36`, and authorize.sh re-run → `AUTHORIZED` on `148e8892`.
 - REFUSED, not needed: `git -C /Users/cobalt/cobalt show fc6a1e2a:ops/com.cobalt.prefill-refresh.plist` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." (A1; the same bytes were read through the gate worktree, proved equal by `git -C … diff --stat fc6a1e2a -- …` printing nothing.)
 - The card's RECORDS, re-read at PREFLIGHT: R1341 is `HIS RULING · APPROVED` (authorize.sh row); `.gitignore:6` is `data/`; `restarts.py:198-206` is as quoted; 304 `:73` is the WRITER GATE; the K18 anchors are `checks.py:427-434`; the sweep anchor is `watchdog.py:397`; `test_jobs.py:885` is `test_an_unloaded_one_shot_is_red`. The other card records (seams 458/485/480, the L68 note, the RESTARTS class homes) are copied as the card has them. The derived RESTARTS (`com.cobalt.radar`) matches the card's class-home read.
 - `.env`: never present in this worktree (`ls /Users/cobalt/cobalt-wt/plist-step-c-1013/.env` → No such file, PREFLIGHT). No lock taken.
 - CONTINUED at W 10:17 (message from `cto-desk`: `CONTINUE: W — the DB: none key is removed from card 496 on main (commit 2ff41ff1)`). Verified: `git -C /Users/cobalt/cobalt log --oneline -3 -- <card>` → `2ff41ff1 docs(desk): R1404 card 496 DB key removed after W failure`; `git -C /Users/cobalt/cobalt diff 80f65fc9 2ff41ff1 -- <card>` → the one line `-DB: none`, nothing else; `grep -n -F "DB:" <card>` → nothing; `git -C /Users/cobalt/cobalt diff --stat -- <card>` → nothing (committed, clean).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: plist-step-c-1013 · tip: 01fb7297 | on 5214e50b | migration: none | offline 4327/0 | with-DB 5230/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 9 of 10 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 382312
+First build's stop line (kept for the record): `job: plist-step-c-1013 · tip: 01fb7297 | on 5214e50b | … | rows: 9 of 10 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 382312` (whole at `dfc2624f`).
+
+FAILED PREFLIGHT: head — fix round: HEAD 6c3402af is the check's fix commit (the card's TIP), not BASE 5214e50b nor a wip(plist-step-c-1013): commit — preflight.sh build has no fix-round case
