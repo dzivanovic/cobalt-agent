@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/desk-refresh-1013
 WORKTREE: desk-refresh-1013
-BASE: «FILL: BASE — main HEAD at the build launch»
+BASE: f7d71571
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/desk-refresh-1013/docs/40 - DevDocs/reports/desk-refresh-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-refresh-check-2026-10-13.md
