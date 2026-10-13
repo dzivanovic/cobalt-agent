@@ -4,7 +4,7 @@ CLASS: K4
 INSTALL: none
 BRANCH: ops/plist-step-c-1013
 WORKTREE: plist-step-c-1013
-BASE: «FILL: 8-hex main tip the desk cuts from, after card 458's deploy lands (seam: desk-launch.sh)»
+BASE: 5214e50b
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/plist-step-c-1013/docs/40 - DevDocs/reports/plist-step-c-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/plist-step-c-check-2026-10-13.md
