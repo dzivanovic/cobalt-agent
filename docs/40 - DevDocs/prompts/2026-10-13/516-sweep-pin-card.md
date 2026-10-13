@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/sweep-pin-1013
 WORKTREE: sweep-pin-1013
 BASE: 03d8ebbe
-TIP:
+TIP: 52cb2fc9
 REPORT: /Users/cobalt/cobalt-wt/sweep-pin-1013/docs/40 - DevDocs/reports/sweep-pin-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/sweep-pin-check-2026-10-13.md
 HOUSE B: as needed
