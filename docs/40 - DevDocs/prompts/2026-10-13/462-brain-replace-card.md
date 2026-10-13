@@ -1,0 +1,65 @@
+JOB: brain-replace-1013
+LADDER: OFF-LADDER — reports/cto-2026-10-13.md R1331
+CLASS: K5
+INSTALL: none
+BRANCH: ops/brain-replace-1013
+WORKTREE: brain-replace-1013
+BASE: «FILL: BASE, the desk's 8-hex main commit at the build launch»
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/brain-replace-1013/docs/40 - DevDocs/reports/brain-replace-build-2026-10-13.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/brain-replace-check-2026-10-13.md
+HOUSE B: as needed
+DB: none
+RESTARTS: none
+RULINGS: 2026-10-12 R1138
+
+## ROWS
+
+WHY: desk record R1331 (`reports/cto-2026-10-13.md` row R1331, `DESK RECORD, brain (L79) survey row 19`). THE ROW, the brain's, byte for byte: "`desk-done.sh` and `desk-launch.sh brain` stop and replace a live brain when its own message asking for its replacement is recorded as a DESK RECORD row naming its id (R131, R188, R191). A brain that has not asked is still stopped only on his word (R76). Red: the 10-11 case (brain 3d24c7e5's ask at ~490k) refused before, accepted after; a brain with no ask refused both before and after." The code still enforces R76 alone: `desk-done.sh:62-64` (`brain*|cto-desk) refuse "… stopped only on his word (2026-09-30 R76)"`) and `desk-launch.sh:803-813` (any live LIST row named `brain` refuses the launch). R1331 cites `desk-done.sh:57` and `desk-launch.sh:730`; at HEAD `:57` is the `case $?` of the agents read and `:730` sits in kind `prompt` — the guards are the lines named here (`## RECORDS`).
+
+THE ASK ROW (one definition, used by both scripts; ASK DESK 1-3 in the draft report): for a brain whose session id is `<id>` (as `claude agents --json` prints it; 8 hex today), the file `cto-<D>.md`, `<D>` = `TZ=America/New_York date +%Y-%m-%d` at the call, committed and unchanged (the `committed` test of `desk-launch.sh:233-237`: a commit touches it, `git diff --quiet` and `git diff --cached --quiet` on it), holds a line that (a) matches `^\| R[0-9]+ \|`, (b) holds the fixed string `DESK RECORD`, and (c) holds the fixed string `` brain `<id>` asked for its replacement `` (backticks included, read with `grep -F`). Nothing else counts: a row naming another id, a row naming `<id>` without (c) (R1104's shape: `` `3d24c7e5` stopped, removed ``), a row with (c) that is not a DESK RECORD (R1102's `LAUNCHED` shape), the same row in yesterday's report, or an uncommitted row. In a table cell below, `\|` is ONE `|`.
+
+| row | what | red first | files |
+|---|---|---|---|
+| D1 | `desk-done.sh` takes a new kind `brain`: `desk-done.sh <id> "<desk report>" brain [<tab>]`. For it, in place of the stop-line read (`:34-45`): the report's basename is `cto-<D>.md` (else `REFUSED: a brain is replaced on today's desk report cto-<D>.md, not <basename>`); it is committed and unchanged (git run as `git -C "$(dirname "$report")"`; else `REFUSED: the desk report is not committed: <report>`); the agents read (`:46-61`) as today; the name is exactly `brain` (else `REFUSED: <id> is <name>, not the brain seat`; `cto-desk` keeps its own refusal); THE ASK ROW holds for `<id>` (else `REFUSED: <id> is brain: it has not asked for its replacement in a DESK RECORD row of <report>; a brain that has not asked is stopped only on his word (2026-09-30 R76)`). Then `step claude stop`, `step claude rm`, the tab close, as `:65-71`. Every other kind keeps `:62-64` as it stands: a brain or the desk under `build` … `shadow` is still refused. The usage line (`:2`, `:22`) and the header (`:14-17`) name the kind and R131, R188, R191 | `tests/ops/test_desk_done.py`, new section `# ---- card 462`; a helper that makes `tmp_path/repo` a git repo with `docs/40 - DevDocs/reports/cto-<D>.md` (`<D>` from `datetime.now(ZoneInfo("America/New_York"))`) holding the row `` \| R1102 \| 15:12 ET \| DESK RECORD: brain `3d24c7e5` asked for its replacement at ~490k (R188, R191). \| RECORD \| `` and commits it; `AGENTS` gains `{"id": "3d24c7e5", "name": "brain", "state": "idle"}` in the section's own list. NEW: `test_d1_the_10_11_ask_stops_and_removes_the_brain` (call `3d24c7e5 "<cto report>" brain w2:tB1`: exit 0, `recorded(calls) == ["claude stop 3d24c7e5", "claude rm 3d24c7e5", "herdr tab close w2:tB1"]`); `test_d1_a_brain_with_no_ask_is_refused` (parametrized: no row; R1104's row `` \| R1104 \| 15:25 ET \| DESK RECORD: `3d24c7e5` stopped, removed. \| RECORD \| ``; the ask row naming `bbbb2222`; the ask row with `LAUNCHED` for `DESK RECORD`; the ask row uncommitted; the ask row in yesterday's `cto-<D-1>.md` passed as the report: exit 1, `REFUSED: ` on stderr, `"2026-09-30 R76"` in stderr for the first four, `recorded(calls) == []`); `test_d1_the_desk_is_never_a_brain_kind` (`dddd4444` with an ask row naming it: refused, no call). RED on BASE: `test_d1_the_10_11_ask_stops_and_removes_the_brain` fails on `returncode == 0`: BASE prints `REFUSED: unknown kind: brain` (`:32`) and records no call. The refused cases are green on BASE too (BASE refuses the kind) and pin the after state. `test_a_brain_or_the_desk_is_refused` (`:164-171`, kind `build`) stays green unchanged | `ops/desk/desk-done.sh`, `tests/ops/test_desk_done.py` |
+| L1 | `desk-launch.sh brain`: the live-brain guard (`:803-813`) reads the LIST rows as today; for each live `brain` id it reads THE ASK ROW in `$REPORTS/cto-<D>.md` (the file's `committed` test refused as a missing row, not as a refusal of its own). Any live brain without it: the refusal stands byte for byte as `:813` (its text names `2026-09-30 R76`), nothing stopped, nothing launched. Every live brain with it: for each, `sh "$here/desk-done.sh" <id> "$REPORTS/cto-<D>.md" brain` (`here`, `:264`), then `run_launch` as `:814`; a non-zero exit refuses `REFUSED: desk-done.sh could not replace brain <id> (exit <n>); nothing launched` with nothing launched. Under `DESK_LAUNCH_DRY=1` no desk-done call runs: each would-be call is printed to stderr as `DRY: sh <here>/desk-done.sh <id> "<report>" brain`, and stdout stays the `cd` and the line. The reminder at `:814` and the comments at `:155-156`, `:803-804` name R131, R188, R191 beside R76 | `tests/ops/test_desk_launch_brain.py`, new section `# ---- card 462`; the `Desk` helper (`:69-123`) gains a fake `desk-done.sh` beside the copy (logs its argv to `self.calls` as `desk-done <args>`, exit from a tmp file) and a method writing and committing `reports/cto-<D>.md`. NEW: `test_l1_the_10_11_ask_replaces_the_brain` (LIST: `DESK` cto-desk, `3d24c7e5` brain; R1102's ask row committed; real run: exit 0, the calls file's lines are `desk-done 3d24c7e5 <repo>/docs/40 - DevDocs/reports/cto-<D>.md brain` then the `--bg` line); `test_l1_dry_prints_the_replace_and_runs_nothing` (dry: stdout the `cd` and the line, stderr holds the `DRY: sh …desk-done.sh 3d24c7e5` line, no calls file); `test_l1_a_failing_desk_done_launches_nothing` (fake exits 1: refused, no `--bg` call); `test_l1_a_brain_with_no_ask_is_refused` (parametrized as D1's no-ask cases: `refused(done, "a session named brain is live (3d24c7e5)")`, `"2026-09-30 R76"` in stderr, no calls file); `test_l1_two_brains_one_asked_is_refused` (two live brains, one ask row: refused, no desk-done call). RED on BASE: `test_l1_the_10_11_ask_replaces_the_brain` and `test_l1_dry_prints_the_replace_and_runs_nothing` fail on `returncode == 0`: BASE refuses `a session named brain is live (3d24c7e5)` (`:813`) whatever the report holds. The refused cases are green on BASE too. `test_a_live_brain_is_refused_and_nothing_runs` (`:170-176`, no report file) and `test_an_unreadable_session_list_is_refused` (`:179-189`) stay green unchanged | `ops/desk/desk-launch.sh`, `tests/ops/test_desk_launch_brain.py` |
+| R2 | RUN — asserts nothing. `uv run cobalt jobs restarts <BASE>..HEAD`; quote the table and the `RESTARTS:` line. Expected none: `ops/desk/` → "operator script; no Cobalt reader" (`src/cobalt/jobs/restarts.py:230-234`), `tests/` → "test/documentation; no resident" (`:245-246`), `docs/` → `DOCS` (`:225-229`) | — (output quoted) | none |
+
+## NOT IN THIS JOB
+- Any `ops/desk/` file but `desk-done.sh` and `desk-launch.sh`; `desk-list.sh` stands (its rows are read as `desk-launch.sh:807-811` reads them). No new script, no new command class: the brain stop is `desk-done.sh`'s existing `claude stop` / `claude rm` steps.
+- Every other kind of both scripts; kind `prompt`'s brain-seat refusal (`test_b5_*`, `test_o1_*`) stands: a brain launches only through kind `brain`.
+- A brain that has not asked: still stopped only on his word (R76); no path here stops it.
+- `docs/40 - DevDocs/prompts/BRAIN-HUB.md` (its `## MEASURE` asks the desk by message; `test_p5_the_hubs_measure_asks_the_desk_for_a_successor_and_names_its_model` stays green unchanged) and every other fixed file.
+- The vault: `topics/cto-desk-checklist.md` W8 and `areas/cobalt.md`; the desk folds the ASK ROW wording into W8 after the deploy (L58).
+- Any `src/`, `configs/` or `.claude/` file; any with-DB test (`DB: none`).
+
+## READ
+- `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-13.md` row R1331.
+- `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-02.md` row R131; `cto-2026-10-03.md` rows R188, R191; `cto-2026-09-30.md` row R76; `cto-2026-10-11.md` rows R1102 and R1104 (the 10-11 case).
+- `/Users/cobalt/cobalt/ops/desk/desk-done.sh` whole (71 lines).
+- `/Users/cobalt/cobalt/ops/desk/desk-launch.sh` lines 150-156, 217-237, 264-286, 745-815.
+- `/Users/cobalt/cobalt/ops/desk/desk-list.sh` whole (19 lines).
+- `/Users/cobalt/cobalt/tests/ops/test_desk_done.py` lines 1-60, 160-185; `tests/ops/test_desk_launch_brain.py` lines 1-190.
+- Precedent card: `prompts/2026-10-13/458-desk-refresh-card.md` (K5, `INSTALL: none`, `RESTARTS: none`).
+
+## CHECK ASKS
+- X1 Can a row count that should not: another id, an id that is a prefix or extension of `<id>`, the ask phrase outside a DESK RECORD row, yesterday's report, an uncommitted row?
+- X2 Is every brain that has not asked still refused by both scripts with the R76 text, and does no path stop a brain before every live brain's ask is proved?
+- X3 Is `cto-desk` refused under every kind, `brain` included?
+- X4 Does every existing test of `test_desk_done.py` and `test_desk_launch_brain.py` pass unchanged, and is the dry stdout still the `cd` and the line?
+- X5 Is the stop order right: desk-done (stop, rm) before the launch, and nothing launched after a failed stop?
+FOR THE CHECK: row 19 2026-10-13 brain: first in the drafter queue; the desk replaces a brain that asked (recorded row), and an unasked brain stays his
+
+## DEPLOY PROOF
+- `grep -c -F "card 462" /Users/cobalt/cobalt/ops/desk/desk-done.sh` · before `0` · after `1` or more
+- `grep -c -F "card 462" /Users/cobalt/cobalt/ops/desk/desk-launch.sh` · before `0` · after `1` or more
+- `grep -c -F "asked for its replacement" /Users/cobalt/cobalt/ops/desk/desk-done.sh` · before `0` · after `1` or more
+
+## RECORDS
+- Reads by the drafter `draft-brain-replace`, 2026-10-13 06:40-06:55 ET, at `main` HEAD `2f043f0b` (`git -C /Users/cobalt/cobalt rev-parse HEAD`). `git -C /Users/cobalt/cobalt status --short ops tests` printed nothing: every `ops/` and `tests/` `file:line` here is HEAD's. The last commit on the four files is `df775390` (`git log -1 --format=%h`). Nothing was run against the scripts.
+- THE GUARDS: `desk-done.sh:62-64` (`case "$name" in brain*|cto-desk) refuse …R76`), header `:14-17`; kinds `:23-33`, `*) refuse "unknown kind: $kind"` at `:32`; agents read `:46-61` (`:57` is `case $? in`). `desk-launch.sh:803-813` (LIST via `desk-list.sh` beside the script, `:805`; a row named `brain` → refuse at `:813`), `:814` the launch; header `:150-156`; `:730` is in kind `prompt` (the PROD-READ stamp case). Read with `grep -n` and `sed -n`.
+- THE RULINGS: `cto-2026-09-30.md` R76 (`a brain he asked for is stopped only on his word`); `cto-2026-10-02.md` R131 (`R76 amended: a brain restart ordered by him OR by the brain itself is approved, no ask`); `cto-2026-10-03.md` R188 (`at 500,000 tokens the brain asks the desk by message for its own restart`) and R191 (`past 500,000 every brain asks the desk for its own restart, no word of his`); checklist W8 (`topics/cto-desk-checklist.md:60`) carries all four. `cto-2026-10-12.md` R1138: HIS RULING · APPROVED, K1–K5.
+- THE 10-11 CASE: `cto-2026-10-11.md` R1102 (LAUNCHED row: `Brain asked for its replacement at ~490k; launcher refuses until he stops it (R76)`), R1104 (`3d24c7e5` stopped, removed under the standing rule, R188/R191). No DESK RECORD row of 10-11 names `3d24c7e5` with the ask; the red tests build that row in a fixture.
+- THE ID: `desk-list.sh` prints `a['id']` (`:16`); `desk-done.sh:50` matches `a.get("id") == sys.argv[1]` exactly; the desk's rows name brains by 8 hex (`3d24c7e5`, `b30b6df5`, R1104).
+- INSTALL: `/Users/cobalt/.claude/ops/desk-done.sh` and `desk-launch.sh` are symlinks into `/Users/cobalt/cobalt/ops/desk/` (`ls -la /Users/cobalt/.claude/ops`): the merge is the install; precedent `458-desk-refresh-card.md:4`. RESTARTS: `restarts.py:225-229`, `:230-234`, `:245-246`; precedent `458-desk-refresh-card.md:13`.
+- `card 462` and `asked for its replacement`: 0 hits in `ops/desk/` (Grep).
