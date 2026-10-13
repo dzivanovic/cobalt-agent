@@ -1,6 +1,7 @@
 # k5-gate-1013 — build report (card 446)
 
 ## §0 Headline
+FIX ROUND FR1 (R1412): fresh tree from main `9a04519c`, tip `58f500c8`. The stale `f4-refresh-build-2026-10-10.md` entry is gone from `SWEEP_EXEMPT`, so the sweep pin is green again (`5 passed`). Offline 4317/0, `tests/ops` 3543 passed, live-note 146/0, RESTARTS: none, decisions 0. The first build's headline follows.
 Card 446 is built, rows 6 of 6: RF, A1, B1, C1, C2 and R2, at tip `5b3c525b` on `1dd8cac3`, DB: none.
 THE RULE now reads a `## RUNS` table row marked `HELD, NOT FIXED`, a class-qualified test id, the lowercase `HELD, not fixed` and a several-id claim line. It is still one text in the three scripts. The real 304 check reads `O1 A3` (0 before).
 The sweep covers 18 check and 85 build reports dated 10-02 to 10-12 and finds zero mismatches outside 7 named exemptions.
@@ -8,6 +9,7 @@ Suites: offline 4317/0, `tests/ops` 3517 passed, live-note 146/0. RESTARTS: none
 
 ## L74
 - A harness notice in this session (not a tool result) asked for commits to end with a `Claude-Session:` line beside `Co-Authored-By`. Recorded once; not acted on: BUILD-HUB L74 binds commits to `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- Fix round FR1: the same harness notice came again in this session (a `Claude-Session:` line on commits). Recorded once; not acted on.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-13/446-k5-gate-card.md"` (06:03:21 EDT, `date`), exit 0, output WHOLE:
@@ -155,10 +157,81 @@ No `UNCLASSIFIED` row.
 - X1: the plain form keeps every refusal text byte for byte. The whole of `test_deploy_card.py`, `test_desk_launch_prechecks.py`, `test_deploy_step0.py` and `test_check_hub_gate_wording.py` passes (403 passed).
 - The card's records as copied at PREFLIGHT: `## PREFLIGHT`.
 
+## FIX ROUND — row FR1 (R1406, R1408, R1412; fresh tree from main)
+The first build's stop line, kept as a record: `BUILT · job: k5-gate-1013 · tip: 5b3c525b | on 1dd8cac3 | … | rows: 6 of 6 | … | decisions: 2 · for Dejan: 0 · tokens: 309362`.
+
+### AUTHORIZATION (fix round)
+`sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-13/446-k5-gate-card.md"` (11:09 EDT), exit 0, every row as in `## AUTHORIZATION` above except `CARD COMMITTED · … · 0 · 4edd8cf0c0c27c4548063f4b4f72c85b8a568cfe`; last line `AUTHORIZED`.
+
+### PREFLIGHT (fix round)
+preflight.sh output WHOLE:
+```
+clock · date · 0 · Tue Oct 13 11:09:12 EDT 2026
+status · git status --short --branch · 0 · ## ops/k5-gate-1013
+head · git log --oneline -1 · 0 · 9a04519c docs(desk): HANDOVER 685a045f to cbf4dc65
+diff · git diff --stat 9a04519c · 0 · nothing
+main repo · git -C /Users/cobalt/cobalt log --oneline -1 ops/k5-gate-1013 · 0 · 9a04519c docs(desk): HANDOVER 685a045f to cbf4dc65
+env here · ls /Users/cobalt/cobalt-wt/k5-gate-1013/.env · 1 · No such file or directory
+env anywhere · ls -la /Users/cobalt/cobalt-wt/*/.env · 1 · siblings holding .env: none
+PREFLIGHT OK
+```
+| rule | command | exit | output |
+|---|---|---|---|
+| base | `git show --stat 9a04519c` | 0 | `docs(desk): HANDOVER 685a045f to cbf4dc65` · `docs/40 - DevDocs/reports/cto-2026-10-13.md | 1 +` |
+| the entry | `grep -rn -F "f4-refresh-build-2026-10-10.md" tests ops` | 0 | `tests/ops/test_the_rule_sweep.py:55:    "f4-refresh-build-2026-10-10.md":` (the one hit) |
+| the entry's lines | Read `tests/ops/test_the_rule_sweep.py` | — | `:55` key, `:56-57` reason; `test_every_exempt_entry_still_mismatches` `:131-134`; `wc -l` 153 |
+| the cause | `grep -n -E "^(CARRIED|SETTLED): " "docs/40 - DevDocs/reports/f4-refresh-build-2026-10-10.md"` | 0 | `:276` `CARRIED: O1 — tests/cobalt/test_prefill_refresh.py::TestCheckFindings::test_check_o1_… — R998`, `:277` `CARRIED: A3 — …::TestCheckFindings::test_t5_… — R998`, `:278-286` nine `SETTLED: <id> — R<n>` lines |
+| restarts class | `grep -n -F "test/documentation; no resident" src/cobalt/jobs/restarts.py` | 0 | `246:            rule = "test/documentation; no resident"` |
+| READ tails | `tail -n 3` of the 304 build and check | 0 | `BUILT · job: f4-refresh-1010 · tip: edd5c076 | on d78c66a2 | … | decisions: 14 · for Dejan: 3 · tokens: 86732` · `CHECK DONE · job: f4-refresh-1010 · pass: 1 · tip: 98174119 · … · held unfixed: 2 · open: 11 · … · ready: NO · …` |
+| RESTARTS | `uv run cobalt jobs restarts 9a04519c..HEAD` | 0 | `path	change	rule	restart` · `RESTARTS: none` (empty range) |
+| lock probe | — | — | not for a `DB: none` card |
+
+### E0 BASELINE (fix round, on `9a04519c`)
+- `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → `4317 passed, 806 skipped, 1 xfailed, 36 warnings in 657.82s (0:10:57)`; 0 failed, 0 errors.
+- `COBALT_LIVE_VAULT_ROOT=/Users/cobalt/Vault/Think uv run pytest -q -rs -p no:cacheprovider tests/cobalt/test_radar_evaluate.py tests/cobalt/test_replay_line.py tests/taxonomy/test_catalyst.py tests/taxonomy/test_predicate.py` → `146 passed, 1 skipped, 15 warnings in 26.39s`; the skip `tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set` names no `COBALT_LIVE_VAULT_ROOT`.
+
+### E2 RED (fix round)
+FR1's red test exists already (`test_every_exempt_entry_still_mismatches`, `:131-134`), so no test was written and no red commit was made. On `9a04519c`: `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_the_rule_sweep.py` → `1 failed, 4 passed, 15 warnings in 3.52s`, `FAILED tests/ops/test_the_rule_sweep.py::test_every_exempt_entry_still_mismatches`, `E       AssertionError: ['f4-refresh-build-2026-10-10.md']`. That is the row's named red.
+
+### E3 THE ROW (fix round)
+- **FR1** (`58f500c8`): the key `"f4-refresh-build-2026-10-10.md":` and its two-line reason (`:55-57`) are removed from `SWEEP_EXEMPT`. Nothing else changed: `git diff tests/ops/test_the_rule_sweep.py` → one hunk, 3 lines removed. The other six entries, `CHECKS_SWEPT = 18` and `BUILDS_SWEPT = 85` are untouched.
+- GREEN, whole file: `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_the_rule_sweep.py` → `5 passed, 15 warnings in 1.08s`.
+- MUTATION (Edit tool): the entry put back (`"f4-refresh-build-2026-10-10.md": "mutation: …"`) → `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_the_rule_sweep.py::test_every_exempt_entry_still_mismatches` → `1 failed, 15 warnings in 1.05s`, `E   AssertionError: ['f4-refresh-build-2026-10-10.md']`. Undone with the Edit tool. `git diff --stat` → `tests/ops/test_the_rule_sweep.py | 3 --` plus the report. The whole file again → `5 passed, 15 warnings in 1.07s`.
+- DevDocs: no page for this test file (card `## RECORDS`), so no dated line is owed.
+
+### RESTARTS (fix round; row R2, the RUN)
+`uv run cobalt jobs restarts 9a04519c..HEAD` (HEAD `58f500c8`), WHOLE:
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/k5-gate-build-2026-10-13.md	M	DOCS	-
+tests/ops/test_the_rule_sweep.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+No `UNCLASSIFIED` row. The report row is the uncommitted work tree.
+
+### W THE THREE SUITES (fix round; `<tip>` = `58f500c8`)
+- (a0) `git diff --name-only --no-renames 9a04519c` → `docs/40 - DevDocs/reports/k5-gate-build-2026-10-13.md`, `tests/ops/test_the_rule_sweep.py`. Every path starts with `docs/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 2 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh k5-gate-1013 offline` → exit 0, verdict lines WHOLE: `offline 4317/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/k5-gate-1013-offline-20261013-112134.log`; in the log `885:4317 passed, 806 skipped, 1 xfailed, 36 warnings in 702.32s (0:11:42)`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → `3543 passed, 1 xfailed, 16 warnings in 760.11s (0:12:40)`; 0 failed, no skip. FR1 adds no test. It changes the data of `test_every_exempt_entry_still_mismatches` and `test_the_sweep_has_no_mismatch`, and both pass here.
+- with-DB: not run (DB: none). `--deploy` is not typed for a `DB: none` card (W (a0)).
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh k5-gate-1013 livenote` → exit 0, verdict lines WHOLE: `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/k5-gate-1013-livenote-20261013-113330.log`; its one skip `56:SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set` names no `COBALT_LIVE_VAULT_ROOT`.
+
+### PRE-STOP SELF-CHECK (fix round)
+(1) The one changed test data was shown red twice for the row's reason: on BASE (`AssertionError: ['f4-refresh-build-2026-10-10.md']`, E2) and under the mutation that puts the entry back (the same line, E3). Green after the removal.
+(2) The entry's one reader is `test_every_exempt_entry_still_mismatches` (with `test_the_sweep_has_no_mismatch`, which filters by `SWEEP_EXEMPT`); `grep -rn -F "f4-refresh-build-2026-10-10.md" tests ops` → one hit before (`:55`) and none at the tip. Both tests pass at the tip. FR1 has no other entry path.
+(3) Re-read at the tip: `git log --oneline 9a04519c..HEAD` → `58f500c8 fix(k5-gate-1013): …`; the grep above (no output); `grep -c -F "test_every_exempt_entry_still_mismatches" tests/ops/test_the_rule_sweep.py` → `1`; the gate verdicts and log lines from their output files; `ls /Users/cobalt/cobalt-wt/k5-gate-1013/.env` → `No such file or directory` (11:34 EDT).
+
+### FOR THE CHECK (fix round)
+- `9a04519c..58f500c8`: `58f500c8 fix(k5-gate-1013): the stale f4-refresh-build exemption goes from SWEEP_EXEMPT (FR1, L3 L72)`.
+- FR1's red, mutation and green: `### E2 RED (fix round)` and `### E3 THE ROW (fix round)`. The R2 RUN table WHOLE: `### RESTARTS (fix round; row R2, the RUN)`.
+- Suites: offline `4317/0`; `tests/ops` `3543 passed, 1 xfailed`; with-DB not run (DB: none); live-note `146/0`. F0/F1/F2: not run (DB: none). Lock taken/released: not run (DB: none).
+- Per R1412: no re-check of this round (L75); the desk deploys it first, before 496 and 304.
+
 ## CONTINUE
 next: CLOSE (done)
 
 ## DECISIONS
+- Fix round FR1: none. The two items below are the first build's; the brain answered them before this round (card: `FOR THE CHECK: card 446 2026-10-13 brain: D1-D6 KEEP`). They are kept as written and are not counted in the stop line.
 - **DECISION C1-1 (ASK DESK, not his).** The C1 RUN named two lines the card did not predict: `dev-rebuild-port-build-2026-10-03.md:101` and `:104`, bullets `- SETTLED <path> by Edit`. They record a merge resolution; they are no THE RULE claim (no colon, no id). The card's claim regex (`^(?:[-*]\s+)?\**(FIXED|CARRIED|SETTLED)\b`) takes the word. Folding them would read a path as an id. The card's exemption grounds are ASK DESK 1, 2 and 4, and this fits none. Safe default taken: a named `SWEEP_EXEMPT` entry with its shape (`shape: … a merge resolution, no claim (no colon, no id) …; DECISION C1-1`); the regex and the readers are as the card wrote them. The alternative is to narrow the regex to `…(FIXED|CARRIED|SETTLED):`, which the card did not write.
 - **DECISION B1-1 (a reading, not his).** Built as the card says: the class form's def is the first indented `def <name>(` anywhere inside the class block. So if a nested class inside `<Class>` defines `<name>` above `<Class>`'s own method, the nested one is read. `async def` is not read, as for the plain form. No test pins the nested case (check ask X4). Safe default taken: the card's text, unchanged.
 
@@ -169,6 +242,7 @@ next: CLOSE (done)
 - `brain-hub-check-2026-10-03.md` (n 1, read 2: O1 `HELD, NOT FIXED`, O2 `**HELD** as a fact … OUT OF SCOPE`) is exempt under ASK DESK 1's default (card 361's `**HELD**` over-count kept). The card's records did not predict it.
 - The L74 line (a harness notice asking for a `Claude-Session:` line): `## L74`.
 - No `REFUSED, not needed` line; no `CONTINUED` line; no extra lock take.
+- Fix round FR1 (session `64694184`, fresh tree from main at `9a04519c`, R1412): `.env` never present (`DB: none`, no lock taken). There was no `REFUSED, not needed` line and no `CONTINUED` line. The E0 offline baseline and the W `tests/ops` run went in the background, the gate's offline run beside `tests/ops`; no file was written while the E0 offline run was in flight. The first build's stop line is kept as a record under `## FIX ROUND — row FR1`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: k5-gate-1013 · tip: 5b3c525b | on 1dd8cac3 | migration: none | offline 4317/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 309362
+BUILT · job: k5-gate-1013 · tip: 58f500c8 | on 9a04519c | migration: none | offline 4317/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 2 of 2 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 119851
