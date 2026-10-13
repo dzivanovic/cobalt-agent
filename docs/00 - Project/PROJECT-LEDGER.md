@@ -4061,3 +4061,156 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-11*"` = `deploy-2026-10-11-held-closed`, `-held-table-row`, `-house-seat-order`, `-install-shadow-hub`, `-shadow-hub`, `-terra-pass-prompt`.
 - STOP LINE (L35), `reports/close-2026-10-10.md`: `CLOSE PUSHED b3f6fa0b · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-11.md` `## 8`.
+
+### 2026-10-12 — K1-K5 standing classes ruled; eight deploys incl. `db apply --prod`; S4 passed; results sitting done; card 434 recut-archive built
+- R1137 05:45 RECORD: his two `rm` lines done (R1136); CONTINUE W sent to build `b352c531`.
+- R1138 06:10 HIS RULING: K1-K5 standing classes and four standing items; cards C1-C5 run under them.
+- R1139 06:12 RECORD: BUILT card 386 `b352c531` tip `a8c18242`, offline 4199/0.
+- R1140 06:13 LAUNCHED: drafter `draft-cleanup-card` (prompt 387, C1) for card 389.
+- R1141 06:13 LAUNCHED: survey `survey-blockers` (prompt 388, C2).
+- R1142 06:13 LAUNCHED: drafter `draft-prodwrite-card` (prompt 390, C3) for card 392.
+- R1143 06:13 LAUNCHED: drafter `draft-hand-card` (prompt 391, C4) for card 393.
+- R1144 06:17 RECORD: card 393 needs-his-hand DRAFTED; base `6468fb5e`; build next.
+- R1145 06:21 LAUNCHED: card 389 scratch-clean DRAFTED; build base `5e5fab02`.
+- R1146 06:51 RECORD: CHECK DONE card 386 `faed89b0` ready NO, held G3.
+- R1147 06:53 DESK RECORD (brain): 386 check G1, G5, O1/G4 KEEP; G3 by row F1; drafter prompt 394.
+- R1148 06:55 LAUNCHED: F1 drafted on card 386; fresh Opus builder, no re-check (L75).
+- R1149 06:54 DESK RECORD (brain): F1 FIXED names a new test; signed DESK CORRECTION on the check report.
+- R1150 06:55 LAUNCHED: Opus builder `dd31bca2` at FIX ROUND F1 on card 386.
+- R1151 06:57 RECORD: desk `a20f9380` took over from `b837a254`; watches re-armed.
+- R1152 06:58 LAUNCHED: check `c4aa4c44` on card 389 (BUILT tip `382876bc`).
+- R1153 06:59 LAUNCHED: check `55e4a1cf` on card 393 (BUILT tip `ad73d04a`); survey `a7e3bab2` SURVEYED.
+- R1154 07:04 DESK RECORD (brain): DESK CORRECTION appended to the 386 check report; build decisions KEEP.
+- R1155 07:05 DESK RECORD (brain): C3 card 392 D1-D7 KEEP; follow-up card `db apply --prod` owed.
+- R1156 07:10 LAUNCHED: build `24ce971a` on card 392 (BASE `86b9daa5`); deploy card 386 refused.
+- R1157 07:14 DESK RECORD (brain): 386 deploys unchanged after a gate-alignment card first; prompt 396.
+- R1158 07:16 LAUNCHED: drafter `45581537` draft-gate-alignment (prompt 396) for card 397.
+- R1159 07:21 RECORD: card 397 gate-alignment DRAFTED `2a555526`; 5 decisions asked.
+- R1160 07:25 DESK RECORD (brain): card 397 D2-D5 KEEP, D1 changed (SETTLED/CARRIED lookup).
+- R1161 07:28 LAUNCHED: build `05456e9f` on card 397, BASE `b5462afd`.
+- R1163 07:38 RECORD: deploy card 398 scratch-clean written (TIP `581d7b3a`); card 393 check ready YES.
+- R1164 07:37 LAUNCHED: deploy hub `17f59673` on card 398 (tag `deploy-2026-10-12-scratch-clean`).
+- R1165 07:37 DESK RECORD (brain): card 393 build D1 KEEP; deploy card after 389.
+- R1166 07:45 RECORD: BUILT card 392 `24ce971a` tip `89fd13c5`, offline 4199/0.
+- R1167 08:00 RECORD: BUILT card 397 `05456e9f` tip `f47fb5d7`, offline 4199/0.
+- R1168 08:17 RECORD: DEPLOYED card 398 `eed748e2` (`deploy-2026-10-12-scratch-clean`), smoke GREEN.
+- R1169 08:17 DESK RECORD (brain): 392 build D1-D3 KEEP.
+- R1170 08:17 RECORD: R1151-R1167 minutes were estimates (W9); TIPs filled on 397 and 392.
+- R1172 08:17 LAUNCHED: checks `a8a08f5d` (card 397) and `d2b28859` (card 392); deploy card 399 written.
+- R1173 08:18 LAUNCHED: deploy hub `d7880864` on card 399 (tag `deploy-2026-10-12-needs-his-hand`).
+- R1174 08:57 RECORD: DEPLOYED card 399 `a21aebb8` (`deploy-2026-10-12-needs-his-hand`), smoke GREEN.
+- R1175 08:57 RECORD: CHECK DONE card 397 tip `1178554e` ready YES.
+- R1176 08:57 RECORD: deploy card 400 gate-alignment written; census smoke line dropped (D4).
+- R1177 08:57 LAUNCHED: deploy hub `55658c0e` on card 400 (tag `deploy-2026-10-12-gate-alignment`).
+- R1178 09:22 RECORD (his words): B5 steps 1-3 done on the trading PC; waits for the first live alert.
+- R1179 09:36 RECORD: DEPLOYED card 400 `8a11c101` (`deploy-2026-10-12-gate-alignment`), smoke GREEN.
+- R1180 09:36 RECORD: CHECK DONE card 392 tip `b96737bf` ready YES.
+- R1181 09:40 RECORD: deploy cards 401 (386) and 402 (392) written.
+- R1182 09:37 LAUNCHED: deploy hub `49745854` on card 401 (tag `deploy-2026-10-12-launcher-shadow-check`).
+- R1183 10:16 RECORD: DEPLOYED card 401 `1966c239` (`deploy-2026-10-12-launcher-shadow-check`), smoke GREEN.
+- R1184 10:17 LAUNCHED: shadow check `cb1ca70c` on card 366; TIPs filled on 369 372 367 370 373.
+- R1185 10:17 LAUNCHED: shadow checks `31c8d621` (369) and `c36376a0` (372).
+- R1186 10:20 LAUNCHED: deploy hub `34622521` on card 402 (tag `deploy-2026-10-12-prodwrite-seat`).
+- R1187 10:22 RECORD: FAILED deploy `34622521` card 402: STEP-T merge conflict in `desk-done.sh`; production untouched.
+- R1188 10:23 DESK RECORD (brain): 402 seam: row S on 392, fresh builder, no re-check.
+- R1189 10:23 LAUNCHED: drafter prompt 403 (row S on card 392).
+- R1190 10:26 LAUNCHED: builder `23823b11` at FIX ROUND row S on card 392.
+- R1191 10:25 RECORD: FAILED builder `23823b11` row S (no branch cut from main); route asked.
+- R1192 10:26 DESK RECORD (brain): new branch 1012b, whole diff re-applied by Edit, no re-check.
+- R1193 10:26 LAUNCHED: drafter `draft-392-repoint` (prompt 404); builder `23823b11` removed.
+- R1194 10:27 LAUNCHED: build `prodwrite-seat-1012b` on card 392, BASE `7744ece9`.
+- R1195 10:44 RECORD (his words): B5 arm/disarm worked; no tone on MISSED lines (silent by design).
+- R1196 10:58 RECORD (his words): B5 live alert TRIGGERED ASTS LONG 10:58:01 with a sound alarm.
+- R1197 10:59 DESK RECORD (brain): B5 proof via read-only prompt carrying the R686 read string.
+- R1198 10:59 LAUNCHED: drafter `draft-strike-alert-read` (prompt 405).
+- R1199 11:00 RECORD: prompt 406 refused by `desk-launch.sh prompt` (`uv run`); route asked.
+- R1200 11:02 DESK RECORD (brain): B5 read route: K5 card, no one-off seat.
+- R1201 11:02 LAUNCHED: drafter `draft-prod-read-route` (prompt 407) for card 408.
+- R1202 11:06 RECORD: CHECK DONE shadow 366 tip `813036e8`, offline 4196/0.
+- R1203 11:07 LAUNCHED: shadow check `2b95f001` on card 367.
+- R1204 11:07 RECORD: B5 PASS: `strike_alerts` id 7 shown, no DM; card 408 not needed.
+- R1205 11:09 DESK RECORD (brain): B5 proof accepted; cards 406-408 DROPPED.
+- R1206 11:12 RECORD: BUILT card 392 on `ops/prodwrite-seat-1012b` tip `62ea5957`; `deploy-card.sh` REFUSES.
+- R1207 11:13 DESK RECORD (brain): 392 at 1012b: A, K5 card reapplied-tip, else B fresh check.
+- R1208 11:13 LAUNCHED: drafter `draft-reapplied-tip` (prompt 410).
+- R1209 11:24 RECORD: card 411 reapplied-tip DRAFTED; fallback B: fresh check of 392 at 1012b.
+- R1210 11:24 RECORD: CHECK DONE shadow 369 tip `c5795c7b`, offline 4000/0.
+- R1211 11:25 LAUNCHED: check `2cda3902` on card 392 at 1012b (TIP `62ea5957`).
+- R1212 11:27 RECORD: FAILED check `2cda3902`: `stage-set.sh` dest not empty; `rm -r` denied.
+- R1213 11:27 DESK RECORD (brain): K5 card: `stage-set.sh` clears its own prior staging.
+- R1214 11:27 LAUNCHED: drafter `draft-stage-set-clear` (prompt 412) for card 413.
+- R1215 11:31 LAUNCHED: build on card 413 stage-set-clear, BASE `0cd1b802`.
+- R1216 11:42 RECORD: CHECK DONE shadow 372 tip `51fe6947`, offline 4159/0.
+- R1217 11:42 LAUNCHED: shadow check on card 370.
+- R1218 12:00 RECORD: BUILT card 413 `d166b30e`, offline 4199/0.
+- R1219 12:00 LAUNCHED: check on card 413 tip `d166b30e`.
+- R1220 12:03 RECORD: CHECK DONE shadow 367 tip `d02370df`, offline 4195/0.
+- R1221 12:03 LAUNCHED: shadow check on card 373.
+- R1222 12:18 RECORD (his words): saw no DM on ASTS as expected; asked the channel and how to produce one.
+- R1223 12:19 HIS RULING: "S4 passed and is not at risk"; DM fallback stays untested live.
+- R1224 12:21 RECORD (his words): the `/strike` tab question is a sitting for later.
+- R1225 12:33 RECORD: CHECK DONE card 413 tip `d166b30e` ready YES; deploy card 414 written.
+- R1226 12:33 LAUNCHED: deploy hub on card 414 (tag `deploy-2026-10-12-stage-set-clear`).
+- R1227 12:34 RECORD: desk `a0a5da6f` took over from `e37e9ba4`; deploy hub `2d583f65` watched.
+- R1228 12:38 RECORD: CHECK DONE shadow 370 tip `e544d94f`, offline 4000/0.
+- R1229 12:53 RECORD: CHECK DONE shadow 373 tip `aad18813`, offline 4071/15.
+- R1230 13:05 RECORD: DEPLOYED card 414 `4e67b058` (`deploy-2026-10-12-stage-set-clear`), smoke GREEN; check `86a74621` on 392.
+- R1231 13:51 RECORD: CHECK DONE card 392 tip `27313211` ready YES; deploy card 415 written.
+- R1232 13:52 LAUNCHED: deploy hub on card 415 (tag `deploy-2026-10-12-prodwrite-seat`).
+- R1233 14:31 RECORD: DEPLOYED card 415 `c928d4e3` (`deploy-2026-10-12-prodwrite-seat`), smoke GREEN.
+- R1234 14:31 RECORD: header TIPs filled on shadow cards 378 and 368.
+- R1235 14:32 LAUNCHED: shadow checks `4f8cc7fe` (378) and `d709cc3a` (368).
+- R1236 14:33 LAUNCHED: drafter `draft-db-apply-prod` (prompt 416) for card 417.
+- R1237 14:40 RECORD: card 417 DRAFTED; 7 ASK DESK sent to the brain.
+- R1238 14:42 DESK RECORD (brain): 417 decisions 1 2 3 6 7 KEEP, 4 5 CHANGE.
+- R1239 14:44 LAUNCHED: preflight `db-apply-prod-preflight` (prompt 419) on card 417.
+- R1240 14:49 RECORD: PREFLIGHT 417 round 1 ready NO; amend drafter prompt 420.
+- R1241 14:56 LAUNCHED: card 417 amend DRAFTED; preflight round 2 (prompt 421).
+- R1242 14:59 RECORD: PREFLIGHT 417 round 2 ready NO; allowlist redesign asked.
+- R1243 15:00 DESK RECORD (brain): 417 allowlist on a Postgres parse tree; amend drafter prompt 422.
+- R1244 15:09 LAUNCHED: card 417 allowlist DRAFTED; preflight round 3 (prompt 423).
+- R1245 15:16 RECORD: PREFLIGHT 417 round 3 ready YES, 6 NOTEs.
+- R1246 15:10 LAUNCHED: build `a44616ba` on card 417 (BASE `8f1d11ed`).
+- R1247 15:23 RECORD: CHECK DONE shadow 378 tip `3e60d5f6`, offline 4139/0.
+- R1248 15:40 RECORD: CHECK DONE shadow 368 tip `ff0f2e0f`, offline 4000/0.
+- R1249 15:41 LAUNCHED: helper `fill-shadow-results` (prompt 424).
+- R1250 15:42 RECORD: FAILED build `a44616ba` at A1/E3 (pglast 6.16 no cp314 wheel); brain asked.
+- R1251 15:44 DESK RECORD (brain): 417 A1 pin pglast 7.x with a proven cp314 wheel.
+- R1252 15:44 LAUNCHED: pin-only drafter `draft-417-pin` (prompt 425).
+- R1253 15:43 RECORD: TABLE DONE `complexity-shadow-results-2026-10-11.md`, 21 UNKNOWN cells.
+- R1254 15:44 LAUNCHED: drafter `draft-results-sitting` (prompt 426).
+- R1255 15:45 RECORD: card 417 pin DRAFTED; CONTINUE sent to build `a44616ba` at A1.
+- R1256 15:51 LAUNCHED: sitting hub 427 and blind seat 428 DRAFTED; preflight prompt 429.
+- R1257 15:55 RECORD: PREFLIGHT 427 428 ready NO (1 FAIL); 427 renamed `-tribunal`.
+- R1258 16:13 RECORD: FAILED build `a44616ba` at W; drafter `draft-417-row-w` (prompt 430).
+- R1259 16:14 DESK RECORD (brain): 417 W test-side pins YES; one with-DB end-to-end test.
+- R1260 16:14 RECORD: REFRESH at 316k tokens; successor `fd1710af`.
+- R1261 16:15 RECORD: desk `fd1710af` took over from `a0a5da6f`; drafter `2d5e7311` (prompt 430).
+- R1262 16:16 RECORD: card 417 rows A6 A7 DRAFTED `91986b0c`; CONTINUE: W sent to `a44616ba`.
+- R1263 16:29 DESK RECORD (brain): 417 A7 hang: separate closed autocommit connection, `timeout(120)`.
+- R1264 16:30 RECORD: card 417 A7 amend committed `31fe0cbe`.
+- R1265 16:31 LAUNCHED: fresh builder `56c65689` on card 417 at W; `a44616ba` removed.
+- R1266 17:04 RECORD: BUILT card 417 `56c65689` tip `dfcf2097`, offline 4307/0, with-DB 5210/0.
+- R1267 17:04 LAUNCHED: check hub `f59c007b` on card 417.
+- R1268 17:05 DESK RECORD (brain): 417 D1 follow-up migration card; D2, D3 KEEP.
+- R1269 18:15 RECORD: CHECK DONE card 417 `f59c007b` ready YES tip `fba1454e`.
+- R1270 18:16 LAUNCHED: results sitting hub (prompt 427) and blind seat (prompt 428).
+- R1271 18:18 HIS RULING: "Deploy 417" (`db apply --prod`, tip `fba1454e`); brain D1-D3 KEEP.
+- R1272 18:23 LAUNCHED: deploy hub `912836eb` on card 432; desk error asked him for a go (K19a).
+- R1273 18:28 RECORD: DEPLOYED card 417 `aa4ca7b2` (`deploy-2026-10-12-db-apply-prod`), smoke GREEN.
+- R1274 18:35 RECORD: RESULTS SITTING DONE, all six cells closed; routing table to him.
+- R1275 18:36 LAUNCHED: deploy hub `7e8f2ba1` on card 356 (284 `--kill`).
+- R1276 19:13 RECORD: DEPLOYED card 356 `82748821` (`deploy-2026-10-11-kill-hub-row`), smoke GREEN.
+- R1277 19:15 LAUNCHED: deploy hub `33ec9e05` on card 256 (relaunch at STEP-D0).
+- R1278 19:17 RECORD: FAILED PREFLIGHT card 256 hub `33ec9e05` (main moved); recut refused on stale tag `pre-aset-orphan-1010`.
+- R1279 19:18 DESK RECORD (brain): 256 recut: K5 card, recut archives a FAILED prior; Opus drafter prompt 433.
+- R1280 19:26 LAUNCHED: card 434 recut-archive DRAFTED (BASE `0990393f`); Sonnet preflight prompt 435.
+- R1281 19:30 RECORD: PREFLIGHT 434 round 1 ready NO; amend drafter prompt 436.
+- R1282 19:32 LAUNCHED: card 434 amend DRAFTED; Sonnet preflight round 2 (prompt 437).
+- R1283 19:33 RECORD: PREFLIGHT 434 round 2 ready NO, one citation fail; drafter prompt 438.
+- R1284 19:34 LAUNCHED: card 434 citations DRAFTED; build (recut-archive-1012, BASE `0990393f`).
+- R1285 20:27 LAUNCHED: BUILT card 434 `94f1e92d` tip `9c2020e8`, offline 4309/0; check launched.
+- R1286 21:06 RECORD: CHECK DONE card 434 `88de800f` ready YES tip `df775390`; deploy card next.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-12*"` = `deploy-2026-10-12-db-apply-prod`, `-gate-alignment`, `-launcher-shadow-check`, `-needs-his-hand`, `-prodwrite-seat`, `-scratch-clean`, `-stage-set-clear`, `-recut-archive` (`4bf3e614`, DEPLOYED after R1287, hub stop line: smoke GREEN, RESTARTS none); also `deploy-2026-10-11-kill-hub-row` (R1276).
+- STOP LINE (L35), `reports/close-2026-10-11.md`: `CLOSE PUSHED 66ba3dc4 · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-12.md` `## 8`.

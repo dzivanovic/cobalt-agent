@@ -961,6 +961,37 @@ OFF-LADDER work of 2026-10-11 (each with the ruling that ordered it):
 | Tribunals F5, F20, F21, F23 | DONE | FINALs approved R1055 (F23 FINAL `d2e1b40f`, R1052). |
 | Standing rules of the day | RULED | R1008, R1014, R1016, R1019 (bake-off routing, arms), R1069 (OpenAI, no stops), R1112 (spike D2). |
 
+### Status 2026-10-12
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1012` for 10-12 alone from `reports/cto-2026-10-12.md` rows R1137–R1286 (05:45 → 21:06 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-12*"` = `-db-apply-prod`, `-gate-alignment`, `-launcher-shadow-check`, `-needs-his-hand`, `-prodwrite-seat`, `-scratch-clean`, `-stage-set-clear`; `deploy-2026-10-11-kill-hub-row` landed 10-12 (R1276). The 10-11 close ran (`CLOSE PUSHED 66ba3dc4`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 | DONE-LIVE | Unchanged (see 10-08 to 10-11). |
+| S4 B5 live alert proof (F9 acceptance) | DONE-LIVE | His words R1196: live alert TRIGGERED ASTS LONG 10:58:01 with a sound alarm; the desk's R686 read shows `strike_alerts` id 7, `shown_at` stamped, no DM (R1204). His R1223: "S4 passed and is not at risk"; the Mattermost DM fallback stays untested live. |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | Last of the brain's deploy queue 284, 256, 304 (R1271); not deployed on 10-12 (no tag). |
+| S5 F5, F20, F21, F23 | NOT STARTED (FINALs APPROVED) | No row on 10-12; FINALs approved 10-11 (R1055). |
+| S5 F16 close | NOT STARTED | No row. |
+
+**Stop date: 2026-10-14 (S4, capped, day 5 of 7 on 10-12). S4: ON TIME (PASSED).** Reason: B5 proof passed 10-12 (R1204) and his R1223 ruled S4 passed and not at risk; S5 opens 10-15 with F4 already BUILT.
+
+OFF-LADDER work of 2026-10-12 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| K1-K5 standing classes, cards C1-C5 | RULED | His R1138 (LAWS L81). |
+| Scratch-clean (card `389`, deploy card `398`) | DONE-LIVE | K1. `deploy-2026-10-12-scratch-clean` `eed748e2` (R1168). |
+| Needs-his-hand section (card `393`, deploy card `399`) | DONE-LIVE | K5, C4. `deploy-2026-10-12-needs-his-hand` `a21aebb8` (R1174). |
+| Gate alignment (card `397`, deploy card `400`) | DONE-LIVE | Brain R1157. `deploy-2026-10-12-gate-alignment` `8a11c101` (R1179). |
+| Launcher shadow check (card `386`, deploy card `401`) | DONE-LIVE | K5. `deploy-2026-10-12-launcher-shadow-check` `1966c239` (R1183). |
+| Stage-set clear (card `413`, deploy card `414`) | DONE-LIVE | Brain R1213. `deploy-2026-10-12-stage-set-clear` `4e67b058` (R1230). |
+| Prodwrite seat (card `392`, deploy card `415`) | DONE-LIVE | C3. `deploy-2026-10-12-prodwrite-seat` `c928d4e3` (R1233); first deploy card 402 FAILED on a `desk-done.sh` merge conflict (R1187), nothing in production touched. |
+| `db apply --prod` (card `417`, deploy card `432`) | DONE-LIVE | His R1271 "Deploy 417". `deploy-2026-10-12-db-apply-prod` `aa4ca7b2`, RESTARTS agent aset radar (R1273). |
+| `--kill` hub card (card `284`, deploy card `356`) | DONE-LIVE | Brain R1060, R1271 queue. `deploy-2026-10-11-kill-hub-row` `82748821` (R1276). |
+| Orphan-cause (aset, card `222`, deploy card `256`) | BUILT-NOT-MERGED | Relaunch FAILED PREFLIGHT, main moved 55 non-docs paths; recut refused on stale tag `pre-aset-orphan-1010` (R1278); waits for card 434. |
+| Recut-archive (card `434`) | BUILT-NOT-MERGED | Brain R1279. BUILT `9c2020e8` (R1285); CHECK DONE ready YES tip `df775390` (R1286); deploy card next. |
+| https only (card `156`, deploy card `208`) | BUILT-NOT-MERGED | His R718; unchanged, after orphan-cause (card `256`) deploy. |
+| Model bake-off shadow arms and results sitting | DONE (his routing words open) | All shadow checks done (R1248); table `complexity-shadow-results-2026-10-11.md` (R1253); sitting DONE, six cells closed, bands LOW Sonnet NOT YET, Terra WITH A REVIEW; MID Sonnet WITH A REVIEW, Terra CAN BUILD; HIGH Sonnet WITH A REVIEW, Terra NOT YET (R1274). Waits on his Grok read and L27. |
+| Survey sheet (C2) | SURVEYED | `survey-blockers-2026-10-12.md`, 33 rows; waits on his word (§5 OWED). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
