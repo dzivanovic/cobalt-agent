@@ -9,7 +9,6 @@ TIP:
 REPORT: /Users/cobalt/cobalt-wt/plist-step-c-1013/docs/40 - DevDocs/reports/plist-step-c-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/plist-step-c-check-2026-10-13.md
 HOUSE B:
-DB: none
 RESTARTS: derived at the build by `cobalt jobs restarts BASE..HEAD`; the builder writes the derived line into its report and the deploy card carries it
 RULINGS: 2026-10-13 R1341
 
