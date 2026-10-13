@@ -4,7 +4,7 @@ BRANCH: deploy/k5-gate-1013
 WORKTREE: deploy-k5-gate-fr1-1013
 BASE: main
 TIP: 5540c4e1
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-k5-gate-1013.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-k5-gate-fr1-1013.md
 RULINGS: 2026-10-12 R1138
 TAG: deploy-2026-10-13-k5-gate-fr1
 MIGRATIONS: none
