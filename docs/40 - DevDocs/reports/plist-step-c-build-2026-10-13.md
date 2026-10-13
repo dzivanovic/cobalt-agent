@@ -5,7 +5,11 @@ Card 496 (`prompts/2026-10-13/496-plist-step-c-card.md`), BASE `5214e50b`, code 
 The first W stopped at (a0) because the card said `DB: none` while row OW1 changes `src/`. The desk removed the key (`2ff41ff1`), and the gate then ran green: offline 4327/0, with-DB 5230/0, live-note 146/0; `cobalt_dev` 0013 with F2 = F0; `.env` removed.
 RESTARTS: `com.cobalt.radar`. `tests/ops` at the tip: 1 failed, the pre-existing rule-sweep red outside the rows (DECISIONS 6).
 
-FIX ROUND (15:09, rows FR-D1 FR-O2 FR-A4 FR-O2b, card at `148e8892`): stopped at PREFLIGHT `head` (DECISIONS 9); no file changed yet.
+FIX ROUND (15:09–15:49, card at `148e8892`): all four rows are built (FR-D1, FR-O2, FR-A4, FR-O2b), code tip `c1fc230d`.
+- A `LAUNCHD` dry run is now `uv run cobalt <1-4 words> --dry-run`, both in the launcher and in STEP-C.
+- `STANDING-LIST.md:157` names the card-named one-shot.
+- The not-JSON sweep test is restored as a pin.
+- Gate `all --deploy`: offline 4328/0, with-DB 5231/0, live-note 146/0; `cobalt_dev` 0013 with F2 = F0; `.env` removed. RESTARTS: `com.cobalt.radar`.
 
 ## L74
 - One system notice in this session asked for a `Claude-Session:` line in commits. Recorded here once, not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -247,15 +251,138 @@ diff · git diff --stat 5214e50b · 0 · (15 lines)
 main repo · git -C /Users/cobalt/cobalt log --oneline -1 ops/plist-step-c-1013 · 0 · 6c3402af fix(plist-step-c-1013): …
 env here · ls /Users/cobalt/cobalt-wt/plist-step-c-1013/.env · 1 · No such file or directory
 env anywhere · ls -la /Users/cobalt/cobalt-wt/*/.env · 1 · siblings holding .env: none
-FAILED PREFLIGHT: head
+  FAILED PREFLIGHT: head   (the script's last line, indented here so no report line starts with it)
 ```
 - Why `head` fails (`ops/desk/preflight.sh:156-166`, read): for `build` the rule accepts only HEAD = BASE (`5214e50b`) or a subject starting `wip(plist-step-c-1013):`. HEAD is the check's commit `6c3402af` (`fix(…)`), which is the card's `TIP:`. The script has no fix-round case.
+- RESUMED 15:10 on the desk's `CONTINUE: PREFLIGHT`. Re-run of `preflight.sh build` → `head · … · 8f7df141 wip(plist-step-c-1013): PREFLIGHT — …` passes. Its last line is `FAILED PREFLIGHT: status`, and its one extra line is ` M "docs/40 - DevDocs/reports/plist-step-c-build-2026-10-13.md"`. That is the hub's required `RESUMED:` edit to this report, made before the run; every other row is as above, and `env here` / `env anywhere` show no `.env`. Went on (RECORDS).
+- SYMBOLS of the fix rows, read at `6c3402af`/`8f7df141`: `STANDING-LIST.md:157` holds the old text (grep above); `ops/desk/desk-launch.sh:1563-1578` is the dry-run `case` (Read; `:1570` and `:1577` are the refuse texts, `:1574` is the word cap); `ops/desk/deploy-step-c.sh:106` is the awk dry-run regex (Read); `DEPLOY-HUB.md:13` and `CARD.md:64` state `uv run <1–4 words of [a-z0-9-]>` (Read); `src/cobalt/jobs/watchdog.py:79` `raise BootstrapOwedError(f"{p}: not JSON ({e})") from e`, `:439` `except BootstrapOwedError as e:`, `:448` `… "not loaded", status.detail + owed_note))` (Read); `tests/cobalt/test_jobs.py:948` `def _sweep(monkeypatch, tmp_path, *, listed, loaded, labels=(OWED_LABEL,)):` (grep); `tests/ops/test_desk_launch_launchd.py:32` `DRY`, `:194-197` the four dry-run refusal cases (Read); check report FINDING O2 `:124-136` (Read).
+- The fix round runs no E0. BUILD-HUB STOP LINE: "only the tests that touch the fixed part rerun, then the deploy gate's pass".
+
+## FIX ROUND — E2 RED
+Tests written: `tests/ops/test_desk_launch_launchd.py` (FR-O2: `DRY` and refusal cases `:194-197` moved to `uv run cobalt …`; `:195` is `cobalt a b c d e`, five words after `cobalt`, because FR-O2b's `<1-4 words>` governs and "the FR-O2 tests … are made to match"; two new refusal cases `uv run cobalt --dry-run` and `uv run prefill cobalt --dry-run`; `test_check_o2_a_dry_run_that_is_no_cobalt_command_is_refused` restored word for word from the check report; `test_fr_o2b_four_words_after_cobalt_are_admitted`); `tests/ops/test_deploy_step_c.py` (FR-O2b: `line()` gains `dry=`; `test_fr_o2b_a_dry_run_that_is_no_cobalt_command_is_refused` [pkill, cobalt alone, five words after cobalt]; `test_fr_o2b_a_cobalt_dry_run_is_admitted` [`cobalt prefill refresh`, `cobalt a b c d`]); `tests/cobalt/test_jobs.py` (FR-A4: `TestBootstrapOwed::test_ow1_not_json_is_refused_loud`, as the row writes it).
+- `uv run pytest -q -rfE -p no:cacheprovider --color=no --tb=no tests/ops/test_desk_launch_launchd.py tests/ops/test_deploy_step_c.py tests/cobalt/test_jobs.py -k "o2 or l1_ or fr_ or ow1"` → `7 failed, 26 passed, 85 deselected`. The 7 FAILED:
+  - `test_l1_each_refusal[… uv run cobalt --dry-run]`, `[… uv run prefill cobalt --dry-run]`, `test_check_o2_a_dry_run_that_is_no_cobalt_command_is_refused`: `assert 0 != 0` (the dry launch exits 0). The O2 dry line holds `"Bash(COBALT_ENV=production uv run cobalt --dry-run)"` in the `[cobalt --dry-run]` case (quoted from `--tb=line`).
+  - `test_fr_o2b_four_words_after_cobalt_are_admitted`: `REFUSED: incomplete card: ## LAUNCHD dry run 'dry run: COBALT_ENV=production uv run cobalt a b c d --dry-run' has more than 4 words`, `assert 1 == 0`.
+  - step-C `test_fr_o2b_a_dry_run_that_is_no_cobalt_command_is_refused[pkill -f cobalt]` and `[cobalt --dry-run]`: stdout `ADMITTED: com.cobalt.prefill-refresh · add` / `STEP-C: ADMITTED 1`, `assert 0 == 1`.
+  - step-C `test_fr_o2b_a_cobalt_dry_run_is_admitted[cobalt a b c d]`: `REFUSED: ## LAUNCHD … — dry run is not none or COBALT_ENV=production uv run <1-4 words> --dry-run`, `assert 1 == 0`.
+- Green on the tip, as each row says: FR-A4's test (a PIN, row FR-A4 "NOT RED"); the FR-O2 pins `test_l1_a_named_label_gets_exactly_its_strings`, `test_l1_no_section_no_new_string`, `test_l1_no_generated_launchctl_string_holds_a_wildcard`; the moved refusal cases `:194`, `:196`, `:197` and `[cobalt a b c d e]` (each still refused for its own reason). Also green: FR-O2b's named accept case `[cobalt prefill refresh]` on step-C. The card calls it red on `6c3402af`, but the tip's 1-4-word regex already admits it, so it is a pin. The four-words case beside it is the accept side's red (DECISIONS 10).
+- FR-D1 red (check A6): `grep -n -F "NOT ON THIS LIST, by design: retiring or installing a launchd job" "docs/40 - DevDocs/prompts/STANDING-LIST.md"` → `157:Deny (7; R62): … NOT ON THIS LIST, by design: retiring or installing a launchd job (a `bootout` of any other label, an `rm` of a plist); …`.
+- Commit `a222362b` `wip(plist-step-c-1013): fix round red — FR-O2 FR-O2b FR-A4`.
+
+## FIX ROUND — E3 THE ROWS
+Commit `c1fc230d` `fix(plist-step-c-1013): a LAUNCHD dry run is cobalt and 1-4 words, in the launcher and STEP-C; STANDING-LIST names the card-named one-shot (FR-D1 FR-O2 FR-O2b FR-A4, L1 L3)`, 5 files, 10 insertions, 9 deletions.
+
+| row | built |
+|---|---|
+| FR-D1 | `STANDING-LIST.md:157`: `Installing or changing one card-named one-shot is on the line only by the strings `desk-launch.sh` generates from the card's `## LAUNCHD` (`DEPLOY-HUB.md` 4.6L, STEP-5 (1L); card 496). NOT ON THIS LIST, by design: retiring a launchd job (a `bootout` of any label no `## LAUNCHD` line names, an `rm` of a plist); …`, line 157 only |
+| FR-O2 | `desk-launch.sh` dry-run `case`: the pattern is `"dry run: COBALT_ENV=production uv run cobalt "*" --dry-run"`, the words are counted after `cobalt` (1-4, FR-O2b), and the three refuse texts name `cobalt` |
+| FR-O2b | `deploy-step-c.sh:106`: the regex is `^dry run: COBALT_ENV=production uv run cobalt [a-z0-9-]+( [a-z0-9-]+)?( [a-z0-9-]+)?( [a-z0-9-]+)? --dry-run$`, and the reason text names `cobalt`; `DEPLOY-HUB.md:13` and `CARD.md:64` state `uv run cobalt <1–4 words of [a-z0-9-]>` |
+| FR-A4 | test only; no `src/` change |
+
+- FR-D1 greens: the same grep → nothing (exit 1); `grep -n -o -F "Installing or changing one card-named one-shot is on the line only by the strings" …STANDING-LIST.md` → `157:Installing or changing one card-named one-shot is on the line only by the strings`. (The card's green grep `grep -n -F "desk-launch.sh"` also hits other lines: `-c` → 17.)
+- Greens: `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_deploy_step_c.py tests/ops/test_desk_launch_launchd.py tests/ops/test_hub_lines.py tests/ops/test_deploy_step0.py tests/cobalt/test_jobs.py tests/cobalt/test_smoke.py` → `246 passed, 19 skipped`.
+
+THE MUTATIONS (each made with Edit, run, undone with Edit):
+
+| row | mutation | run | result |
+|---|---|---|---|
+| FR-O2 | the launcher pattern and prefix back to `uv run "*"` / `uv run ` (no `cobalt`) | `tests/ops/test_desk_launch_launchd.py` | `4 failed, 18 passed`: `[cobalt --dry-run]`, `[prefill cobalt]`, `test_check_o2_…`, `test_fr_o2b_four_words_…` |
+| FR-O2 cap | `[ "$#" -le 4 ]` → `-le 9` | same | `1 failed, 21 passed`: `[cobalt a b c d e]` |
+| FR-O2b | step-C regex without `cobalt ` | `tests/ops/test_deploy_step_c.py -k fr_o2b` | `3 failed, 2 passed`: `[pkill -f cobalt]`, `[cobalt --dry-run]`, `[cobalt a b c d]` |
+| FR-O2b cap | a fifth optional word group in the regex | same | `1 failed, 4 passed`: `[cobalt a b c d e]` |
+| FR-A4 (1) | `watchdog.py:448` drops `+ owed_note` | `tests/cobalt/test_jobs.py -k not_json` | `1 failed`: `assert ('bootstrap-owed.json' in 'NOT LOADED in launchd')` |
+| FR-A4 (2) | `watchdog.py:439` `except ZeroDivisionError as e:` | same | `1 failed`: `cobalt.jobs.watchdog.BootstrapOwedError: …/data/deploy/bootstrap-owed.json: not JSON (Expecting property name enclosed in double quotes: line 1 column 2 (char 1))` escapes |
+
+After the undo: `git diff --stat -- src` → nothing. `git diff --stat` showed only the rows' five files and this report, and the commit followed.
+
+## FIX ROUND — RESTARTS
+`uv run cobalt jobs restarts 5214e50b..HEAD` (HEAD `c1fc230d`) → exit 0, whole:
+```
+path	change	rule	restart
+configs/cobalt/smoke/s2.yaml	M	operator command (cobalt smoke); no job reads	-
+docs/40 - DevDocs/cobalt/jobs/watchdog.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/smoke/checks.md	M	DOCS	-
+docs/40 - DevDocs/prompts/CARD.md	M	DOCS	-
+docs/40 - DevDocs/prompts/DEPLOY-HUB.md	M	DOCS	-
+docs/40 - DevDocs/prompts/STANDING-LIST.md	M	DOCS	-
+docs/40 - DevDocs/reports/plist-step-c-build-2026-10-13.md	M	DOCS	-
+ops/desk/deploy-step-c.sh	A	operator script; no Cobalt reader	-
+ops/desk/desk-launch.sh	M	operator script; no Cobalt reader	-
+src/cobalt/jobs/watchdog.py	M	static import reach	com.cobalt.radar
+src/cobalt/smoke/checks.py	M	static import reach	com.cobalt.radar
+tests/cobalt/test_jobs.py	M	test/documentation; no resident	-
+tests/cobalt/test_smoke.py	M	test/documentation; no resident	-
+tests/ops/test_deploy_step_c.py	A	test/documentation; no resident	-
+tests/ops/test_desk_launch_launchd.py	A	test/documentation; no resident	-
+RESTARTS: com.cobalt.radar
+```
+No `UNCLASSIFIED` row.
+
+## FIX ROUND — W
+`ls -la /Users/cobalt/cobalt-wt/plist-step-c-1013/.env` → No such file; `sh /Users/cobalt/cobalt/ops/desk/gate.sh plist-step-c-1013 all --deploy` (no `--deselect`, `--tickers` or `--migration`: the fix round adds no with-DB test, no ticker, no migration) at HEAD `826ee216`, a report-only wip above code tip `c1fc230d` (`git diff --stat c1fc230d 826ee216` touches only this report) → exit 0. Verdict lines, whole:
+```
+offline 4328/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 5231/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 146/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/plist-step-c-1013-all-20261013-151626.log
+```
+- (a) offline, log `:885` `4328 passed, 806 skipped, 1 xfailed`. That is one more than the first build's 4327: FR-A4's `test_ow1_not_json_is_refused_loud` (the other new tests are under `tests/ops`).
+- (b) `:891` `lock taken: plist-step-c-1013`; `:902` `F0: 664 35 272c95bbb12241e3611e4b36326ccf87`; LEVEL 0013.
+- (c) PASS 1, `:956` `pass 1: whole (deploy)` → `:1115` `5026 passed, 7 skipped, 99 deselected, 3 xfailed`. The seven SKIPPED lines above are the allowed set (as the first build's W read them); none is marked `OUTSIDE the allowed set`.
+- (c2) `:1117` **`dev forward: APPLIED 15:43:35`**; `:1195` `F1: 908 45 126f2d6983fa59f9d0eaaff7da7dd29c`.
+- (c3) PASS 2 → `:1969` `205 passed, 1 deselected`. `with-DB 5231/0` = 5026 + 205.
+- (c3r) stray rows: not read (no `--tickers`).
+- (f) `:2037` `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` = F0 → **`cobalt_dev: 0013 — F2 = F0`**; `:2091` `lock released`; `.env: removed`; `ls /Users/cobalt/cobalt-wt/plist-step-c-1013/.env` → No such file.
+- (e) live-note `:2160` `146 passed, 1 skipped` (the `COBALT_TEST_LIVE_DRC` skip; none names `COBALT_LIVE_VAULT_ROOT`).
+
+## FIX ROUND — PRE-STOP SELF-CHECK
+1. "Every added or changed test shown RED for its named reason against a mutation or negative control; any test that stayed green was rewritten."
+   - E2 reds (quoted under FIX ROUND — E2 RED): `[cobalt --dry-run]`, `[prefill cobalt]`, `test_check_o2_…`, `test_fr_o2b_four_words_…`, and on step C `[pkill]`, `[cobalt --dry-run]`, `[cobalt a b c d]`.
+   - Mutation reds (THE MUTATIONS table): the five-words cases on both sides (`-le 9`; a fifth regex group), FR-A4 under both of its mutations, and FR-D1 by its grep (old text present at `6c3402af`, absent at the tip).
+   - Pins green before and after, as the rows name them: `[cobalt prefill refresh]` on step C (DECISIONS 10), the moved refusal cases `:194`, `:196`, `:197` (still refused for their own reason; the first build's mutations of those branches stand), and the three FR-O2 pins.
+   - No test stayed green under its row's mutation.
+2. "Every entry path of each rule pinned by a test."
+   - `launchd_line` has one caller, `ops/desk/desk-launch.sh:1744` (`grep -rn -F "launchd_line " ops/desk/desk-launch.sh`); the deploy dry launch drives it in every test.
+   - The step-C awk at `:106` runs in every mode, and a BAD line is refused in every mode (`:161-165`, read). The FR-O2b tests drive the STEP-C mode.
+   - `sweep`'s callers `heartbeat/runner.py:150` and `jobs/cli.py:129` (first build PREFLIGHT) call `sweep()`; FR-A4 drives `watchdog.sweep` itself with an unreadable file. K18's ERROR on the same file is the existing `evaluate` path, which the card cites (`checks.py:733`) and does not ask this round to test.
+3. "Every `file:line`, count and quote in the report re-read from tool output at the tip."
+   - Grep tool `uv run cobalt ` over the two scripts → `deploy-step-c.sh:106`, `desk-launch.sh:1565`, `:1567`, `:1578`.
+   - `grep -n -o -F "Installing or changing …"` → `157:`.
+   - The gate log lines by `grep -n -E` (`:885`, `:891`, `:902`, `:956`, `:1115`, `:1117`, `:1195`, `:1969`, `:2037`, `:2091`, `:2160`).
+   - `git diff --stat c1fc230d -- . ":(exclude)docs/40 - DevDocs/reports"` → nothing.
+
+## FIX ROUND — FOR THE CHECK
+- Range `6c3402af..c1fc230d` (fix-round code tip). Commits:
+  - `8f7df141 wip(plist-step-c-1013): PREFLIGHT — fix round, head 6c3402af is the check's fix commit, preflight.sh build has no fix-round case` (report)
+  - `a222362b wip(plist-step-c-1013): fix round red — FR-O2 FR-O2b FR-A4`
+  - `c1fc230d fix(plist-step-c-1013): a LAUNCHD dry run is cobalt and 1-4 words, in the launcher and STEP-C; STANDING-LIST names the card-named one-shot (FR-D1 FR-O2 FR-O2b FR-A4, L1 L3)`
+  - `826ee216 wip(plist-step-c-1013): fix round resumed at PREFLIGHT` (report)
+  - then the report commit.
+- The whole range `5214e50b..c1fc230d` holds the first build, the check's `402aaa1c`/`6c3402af` and this round.
+- For house A (CHECK ASKS): this round changes `STANDING-LIST.md:157` (FR-D1), `DEPLOY-HUB.md:13` and `CARD.md:64` (FR-O2b).
+- X1, as the round leaves it: a `## LAUNCHD` dry run reaches the deploy line only as `COBALT_ENV=production uv run cobalt <1-4 words of [a-z0-9-]> --dry-run`, in the launcher (`desk-launch.sh:1565-1578`) and in STEP-C (`deploy-step-c.sh:106`). `pkill -f cobalt` is refused by both (tests above).
+- With-DB suite, F0 / F1 / F2, lock taken / released: FIX ROUND — W (log `:891`, `:2091`; forward 15:43:35).
+- `tests/ops` at the tip (outside the gate): `uv run pytest -q -rs -p no:cacheprovider --color=no --tb=line tests/ops` → `1 failed, 3599 passed, 1 xfailed, 16 warnings in 825.72s (0:13:45)`. The one red is `tests/ops/test_the_rule_sweep.py:134: AssertionError: ['f4-refresh-build-2026-10-10.md']`, the red from before BASE, outside the rows (DECISIONS 6). That is 15 more passes than the first build's 3584. Nine are this round's new `tests/ops` cases (4 in the launcher file, 5 in step C). The other 6 come from the check's commits `402aaa1c`/`6c3402af`, by subtraction; they were not counted one by one here.
 
 ## CONTINUE
-next: PREFLIGHT (fix round: rows FR-D1, FR-O2, FR-A4, FR-O2b at TIP `6c3402af`), on the desk's `CONTINUE`.
+next: none (fix round BUILT; L75: no re-check, the desk verifies the artifact).
 
 ## DECISIONS
-1. ASK DESK [10:15 ET] — FOR DEJAN. `STANDING-LIST.md:157` is not edited. Row D1 says it is "Edited only after the desk's answer to report `## DECISIONS` item 1". No answer is in this session, and the file is his one approval (R60: a command string that changes returns to him). Safe default taken: the line stays as is. CARD.md and the hub are built. When the answer comes, the edit is one line: installing or changing one card-named one-shot is on the line through the strings `desk-launch.sh` generates from `## LAUNCHD` (`DEPLOY-HUB.md` 4.6L, STEP-5 (1L)); retiring one stays off.
+1. ANSWERED (fix round): the card's row FR-D1 records the desk's answer, brain R1418 (K4), and line 157 is now edited. It was ASK DESK [10:15 ET] — FOR DEJAN. `STANDING-LIST.md:157` is not edited. Row D1 says it is "Edited only after the desk's answer to report `## DECISIONS` item 1". No answer is in this session, and the file is his one approval (R60: a command string that changes returns to him). Safe default taken: the line stays as is. CARD.md and the hub are built. When the answer comes, the edit is one line: installing or changing one card-named one-shot is on the line through the strings `desk-launch.sh` generates from `## LAUNCHD` (`DEPLOY-HUB.md` 4.6L, STEP-5 (1L)); retiring one stays off.
 2. DECISION W (answered at 10:17: the desk removed the key, `2ff41ff1`, and sent `CONTINUE: W`; the gate is green): the card's `DB: none` and row OW1 disagree. OW1 names `src/cobalt/smoke/checks.py`, `src/cobalt/jobs/watchdog.py`, `configs/cobalt/smoke/s2.yaml`, `tests/cobalt/test_smoke.py` and `tests/cobalt/test_jobs.py`, so (a0) fails (W above). Safe default: stop, as BUILD-HUB W (a0) says; the desk removes the key and sends `CONTINUE: W`.
 3. DECISION OW1-v: the card places (v) at "`test_jobs.py:885`'s fixture". That class is `@requires_db` (`:842`), and E2 on a DB: none card holds no with-DB red. The sweep tests (`TestBootstrapOwed`) therefore run offline, on the `Store` stub shape of `test_jobs.py:667` (an existing offline sweep test), with the same one-shot `_spec` and card 304's label. Their reds and mutations are shown above. Safe default: offline. The with-DB `TestEveryPlistMustBeLoaded` is unchanged.
 4. DECISION DF1/BO1 shape (the card leaves these open):
@@ -267,11 +394,16 @@ next: PREFLIGHT (fix round: rows FR-D1, FR-O2, FR-A4, FR-O2b at TIP `6c3402af`),
 5. DECISION L1 fill: the card writes `-e "s|<launchd strings>|$launchd|"`. The build uses `-e "s| <launchd strings>|$launchd|"` (the token's leading space goes with it, and each generated string carries its own leading space). This way a card with no `## LAUNCHD` gives today's line byte for byte (X4; (k) and its negative control above).
 6. UNPROVEN (L70), outside the rows, not fixed: `tests/ops/test_the_rule_sweep.py::test_every_exempt_entry_still_mismatches` FAILS with `AssertionError: ['f4-refresh-build-2026-10-10.md']` (`:134`). Its inputs are unchanged since BASE: `git diff --stat 5214e50b -- tests/ops/test_the_rule_sweep.py ops/desk/deploy-card.sh "docs/40 - DevDocs/reports"` prints nothing, and this build's report is dated 2026-10-13, outside its window (`LAST = "2026-10-12"`). The gate's offline pass will show it again.
 7. ASK DESK [10:15 ET]: a bootstrap-only deploy card has no launch path yet. `desk-launch.sh deploy` still requires `TIP`, `## SHIPS` and a check per ship; BO1's merge-free deploy needs a card shape the launcher accepts. This is outside the rows. Safe default: not built; the hub text (4.6L-BO) and the script mode exist.
-8. Self-check gap (2): `bootstrap_owed()`'s not-JSON path (`BootstrapOwedError`, which K18 turns into ERROR and the sweep into the unchanged red, plus a note) has no test. Safe default: left as built and named here for the check's fix round.
+8. ANSWERED (fix round, row FR-A4): `test_ow1_not_json_is_refused_loud` now pins the sweep's not-JSON path. It was a self-check gap (2): `bootstrap_owed()`'s not-JSON path (`BootstrapOwedError`, which K18 turns into ERROR and the sweep into the unchanged red, plus a note) has no test. Safe default: left as built and named here for the check's fix round.
 
 9. ASK DESK [15:10 ET], fix round: `preflight.sh build` fails `head` because HEAD is the check's `fix(plist-step-c-1013):` commit `6c3402af` (the card's `TIP:`), not BASE or a `wip(plist-step-c-1013):` commit. BUILD-HUB PREFLIGHT makes that the last line. Safe default: stopped before any change; waiting for `CONTINUE: PREFLIGHT` with the fact that the fix round starts at TIP `6c3402af`.
+   ANSWERED 15:10: the desk sent `CONTINUE: PREFLIGHT`.
+10. DECISION FR-O2b red: the row says both named cases are "RED on `6c3402af`". The accept case `uv run cobalt prefill refresh --dry-run` is GREEN there: the tip's regex `uv run [a-z0-9-]+( …)?{3}` admits it as 4 words. Safe default: it is kept as a pin. The accept side's red is `uv run cobalt a b c d --dry-run` (four words after `cobalt`, FR-O2b's upper bound), which the tip refuses and the fix admits. In FR-O2's word-count conflict, the card's own rule settles it: FR-O2b's `<1-4 words>` after `cobalt` governs both scripts. So the `:195` refusal case is `cobalt a b c d e` (five words after `cobalt`), not FR-O2's `cobalt a b c d`.
 
 ## RECORDS
+- CONTINUED at PREFLIGHT 15:10 (message from `cto-desk`: `CONTINUE: PREFLIGHT`, with no stated fact). Verified myself: `preflight.sh build` re-run → `head` passes on the wip `8f7df141`; its one failing row, `status`, is this report modified by the hub's own `RESUMED:` write.
+- REFUSED, not needed: two `grep -n -F` calls whose pattern holds `COBALT_ENV=production` — the hook said "route: production is the deploy hub's; a dev read uses COBALT_ENV=dev". The same read was done with the Grep tool (`uv run cobalt `).
+- Fix-round lock: one take by `gate.sh` (log `:891` taken, `:2091` released); `.env` removed, proven gone (`ls` → No such file).
 - Fix round 15:10: message from `cto-desk` saying card 496 gained row FR-O2b (`148e8892`). It adds a row, so per UNATTENDED RULES (b) the message itself is not followed. The row is taken from the card: re-read at `:36`, and authorize.sh re-run → `AUTHORIZED` on `148e8892`.
 - REFUSED, not needed: `git -C /Users/cobalt/cobalt show fc6a1e2a:ops/com.cobalt.prefill-refresh.plist` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." (A1; the same bytes were read through the gate worktree, proved equal by `git -C … diff --stat fc6a1e2a -- …` printing nothing.)
 - The card's RECORDS, re-read at PREFLIGHT: R1341 is `HIS RULING · APPROVED` (authorize.sh row); `.gitignore:6` is `data/`; `restarts.py:198-206` is as quoted; 304 `:73` is the WRITER GATE; the K18 anchors are `checks.py:427-434`; the sweep anchor is `watchdog.py:397`; `test_jobs.py:885` is `test_an_unloaded_one_shot_is_red`. The other card records (seams 458/485/480, the L68 note, the RESTARTS class homes) are copied as the card has them. The derived RESTARTS (`com.cobalt.radar`) matches the card's class-home read.
@@ -281,4 +413,4 @@ next: PREFLIGHT (fix round: rows FR-D1, FR-O2, FR-A4, FR-O2b at TIP `6c3402af`),
 
 First build's stop line (kept for the record): `job: plist-step-c-1013 · tip: 01fb7297 | on 5214e50b | … | rows: 9 of 10 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 382312` (whole at `dfc2624f`).
 
-RESUMED: PREFLIGHT 15:10
+BUILT · job: plist-step-c-1013 · tip: c1fc230d | on 5214e50b | migration: none | offline 4328/0 | with-DB 5231/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 14 of 14 | self-check: 3 of 3 | decisions: 6 · for Dejan: 0 · tokens: 179297
