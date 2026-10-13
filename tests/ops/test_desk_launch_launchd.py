@@ -29,7 +29,7 @@ GIT_ENV = {
     "GIT_CONFIG_NOSYSTEM": "1",
 }
 
-DRY = "COBALT_ENV=production uv run prefill refresh --dry-run"
+DRY = "COBALT_ENV=production uv run cobalt prefill refresh --dry-run"
 BOOTOUT = "Bash(launchctl bootout gui/501/com.cobalt.prefill-refresh)"
 BOOTSTRAP = "Bash(launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist)"
 BUILD_CARD = "prompts/2026-01-02/01-x-job-card.md"
@@ -191,10 +191,13 @@ def test_l1_a_deferred_label_gets_no_string(tmp_path):
     card_line(mode="remove"),
     card_line(card="prompts/2026-01-02/99-none-card.md"),
     card_line(card="reports/x-card.md"),
-    card_line(dry="COBALT_ENV=production uv run prefill refresh"),
-    card_line(dry="COBALT_ENV=production uv run a b c d e --dry-run"),
-    card_line(dry="COBALT_ENV=production uv run prefill * --dry-run"),
-    card_line(dry="COBALT_ENV=production uv run prefill refresh --dry-run; rm x"),
+    card_line(dry="COBALT_ENV=production uv run cobalt prefill refresh"),
+    card_line(dry="COBALT_ENV=production uv run cobalt a b c d e --dry-run"),
+    card_line(dry="COBALT_ENV=production uv run cobalt prefill * --dry-run"),
+    card_line(dry="COBALT_ENV=production uv run cobalt prefill refresh --dry-run; rm x"),
+    # card 496 FR-O2: `cobalt` is the first word and at least one word follows it
+    card_line(dry="COBALT_ENV=production uv run cobalt --dry-run"),
+    card_line(dry="COBALT_ENV=production uv run prefill cobalt --dry-run"),
     card_line(mode="deferred", dry="none"),
     "TWO",
 ])
@@ -210,6 +213,22 @@ def test_l1_each_refusal(tmp_path, bad):
     done = desk.launch()
     assert done.returncode != 0, done.stdout
     assert "REFUSED" in done.stderr, done.stderr
+
+
+def test_check_o2_a_dry_run_that_is_no_cobalt_command_is_refused(tmp_path):
+    desk = Desk(tmp_path)
+    desk.set_card(section(card_line(dry="COBALT_ENV=production uv run pkill -f cobalt --dry-run")))
+    done = desk.launch()
+    assert done.returncode != 0, done.stdout
+    assert "REFUSED" in done.stderr, done.stderr
+
+
+def test_fr_o2b_four_words_after_cobalt_are_admitted(tmp_path):
+    # card 496 FR-O2b: 1-4 words after `cobalt` (constructed words)
+    dry = "COBALT_ENV=production uv run cobalt a b c d --dry-run"
+    desk = Desk(tmp_path)
+    desk.set_card(section(card_line(dry=dry)))
+    assert tools(desk.line(), "--allowedTools").count(f"Bash({dry})") == 1
 
 
 def test_l1_no_generated_launchctl_string_holds_a_wildcard(tmp_path):

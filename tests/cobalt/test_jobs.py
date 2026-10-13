@@ -1005,6 +1005,17 @@ class TestBootstrapOwed:
         f = self._sweep(monkeypatch, tmp_path, listed=None, loaded={OWED_LABEL: False})[OWED_LABEL]
         assert not f.ok and f.state == "not loaded" and "NOT LOADED" in f.detail
 
+    def test_ow1_not_json_is_refused_loud(self, monkeypatch, tmp_path):
+        # card 496 FR-A4: the sweep catches the reader's refusal; the label stays red, the file named
+        path = tmp_path / "data" / "deploy" / "bootstrap-owed.json"
+        path.parent.mkdir(parents=True)
+        path.write_text("{")
+        f = self._sweep(monkeypatch, tmp_path, listed=None, loaded={OWED_LABEL: False})[OWED_LABEL]
+        assert not f.ok
+        assert f.state == "not loaded"
+        assert "NOT LOADED" in f.detail
+        assert "bootstrap-owed.json" in f.detail and "not JSON" in f.detail
+
     def test_ow1_a_loaded_listed_label_is_a_match(self, monkeypatch, tmp_path):
         listed = self._sweep(monkeypatch, tmp_path, listed=[OWED_LABEL], loaded={OWED_LABEL: True})[OWED_LABEL]
         plain = self._sweep(monkeypatch, tmp_path, listed=None, loaded={OWED_LABEL: True})[OWED_LABEL]

@@ -88,8 +88,9 @@ def launchd(*lines: str) -> str:
     return "## LAUNCHD\n" + "".join(f"{ln}\n" for ln in lines)
 
 
-def line(label: str = LABEL, mode: str = "add", row: str = "C2", gate: str | None = None) -> str:
-    out = f"{label} · {mode} · {BUILD_CARD}:{row} · dry run: none"
+def line(label: str = LABEL, mode: str = "add", row: str = "C2", gate: str | None = None,
+         dry: str = "none") -> str:
+    out = f"{label} · {mode} · {BUILD_CARD}:{row} · dry run: {dry}"
     return out + (f" · gate: {gate}" if gate is not None else "")
 
 
@@ -244,6 +245,33 @@ def test_c1_the_ops_desk_exception_stands(repo):
     done = repo.run("")
     assert done.returncode == 1, done.stdout + done.stderr
     assert last(done) == f"FAILED: C — ops/desk/x.plist: {FAILED_TAIL}"
+
+
+# ---- FR-O2b: the dry run names `cobalt` first, then 1-4 words ------------------------------------
+
+
+@pytest.mark.parametrize("dry", [
+    "COBALT_ENV=production uv run pkill -f cobalt --dry-run",
+    "COBALT_ENV=production uv run cobalt --dry-run",
+    "COBALT_ENV=production uv run cobalt a b c d e --dry-run",
+])
+def test_fr_o2b_a_dry_run_that_is_no_cobalt_command_is_refused(repo, dry):
+    repo.add_plist()
+    done = repo.run(launchd(line(dry=dry)))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: ## LAUNCHD " in done.stdout, done.stdout
+    assert last(done).startswith("FAILED: C — ") and last(done).endswith(FAILED_TAIL)
+
+
+@pytest.mark.parametrize("dry", [
+    "COBALT_ENV=production uv run cobalt prefill refresh --dry-run",
+    "COBALT_ENV=production uv run cobalt a b c d --dry-run",
+])
+def test_fr_o2b_a_cobalt_dry_run_is_admitted(repo, dry):
+    repo.add_plist()
+    done = repo.run(launchd(line(dry=dry)))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert f"ADMITTED: {LABEL} · add" in done.stdout.splitlines()
 
 
 def test_c1_a_removed_plist_is_retire_owed(repo):
