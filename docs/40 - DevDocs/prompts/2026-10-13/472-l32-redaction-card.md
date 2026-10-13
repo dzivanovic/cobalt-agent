@@ -11,9 +11,12 @@ HOUSE B:
 DB: none
 RULINGS: 2026-10-12 R1138
 
+## WHY
+- The brain's directions of 2026-10-13, `reports/cto-2026-10-13.md`: R1347 (scope: the L32 redaction of the f23 proposal :19 and :76 and the drafter report :50, history untouched), R1349 (row 18 approved R1324 (K2); card 472 names spans by file:line only, plus `338-f23-tribunal.md:16`), R1356 (the seam and L32 drafters are done).
+
 ## ROWS
 
-DOCS ONLY: every file sits under `docs/`. Each row names its span by file, line and section only (L32: this card quotes no count). The builder reads the span in place on BASE, replaces exactly that span with `[user data]`, and changes no other character. Lines proven against `git -C /Users/cobalt/cobalt show HEAD:<file>` at HEAD `0e3590dc`.
+DOCS ONLY: every file sits under `docs/`. Each row names its span by file, line and section only (L32: this card quotes no count). The builder reads the span in place on BASE, replaces exactly that span with `[user data]`, and changes no other character. Lines proven against `git -C /Users/cobalt/cobalt show HEAD:<file>` at HEAD `83c9894e`.
 
 | row | what | red first | files |
 |---|---|---|---|
@@ -32,7 +35,10 @@ DOCS ONLY: every file sits under `docs/`. Each row names its span by file, line 
 ## READ
 - `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f23-tribunal-2026-10-11.md` :60 and :298 (the three known spans).
 - `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/draft-l32-redaction-2026-10-13.md` `## RECORDS`.
+FOR THE CHECK: seam and L32 2026-10-13 brain: first ready merges first; row 18 approved R1324 K2, card pending; FINAL untouched; card 472 names spans by file:line only (no quotes) and gains 338-f23-tribunal.md:16
 
 ## RECORDS
-- `git -C /Users/cobalt/cobalt grep -n` of the two count patterns on HEAD `0e3590dc` printed `:19`, `:76` (proposal), `:50` (drafter report) and `:16` (`338-f23-tribunal.md`) (the drafter, 2026-10-13). Neither f23 report is modified in the working tree.
+- `git -C /Users/cobalt/cobalt grep -n` of the two count patterns on HEAD `83c9894e` (`git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD`) printed `:19`, `:76` (proposal), `:50` (drafter report) and `:16` (`338-f23-tribunal.md`) (the amender `draft-472-amend`, 2026-10-13). `git -C /Users/cobalt/cobalt status --short` on the three files printed nothing: none is modified in the working tree.
+- RESTARTS class of every changed path: all three (`docs/40 - DevDocs/reports/f23-design-proposal-2026-10-10.md`, `docs/40 - DevDocs/reports/f23-design-2026-10-10.md`, `docs/40 - DevDocs/prompts/2026-10-11/338-f23-tribunal.md`) start with `docs/`, so class `DOCS`, restarts none: `src/cobalt/jobs/restarts.py:225-228` (`path.startswith("docs/")` → `Classification(path, item.change, "DOCS", ())`); the file is unmodified in the working tree.
 - R1138 is his row `HIS RULING · APPROVED` of `reports/cto-2026-10-12.md` :173.
+- The brain's rows in `reports/cto-2026-10-13.md` (`^| R<n> ` grep): R1347 :20, R1349 :18, R1356 :11. The row-18 approval is R1349 together with survey R1324 (:43, K2, his "yes, yes, and remove").
