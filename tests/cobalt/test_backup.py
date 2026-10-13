@@ -272,6 +272,9 @@ class TestStagingLock:
 
     def test_two_snapshots_started_together_both_finish(self, tmp_path, monkeypatch):
         monkeypatch.setattr(restic, "STAGING", tmp_path)
+        # Longer than run 1's hold (WAIT), so run 2 waits it out; bounded, so
+        # a lock never released fails loud here instead of hanging 30 minutes.
+        monkeypatch.setattr(restic, "LOCK_WAIT_S", 3 * self.WAIT, raising=False)
         cfg = self._armed(tmp_path)
         dump1_written = threading.Event()
         dump2_written = threading.Event()
@@ -311,8 +314,8 @@ class TestStagingLock:
         assert dump1_written.wait(self.WAIT)
         t2 = threading.Thread(target=go, args=("run2",), name="run2")
         t2.start()
-        t1.join(3 * self.WAIT)
-        t2.join(3 * self.WAIT)
+        t1.join(5 * self.WAIT)
+        t2.join(5 * self.WAIT)
         assert not t1.is_alive() and not t2.is_alive()
         assert errors == {}, errors
         assert [name for name, _ in seen] == ["run1", "run2"]
@@ -349,6 +352,62 @@ class TestStagingLock:
         lock = tmp_path / ".backup.lock"
         assert lock.exists()
         assert lock.stat().st_mode & 0o777 == 0o600
+
+    def _lock_is_free(self, tmp_path) -> bool:
+        fd = os.open(tmp_path / ".backup.lock", os.O_RDWR)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            return True
+        except BlockingIOError:
+            return False
+        finally:
+            os.close(fd)
+
+    def test_a_dump_that_raises_mid_write_is_removed_and_the_lock_released(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(restic, "STAGING", tmp_path)
+        other = tmp_path / "other.sql"
+        other.write_bytes(b"-- not this run's\n")
+
+        def dump(name, into):
+            (into / f"{name}.sql").write_bytes(b"-- truncated")
+            raise RuntimeError("constructed: pg_dump died mid-write")
+
+        monkeypatch.setattr(restic, "dump_database", dump)
+        with pytest.raises(RuntimeError, match="mid-write"):
+            restic.snapshot(self._armed(tmp_path))
+        assert not (tmp_path / "cobalt_brain.sql").exists()
+        assert other.read_bytes() == b"-- not this run's\n"
+        assert self._lock_is_free(tmp_path)
+
+    def test_with_the_database_off_nothing_in_staging_is_removed(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(restic, "STAGING", tmp_path)
+        stray = tmp_path / "cobalt_brain.sql"
+        stray.write_bytes(b"-- another run's dump\n")
+        dumps = self._fake_dump(monkeypatch)
+        targets_seen = []
+        monkeypatch.setattr(restic, "_snapshot_one", lambda cfg, dest, targets: targets_seen.append(
+            targets) or restic.SnapshotResult(destination=dest.name, snapshot_id="00000000",
+                                              files_new=0, files_changed=0, bytes_added=0))
+        cfg = _cfg(database=DatabaseSpec(enabled=False, name="cobalt_brain"),
+                   destinations=self._armed(tmp_path).destinations)
+        restic.snapshot(cfg)
+        assert dumps == []
+        assert targets_seen == [["/tmp/vault"]]
+        assert stray.read_bytes() == b"-- another run's dump\n"
+        assert self._lock_is_free(tmp_path)
+
+    def test_a_dry_run_takes_the_lock_and_removes_its_own_dump(self, tmp_path, monkeypatch):
+        monkeypatch.setattr(restic, "STAGING", tmp_path)
+        self._fake_dump(monkeypatch)
+        seen = self._fake_snapshot(monkeypatch)
+        run = restic.snapshot(self._armed(tmp_path), dry_run=True)
+        assert run.results == [] and seen == []
+        assert run.db_dump_bytes > 0
+        assert not (tmp_path / "cobalt_brain.sql").exists()
+        assert (tmp_path / ".backup.lock").exists()
+        assert self._lock_is_free(tmp_path)
 
     def test_the_lock_wait_is_thirty_minutes(self):
         assert restic.LOCK_WAIT_S == 1800
