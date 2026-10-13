@@ -926,10 +926,10 @@ def test_s1_an_unreadable_size_is_said(tmp_path):
     assert (r.returncode, r.stderr) == (2, "DESK SIZE UNREAD — no transcript for x\n")
 
 
-@pytest.mark.parametrize("block", [("owed: none",), ("owed: none", stamp(1))], ids=["none", "stale"])
-def test_s2_no_stamp_or_a_stale_hour_asks_for_section_5_first(tmp_path, block):
+@pytest.mark.parametrize("off", [None, 1], ids=["none", "stale"])
+def test_s2_no_stamp_or_a_stale_hour_asks_for_section_5_first(tmp_path, off):
     d = Sized(tmp_path)
-    d.owed(*block)
+    d.owed("owed: none", *(() if off is None else (stamp(off),)))
     r = d.run()
     assert (r.returncode, r.stderr) == (2, "UPDATE §5 CURRENT NOW\nDESK SIZE 123,456 / 300,000\n")
 

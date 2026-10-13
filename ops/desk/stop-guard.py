@@ -37,6 +37,21 @@
 # give-up (`… GAVE UP after 3 blocks — session list unreadable — fix it`). Any other error on
 # the desk path (an unparseable block, an unreadable report or count, a failing pgrep) ->
 # exit 0 with ONE stderr line `stop-guard: desk not guarded — <reason>`.
+# THE DESK'S SIZE AND STATE EVERY TURN (card 2026-10-13 458; his 2026-10-13 R1323), only when
+# desk-context.sh stands beside this file and stop_hook_active is false: it runs
+# `sh desk-context.sh <session_id> 300000` (20 s) and puts, before the OWED line, `UPDATE §5
+# CURRENT NOW` when `## §5 CURRENT` holds no `STATE AT <hh:mm>` line of the ET hour now, then
+# `DESK SIZE <n> / 300,000` (or `DESK SIZE UNREAD — <first output line or the exit>`). At
+# 300,000 or more the size line is REFRESH_NOW below; the first such stop writes
+# `<transcript_path>.desk-refresh` (the order time) and starts `python3 <this file> --forced
+# <session_id> <transcript_path>` detached; a later stop with a one-line order file sends
+# WRITE_HANDOVER once (a second line). Per-turn lines alone: exit 2, count file 0. A report
+# whose last line is `HANDOVER: predecessor <this session> ` prints no per-turn line.
+# THE FORCED REFRESH (`--forced`, no stdin): waits DESK_REFRESH_TURN_WAIT (600) s from the order
+# for its second line, then DESK_REFRESH_LINE_WAIT (300) s for a new `HANDOVER:` line; a line
+# naming this session as predecessor ends it. Then: another live cto-desk -> nothing; else the
+# FORCED line (no new line came) committed by desk-commit.sh, `sh desk-launch.sh desk`, `claude
+# stop <id>`, `claude rm <id>`, each logged to /Users/cobalt/cobalt-wt/.job-state/DESK-REFRESH.
 #
 # HIS INSTALL (card row I1; his 2026-10-03 R77), after set 2 is DEPLOYED: the value of "hooks"
 # in user settings ~/.claude/settings.json (not main's tracked .claude/settings.json), pasted
@@ -60,6 +75,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -110,6 +126,24 @@ SESSION_ID = re.compile(r"[0-9a-f-]{8,}")
 PGREP = ["pgrep", "-l", "-f", "wait-stop-line.sh|desk-watch.sh"]
 BLOCKS = 3
 UNREADABLE = "session list unreadable — fix it"
+# the per-turn size and state, the order at 300k and the forced refresh (card 458; his 10-13 R1323)
+ET = ZoneInfo("America/New_York")
+CONTEXT = "desk-context.sh"
+SIZE_AT = 300000
+MEASURED = re.compile(r"context (\d+) of %d — (ok|REFRESH)" % SIZE_AT)
+STAMP = re.compile(r"^STATE AT (\d\d):(\d\d)$")
+UPDATE = "UPDATE §5 CURRENT NOW"
+REFRESH_NOW = (
+    "REFRESH NOW: (1) write the HANDOVER line and §5 CURRENT, "
+    "(2) run sh /Users/cobalt/.claude/ops/desk-launch.sh desk, (3) stop."
+)
+WRITE_HANDOVER = "WRITE HANDOVER NOW"
+HANDOVER = "HANDOVER:"
+PREDECESSOR = re.compile(r"HANDOVER: predecessor ([0-9a-f-]{8,}) ")
+DESK_REFRESH = WT_ROOT + "/.job-state/DESK-REFRESH"
+TURN_WAIT = ("DESK_REFRESH_TURN_WAIT", 600)
+LINE_WAIT = ("DESK_REFRESH_LINE_WAIT", 300)
+POLL = 5
 
 
 def worktree(cwd):
@@ -350,6 +384,7 @@ def desk(event):
         count = int(raw)
     report = desk_report()
     lines = report_lines(report)
+    turn = [] if event.get("stop_hook_active") else per_turn(event, lines)
     items = owed_block(lines)
     if items is None:
         line = "start it: the OWED block under %s of %s" % (CURRENT, report)
@@ -362,12 +397,17 @@ def desk(event):
             if what is None:
                 what = queued(lines)
             line = None if what is None else "start it: %s" % what
+    if line is None and turn:
+        # the per-turn lines alone: the continuation's stop reads a count (card 458 S1)
+        count_file.write_text("0\n", encoding="utf-8")
+        sys.stderr.write("".join("%s\n" % x for x in turn))
+        return 2
     if line is None:
         count_file.unlink(missing_ok=True)
         return 0
     if count < BLOCKS:
         count_file.write_text("%d\n" % (count + 1), encoding="utf-8")
-        sys.stderr.write("%s\n" % line)
+        sys.stderr.write("".join("%s\n" % x for x in turn + [line]))
         return 2
     when = datetime.now(ZoneInfo("America/New_York")).isoformat(timespec="seconds")
     os.makedirs(os.path.dirname(DESK_STOP), exist_ok=True)
@@ -377,7 +417,224 @@ def desk(event):
     return 0
 
 
+def here(name):
+    """The path of `name` beside this file."""
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), name)
+
+
+def now_iso():
+    return datetime.now(ET).isoformat(timespec="seconds")
+
+
+def handed_over(line, sid):
+    """`HANDOVER: predecessor <p> …` with the session id starting <p> (8+ chars): the desk refreshed."""
+    m = PREDECESSOR.match(line)
+    return bool(m) and bool(sid) and sid.startswith(m.group(1))
+
+
+def stamped(lines):
+    """`## §5 CURRENT` holds, before the next `## `, a STATE AT line of the ET hour now (card 458 R2)."""
+    if lines is None or CURRENT not in lines:
+        return False
+    hour = datetime.now(ET).hour
+    for line in lines[lines.index(CURRENT) + 1 :]:
+        if line.startswith("## "):
+            break
+        m = STAMP.match(line)
+        if m and int(m.group(1)) == hour:
+            return True
+    return False
+
+
+def measure(script, sid):
+    """(<n>, None) from desk-context.sh's plain mode, or (None, <first output line or the exit>)."""
+    try:
+        out = subprocess.run(
+            ["sh", script, sid, str(SIZE_AT)], capture_output=True, encoding="utf-8", timeout=20
+        )
+    except subprocess.TimeoutExpired:
+        return None, "timed out after 20 s"
+    first = (out.stdout.strip().splitlines() or [""])[0].strip()
+    m = MEASURED.fullmatch(first)
+    if out.returncode == 0 and m:
+        return int(m.group(1)), None
+    return None, first or "exit %d" % out.returncode
+
+
+def per_turn(event, lines):
+    """The desk's per-turn lines (card 458 S1-S3), [] when desk-context.sh is not beside this file
+    or the desk has refreshed (the report's last line names it predecessor)."""
+    script = here(CONTEXT)
+    if not os.path.exists(script):
+        return []
+    sid = str(event.get("session_id") or "")
+    body = [x for x in lines or [] if x.strip()]
+    if body and handed_over(body[-1], sid):
+        return []
+    out = [] if stamped(lines) else [UPDATE]
+    n, unread = measure(script, sid)
+    if n is None:
+        out.append("DESK SIZE UNREAD — %s" % unread)
+    elif n < SIZE_AT:
+        out.append("DESK SIZE %s / 300,000" % f"{n:,}")
+    else:
+        out.append(order(event, sid))
+    return out
+
+
+def order(event, sid):
+    """At 300k: the first order starts the forced refresh once; a one-line order file gets the
+    final message once (card 458 S2, S3 (a))."""
+    transcript = str(event.get("transcript_path"))
+    order_file = Path(transcript + ".desk-refresh")
+    try:
+        held = order_file.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        order_file.write_text(now_iso() + "\n", encoding="utf-8")
+        try:
+            subprocess.Popen(
+                [sys.executable, os.path.abspath(__file__), "--forced", sid, transcript],
+                stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except OSError as e:
+            refresh_log(sid, "start --forced", "-", str(e))
+        return REFRESH_NOW
+    if len(held) == 1:
+        with open(order_file, "a", encoding="utf-8") as f:
+            f.write(now_iso() + "\n")
+        return WRITE_HANDOVER
+    return REFRESH_NOW
+
+
+def refresh_log(sid, step, code, first):
+    """One line of the forced refresh's record (card 458 S3; the DESK-STOP precedent)."""
+    os.makedirs(os.path.dirname(DESK_REFRESH), exist_ok=True)
+    with open(DESK_REFRESH, "a", encoding="utf-8") as f:
+        f.write("%s %s %s — %s — %s\n" % (now_iso(), sid[:8], step, code, " ".join(first.split())))
+
+
+def seconds(pair):
+    """DESK_REFRESH_* as desk-handover.sh reads DESK_HANDOVER_WAIT: a whole number of seconds."""
+    name, default = pair
+    raw = os.environ.get(name, str(default))
+    if not raw.isdigit():
+        raise Unguarded("%s '%s' is not a number of seconds" % (name, raw))
+    return int(raw)
+
+
+def when(text):
+    """The epoch time of an ET ISO line, or None."""
+    try:
+        return datetime.fromisoformat(text.strip()).timestamp()
+    except ValueError:
+        return None
+
+
+def forced(sid, transcript):
+    """The forced refresh (card 458 S3 (b)): never waits for Dejan; a failed step is logged and
+    the next one still runs."""
+    report = desk_report()
+    order_file = Path(transcript + ".desk-refresh")
+    try:
+        turn_wait, line_wait = seconds(TURN_WAIT), seconds(LINE_WAIT)
+    except Unguarded as e:
+        refresh_log(sid, "refused", "-", str(e))
+        return 1
+
+    def held():
+        try:
+            return order_file.read_text(encoding="utf-8").splitlines()
+        except OSError:
+            return []
+
+    def handovers():
+        try:
+            lines = report_lines(report) or []
+        except Unguarded:
+            lines = []
+        return [x for x in lines if x.startswith(HANDOVER)]
+
+    def refreshed():
+        return any(handed_over(x, sid) for x in handovers())
+
+    h0 = len(handovers())
+    first = held()
+    deadline = (when(first[0]) if first else None) or time.time()
+    deadline += turn_wait
+    while True:
+        if refreshed():
+            refresh_log(sid, "refreshed itself", 0, "")
+            return 0
+        lines = held()
+        if len(lines) >= 2:
+            start = when(lines[1]) or time.time()
+            break
+        if time.time() >= deadline:
+            start = time.time()
+            break
+        time.sleep(min(POLL, max(0, deadline - time.time())))
+    deadline = start + line_wait
+    while True:
+        if refreshed():
+            refresh_log(sid, "refreshed itself", 0, "")
+            return 0
+        if len(handovers()) > h0:
+            new = True
+            break
+        if time.time() >= deadline:
+            new = False
+            break
+        time.sleep(min(POLL, max(0, deadline - time.time())))
+
+    try:
+        rows = listed()
+    except ListUnreadable as e:
+        refresh_log(sid, "desk-list.sh", "-", str(e))
+        rows = []
+
+    def own(i):
+        return SESSION_ID.fullmatch(i) is not None and (sid.startswith(i) or i.startswith(sid))
+
+    others = [i for i, name in rows if name == "cto-desk" and not own(i)]
+    if others:
+        refresh_log(sid, "live cto-desk %s" % others[0], "-", "launch nothing")
+        return 0
+
+    def step(name, argv):
+        try:
+            out = subprocess.run(argv, capture_output=True, encoding="utf-8", timeout=600)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            refresh_log(sid, name, "-", "%s: %s" % (type(e).__name__, e))
+            return
+        text = (out.stdout.strip() or out.stderr.strip()).splitlines()
+        refresh_log(sid, name, out.returncode, text[0] if text else "")
+
+    if not new:
+        line ="HANDOVER: FORCED — no line from %s; successor reconciles" % sid[:8]
+        try:
+            text = report.read_text(encoding="utf-8")
+            with open(report, "a", encoding="utf-8") as f:
+                f.write(("" if not text or text.endswith("\n") else "\n") + line + "\n")
+            refresh_log(sid, line, 0, "")
+        except OSError as e:
+            refresh_log(sid, line, "-", str(e))
+        step("desk-commit.sh", ["sh", here("desk-commit.sh"), "docs(desk): HANDOVER FORCED %s" % sid[:8], str(report)])
+    step("desk-launch.sh desk", ["sh", here("desk-launch.sh"), "desk"])
+    ids = [i for i, _ in rows if own(i)]
+    if ids:
+        step("claude stop %s" % ids[0], ["claude", "stop", ids[0]])
+        step("claude rm %s" % ids[0], ["claude", "rm", ids[0]])
+    return 0
+
+
 def main():
+    if len(sys.argv) == 4 and sys.argv[1] == "--forced":
+        try:
+            return forced(sys.argv[2], sys.argv[3])
+        except Exception as e:
+            refresh_log(sys.argv[2], "error", "-", "%s: %s" % (type(e).__name__, e))
+            return 1
     try:
         event = json.loads(sys.stdin.read())
         if not isinstance(event, dict):
