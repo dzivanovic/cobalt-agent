@@ -384,7 +384,6 @@ def desk(event):
         count = int(raw)
     report = desk_report()
     lines = report_lines(report)
-    turn = [] if event.get("stop_hook_active") else per_turn(event, lines)
     items = owed_block(lines)
     if items is None:
         line = "start it: the OWED block under %s of %s" % (CURRENT, report)
@@ -397,6 +396,8 @@ def desk(event):
             if what is None:
                 what = queued(lines)
             line = None if what is None else "start it: %s" % what
+    # after the OWED read: an unguarded stop never writes an order it does not show (check O1)
+    turn = [] if event.get("stop_hook_active") else per_turn(event, lines)
     if line is None and turn:
         # the per-turn lines alone: the continuation's stop reads a count (card 458 S1)
         count_file.write_text("0\n", encoding="utf-8")
@@ -452,8 +453,12 @@ def measure(script, sid):
         out = subprocess.run(
             ["sh", script, sid, str(SIZE_AT)], capture_output=True, encoding="utf-8", timeout=20
         )
-    except subprocess.TimeoutExpired:
-        return None, "timed out after 20 s"
+    except subprocess.TimeoutExpired as e:
+        # its first output line before the timeout, when it printed one (check G2)
+        raw = e.stdout or ""
+        raw = raw.decode("utf-8", "replace") if isinstance(raw, bytes) else raw
+        first = (raw.strip().splitlines() or [""])[0].strip()
+        return None, first or "timed out after 20 s"
     first = (out.stdout.strip().splitlines() or [""])[0].strip()
     m = MEASURED.fullmatch(first)
     if out.returncode == 0 and m:
@@ -621,7 +626,10 @@ def forced(sid, transcript):
             refresh_log(sid, line, "-", str(e))
         step("desk-commit.sh", ["sh", here("desk-commit.sh"), "docs(desk): HANDOVER FORCED %s" % sid[:8], str(report)])
     step("desk-launch.sh desk", ["sh", here("desk-launch.sh"), "desk"])
-    ids = [i for i, _ in rows if own(i)]
+    # the old desk's own cto-desk row first, then any other prefix row (check G1)
+    ids = [i for i, name in rows if own(i) and name == "cto-desk"] + [
+        i for i, name in rows if own(i) and name != "cto-desk"
+    ]
     if ids:
         step("claude stop %s" % ids[0], ["claude", "stop", ids[0]])
         step("claude rm %s" % ids[0], ["claude", "rm", ids[0]])
