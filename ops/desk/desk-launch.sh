@@ -72,7 +72,8 @@
 #           (b) the report's last `<pre-merge>` line holds the tag's commit P; (c) its last
 #           `<stack-final>` line holds the branch head S, and S^2 = P; (d) the gate tree is plain
 #           and registered on BRANCH; (e) S not on main; (f) no .env in the gate, no lock it owns;
-#           (g) archive/pre-<job>-<YYYYMMDD-HHMM> and archive/<BRANCH>-<stamp> valid and free.
+#           (g) archive/pre-<job>-<YYYYMMDD-HHMM> and archive/<BRANCH>-<stamp> valid, free and
+#           creatable (no ref on their path; a ref transaction prepared, then aborted).
 #           Then `job-clean.sh salvage <WORKTREE>` (a dirty tree to its wip branch; never forced),
 #           `branch -m` BRANCH to archive/<BRANCH>-<stamp>, a new tag archive/pre-<job>-<stamp> at
 #           P and only then `tag -d pre-<job>`; each step printed `ARCHIVE: …`, nothing deleted;
@@ -1991,6 +1992,12 @@ print(last)' "RECUT $job attempt $n — " "$last") && [ -n "$last" ] \
         git -C "$REPO" check-ref-format --branch "$ab" >/dev/null 2>&1 || nogo "$ab is not a valid branch name"
         ! git -C "$REPO" show-ref --verify --quiet "refs/tags/$at" || nogo "tag $at exists"
         ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$ab" || nogo "branch $ab exists"
+        # free is not enough: a ref on the name's path (a tag `archive`) blocks it; a ref transaction
+        # prepared and aborted proves each name creatable, changing nothing (check O1)
+        printf 'start\ncreate refs/tags/%s %s\nprepare\nabort\n' "$at" "$Pfull" \
+            | git -C "$REPO" update-ref --stdin >/dev/null 2>&1 || nogo "tag $at cannot be created: a ref on its path"
+        printf 'start\ncreate refs/heads/%s %s\nprepare\nabort\n' "$ab" "$Pfull" \
+            | git -C "$REPO" update-ref --stdin >/dev/null 2>&1 || nogo "branch $ab cannot be created: a ref on its path"
         # THE ARCHIVE: (1) the tree by job-clean.sh salvage (a dirty tree to a wip branch; never forced;
         # the unmerged gate branch kept), (2) the branch renamed, (3) the tag copied, then its old name dropped
         printf 'RUN: sh %s/job-clean.sh salvage %s\n' "$here" "$wt"
