@@ -14,7 +14,9 @@ Friday and somewhere else on Saturday. `restic restore --include` needs a
 path you can type, and on the day it is needed nobody wants to list a
 snapshot to find out where the database went. `STAGING` is that stable
 path, and it is emptied in a `finally` so a 360 MB dump never outlives
-the run that made it.
+the run that made it. One run at a time holds `STAGING/.backup.lock`
+(card 441: a second `backup run` overwrote the nightly's dump and the
+nightly's cleanup removed it), and each run removes only the dump it wrote.
 
 WHY `restic` IS RUN AS A SUBPROCESS with an explicit env. The repository
 password reaches it through `RESTIC_PASSWORD` in the child's environment
@@ -24,10 +26,12 @@ on disk, never a log line. Same for the B2 keys.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
 import subprocess
+import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -46,6 +50,10 @@ TAG = "cobalt-nightly"
 #:     restic restore <id> --target DIR \
 #:         --include /Users/cobalt/cobalt-backups/staging/cobalt_brain.sql
 STAGING = Path.home() / "cobalt-backups" / "staging"
+
+#: Seconds `snapshot()` waits for another run to release
+#: `STAGING/.backup.lock` before it fails loud (card 441, brain R1295).
+LOCK_WAIT_S = 1800
 
 
 class BackupError(RuntimeError):
@@ -178,10 +186,43 @@ def snapshot(cfg: Optional[BackupConfig] = None, *, dry_run: bool = False) -> Ba
 
     run = BackupRun()
     STAGING.mkdir(parents=True, exist_ok=True)
+    # One run at a time: two runs share the one dump path below. The lock
+    # file is never unlinked — a third run would lock a new inode while a
+    # second still waits on the old one.
+    lock_path = STAGING / ".backup.lock"
+    fd = os.open(lock_path, os.O_RDWR | os.O_CREAT, 0o600)
+    try:
+        os.chmod(lock_path, 0o600)
+        started = time.monotonic()
+        while True:
+            try:
+                fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                break
+            except BlockingIOError:
+                waited = time.monotonic() - started
+                if waited >= LOCK_WAIT_S:
+                    try:
+                        holder = os.pread(fd, 32, 0).decode().strip() or "unknown"
+                    except (OSError, UnicodeDecodeError):
+                        holder = "unknown"
+                    raise BackupError(
+                        f"another backup run holds {lock_path} (pid {holder}); waited "
+                        f"{waited:.1f} s (LOCK_WAIT_S {LOCK_WAIT_S}). No dump was written "
+                        "and nothing in STAGING was removed."
+                    ) from None
+                time.sleep(min(1.0, LOCK_WAIT_S - waited))
+        os.ftruncate(fd, 0)
+        os.pwrite(fd, str(os.getpid()).encode(), 0)
+    except BaseException:
+        os.close(fd)
+        raise
+
+    dump: Optional[Path] = None
     try:
         targets = [str(p) for p in cfg.sources]
         if cfg.database.enabled:
-            dump = dump_database(cfg.database.name, STAGING)
+            dump = STAGING / f"{cfg.database.name}.sql"
+            dump_database(cfg.database.name, STAGING)
             run.db_dump_bytes = dump.stat().st_size
             targets.append(str(dump))
             logger.info("backup: {} dumped, {:.1f} MB", cfg.database.name, run.db_dump_bytes / 1e6)
@@ -191,10 +232,15 @@ def snapshot(cfg: Optional[BackupConfig] = None, *, dry_run: bool = False) -> Ba
                 continue
             run.results.append(_snapshot_one(cfg, dest, targets))
     finally:
-        # The dump is 360 MB today. It exists for the length of the run
-        # and nothing else may depend on finding it afterwards.
-        for leftover in STAGING.glob("*.sql"):
-            leftover.unlink(missing_ok=True)
+        # The dump is 360 MB today. It exists for the length of the run;
+        # this run removes the one file it wrote, never another, then
+        # releases the lock.
+        try:
+            if dump is not None:
+                dump.unlink(missing_ok=True)
+        finally:
+            fcntl.flock(fd, fcntl.LOCK_UN)
+            os.close(fd)
     return run
 
 
