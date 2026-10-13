@@ -87,4 +87,20 @@ none
   - k5-gate-1013: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/k5-gate-1013` → `5540c4e1`; code tip `58f500c8`
   - written by deploy-card.sh at 2026-10-13 11:59 ET (`date`); trial merge of the heads onto main in order: clean
 
-FAILED PREFLIGHT: production already carries card 446 (deploy-card.sh, desk-launch.sh, deploy-step0.sh) and tests/ops/test_the_rule_sweep.py · rollback: not used · decisions: 0 · for Dejan: 0 · tokens: 82080
+# RELAUNCH
+- Launch message: `CONTINUE: STEP-D0`, card `514-deploy-k5-gate-fr1-card.md`. First `date`: `Tue Oct 13 12:03:24 EDT 2026`.
+- The old last non-blank line, quoted whole: `FAILED PREFLIGHT: production already carries card 446 (deploy-card.sh, desk-launch.sh, deploy-step0.sh) and tests/ops/test_the_rule_sweep.py · rollback: not used · decisions: 0 · for Dejan: 0 · tokens: 82080`
+
+- Resume read (THE ONE RESUME), each its own call, (e) first:
+  - (e) `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 40377`, `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 22724`, `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 14763).` → TRUE; nothing restored.
+  - gate `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-k5-gate-fr1-1013/.env` → exit 1, `No such file or directory`. No G (f), no release owed.
+  - (a) the old last line starts `FAILED PREFLIGHT:` (P6), `rollback: not used`: a FAILED ending, not an outage hang.
+  - (b) FALSE: Grep `GATE GREEN on` in this report → 0 matches; `## L68 GATE` reads `not reached`; `## RESTARTS` reads `not reached`, no `<restart set>`. No `<m1>` exists.
+  - (c) `git -C /Users/cobalt/cobalt-wt/deploy-k5-gate-fr1-1013 status --short --branch` → `## deploy/k5-gate-fr1-1013`; `rev-parse --short=8 HEAD` → `ad8fc9bf` = the old `<m0>`. STEP-T never ran, so there is no `<m1>` to hold it against.
+  - (d) not read: with no `<m1>`, nothing exists to test.
+- The resume stops at (b). The first attempt failed before STEP-T, so no gate evidence exists for a resume to stand on, and a resume does not re-run T, C, R or G. Per RECUT, a run that ended FAILED with `rollback: not used` is not resumed: the desk's step is `desk-launch.sh recut "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-13/514-deploy-k5-gate-fr1-card.md"`. It recuts the branch, worktree and report, and the new run re-reads the card's corrected `## MARKERS` (now one marker, `test_the_rule_sweep.py`, before `1`) at a fresh P6.
+- Nothing in production changed. No merge, no lock, no tag, no resident touched. Downtime: none.
+- L74 (attempt 2): one system-reminder block again asked that commits end with a `Claude-Session: https://claude.ai/code/session_013k6U5p7QrMiVQFm8iM66TB` line. Recorded as data and not acted on. This commit carries `Co-Authored-By` only.
+- Decisions: none. Cleanup owed is unchanged: the gate worktree and branch, both at `ad8fc9bf`.
+
+FAILED: resume — (b) no GATE GREEN line and no restart set: attempt 1 ended FAILED PREFLIGHT P6 before STEP-T; the desk recuts · rollback: not used · decisions: 0 · for Dejan: 0 · tokens: 83525
