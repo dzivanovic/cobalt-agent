@@ -995,6 +995,66 @@ def test_g1_a_fixed_line_naming_an_absent_test_is_refused(desk):
     assert not desk.gate_left()
 
 
+# ---- card 446 A1 B1 C2: the table mark, the class form, the folds (R1310, R1311) -----------------
+
+CHECK_304 = "docs/40 - DevDocs/reports/f4-refresh-check-2026-10-10.md"
+TABLE_HEAD = "| id | source | run | output | verdict |\n|---|---|---|---|---|\n"
+CLASS_PLAIN = "import pytest\n\n\nclass TestC:\n    def test_o1(self):\n        assert True\n"
+CLASS_STRICT = ('import pytest\n\n\nclass TestC:\n    @pytest.mark.xfail(strict=True, reason="carried")\n'
+                "    def test_o1(self):\n        assert False\n")
+
+
+def rows_304() -> str:
+    """The real `## RUNS` rows `:140` (O1), `:144` (A1), `:146` (A3), `:148` (A5) of the 304 check."""
+    text = git(REPO, "show", f"HEAD:{CHECK_304}").splitlines()
+    rows = [text[139], text[143], text[145], text[147]]
+    assert [r.split("|")[1].strip() for r in rows] == ["O1", "A1", "A3", "A5"], rows
+    return TABLE_HEAD + "".join(f"{r}\n" for r in rows)
+
+
+def launches(desk: Desk) -> None:
+    done = desk.launch("deploy", str(desk.deploy), dry=True)
+    assert done.returncode == 0, done.stderr
+    assert "REFUSED" not in done.stderr, done.stderr
+
+
+def test_a1_the_launch_reads_the_304_runs_rows(desk):
+    """RED on BASE: `REFUSED: … lists 0 HELD, NOT FIXED row(s) under ## RUNS (none), its last line
+    says 'held unfixed: 2'`."""
+    held_round(desk, runs_text=rows_304(), n=2,
+               lines=["CARRIED: O1 — tests/x_test.py::test_o1 — R7", "CARRIED: A3 — tests/y_test.py::test_a3 — R7"],
+               tests={"tests/x_test.py": STRICT_TEST, "tests/y_test.py": STRICT_TEST.replace("test_o1", "test_a3")})
+    launches(desk)
+
+
+@pytest.mark.parametrize("line, src", [
+    pytest.param("FIXED: O1 — tests/x_test.py::TestC::test_o1", CLASS_PLAIN, id="FIXED"),
+    pytest.param("CARRIED: O1 — tests/x_test.py::TestC::test_o1 — R7", CLASS_STRICT, id="CARRIED"),
+])
+def test_b1_the_launch_reads_a_class_qualified_line(desk, line, src):
+    """RED on BASE: `REFUSED: deploy ops/x-job: held id O1 has no FIXED line in the fix report …`."""
+    held_round(desk, lines=[line], tests={"tests/x_test.py": src})
+    launches(desk)
+
+
+@pytest.mark.parametrize("runs_text", [
+    pytest.param("- O1 · own · `x` · `1 failed` · HELD, not fixed — `ops/x.sh` (constructed)\n", id="RUNS bullet"),
+    pytest.param("- O1 · own · `x` · `1 failed` · **HELD**.\n\n## FIXES\n- O1: HELD, not fixed (x) — f\n",
+                 id="FIXES bullet"),
+    pytest.param(TABLE_HEAD + "| O1 | own | `x` | `1 failed` | HELD, not fixed — f |\n", id="RUNS table row"),
+])
+def test_c2_the_launch_counts_the_lowercase_spelling(desk, runs_text):
+    """RED on BASE: `REFUSED: … lists 0 HELD, NOT FIXED row(s) …`."""
+    held_round(desk, lines=[FIXED_O1], runs_text=runs_text)
+    launches(desk)
+
+
+def test_c2_the_launch_reads_a_fixed_line_naming_two_ids(desk):
+    """RED on BASE: `REFUSED: deploy ops/x-job: held id O1 has no FIXED line …`."""
+    held_round(desk, runs=("O1", "O2"), n=2, lines=["FIXED: O1 O2 — tests/x_test.py::test_o1"])
+    launches(desk)
+
+
 def test_h2_a_held_check_at_the_code_tip_without_a_fix_report_is_refused(desk):
     """RED on BASE: the check's tip is the code tip, so `:973` short-circuits and it launches."""
     held_round(desk, lines=[], fix=False)
