@@ -1,6 +1,6 @@
 JOB: k5-gate-1013
 LADDER: OFF-LADDER — reports/cto-2026-10-13.md R1310, R1311, R1316
-BRANCH: deploy/k5-gate-1013
+BRANCH: deploy/k5-gate-fr1-1013
 WORKTREE: deploy-k5-gate-fr1-1013
 BASE: main
 TIP: 5540c4e1
