@@ -603,3 +603,14 @@ def test_ra7_an_archive_name_already_present_is_refused(desk, taken):
     assert archive_refs(desk.repo) == [f"refs/{'tags' if what == 'tag' else 'heads'}/{name}"]
     refusal = [ln for ln in done.stderr.splitlines() if ln.startswith("REFUSED: " + NOT_ARCHIVED)]
     assert len(refusal) == 1 and name in refusal[0], done.stderr
+
+
+def test_o1_an_archive_name_blocked_by_an_existing_ref_is_refused_before_anything(desk):
+    """Check O1: `refs/tags/archive` makes every `archive/pre-…` tag uncreatable (a D/F conflict)."""
+    stale_256(desk)
+    git(desk.repo, "tag", "archive", "main")
+    old, before = desk.card.read_text(), (refs(desk.repo), worktrees(desk.repo))
+    done = desk.recut()
+    refused(desk, done, NOT_ARCHIVED, old)
+    assert (refs(desk.repo), worktrees(desk.repo)) == before
+    assert desk.gate.is_dir()
