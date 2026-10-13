@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/plist-step-c-1013
 WORKTREE: plist-step-c-1013
 BASE: 5214e50b
-TIP:
+TIP: 01fb7297
 REPORT: /Users/cobalt/cobalt-wt/plist-step-c-1013/docs/40 - DevDocs/reports/plist-step-c-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/plist-step-c-check-2026-10-13.md
-HOUSE B:
+HOUSE B: as needed
 RESTARTS: derived at the build by `cobalt jobs restarts BASE..HEAD`; the builder writes the derived line into its report and the deploy card carries it
 RULINGS: 2026-10-13 R1341
 
