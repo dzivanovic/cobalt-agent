@@ -156,6 +156,11 @@ field() {
 # report's date (<date> from its file name), read newest first (R1160).
 # A static read: no test is run. The first refusal sets held_why (naming <who> and the id) and
 # returns 1; the check report is never written.
+# The readers are four seams (card 446, R1311), each reading its argument or stdin only, no git:
+# held_runs <check report> (the `## RUNS` ids, in file order), held_fixes <check report> (the
+# `## FIXES` ids), held_union <check report> (the `## RUNS` ids, then those of `## FIXES` that
+# `## RUNS` does not name) and fix_lines (a report's text on stdin; one line per FIXED, CARRIED or
+# SETTLED line it reads: `F <id> <path> <name> -`, `C <id> <path> <name> R<n>`, `S <id> R<n>`).
 held_n() {
     printf '%s\n' "$1" | grep -o -E '(^| )held unfixed: [0-9]+( |$)' | sed -n '1p' \
         | sed -e 's/^ *held unfixed: //' -e 's/ *$//' | grep -E '^[1-9][0-9]*$'
@@ -172,20 +177,39 @@ held_row() {
         fi
     done
 }
+# held_runs <check report> -> the ids of its `## RUNS` held bullets and table rows, one per line
+held_runs() {
+    awk '/^## /{on = ($0 == "## RUNS"); next}
+        on && /^- [A-Za-z0-9._-]+ · / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/ · .*/, ""); print}
+        on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
+            sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && index(v, "**HELD**")) print id}' "$1"
+}
+# held_fixes <check report> -> the ids of its `## FIXES` held bullets, one per line
+held_fixes() {
+    awk '/^## /{on = ($0 == "## FIXES"); next}
+        on && /^- [A-Za-z0-9._-]+: / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/: .*/, ""); print}' "$1"
+}
+# held_union <check report> -> the ids of `## RUNS`, then those of `## FIXES` that `## RUNS` does not name
+held_union() {
+    { held_runs "$1" | sed 's/^/R /'; held_fixes "$1" | sed 's/^/F /'; } \
+        | awk '$2 == "" {next} $1 == "R" {r[$2] = 1; print $2; next} !r[$2] {print $2}'
+}
+# fix_lines < report -> one normalized line per FIXED, CARRIED or SETTLED line
+fix_lines() {
+    sed -n -E \
+        -e 's#^FIXED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+)$#F \1 \2 \3 -#p' \
+        -e 's#^CARRIED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+) — (R[0-9]+)$#C \1 \2 \3 \4#p' \
+        -e 's#^SETTLED: ([A-Za-z0-9._-]+) — (R[0-9]+)$#S \1 \2#p'
+}
 held_rule() {
     hr_who=$1 hr_check=$2 hr_last=$3 hr_tip=$4 hr_head=$5 hr_frep=$6
     held_why=""
     hr_reports="$REPO/docs/40 - DevDocs/reports"
     hr_n=$(held_n "$hr_last")
-    hr_runs=$(awk '/^## /{on = ($0 == "## RUNS"); next}
-        on && /^- [A-Za-z0-9._-]+ · / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/ · .*/, ""); print}
-        on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
-            sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && index(v, "**HELD**")) print id}' "$hr_check")
-    hr_fixes=$(awk '/^## /{on = ($0 == "## FIXES"); next}
-        on && /^- [A-Za-z0-9._-]+: / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/: .*/, ""); print}' "$hr_check")
+    hr_runs=$(held_runs "$hr_check")
+    hr_fixes=$(held_fixes "$hr_check")
     # the ids of `## RUNS`, then those of `## FIXES` that `## RUNS` does not name
-    hr_ids=$({ printf '%s\n' "$hr_runs" | sed 's/^/R /'; printf '%s\n' "$hr_fixes" | sed 's/^/F /'; } \
-        | awk '$2 == "" {next} $1 == "R" {r[$2] = 1; print $2; next} !r[$2] {print $2}')
+    hr_ids=$(held_union "$hr_check")
     hr_k=$(printf '%s\n' "$hr_ids" | grep -c .)
     hr_list=$(printf '%s\n' "$hr_ids" | grep . | tr '\n' ' ' | sed 's/ *$//')
     hr_list=${hr_list:-none}
@@ -231,9 +255,8 @@ held_rule() {
         *) held_why="$hr_who: the fix report $hr_frep of held id(s) $hr_list does not end 'BUILT · … tip: $hr_tip': $hr_flast"; return 1 ;;
     esac
     # one normalized line per FIXED or CARRIED line: `F <id> <path> <name> -` or `C <id> <path> <name> R<n>`
-    hr_lines=$(printf '%s\n' "$hr_blob" | sed -n -E \
-        -e 's#^FIXED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+)$#F \1 \2 \3 -#p' \
-        -e 's#^CARRIED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+) — (R[0-9]+)$#C \1 \2 \3 \4#p')
+    hr_read=$(printf '%s\n' "$hr_blob" | fix_lines)
+    hr_lines=$(printf '%s\n' "$hr_read" | awk '$1 == "F" || $1 == "C"')
     while IFS=' ' read -r hr_kind hr_id hr_path hr_name hr_row; do
         [ -n "$hr_id" ] || continue
         if ! printf '%s\n' "$hr_ids" | grep -q -x -F -e "$hr_id"; then
@@ -359,7 +382,7 @@ HELD_LINES
             if (o) {sub(/^- /, ""); sub(/ · .*/, ""); print}}
         on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
             sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && opened(v)) print id}' "$hr_check")
-    hr_settled=$(printf '%s\n' "$hr_blob" | sed -n -E 's#^SETTLED: ([A-Za-z0-9._-]+) — (R[0-9]+)$#\1 \2#p')
+    hr_settled=$(printf '%s\n' "$hr_read" | awk '$1 == "S" {print $2, $3}')
     while IFS=' ' read -r hr_id hr_row; do
         [ -n "$hr_id" ] || continue
         if printf '%s\n' "$hr_ids" | grep -q -x -F -e "$hr_id"; then
