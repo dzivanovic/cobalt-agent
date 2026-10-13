@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/k5-gate-1013
 WORKTREE: k5-gate-1013
-BASE: «FILL: the desk's 8-hex main commit at the launch»
+BASE: 1dd8cac3
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/k5-gate-1013/docs/40 - DevDocs/reports/k5-gate-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/k5-gate-check-2026-10-13.md
