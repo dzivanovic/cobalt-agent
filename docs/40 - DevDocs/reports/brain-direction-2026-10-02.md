@@ -239,6 +239,14 @@ On `reports/survey-blockers-2026-10-12.md` `## DECISIONS`:
 - The other B rows run by card inside K1–K5 with no word of his. Rows 21–33 KEEP, except row 31.
 - Row 31 REWRITTEN, his words: "this one stops desk now and everything else. The rule is if blocked check if you used bare commands". A blocked call follows three steps, in order: (1) a bare-command check: was it one bare command? If not, resend it as single bare calls (the guard's own "NOT A REFUSAL" route, never a workaround); (2) the approved route: if a script or string the seat already holds does the job (`scratch-clean.sh`, `job-clean.sh`, the R686 read), use it; (3) still denied: that ONE item stops, goes to `## NEEDS HIS HAND` with the full why, and everything else keeps running. Never: the same action disguised (a file pointer, a rename, another seat, another tool). Amends UNATTENDED-LAUNCH :13-19, L61 and checklist K19a by card (K5).
 
+## RULED 2026-10-13 — the rules cut list, all of it (his "yes fix, and delete all from prior list with no strike")
+On `reports/rules-map-2026-10-13.md` `## CUT LIST` (:567-603), with the brain's one change (his working preferences go to `preferences.md`):
+- The 13 contradictions: the losing lines are deleted, and the stop-line token field is added.
+- The 25 stale lines and the duplicate copies in 40 groups are deleted.
+- The moves: the remaining desk checklist and contract lines go to `CTO-DESK-WAKEUP.md` under ON TRIGGER headings, and both topic files are retired. His working preferences go to `preferences.md`. Rulings leave NOW for their homes. The brain-restart rule goes to BRAIN-HUB, and no-awk to the STANDING-LIST NEVER block.
+- The three principles (build firewall, design standard, Cobalt's absolute boundaries) become laws L82–L84, with text as the map gives it. He reads them at DONE and may veto.
+- The work is done by cards (drafters), with the desk as the one memory and LAWS writer.
+
 ## PLAN ROWS ADDED 2026-10-09 night (brain judge answers; follow-ups, not his rulings)
 - Launcher card (with the owed "accept held items the fix report names fixed" row): `deploy-card.sh --fix-report "<path>"` per job card emits the CARD.md :48 fix-round SHIPS row, instead of refusing "adds paths outside docs/" (card 156, R771).
 - Archiver defect card (drafter, R685): bounded 429 retry with `Retry-After` inside the L53 bucket, and retried targets named in the run report. First 429s in history, 10-09 20:35–20:41, radar paused, strike not yet deployed (R808).
