@@ -20,7 +20,8 @@
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh deploy "<absolute card path>"
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh deploy "<absolute card path>" STEP-D0  (the one resume)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh recut "<absolute deploy card path>"    (a deploy whose
-#        gate FAILED, recut and relaunched in ONE call: card 2026-10-03/03 adoption-scripts L5)
+#        gate FAILED, recut and relaunched in ONE call: card 2026-10-03/03 adoption-scripts L5; a
+#        prior that left its pre-<job> tag is archived first: card 2026-10-12 434 A1)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh devfix "<absolute card path>"          (one dev-maintenance
 #        job on cobalt_dev: DEVFIX-HUB.md, card 12 devfix-route; a resume names its step as build)
 #   sh /Users/cobalt/.claude/ops/desk-launch.sh build|check "<card>" [PASS-2] <step>   (a NEW worker at
@@ -63,7 +64,20 @@
 #           when the worktree does not exist yet; `cd <worktree>`; DEVFIX-HUB.md's `claude --bg`
 #           line with <card>, <job>, <worktree>, <table>, <proof test> filled.
 #   recut : for a deploy card whose REPORT's last line starts `FAILED` and names no `rollback:
-#           used`: `gate-clean.sh <card>` (beside this script; its refusals stand); the card's
+#           used`: `gate-clean.sh <card>` (beside this script; its refusals stand) — or, when the
+#           tag pre-<JOB> exists (card 2026-10-12 434 A1), THE ARCHIVE: every test read first, the
+#           first miss `REFUSED: tag pre-<job> exists: the deploy got that far — not archived:
+#           <the miss>`, nothing changed: (a) no deploy tag TAG, <TAG base> or <TAG base>-attempt*,
+#           and no line starting DEPLOYED in REPORT, <REPORT base>.md or any -attempt*.md of it;
+#           (b) the report's last `<pre-merge>` line holds the tag's commit P; (c) its last
+#           `<stack-final>` line holds the branch head S, and S^2 = P; (d) the gate tree is plain
+#           and registered on BRANCH; (e) S not on main; (f) no .env in the gate, no lock it owns;
+#           (g) archive/pre-<job>-<YYYYMMDD-HHMM> and archive/<BRANCH>-<stamp> valid, free and
+#           creatable (no ref on their path; a ref transaction prepared, then aborted).
+#           Then `job-clean.sh salvage <WORKTREE>` (a dirty tree to its wip branch; never forced),
+#           `branch -m` BRANCH to archive/<BRANCH>-<stamp>, a new tag archive/pre-<job>-<stamp> at
+#           P and only then `tag -d pre-<job>`; each step printed `ARCHIVE: …`, nothing deleted;
+#           a DEPLOYED prior, or a ref off its report, is refused as before. Then the card's
 #           BRANCH, WORKTREE and TAG get `-attempt<n>` (n = the highest attempt present on those
 #           values, on a branch, tag, worktree or report of the same names, + 1; the first gate is
 #           attempt 1) and REPORT `<its name>-attempt<n>.md`, each printed `KEY: old -> new` after
@@ -1914,9 +1928,94 @@ print(last)' "RECUT $job attempt $n — " "$last") && [ -n "$last" ] \
     text="RECUT $job attempt $n — $last"
     rlen=$(python3 -c 'import sys; print(len("| R0000 | 00:00 ET | %s | RECORD |" % sys.argv[1]))' "$text")
     [ "$rlen" -le 300 ] || refuse "recut: the desk row would be $rlen characters, over desk-row.sh's 300: $text"
-    # 1. the failed gate, by gate-clean.sh (it refuses when anything of the gate landed)
-    printf 'RUN: sh %s/gate-clean.sh "%s"\n' "$here" "$card"
-    sh "$here/gate-clean.sh" "$card" || exit 1
+    if ! git -C "$REPO" rev-parse --verify --quiet "refs/tags/pre-$job" >/dev/null; then
+        # 1. the failed gate, by gate-clean.sh (it refuses when anything of the gate landed)
+        printf 'RUN: sh %s/gate-clean.sh "%s"\n' "$here" "$card"
+        sh "$here/gate-clean.sh" "$card" || exit 1
+    else
+        # 1. card 2026-10-12 434 A1: the prior deploy reached D2.6 and FAILED; its pre tag, gate
+        # branch and gate tree are archived (renamed, never deleted), each test read first
+        nogo() { refuse "tag pre-$job exists: the deploy got that far — not archived: $*"; }
+        # (a) not deployed: no deploy tag of any attempt, no DEPLOYED line in any attempt's report
+        for v in "refs/tags/$tag" "refs/tags/$bt" $(git -C "$REPO" for-each-ref --format='%(refname)' "refs/tags/$bt-attempt*"); do
+            ! git -C "$REPO" show-ref --verify --quiet "$v" || nogo "DEPLOYED: tag ${v#refs/tags/} exists"
+        done
+        for v in "$report" "$br.md" "$br"-attempt*.md; do
+            [ ! -f "$v" ] || ! grep -q '^DEPLOYED' "$v" || nogo "DEPLOYED: $v holds a DEPLOYED line"
+        done
+        # (b) the tag is where the report says (<pre-merge>, DEPLOY-HUB.md D2.0, D2.2)
+        P=$(git -C "$REPO" rev-parse --short=8 "refs/tags/pre-$job^{commit}") || nogo "tag pre-$job reads no commit"
+        Pfull=$(git -C "$REPO" rev-parse "refs/tags/pre-$job^{commit}") || nogo "tag pre-$job reads no commit"
+        pl=$(grep -F '<pre-merge>' "$report" | tail -n 1)
+        case "$pl" in
+            *"$P"*) ;;
+            *) nogo "tag pre-$job at $P is not the report's <pre-merge>: ${pl:-no <pre-merge> line}" ;;
+        esac
+        # (c) the branch is where the report says (<stack-final>, D2.2), and its second parent is P
+        S=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "refs/heads/$branch^{commit}") || nogo "no branch $branch"
+        sl=$(grep -F '<stack-final>' "$report" | tail -n 1)
+        case "$sl" in
+            *"$S"*) ;;
+            *) nogo "branch $branch at $S is not the report's <stack-final>: ${sl:-no <stack-final> line}" ;;
+        esac
+        S2=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$S^2") || S2=none
+        [ "$S2" = "$P" ] || nogo "branch $branch at $S: its second parent $S2 is not $P"
+        # (d) the tree is the gate's (gate-clean.sh:60-71)
+        case "$wt" in
+            ""|.*|*[!A-Za-z0-9._-]*) nogo "worktree '$wt' is outside the approved pattern $WT/<one directory name>" ;;
+        esac
+        [ "$wt" != "agy-trial" ] || nogo "worktree 'agy-trial' is the check hubs' scratch tree, never a gate"
+        [ ! -L "$WT/$wt" ] || nogo "$WT/$wt is a symlink"
+        [ -d "$WT/$wt" ] || nogo "no gate worktree at $WT/$wt"
+        registered=$(git -C "$REPO" worktree list --porcelain | awk -v p="worktree $WT/$wt" -v b="branch refs/heads/$branch" '
+            $0 == p { on = 1; next }
+            /^worktree / { on = 0 }
+            on && $0 == b { print "yes" }')
+        [ "$registered" = "yes" ] || nogo "$WT/$wt is not a worktree of $REPO with $branch checked out"
+        # (e) nothing landed: with a pre tag D2.1 made a merge, so no first-parent exception
+        git -C "$REPO" merge-base --is-ancestor "$S" main
+        case $? in
+            1) ;;
+            0) nogo "main contains the gate's head $S" ;;
+            *) nogo "merge-base failed for $S" ;;
+        esac
+        # (f) no lock (gate-clean.sh:99-102)
+        [ ! -e "$WT/$wt/.env" ] && [ ! -L "$WT/$wt/.env" ] || nogo "$WT/$wt/.env exists: the gate holds the cobalt_dev lock (L76)"
+        if [ -f "$WT/.cobalt_dev.lock/owner" ] && [ "$(sed -n '1p' "$WT/.cobalt_dev.lock/owner")" = "$wt" ]; then
+            nogo "the lock directory $WT/.cobalt_dev.lock is owned by $wt"
+        fi
+        # (g) the archive names are valid and free
+        stamp=$(date +%Y%m%d-%H%M)
+        at="archive/pre-$job-$stamp"
+        ab="archive/$branch-$stamp"
+        git -C "$REPO" check-ref-format "refs/tags/$at" || nogo "$at is not a valid tag name"
+        git -C "$REPO" check-ref-format --branch "$ab" >/dev/null 2>&1 || nogo "$ab is not a valid branch name"
+        ! git -C "$REPO" show-ref --verify --quiet "refs/tags/$at" || nogo "tag $at exists"
+        ! git -C "$REPO" show-ref --verify --quiet "refs/heads/$ab" || nogo "branch $ab exists"
+        # free is not enough: a ref on the name's path (a tag `archive`) blocks it; a ref transaction
+        # prepared and aborted proves each name creatable, changing nothing (check O1)
+        printf 'start\ncreate refs/tags/%s %s\nprepare\nabort\n' "$at" "$Pfull" \
+            | git -C "$REPO" update-ref --stdin >/dev/null 2>&1 || nogo "tag $at cannot be created: a ref on its path"
+        printf 'start\ncreate refs/heads/%s %s\nprepare\nabort\n' "$ab" "$Pfull" \
+            | git -C "$REPO" update-ref --stdin >/dev/null 2>&1 || nogo "branch $ab cannot be created: a ref on its path"
+        # THE ARCHIVE: (1) the tree by job-clean.sh salvage (a dirty tree to a wip branch; never forced;
+        # the unmerged gate branch kept), (2) the branch renamed, (3) the tag copied, then its old name dropped
+        printf 'RUN: sh %s/job-clean.sh salvage %s\n' "$here" "$wt"
+        sh "$here/job-clean.sh" salvage "$wt" || refuse "recut: job-clean.sh salvage refused; nothing archived: $WT/$wt"
+        git -C "$REPO" branch -m "$branch" "$ab" \
+            || refuse "recut: the archive stopped at (2) branch -m: $WT/$wt is removed; branch $branch and tag pre-$job are kept"
+        [ "$(git -C "$REPO" rev-parse --short=8 "refs/heads/$ab^{commit}")" = "$S" ] \
+            || refuse "recut: the archive stopped at (2) branch -m: $ab does not read $S; tag pre-$job is kept"
+        printf 'ARCHIVE: branch %s -> %s (%s)\n' "$branch" "$ab" "$S"
+        git -C "$REPO" tag "$at" "$Pfull" \
+            || refuse "recut: the archive stopped at (3) tag: branch $branch is $ab; tag pre-$job is kept"
+        [ "$(git -C "$REPO" rev-parse --short=8 "refs/tags/$at^{commit}")" = "$P" ] \
+            || refuse "recut: the archive stopped at (3) tag: $at does not read $P; tag pre-$job is kept"
+        git -C "$REPO" tag -d "pre-$job" >/dev/null \
+            || refuse "recut: the archive stopped at (3) the old name: $at reads $P; tag pre-$job is kept beside it"
+        printf 'ARCHIVE: tag pre-%s -> %s (%s)\n' "$job" "$at" "$P"
+        printf 'ARCHIVE: %s done; recut proceeds\n' "$job"
+    fi
     # 2. the card's four values
     sed -e "s|^BRANCH: .*|BRANCH: $nb|" -e "s|^WORKTREE: .*|WORKTREE: $nw|" \
         -e "s|^TAG: .*|TAG: $nt|" -e "s|^REPORT: .*|REPORT: $nr|" "$card" > "$card.recut" \
