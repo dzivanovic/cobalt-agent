@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/k5-gate-1013
 WORKTREE: k5-gate-1013
 BASE: 1dd8cac3
-TIP:
+TIP: 5b3c525b
 REPORT: /Users/cobalt/cobalt-wt/k5-gate-1013/docs/40 - DevDocs/reports/k5-gate-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/k5-gate-check-2026-10-13.md
 HOUSE B: as needed
