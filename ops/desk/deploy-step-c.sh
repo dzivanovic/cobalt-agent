@@ -203,13 +203,15 @@ EOF
 fi
 
 # ---- STEP-C ---------------------------------------------------------------------------------
-diff=$(git -C "$REPO" diff --name-status "$m0" "$branch" -- configs ops 2>&1) \
+# --no-renames: a plist that arrives by rename is read as the A it is, never skipped by its old path
+diff=$(git -C "$REPO" diff --name-status --no-renames "$m0" "$branch" -- configs ops 2>&1) \
     || { printf 'FAILED: C — git diff %s %s exit — %s · rollback: not used\n' "$m0" "$branch" "$diff"; exit 1; }
 jobs_labels=$(git -C "$REPO" show "$branch:configs/cobalt/jobs.yaml" 2>/dev/null \
     | sed -n 's/^[[:space:]]*-[[:space:]]*label:[[:space:]]*//p' | tr -d "\"'" | sed 's/[[:space:]]*$//')
 admitted=0
 touched=" "
 owed_new=""
+cleared=""
 
 while IFS="$TAB" read -r st path rest; do
     [ -n "$st" ] || continue
@@ -274,8 +276,9 @@ while IFS="$TAB" read -r st path rest; do
     cpath=$(card_field "$want" 4)
     crow=$(card_field "$want" 5)
     files=$(row_files "$cpath" "$crow")
-    case "$files" in
-        *"$path"*) ;;
+    # the path whole, as one of the cell's backticked, comma-separated entries, never a substring
+    case " $(printf '%s' "$files" | tr '`,' '  ') " in
+        *" $path "*) ;;
         *) refuse_path "$path" "build card $cpath (main) row $crow's files cell does not name $path"; continue ;;
     esac
     admitted=$((admitted + 1))
@@ -288,6 +291,7 @@ while IFS="$TAB" read -r st path rest; do
   \"$want\": {\"gate\": [\"$items\"], \"card\": \"$card\"}"
     else
         printf 'ADMITTED: %s · %s\n' "$want" "$([ "$st" = A ] && echo add || echo change)"
+        cleared="$cleared $want"
     fi
 done <<EOF
 $diff
@@ -305,12 +309,17 @@ if [ -n "$refused" ]; then
     printf 'FAILED: C — %s: %s\n' "$paths" "$FAILTEXT"
     exit 1
 fi
-if [ -n "$owed_new" ]; then
-    keep=$(owed_entries)
-    for lab in $(printf '%s\n' "$owed_new" | sed -n 's/^  "\(com\.cobalt\.[a-z0-9-]*\)": .*/\1/p'); do
+# an `add` or `change` label is loaded by this deploy's 4.6L: an older owed entry for it goes, so
+# it never reads OWED once loaded and unloaded again
+if [ -n "$owed_new" ] || [ -n "$cleared" ]; then
+    old=$(owed_entries)
+    keep=$old
+    for lab in $cleared $(printf '%s\n' "$owed_new" | sed -n 's/^  "\(com\.cobalt\.[a-z0-9-]*\)": .*/\1/p'); do
         keep=$(printf '%s\n' "$keep" | grep -v -F "\"$lab\": " || true)
     done
-    owed_write "$keep$owed_new"
+    if [ -n "$owed_new" ] || [ "$keep" != "$old" ]; then
+        owed_write "$keep$owed_new"
+    fi
 fi
 printf 'STEP-C: ADMITTED %s\n' "$admitted"
 exit 0
