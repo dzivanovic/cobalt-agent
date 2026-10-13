@@ -93,3 +93,6 @@ The compare line is the one entry that is not a command, because that row runs n
 - **cli:** the exit code against `exit_code`; `raw` is the last 40 output lines.
 
 **2026-09-29 — DRC D3 fix r1 (F-2): K10.2 keys on the day's note.** K10.2's `writes` counts the `drc-misses` / `miss_line` rows of `vault_writes` whose `note` EQUALS the stored `note_path` of the same event row that `event_state` selects. There is no `ts` predicate. The old count was of any note's rows whose `ts` fell on the day (ET). The build stamps its writes at clock time, so a miss line written for day D after midnight ET FAILed D. Another note's miss line stamped on D PASSed D. Both paths name the note the same way: `vault_writes.note` is `str(path)`, and `drc_events.note_path` is `str(note)` of the build's return. The 21:10 writer and the build compose that path from the same `load_prefill_paths()` under the resolved vault. `expect_text` now ends `writes >= 1 for the day's DRC note (any clock time)`.
+
+## 2026-10-13 — plist-step-c-1013
+`_launchctl` `registry_match` (K18): an enabled, unloaded label listed by `cobalt.jobs.watchdog.bootstrap_owed()` is not in `not_loaded`; its raw row ends `owed` and a PASS detail names `OWED (deferred bootstrap): <labels>`; an unreadable owed file raises (ERROR). `s2.yaml` K18 `expect_text` names the exception (card 496 OW1).

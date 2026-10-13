@@ -181,6 +181,7 @@ def test_c1_an_unnamed_plist_is_refused(repo):
     repo.add_plist()
     done = repo.run("")
     assert done.returncode == 1, done.stdout + done.stderr
+    assert f"REFUSED: {PLIST_PATH} — no ## LAUNCHD line names {LABEL}" in done.stdout.splitlines()
     assert last(done) == f"FAILED: C — {PLIST_PATH}: {FAILED_TAIL}"
 
 
@@ -335,6 +336,7 @@ def test_df1_an_unnamed_plist_is_refused_before_and_after(repo):
     repo.add_plist()
     done = repo.run("")
     assert done.returncode == 1 and last(done) == f"FAILED: C — {PLIST_PATH}: {FAILED_TAIL}"
+    assert f"REFUSED: {PLIST_PATH} — no ## LAUNCHD line names {LABEL}" in done.stdout.splitlines()
     # after the deferred deploy: a bootstrap-only run whose card does not name the label
     assert repo.run(launchd(line(mode="deferred", gate=GATE))).returncode == 0
     done = repo.run("", mode=("--bootstrap-only",))
@@ -352,7 +354,7 @@ def owed_then_merged(repo: Repo) -> None:
     git(repo.repo, "merge", "-q", "--ff-only", repo.branch)
 
 
-RESULTS = "".join(f"GATE RESULT: {LABEL} · {item} · run, green (constructed)\n"
+RESULTS = "## GATE RESULTS\n" + "".join(f"GATE RESULT: {LABEL} · {item} · run, green (constructed)\n"
                   for item in ("X7 render", "X8", "X9", "X10 dry run", "X15"))
 
 
@@ -360,7 +362,7 @@ def test_bo1_a_label_only_run_is_refused_when_the_label_is_not_named(repo):
     owed_then_merged(repo)
     done = repo.run(RESULTS, mode=("--bootstrap-only",))
     assert done.returncode == 1, done.stdout + done.stderr
-    assert "REFUSED: " in done.stdout
+    assert f"REFUSED: {LABEL} — the card's ## LAUNCHD names no line for this label" in done.stdout.splitlines()
 
 
 def test_bo1_a_label_only_run_is_refused_without_recorded_gate_results(repo):
@@ -369,7 +371,8 @@ def test_bo1_a_label_only_run_is_refused_without_recorded_gate_results(repo):
     assert done.returncode == 1, done.stdout + done.stderr
     assert "REFUSED: " in done.stdout
     # one item short is refused the same
-    done = repo.run(launchd(line()) + RESULTS.split("\n", 1)[1], mode=("--bootstrap-only",))
+    done = repo.run(launchd(line()) + "## GATE RESULTS\n" + RESULTS.split("\n", 2)[2],
+                    mode=("--bootstrap-only",))
     assert done.returncode == 1 and "REFUSED: " in done.stdout
 
 

@@ -1505,7 +1505,84 @@ ship_cell() {
     printf '%s\n' "$1" | awk -F'|' -v i="$2" '{print $i}' | tr -d '`' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//'
 }
 
+# launchd_line <line>: one `## LAUNCHD` line of a deploy card (card 496 L1), shape-checked; an
+# `add` or `change` line appends its bootout, bootstrap and dry-run strings to $launchd
+#   com.cobalt.<label> · add|change|deferred · prompts/<…>-card.md:<row> · dry run: <cmd>|none [· gate: <items>]
+launchd_line() {
+    l=$1
+    case "$l" in
+        *[\*\$\`\"\'\;\|\&\<\>\\\(\)]*) refuse "incomplete card: a ## LAUNCHD line holds one of * \$ \` \" ' ; | & < > \\ ( ): $l" ;;
+    esac
+    nf=$(printf '%s\n' "$l" | awk -F ' · ' '{print NF}')
+    lab=$(printf '%s\n' "$l" | awk -F ' · ' '{print $1}')
+    lmode=$(printf '%s\n' "$l" | awk -F ' · ' '{print $2}')
+    ref=$(printf '%s\n' "$l" | awk -F ' · ' '{print $3}')
+    dry=$(printf '%s\n' "$l" | awk -F ' · ' '{print $4}')
+    gate=$(printf '%s\n' "$l" | awk -F ' · ' '{print $5}')
+    [ "$nf" -eq 4 ] || [ "$nf" -eq 5 ] || refuse "incomplete card: a ## LAUNCHD line is not 'com.cobalt.<label> · <mode> · <card>:<row> · dry run: …': $l"
+    name=${lab#com.cobalt.}
+    [ "$name" != "$lab" ] || refuse "incomplete card: ## LAUNCHD label '$lab' is not com.cobalt.<label>"
+    # the letters spelled out: under a UTF-8 locale a range a-z also matches capitals
+    case "$name" in
+        ""|*[!abcdefghijklmnopqrstuvwxyz0123456789-]*) refuse "incomplete card: ## LAUNCHD label '$lab' is not com.cobalt.<[a-z0-9-]+>" ;;
+        agent|aset|radar) refuse "incomplete card: ## LAUNCHD label '$lab' is a resident; STEP-R's gate keeps it" ;;
+    esac
+    case "$lseen" in
+        *" $name "*) refuse "incomplete card: ## LAUNCHD label '$lab' is repeated" ;;
+    esac
+    lseen="$lseen$name "
+    case "$lmode" in
+        add|change) [ "$nf" -eq 4 ] || refuse "incomplete card: only a deferred ## LAUNCHD line carries a gate field: $l" ;;
+        deferred)
+            [ "$nf" -eq 5 ] || refuse "incomplete card: a deferred ## LAUNCHD line ends ' · gate: <items>': $l"
+            case "$gate" in
+                "gate: "?*) ;;
+                *) refuse "incomplete card: a deferred ## LAUNCHD line ends ' · gate: <items>': $l" ;;
+            esac
+            case "${gate#gate: }" in
+                *[!A-Za-z0-9\ ._,-]*) refuse "incomplete card: a gate item holds a character outside [A-Za-z0-9 ._,-]: $l" ;;
+            esac
+            ;;
+        *) refuse "incomplete card: ## LAUNCHD mode '$lmode' is not add, change or deferred" ;;
+    esac
+    bpath=${ref%:*}
+    brow=${ref##*:}
+    case "$bpath" in
+        prompts/*-card.md) ;;
+        *) refuse "incomplete card: ## LAUNCHD build card '$bpath' is not prompts/<…>-card.md" ;;
+    esac
+    case "$bpath" in
+        *..*|*[!A-Za-z0-9._/-]*) refuse "incomplete card: ## LAUNCHD build card path '$bpath' holds '..' or a character outside [A-Za-z0-9._/-]" ;;
+    esac
+    case "$brow" in
+        ""|*[!A-Za-z0-9]*) refuse "incomplete card: ## LAUNCHD row '$brow' is not [A-Za-z0-9]+" ;;
+    esac
+    [ -f "$PROMPTS/${bpath#prompts/}" ] || refuse "incomplete card: ## LAUNCHD build card is no file: $PROMPTS/${bpath#prompts/}"
+    committed "the ## LAUNCHD build card" "$PROMPTS/${bpath#prompts/}"
+    d=""
+    case "$dry" in
+        "dry run: none") ;;
+        "dry run: COBALT_ENV=production uv run "*" --dry-run")
+            words=${dry#dry run: COBALT_ENV=production uv run }
+            words=${words% --dry-run}
+            case "$words" in
+                ""|" "*|*" "|*"  "*|*[!abcdefghijklmnopqrstuvwxyz0123456789\ -]*)
+                    refuse "incomplete card: ## LAUNCHD dry run '$dry' is not 1-4 words of [a-z0-9-]" ;;
+            esac
+            # shellcheck disable=SC2086 # the words are [a-z0-9-] only, checked above
+            set -- $words
+            [ "$#" -le 4 ] || refuse "incomplete card: ## LAUNCHD dry run '$dry' has more than 4 words"
+            d=${dry#dry run: }
+            ;;
+        *) refuse "incomplete card: ## LAUNCHD dry run '$dry' is not 'none' or 'COBALT_ENV=production uv run <1-4 words> --dry-run'" ;;
+    esac
+    [ "$lmode" != deferred ] || return 0
+    launchd="$launchd \"Bash(launchctl bootout gui/501/$lab)\" \"Bash(launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/$lab.plist)\""
+    [ -z "$d" ] || launchd="$launchd \"Bash($d)\""
+}
+
 merges=""
+launchd=""
 prod=""
 prodw=""
 table=""
@@ -1657,6 +1734,16 @@ deploy)
         merges="$merges \"Bash(git -C $WT/$wt merge --no-edit $h)\""
     done
     merges=${merges# }
+    # card 496 L1: `## LAUNCHD` -> the launchctl strings of the card's labels only, built the way
+    # $merges is; each string keeps its leading space so an empty fill leaves today's line
+    [ "$(grep -c '^## LAUNCHD' "$card")" -le 1 ] || refuse "incomplete card: more than one '## LAUNCHD' section"
+    lseen=" "
+    while IFS= read -r ll; do
+        [ -n "$ll" ] || continue
+        launchd_line "${ll#- }"
+    done <<EOF
+$(awk '/^## /{on = ($0 == "## LAUNCHD"); next} on && NF' "$card")
+EOF
     case "$(field MIGRATIONS)" in
         none) ;;
         none*) refuse "incomplete card: MIGRATIONS is 'none' alone, or the numbers" ;;
@@ -2094,6 +2181,7 @@ line=$(grep '^claude --bg ' "$fixed" | sed \
     -e "s|<table>|$table|g" \
     -e "s|<proof test>|$proof|g" \
     -e "s|<tip merges>|$merges|" \
+    -e "s| <launchd strings>|$launchd|" \
     -e "s|<prod migrate strings>|$prod|" \
     -e "s|<prod write>|$prodw|" \
     -e "s|<model>|$model|g" \
