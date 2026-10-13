@@ -65,9 +65,14 @@ else
 fi
 
 cd "$REPO_ROOT"
-# Resolve uv via PATH, not a hardcoded prefix: on this machine uv lives
-# at ~/.local/bin/uv, not /opt/homebrew/bin/uv (the path the older
-# archiver/mainframe plists hardcode — see ops/README.md's note on that
-# discrepancy). The plist's own EnvironmentVariables PATH includes
-# ~/.local/bin, so a bare `uv` resolves correctly here.
-exec uv run python -m cobalt.aset
+# aset-orphan (2026-10-10): the venv python is exec'd directly, so
+# launchd's pid IS the python. com.cobalt.aset.plist sets
+# AbandonProcessGroup, so on bootout launchd signals its own pid only;
+# under a uv wrapper that pid was uv and the python child survived,
+# holding the voice scratch lock and :5010. The sync first keeps
+# pyproject.toml / uv.lock read at every start, as the wrapper did;
+# --inexact keeps extraneous packages, as the wrapper's sync did, and
+# under `set -e` a failed sync exits here. A bare `uv` resolves through
+# the plist's PATH (~/.local/bin, see ops/README.md).
+uv sync --inexact
+exec "$REPO_ROOT/.venv/bin/python" -m cobalt.aset
