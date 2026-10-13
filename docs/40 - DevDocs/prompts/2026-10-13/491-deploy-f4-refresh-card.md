@@ -18,10 +18,15 @@ TICKERS: none
 | 1 | `ops/f4-refresh-1010` | `edd5c076` | `b1ba47d8` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-refresh-check-2026-10-10.md` | `held unfixed: 2` and `ready: NO` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-refresh-build-2026-10-10.md` |
 
 ## MARKERS
-- «FILL: markers for f4-refresh-1010 (its job card has no ## DEPLOY PROOF)»
+- `grep -c -F -e "label: com.cobalt.prefill-refresh" "/Users/cobalt/cobalt/configs/cobalt/jobs.yaml"` · before count `0` · after a count of `1` or more (the refresh job row)
+- `grep -c -F -e "key: prefill.refresh_interval_min" "/Users/cobalt/cobalt/configs/cobalt/taxonomy/tunables.yaml"` · before count `0` · after a count of `1` or more (the refresh interval tunable)
+- `grep -c -F -e "key: prefill.refresh_window" "/Users/cobalt/cobalt/configs/cobalt/taxonomy/tunables.yaml"` · before count `0` · after a count of `1` or more (the refresh window tunable)
+- `grep -c -F -e "id: K12.3" "/Users/cobalt/cobalt/configs/cobalt/smoke/s2.yaml"` · before count `0` · after a count of `1` or more (the refresh smoke row)
 
 ## SMOKE READS
-- «FILL: smoke reads for f4-refresh-1010 (its job card has no ## DEPLOY PROOF)»
+- The refresh job row is on main · `grep -c -F -e "label: com.cobalt.prefill-refresh" "/Users/cobalt/cobalt/configs/cobalt/jobs.yaml"` · prints 1 or more
+- The refresh plist is on main · `grep -c -F -e "<string>com.cobalt.prefill-refresh</string>" "/Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist"` · prints 1 or more
+- The refresh smoke row is on main · `grep -c -F -e "id: K12.3" "/Users/cobalt/cobalt/configs/cobalt/smoke/s2.yaml"` · prints 1 or more
 
 ## RECORDS
 - f4-refresh-1010: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-refresh-build-2026-10-10.md` at `b1ba47d8` last line: BUILT · job: f4-refresh-1010 · tip: edd5c076 | on d78c66a2 | migration: none | offline 4245/0 | with-DB 5173/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.radar | rows: 15 of 15 | self-check: 3 of 3 | decisions: 14 · for Dejan: 3 · tokens: 86732
