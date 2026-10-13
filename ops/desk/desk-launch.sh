@@ -1562,19 +1562,20 @@ launchd_line() {
     d=""
     case "$dry" in
         "dry run: none") ;;
-        "dry run: COBALT_ENV=production uv run "*" --dry-run")
-            words=${dry#dry run: COBALT_ENV=production uv run }
+        "dry run: COBALT_ENV=production uv run cobalt "*" --dry-run")
+            # card 496 FR-O2 / FR-O2b: the first word is `cobalt`, then 1-4 words
+            words=${dry#dry run: COBALT_ENV=production uv run cobalt }
             words=${words% --dry-run}
             case "$words" in
                 ""|" "*|*" "|*"  "*|*[!abcdefghijklmnopqrstuvwxyz0123456789\ -]*)
-                    refuse "incomplete card: ## LAUNCHD dry run '$dry' is not 1-4 words of [a-z0-9-]" ;;
+                    refuse "incomplete card: ## LAUNCHD dry run '$dry' is not 'cobalt' and 1-4 words of [a-z0-9-]" ;;
             esac
             # shellcheck disable=SC2086 # the words are [a-z0-9-] only, checked above
             set -- $words
-            [ "$#" -le 4 ] || refuse "incomplete card: ## LAUNCHD dry run '$dry' has more than 4 words"
+            [ "$#" -le 4 ] || refuse "incomplete card: ## LAUNCHD dry run '$dry' has more than 4 words after 'cobalt'"
             d=${dry#dry run: }
             ;;
-        *) refuse "incomplete card: ## LAUNCHD dry run '$dry' is not 'none' or 'COBALT_ENV=production uv run <1-4 words> --dry-run'" ;;
+        *) refuse "incomplete card: ## LAUNCHD dry run '$dry' is not 'none' or 'COBALT_ENV=production uv run cobalt <1-4 words> --dry-run'" ;;
     esac
     [ "$lmode" != deferred ] || return 0
     launchd="$launchd \"Bash(launchctl bootout gui/501/$lab)\" \"Bash(launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/$lab.plist)\""

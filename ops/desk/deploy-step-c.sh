@@ -103,7 +103,7 @@ launchd=$(awk '/^## /{on = ($0 == "## LAUNCHD"); next} on && NF' "$card" | awk -
     else if (seen[lab]++) bad = "label repeated"
     else if (mode != "add" && mode != "change" && mode != "deferred") bad = "mode is not add, change or deferred"
     else if (ref !~ /^prompts\/[A-Za-z0-9._\/-]+-card\.md:[A-Za-z0-9]+$/ || ref ~ /\.\./) bad = "build card is not prompts/<…>-card.md:<row>"
-    else if (dry != "dry run: none" && dry !~ /^dry run: COBALT_ENV=production uv run [a-z0-9-]+( [a-z0-9-]+)?( [a-z0-9-]+)?( [a-z0-9-]+)? --dry-run$/) bad = "dry run is not none or COBALT_ENV=production uv run <1-4 words> --dry-run"
+    else if (dry != "dry run: none" && dry !~ /^dry run: COBALT_ENV=production uv run cobalt [a-z0-9-]+( [a-z0-9-]+)?( [a-z0-9-]+)?( [a-z0-9-]+)? --dry-run$/) bad = "dry run is not none or COBALT_ENV=production uv run cobalt <1-4 words> --dry-run"
     else if (mode == "deferred" && gate !~ /^gate: [A-Za-z0-9 ._-]+(, [A-Za-z0-9 ._-]+)*$/) bad = "a deferred line ends \" · gate: <item>, <item>\""
     else if (mode != "deferred" && n == 5) bad = "only a deferred line carries a gate field"
     if (bad != "") { print "BAD\t" $0 "\t" bad; next }
