@@ -398,3 +398,63 @@ def test_bo1_a_named_label_with_results_bootstraps_and_merges_nothing(repo):
     # nothing merged, nothing tracked changed
     assert git(repo.repo, "rev-parse", "HEAD") == head
     assert git(repo.repo, "status", "--porcelain", "--untracked-files=no") == ""
+
+
+# ---- check of plist-step-c-1013 ---------------------------------------------------------------
+
+
+def test_check_o1_a_plist_that_arrives_by_rename_is_refused_unnamed(repo):
+    repo.write("ops/notes.txt", plist(LABEL))
+    repo.commit("gate: a note")
+    git(repo.repo, "checkout", "-q", "main")
+    git(repo.repo, "merge", "-q", "--ff-only", repo.branch)
+    repo.m0 = git(repo.repo, "rev-parse", "--short=8", "HEAD")
+    git(repo.repo, "checkout", "-q", repo.branch)
+    git(repo.repo, "mv", "ops/notes.txt", PLIST_PATH)
+    repo.commit("gate: the note becomes a plist")
+    done = repo.run("")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert last(done) == f"FAILED: C — {PLIST_PATH}: {FAILED_TAIL}"
+
+
+def test_check_o3_an_add_admission_leaves_no_owed_entry_for_its_label(repo):
+    repo.add_plist()
+    assert repo.run(launchd(line(mode="deferred", gate=GATE))).returncode == 0
+    assert LABEL in json.loads(repo.owed.read_text())
+    done = repo.run(launchd(line()))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert LABEL not in json.loads(repo.owed.read_text())
+
+
+def test_c1_a_files_cell_that_only_contains_the_path_is_refused(repo):
+    repo.add_plist()
+    git(repo.repo, "checkout", "-q", "main")
+    repo.write(
+        "docs/40 - DevDocs/prompts/2026-01-02/01-x-build-card.md",
+        "JOB: x\n\n## ROWS\n\n| row | what | red first | files |\n|---|---|---|---|\n"
+        "| C2 | the job row and plist | T10 | `xxops/com.cobalt.prefill-refresh.plistyy` |\n",
+    )
+    repo.commit("main: the files cell does not name the path")
+    git(repo.repo, "checkout", "-q", repo.branch)
+    done = repo.run(launchd(line()))
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "files cell does not name" in done.stdout
+
+
+def test_check_a2_a_deferred_admission_is_marked_deferred(repo):
+    repo.add_plist()
+    done = repo.run(launchd(line(mode="deferred", gate=GATE)))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert f"ADMITTED: {LABEL} · add · deferred" in done.stdout.splitlines()
+
+
+def test_check_a3_the_hub_names_the_bootstrap_only_step():
+    lines = HUB.read_text(encoding="utf-8").splitlines()
+    (bo,) = [ln for ln in lines if ln.startswith("4.6L-BO ")]
+    assert "deploy-step-c.sh --bootstrap-only" in bo and "deploy-step-c.sh --owed-clear" in bo
+
+
+def test_check_a5_a_refusal_at_4_6l_goes_to_step_5():
+    (rule,) = [ln for ln in HUB.read_text(encoding="utf-8").splitlines()
+               if ln.startswith("- A DEPLOY NEVER CONTINUES BY MESSAGE")]
+    assert "4.6L" in rule, rule
