@@ -1,12 +1,12 @@
 JOB: aset-orphan-1010
 LADDER: OFF-LADDER — reports/cto-2026-10-10.md R853
-BRANCH: deploy/aset-orphan-1010
-WORKTREE: deploy-aset-orphan-1010
+BRANCH: deploy/aset-orphan-1010-attempt2
+WORKTREE: deploy-aset-orphan-1010-attempt2
 BASE: main
 TIP: f72dbb9a
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-aset-orphan-1010.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-aset-orphan-1010-attempt2.md
 RULINGS: 2026-10-08 R685
-TAG: deploy-2026-10-10-aset-orphan
+TAG: deploy-2026-10-10-aset-orphan-attempt2
 MIGRATIONS: none
 SET: none
 TICKERS: none
