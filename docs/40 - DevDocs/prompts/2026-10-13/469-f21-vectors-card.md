@@ -1,0 +1,45 @@
+JOB: f21-vectors-1013
+LADDER: S5-P4 · F21
+CLASS: K2
+INSTALL: none
+BRANCH: ops/f21-vectors-1013
+WORKTREE: f21-vectors-1013
+BASE: «FILL: BASE, the desk's 8-hex main commit after card 468 merges»
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/f21-vectors-1013/docs/40 - DevDocs/reports/f21-vectors-build-2026-10-13.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f21-vectors-check-2026-10-13.md
+HOUSE B: as needed
+RESTARTS: com.cobalt.aset com.cobalt.radar
+RULINGS: 2026-10-11 R1055
+
+## ROWS
+
+| row | what | red first | files |
+|---|---|---|---|
+| V1 | THE EMBEDDINGS KIND (FINAL F-01 chunk 2, F-06; X5). `Route` (`src/cobalt/modelaccess/config.py:40-56`) becomes a discriminated union on `kind`: the chat route keeps every key it has (`:43-56`), unchanged; a NEW `EmbedRoute` has `lane: Literal["local"]`, `kind: Literal["openai_embeddings"]`, `api_base` (the same loopback validator, `:58-76`), `model`, `timeout_s`, `dim: int > 0`, `key_name`, `extra="forbid"`, and none of `no_think`, `think_policy`, `max_output_tokens`, `response_format`. The fallback refusal (`:94-103`, `:122-127`) and the loopback refusal stand as they are | OFFLINE `tests/cobalt/test_modelaccess_config.py::test_an_embed_route_loads_without_chat_keys` (X5 first half): a fixture adding `local.embed` with only the embed keys loads. RED on BASE: `ModelAccessConfigError` (missing `no_think` … and `kind` not `openai_compatible`, `:44`). `::test_an_embed_route_with_a_fallback_key_refuses` (X5 second half) stays green on BASE and after; `::test_an_embed_route_with_a_chat_key_refuses` RED on BASE for the same `:44` reason | `src/cobalt/modelaccess/config.py`, `tests/cobalt/test_modelaccess_config.py`, `docs/40 - DevDocs/cobalt/modelaccess/` |
+| V2 | THE ADAPTER AND THE RESULT (F-01 "its own adapter method and result type"; F-14). `ModelResult.kind` (`models.py:68`) stays chat-only; a NEW `EmbedResult` (`route`, `model_returned`, `vector: list[float]`, `dim`, `latency_ms`, `request_id`). A NEW `OpenAIEmbeddingsAdapter.embed()` (`POST {api_base}/embeddings`) beside `OpenAICompatibleAdapter` (`adapters.py:68-121`), registered in `ADAPTERS` (`:123`). A NEW `embed_sync(route, text, *, caller)` in `client.py` beside `call_sync` (`:81`), reusing `_classify` (`adapters.py:55`) and `_record` (`client.py:38`); it never runs `_apply_think_policy` (`:62-77`). An HTTP error, a model not loaded, a timeout, or a vector whose length is not the route's `dim` raises `ModelCallError` and returns nothing; no zero vector, no `None`, no `[]` (F-14, D5) | OFFLINE `tests/cobalt/test_modelaccess_embed.py` with a fake transport: `::test_a_wrong_length_vector_raises`, `::test_a_timeout_raises`, `::test_a_not_loaded_body_raises` (the X8 body shape, `«FILL: X8 not-loaded status and body shape»`), `::test_a_good_vector_returns_model_returned_and_dim`. RED on BASE: `ImportError: embed_sync` | `src/cobalt/modelaccess/models.py`, `src/cobalt/modelaccess/adapters.py`, `src/cobalt/modelaccess/client.py`, `src/cobalt/modelaccess/__init__.py`, `tests/cobalt/test_modelaccess_embed.py`, `docs/40 - DevDocs/cobalt/modelaccess/` |
+| V3 | THE ROUTE (F-01, F-03, F-15; L5, L10). `configs/cobalt/modelaccess.yaml` gains `local.embed` after `local.plan` (`:17-42`): `lane: local`, `kind: openai_embeddings`, `api_base: http://127.0.0.1:1234/v1`, `model: «FILL: the alias X2/X8 proved»`, `timeout_s: «FILL: from X8 (covers a not-loaded hang)»`, `dim: «FILL: the X2 vector length»`, `key_name: null`; each value's `# source:` comment names its probe row (the `:31-39` shape). The registry test pins both routes | OFFLINE `test_modelaccess_config.py::test_committed_registry_loads_with_exactly_the_local_plan_route` (`:49-51`) is renamed `..._with_local_plan_and_local_embed` and asserts `list(cfg.routes) == ["local.plan", "local.embed"]` and each kind. RED on BASE: the committed registry has `["local.plan"]` | `configs/cobalt/modelaccess.yaml`, `tests/cobalt/test_modelaccess_config.py` |
+| V4 | THE VECTOR COLUMN (F-02; X6, X10). NEW migration `<nnnn>_genesis_vectors.sql` + rollback, `<nnnn>` the next free number at BASE: `ALTER TABLE "user".genesis_chunk ADD COLUMN IF NOT EXISTS embedding vector(<dim>)`, `embed_model TEXT`, `embed_dim INTEGER`, `CHECK ((embedding IS NULL) = (embed_model IS NULL) AND (embedding IS NULL) = (embed_dim IS NULL))`. `«FILL: X6 — vector extension present in cobalt_dev and usable by cobalt_user, or the owner-run CREATE EXTENSION step»`. At load the genesis store reads the column's declared dimension (`pg_attribute.atttypmod`) and crashes when it is not the route's `dim`, before any write (F-02, L1) | WITH-DB `tests/cobalt/test_genesis_vectors_db.py::test_route_dim_not_column_dim_crashes_before_any_write` and `::test_x10_a_wrong_length_vector_is_refused_loud` (X10). RED on BASE: column `embedding` does not exist | `src/cobalt/db_migrations/__init__.py`, the two new `.sql` files, the registry test files that pin the tail (card 468 G1 (c) list), `src/cobalt/genesis/store.py`, `tests/cobalt/test_genesis_vectors_db.py`, `ops/desk/gate-lists.md` (PASS 1 `--deselect`, PASS 2 the id) |
+| V5 | THE ONE-SHOT EMBED COMMAND AND ITS PREFLIGHT (F-03, F-09, F-15). `cobalt genesis embed` first calls the route once on a synthetic string: no vector → prints `vectors: DEGRADED`, writes nothing, exits non-zero (F-03). Then embeds every chunk whose `embedding` is NULL, one chunk per call, committing each chunk's vector as it lands (checkpoint and resume). `«FILL: T4 in-flight rule — X3/X9 result: dropped, or kept with G1's signal»`. A failed call leaves that row's FTS body and NULL vector and the run exits non-zero naming the count | OFFLINE `tests/cobalt/test_genesis_embed.py::test_no_vector_at_preflight_prints_degraded_and_writes_nothing`, `::test_a_failed_chunk_leaves_it_null_and_exits_nonzero`, `::test_a_rerun_embeds_only_null_rows`. RED on BASE: argparse `invalid choice: 'embed'` | `src/cobalt/genesis/embed.py`, `src/cobalt/genesis/cli.py`, `tests/cobalt/test_genesis_embed.py`, `docs/40 - DevDocs/cobalt/genesis/` |
+
+## NOT IN THIS JOB
+- Any cloud lane, metered kind, `fallback` key or credential (FINAL D4, F-06; L21–L25 stay frozen).
+- The four 1536-dim old tables and `src/cobalt_agent/`.
+- A second recall entry or a second embed table: recall stays `cobalt.genesis.search` (card 468 G4); a vector-ranked search is its own card.
+- Any `configs/cobalt/jobs.yaml` row or plist for the embed command (FINAL G3, UNSETTLED).
+- Any production command; the production embed run is its own K3 card after the deploy.
+
+## READ
+- `docs/30 - Design/F21-ADR-FINAL-2026-10-11.md`: `## Decision (default)` 1, 2, 3, 6, 7; `## What the tribunal must test` 1, 3, 4; X2, X3, X5, X6, X8, X9, X10; `## SEAM` the first three bullets; `## CHUNKS` row 2.
+- `src/cobalt/modelaccess/config.py`, `models.py`, `adapters.py`, `client.py`; `configs/cobalt/modelaccess.yaml`; `tests/cobalt/test_modelaccess_config.py`.
+- Card 468's build report `## FOR THE CHECK` (the store and the CLI it shipped).
+
+## CHECK ASKS
+- X1 Is the chat route's schema byte-for-byte what it was, and does every voice caller still load `local.plan` with no code change (`voice/web.py:170`, `voice/turn.py:103`, `voice/registry.py:99`)?
+- X2 Can any path write a zero vector, `None`, `[]`, or a vector of a length other than the column's?
+- X3 Re-derive RESTARTS: `com.cobalt.aset` by `jobs.yaml:86`; `com.cobalt.radar` by `cobalt.cli` → `voice.cli` → `voice.turn` → `voice.agent` → `cobalt.modelaccess`.
+
+## RECORDS
+- `grep -n "^| R1055 " "docs/40 - DevDocs/reports/cto-2026-10-11.md"` → line 88, `HIS RULING · APPROVED` … "F5, F21, F20, F23 FINALs" (the drafter, 07:31 ET).
+- RESTARTS from `src/cobalt/jobs/restarts.py` `classify`: `configs/cobalt/modelaccess.yaml` is in `com.cobalt.aset`'s `reads:` (`jobs.yaml:86`) → "resident reads" → `com.cobalt.aset`. `src/cobalt/modelaccess/*` by static import reach: `com.cobalt.radar` imports `cobalt.cli` (`jobs.yaml:203`), which imports `cobalt.voice.cli` (`cli.py:83`) → `voice/cli.py:29` `.turn` → `voice/turn.py:42` `.agent` → `voice/agent.py:27-29` `cobalt.modelaccess` → `com.cobalt.radar` too. The FINAL names `com.cobalt.aset` only (SEAM, "The route's RESTARTS"); the build's `## RESTARTS` is the word (the drafter, 07:31 ET).
+- Every `«FILL»` in `## ROWS` is a host result of the probe run owed before this launch (`DECISION D5` of `reports/draft-f21-card-2026-10-13.md`): X2, X8 (alias, `dim`, `timeout_s`, not-loaded shape), X3, X9 (T4 rule), X6 (extension).
