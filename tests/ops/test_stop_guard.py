@@ -1088,3 +1088,37 @@ def test_s3_the_refresh_logs_each_step(tmp_path):
         (f"claude stop {SID}", "0"),
         (f"claude rm {SID}", "0"),
     ]
+
+
+# ---- card 458 check (desk-refresh-1013-check) -------------------------------------------------
+
+
+def test_check_o1_an_unguarded_block_at_300k_gives_no_silent_order(tmp_path):
+    d = Sized(tmp_path, n=300000)
+    d.lister(DESK_ROW)
+    d.owed("owed: none", "OWED: x", stamp())
+    r = d.run()
+    assert r.returncode == 0 and r.stderr.startswith(UNGUARDED), r.stderr
+    assert not d.order.exists(), "the order file was written though REFRESH NOW was never shown"
+
+
+def test_x4_a_shorter_prefix_listed_first_is_stopped(tmp_path):
+    d = Sized(tmp_path)
+    short = SID[:8]
+    d.lister(f"{short} · other · ~/cobalt-wt/x · busy · working", DESK_ROW)
+    d.owed("owed: none", stamp())
+    d.order.write_text(now_iso() + "\n")
+    d.forced()
+    stopped = [x for x in d.logged() if x.startswith("claude stop ")]
+    assert stopped == [f"claude stop {SID}"], stopped
+
+
+def test_s1_a_timeout_keeps_the_first_output_line(tmp_path):
+    d = Sized(tmp_path)
+    (d.hook.parent / "desk-context.sh").write_text(
+        "#!/bin/sh\n"
+        "exec python3 -c 'import sys,time; sys.stdout.write(\"no transcript for x\\n\"); sys.stdout.flush(); time.sleep(30)'\n"
+    )
+    d.owed("owed: none", stamp())
+    r = d.run()
+    assert r.stderr == "DESK SIZE UNREAD — no transcript for x\n"
