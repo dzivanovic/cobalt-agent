@@ -12,6 +12,7 @@ import os
 import re
 import signal
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
@@ -809,3 +810,315 @@ def test_g7a_an_empty_third_cell_is_the_prompt_cell(tmp_path):
     d.owed("owed: none", rows=("| QUEUE | — ||",))
     r = d.run()
     assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: \n")
+
+
+# ---- card 458 — the desk's size every turn and the refresh at 300k (his 2026-10-13 R1323) --------
+
+SID = "5f91403d-3f67-445e-a654-8eedc3cc8a0b"
+DESK_ROW = f"{SID} · cto-desk · ~/cobalt · busy · working"
+REFRESH_NOW = (
+    "REFRESH NOW: (1) write the HANDOVER line and §5 CURRENT, "
+    "(2) run sh /Users/cobalt/.claude/ops/desk-launch.sh desk, (3) stop.\n"
+)
+ISO = re.compile(r"^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d-0[45]:00$")
+FORCED = f"HANDOVER: FORCED — no line from {SID[:8]}; successor reconciles"
+
+
+def stamp(hours: int = 0) -> str:
+    """The §5 CURRENT stamp for the ET hour now, `hours` off."""
+    now = datetime.now(ZoneInfo("America/New_York"))
+    return "STATE AT %02d:%02d" % ((now.hour + hours) % 24, now.minute)
+
+
+def now_iso() -> str:
+    return datetime.now(ZoneInfo("America/New_York")).isoformat(timespec="seconds")
+
+
+class Sized(Desk):
+    """The desk with a fake desk-context.sh beside the staged hook (prints a set line, logs each
+    call to ctx.log), fake desk-launch.sh and desk-commit.sh beside it and a fake `claude` on PATH,
+    the three logging their argv in call order to calls.log."""
+
+    def __init__(self, tmp_path: Path, n: int = 123456):
+        super().__init__(tmp_path)
+        self.ctx = tmp_path / "ctx.log"
+        self.calls = tmp_path / "calls.log"
+        self.order = Path(str(self.transcript) + ".desk-refresh")
+        self.refresh_log = tmp_path / "wt" / ".job-state" / "DESK-REFRESH"
+        self.bin = tmp_path / "bin"
+        self.bin.mkdir()
+        self.size(n)
+        self.fake(self.hook.parent / "desk-launch.sh", "desk-launch.sh")
+        self.fake(self.hook.parent / "desk-commit.sh", "desk-commit.sh")
+        self.fake(self.bin / "claude", "claude")
+
+    def fake(self, path: Path, name: str, code: int = 0) -> None:
+        path.write_text(f"#!/bin/sh\nprintf '%s\\n' \"{name} $*\" >> '{self.calls}'\nexit {code}\n")
+        path.chmod(0o755)
+
+    def size(self, n: int | None = None, line: str | None = None, code: int = 0) -> None:
+        if line is None:
+            line = f"context {n} of 300000 — " + ("REFRESH" if n >= 300000 else "ok")
+        (self.hook.parent / "desk-context.sh").write_text(
+            f"#!/bin/sh\nprintf '%s\\n' \"desk-context.sh $*\" >> '{self.ctx}'\n"
+            f"printf '%s\\n' '{line}'\nexit {code}\n"
+        )
+
+    def env(self, turn: int = 0, wait: int = 0) -> dict:
+        return dict(os.environ, LC_ALL="C", PATH=f"{self.bin}:{os.environ['PATH']}",
+                    DESK_REFRESH_TURN_WAIT=str(turn), DESK_REFRESH_LINE_WAIT=str(wait))
+
+    def run(self, active: bool = False, cwd=None):
+        event = {
+            "session_id": SID, "transcript_path": str(self.transcript),
+            "cwd": str(self.repo if cwd is None else cwd), "hook_event_name": "Stop",
+            "stop_hook_active": active,
+        }
+        return subprocess.run(
+            ["python3", str(self.hook)], input=json.dumps(event),
+            capture_output=True, text=True, timeout=60, env=self.env(),
+        )
+
+    def forced(self, wait: int = 0, background: bool = False):
+        argv = ["python3", str(self.hook), "--forced", SID, str(self.transcript)]
+        if background:
+            return subprocess.Popen(argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                    stderr=subprocess.DEVNULL, env=self.env(wait=wait))
+        return subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                              timeout=60, env=self.env(wait=wait))
+
+    def logged(self) -> list[str]:
+        return self.calls.read_text().splitlines() if self.calls.exists() else []
+
+    def until(self, line: str, seconds: float = 10) -> list[str]:
+        """The call log once it holds `line`, waiting up to `seconds`."""
+        end = time.time() + seconds
+        while time.time() < end and line not in self.logged():
+            time.sleep(0.1)
+        return self.logged()
+
+
+# S1 — R1 the size and R2 the stamp, every turn
+
+
+def test_s1_a_fresh_desk_gets_its_size_line(tmp_path):
+    d = Sized(tmp_path)
+    d.owed("owed: none", stamp())
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "DESK SIZE 123,456 / 300,000\n")
+    assert d.count.read_text().strip() == "0"
+    assert d.ctx.read_text().splitlines() == [f"desk-context.sh {SID} 300000"]
+
+
+def test_s1_the_size_line_comes_before_the_owed_line(tmp_path):
+    d = Sized(tmp_path)
+    d.owed("OWED: b", stamp())
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "DESK SIZE 123,456 / 300,000\nstart it: b\n")
+    assert d.count.read_text().strip() == "1"
+
+
+def test_s1_an_unreadable_size_is_said(tmp_path):
+    d = Sized(tmp_path)
+    d.size(line="no transcript for x", code=2)
+    d.owed("owed: none", stamp())
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "DESK SIZE UNREAD — no transcript for x\n")
+
+
+@pytest.mark.parametrize("off", [None, 1], ids=["none", "stale"])
+def test_s2_no_stamp_or_a_stale_hour_asks_for_section_5_first(tmp_path, off):
+    d = Sized(tmp_path)
+    d.owed("owed: none", *(() if off is None else (stamp(off),)))
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "UPDATE §5 CURRENT NOW\nDESK SIZE 123,456 / 300,000\n")
+
+
+def test_s1_the_continuation_stop_runs_no_size(tmp_path):
+    d = Sized(tmp_path)
+    d.owed("owed: none")
+    d.count.write_text("0\n")
+    r = d.run(active=True)
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    assert not d.ctx.exists()
+
+
+def test_s2_the_stamp_under_the_owed_block_keeps_the_block(tmp_path):
+    d = Desk(tmp_path)
+    d.lister(ROW)
+    d.owed("OWED: build x | live: b43daef9", stamp())
+    assert f"| live: b43daef9\n{stamp()}\n\n| session |" in d.report.read_text()
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+# S2 — R3 the order at 300k
+
+
+def test_s2_at_300000_the_order_replaces_the_size_line(tmp_path):
+    d = Sized(tmp_path, n=300000)
+    d.lister(DESK_ROW)
+    d.owed("owed: none", stamp())
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, REFRESH_NOW)
+    held = d.order.read_text().splitlines()
+    assert len(held) == 1 and ISO.match(held[0]), held
+    assert "desk-launch.sh desk" in d.until(f"claude rm {SID}"), "the detached refresh ran"
+
+
+def test_s2_299999_is_still_a_size_line(tmp_path):
+    d = Sized(tmp_path, n=299999)
+    d.owed("owed: none", stamp())
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "DESK SIZE 299,999 / 300,000\n")
+    assert not d.order.exists()
+
+
+def test_s2_the_order_file_starts_the_refresh_once(tmp_path):
+    d = Sized(tmp_path, n=300000)
+    d.lister(DESK_ROW)
+    d.owed("owed: none", stamp())
+    assert d.run().stderr == REFRESH_NOW
+    d.until(f"claude rm {SID}")
+    d.run()
+    time.sleep(2)
+    assert d.logged().count("desk-launch.sh desk") == 1, d.logged()
+
+
+def test_s2_a_refreshed_desk_stops_silently(tmp_path):
+    d = Sized(tmp_path, n=310000)
+    d.owed("owed: none", stamp())
+    with d.report.open("a") as f:
+        f.write(f"\nHANDOVER: predecessor {SID[:8]} → successor 12345678 at 06:00 · pane w2:pV1\n")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    assert not d.order.exists()
+
+
+# S3 — R4 the forced refresh
+
+
+def test_s3_the_final_message_is_sent_once(tmp_path):
+    d = Sized(tmp_path, n=305000)
+    d.owed("owed: none", stamp())
+    d.order.write_text(now_iso() + "\n")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "WRITE HANDOVER NOW\n")
+    held = d.order.read_text().splitlines()
+    assert len(held) == 2 and all(ISO.match(x) for x in held), held
+    assert d.count.read_text().strip() == "0"
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, REFRESH_NOW)
+    assert len(d.order.read_text().splitlines()) == 2
+
+
+def test_s3_no_line_forces_the_line_the_launch_and_the_stop(tmp_path):
+    d = Sized(tmp_path)
+    d.lister(DESK_ROW)
+    d.owed("owed: none", stamp())
+    d.order.write_text(now_iso() + "\n")
+    d.forced()
+    assert d.report.read_text().splitlines()[-1] == FORCED
+    assert d.logged() == [
+        f"desk-commit.sh docs(desk): HANDOVER FORCED {SID[:8]} {d.report}",
+        "desk-launch.sh desk",
+        f"claude stop {SID}",
+        f"claude rm {SID}",
+    ]
+
+
+def test_s3_a_desk_that_refreshed_itself_is_left_alone(tmp_path):
+    d = Sized(tmp_path)
+    d.lister(DESK_ROW)
+    d.owed("owed: none", stamp())
+    d.order.write_text(now_iso() + "\n")
+    p = d.forced(wait=30, background=True)
+    time.sleep(1)
+    line = f"HANDOVER: predecessor {SID[:8]} → successor 12345678 at 06:00 · pane w2:pV1"
+    with d.report.open("a") as f:
+        f.write(line + "\n")
+    assert p.wait(timeout=30) == 0
+    assert d.logged() == []
+    assert d.report.read_text().splitlines()[-1] == line
+
+
+def test_s3_another_handover_line_launches_without_a_forced_line(tmp_path):
+    d = Sized(tmp_path)
+    d.lister(DESK_ROW)
+    d.owed("owed: none", stamp())
+    d.order.write_text(now_iso() + "\n")
+    p = d.forced(wait=30, background=True)
+    time.sleep(1)
+    line = "HANDOVER: written by hand, successor next"
+    with d.report.open("a") as f:
+        f.write(line + "\n")
+    assert p.wait(timeout=30) == 0
+    assert d.report.read_text().splitlines()[-1] == line
+    assert d.logged() == ["desk-launch.sh desk", f"claude stop {SID}", f"claude rm {SID}"]
+
+
+def test_s3_a_live_successor_is_never_doubled(tmp_path):
+    d = Sized(tmp_path)
+    d.lister(DESK_ROW, "0000bbbb-1111 · cto-desk · ~/cobalt · idle · idle")
+    d.owed("owed: none", stamp())
+    before = d.report.read_text()
+    d.order.write_text(now_iso() + "\n")
+    d.forced()
+    assert d.logged() == []
+    assert d.report.read_text() == before
+    assert "0000bbbb-1111" in d.refresh_log.read_text()
+
+
+def test_s3_the_refresh_logs_each_step(tmp_path):
+    d = Sized(tmp_path)
+    d.lister(DESK_ROW)
+    d.fake(d.hook.parent / "desk-launch.sh", "desk-launch.sh", code=3)
+    d.owed("owed: none", stamp())
+    d.order.write_text(now_iso() + "\n")
+    d.forced()
+    assert d.logged()[-2:] == [f"claude stop {SID}", f"claude rm {SID}"], "a failed step: the next still runs"
+    steps = d.refresh_log.read_text().splitlines()
+    shape = re.compile(r"^\S+ %s (.+) — (\S+) — (.*)$" % SID[:8])
+    parsed = [shape.match(x) for x in steps]
+    assert all(parsed) and all(ISO.match(x.split(" ", 1)[0]) for x in steps), steps
+    assert [(m.group(1), m.group(2)) for m in parsed] == [
+        (FORCED, "0"),
+        ("desk-commit.sh", "0"),
+        ("desk-launch.sh desk", "3"),
+        (f"claude stop {SID}", "0"),
+        (f"claude rm {SID}", "0"),
+    ]
+
+
+# ---- card 458 check (desk-refresh-1013-check) -------------------------------------------------
+
+
+def test_check_o1_an_unguarded_block_at_300k_gives_no_silent_order(tmp_path):
+    d = Sized(tmp_path, n=300000)
+    d.lister(DESK_ROW)
+    d.owed("owed: none", "OWED: x", stamp())
+    r = d.run()
+    assert r.returncode == 0 and r.stderr.startswith(UNGUARDED), r.stderr
+    assert not d.order.exists(), "the order file was written though REFRESH NOW was never shown"
+
+
+def test_x4_a_shorter_prefix_listed_first_is_stopped(tmp_path):
+    d = Sized(tmp_path)
+    short = SID[:8]
+    d.lister(f"{short} · other · ~/cobalt-wt/x · busy · working", DESK_ROW)
+    d.owed("owed: none", stamp())
+    d.order.write_text(now_iso() + "\n")
+    d.forced()
+    stopped = [x for x in d.logged() if x.startswith("claude stop ")]
+    assert stopped == [f"claude stop {SID}"], stopped
+
+
+def test_s1_a_timeout_keeps_the_first_output_line(tmp_path):
+    d = Sized(tmp_path)
+    (d.hook.parent / "desk-context.sh").write_text(
+        "#!/bin/sh\n"
+        "exec python3 -c 'import sys,time; sys.stdout.write(\"no transcript for x\\n\"); sys.stdout.flush(); time.sleep(30)'\n"
+    )
+    d.owed("owed: none", stamp())
+    r = d.run()
+    assert r.stderr == "DESK SIZE UNREAD — no transcript for x\n"
