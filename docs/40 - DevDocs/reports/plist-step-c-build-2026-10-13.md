@@ -281,4 +281,4 @@ next: PREFLIGHT (fix round: rows FR-D1, FR-O2, FR-A4, FR-O2b at TIP `6c3402af`),
 
 First build's stop line (kept for the record): `job: plist-step-c-1013 · tip: 01fb7297 | on 5214e50b | … | rows: 9 of 10 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 382312` (whole at `dfc2624f`).
 
-FAILED PREFLIGHT: head — fix round: HEAD 6c3402af is the check's fix commit (the card's TIP), not BASE 5214e50b nor a wip(plist-step-c-1013): commit — preflight.sh build has no fix-round case
+RESUMED: PREFLIGHT 15:10
