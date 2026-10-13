@@ -221,8 +221,26 @@ def snapshot(cfg: Optional[BackupConfig] = None, *, dry_run: bool = False) -> Ba
     try:
         targets = [str(p) for p in cfg.sources]
         if cfg.database.enabled:
-            dump = STAGING / f"{cfg.database.name}.sql"
-            dump_database(cfg.database.name, STAGING)
+            path = STAGING / f"{cfg.database.name}.sql"
+
+            def stamp() -> Optional[tuple[int, int, int, int]]:
+                try:
+                    st = path.stat()
+                except FileNotFoundError:
+                    return None
+                return (st.st_ino, st.st_size, st.st_mtime_ns, st.st_ctime_ns)
+
+            # The path is this run's once the dump has touched it: a dump
+            # that raised mid-write is removed, one that raised before it
+            # opened the file leaves whatever was there.
+            before = stamp()
+            try:
+                dump_database(cfg.database.name, STAGING)
+            except BaseException:
+                if stamp() != before:
+                    dump = path
+                raise
+            dump = path
             run.db_dump_bytes = dump.stat().st_size
             targets.append(str(dump))
             logger.info("backup: {} dumped, {:.1f} MB", cfg.database.name, run.db_dump_bytes / 1e6)
