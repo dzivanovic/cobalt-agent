@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/backup-flock-1012
 WORKTREE: backup-flock-1012
-BASE: «FILL: BASE — main HEAD at launch, 8 hex (the desk's)»
+BASE: 86dc425a
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/backup-flock-1012/docs/40 - DevDocs/reports/backup-flock-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/backup-flock-check-2026-10-12.md
