@@ -10,7 +10,7 @@ REPORT: /Users/cobalt/cobalt-wt/backup-flock-1012/docs/40 - DevDocs/reports/back
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/backup-flock-check-2026-10-12.md
 HOUSE B:
 RESTARTS: com.cobalt.radar
-RULINGS: 2026-10-12 R1138, 2026-10-12 R1289, 2026-10-12 R1295
+RULINGS: 2026-10-12 R1138
 
 ## ROWS
 
