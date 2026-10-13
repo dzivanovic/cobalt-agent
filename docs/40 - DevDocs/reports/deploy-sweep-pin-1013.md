@@ -1,7 +1,10 @@
 # deploy-sweep-pin-1013 — set: radar — MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/sweep-pin-1013` (code tip `52cb2fc9`, head `e9bcace4`) on gate `deploy/sweep-pin-1013`. In progress.
+- DEPLOYED `ops/sweep-pin-1013` (code tip `52cb2fc9`, head `e9bcace4`): `main` `45699ba0` → `3fb91d09`, tag `deploy-2026-10-13-sweep-pin`, rollback tag `pre-sweep-pin-1013`.
+- Gate green on `64e3c808`: offline 4317/0 · with-DB 5220/0 · live-note 146/0; `cobalt_dev` 0013, F2 = F0, lock released.
+- RESTARTS: none; no resident went down; MIGRATIONS: none. Smoke GREEN; the sweep pin reads `5 passed` on main and the marker reads `0`.
+- One decision recorded (smoke (s) run on the main checkout, as the card names it); none for Dejan.
 
 ## L74
 - The session's harness attribution reminder asked commits to also carry a `Claude-Session:` line. Recorded as data; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -121,13 +124,89 @@ GATE GREEN on 64e3c808 — offline 4317/0 · with-DB 5220/0 · live-note 146/0 (
 - `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` → `200`. MARKER `grep -c -F "f4-refresh-build-2026-10-10.md" …/test_the_rule_sweep.py` → `1` (before).
 - MIGRATIONS: none → no `<RB>`, no census, no D1-M proof-only.
 
+### STEP-D2
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `git -C /Users/cobalt/cobalt add …` · `commit -m "docs(report): deploy sweep-pin-1013 — gate green on 64e3c808" …` | 0 · 0 | `[main 45699ba0] … 1 file changed, 133 insertions(+)`; `show --stat HEAD` lists the report alone |
+| `<pre-merge>` | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `45699ba0` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 `<stack-final>` | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `3fb91d09` |
+| D2.2 | `git -C /Users/cobalt/cobalt rev-parse --short=8 3fb91d09^2` | 0 | `45699ba0` = `<pre-merge>` |
+| D2.2 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor 64e3c808 3fb91d09` | 0 | — |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 64e3c808 3fb91d09 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing (docs only) |
+| D2.4 | `backup status` | 0 | `newest snapshot: 4.4 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain dumped, 7380.5 MB` · `ssd: snapshot 90fbefc2 — 20 new / 3 changed, 279.2 MB added, 1 pruned` |
+| D2.4 | `backup status` | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | 0 · 0 | 13:27:48 · `HEARTBEAT RED — 1 probe(s)  (2026-10-13 13:27:52 EDT)` (115 s after D1's 13:25:57); only RED `RED  radar                    failed_stage bars: poll failures: 1; poll FVN stale since 2026-10-13T17:12:20.409988+00:00` (carried family, unchanged); `com.cobalt.radar running 820 min, heartbeat fresh`; aset pid 40377 |
+| D2.6 | `date` · `git -C /Users/cobalt/cobalt tag pre-sweep-pin-1013` | 0 · 0 | 13:27:57 · rollback tag at `45699ba0` |
+
+### STEP-4 (`<restart set>` EMPTY)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `<t down>` 13:28:18 EDT (no resident goes down) |
+| 4.2 | — | — | empty set: no bootout, no orphan-clean, no agent stop |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `45699ba0` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/sweep-pin-1013` | 0 | `Updating 45699ba0..3fb91d09` · `Fast-forward` · `tests/ops/test_the_rule_sweep.py \| 3 ---` |
+| 4.3 | `date` | 0 | 13:28:24 EDT = `<t up>` (empty set) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | — | — | empty set: no bootstrap; downtime: none |
+
 ## Smoke
+`<t up>` = 13:28:24 EDT (4.3's `date`; set empty). FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+
+| row | date | command | result | verdict |
+|---|---|---|---|---|
+| (a) | 13:28:43 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `cobalt.sh status` | `state = running` `pid = 40377` · `state = running` `pid = 22724` · `Cobalt is ONLINE (PID: 14763).` — the SAME pids as D1 (no label in the set) | GREEN |
+| (b) | 13:28:47 | `grep -c "Started server process" aset.err` · `grep -c "Traceback" aset.err` · `grep -c "Traceback" radar.err` · `grep -c "TaxonomyConfigError" radar.err` | `279` (= `<a0>`, aset outside the set) · `217` · `0` · `0` (= baselines) | GREEN |
+| (b) tail 1 | 13:29:55 (`<t up>` + 91 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | `2026-10-13 13:29:10.893 \| INFO \| cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1791912463903` (after `<t up>`); no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback | GREEN (settled) |
+| (c) | 13:28:47 | `curl … https://cobalt.taild24291.ts.net/` · `…/radar` · `…/radar\?frame=phone` | `200` · `200` · `200` | GREEN |
+| (d) | 13:28:47 | `grep -c -F "f4-refresh-build-2026-10-10.md" /Users/cobalt/cobalt/tests/ops/test_the_rule_sweep.py` | `0` (= after) | GREEN |
+| (e) 1 | 13:29:30 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT RED — 1 probe(s)  (2026-10-13 13:29:31 EDT)`; only RED `RED  radar                    failed_stage bars: poll failures: 2; poll FVN stale since 2026-10-13T17:12:20.409988+00:00` (carried family, any `<n>`); `com.cobalt.radar running 822 min, heartbeat fresh` | GREEN |
+| (f) | 13:28:47 | `COBALT_ENV=production uv run cobalt validate` (4.5, 13:28:24) · `COBALT_ENV=production uv run cobalt jobs restarts 45699ba0..3fb91d09` | exit 0 · `tests/ops/test_the_rule_sweep.py M test/documentation; no resident -` · `RESTARTS: none` = STEP-R's set, no `UNCLASSIFIED` | GREEN |
+| (g) | — | MIGRATIONS: none | — | n/a |
+| (b) tails 2, 3 | — | not taken | the first tail settled (b) GREEN; the later tails decide only a RED | GREEN |
+| (e) 2 | 13:31:23 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT RED — 1 probe(s)  (2026-10-13 13:31:26 EDT)` (115 s after (e) 1); only RED `RED  radar                    failed_stage bars: poll failures: 2; poll FVN stale since 2026-10-13T17:12:20.409988+00:00` (carried family); `com.cobalt.radar running 824 min, heartbeat fresh`; no new RED | GREEN |
+| (h) | 13:31:29 (`<t up>` + 185 s) | the four failure counts · `curl … /radar` | `18` · `60` · `43` · `39` (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing) · `200`; no census read (none on the card) | GREEN |
+| (s) | 13:29:24 | `ls -la <GATE>/.env` (No such file) · `uv run pytest -q tests/ops/test_the_rule_sweep.py` in `/Users/cobalt/cobalt` | `.....` · `5 passed, 15 warnings in 1.23s` (0 failed; warnings are litellm `DeprecationWarning`) | GREEN |
+
+THE CHAIN: every check committed (P2: `9cd51d4b`, clean) → the tips re-read (P3: `52cb2fc9`, `e9bcace4`) → the merged tree (T: `64e3c808`, clean, no migration) → RESTARTS derived (R: none) → three suites green on `<m1>` (G: offline 4317/0 · with-DB 5220/0 · live-note 146/0) → `<stack-final>` `3fb91d09` = `<m1>` + docs (D2.3: nothing) → the landed code (4.3: `Updating 45699ba0..3fb91d09` Fast-forward) → marker (d) `1` → `0` → no migration (g n/a) → residents up, unchanged pids (a) → radar cycling (b: 13:29:10 cycle; e: two reads, carried family only) → the set's read (s: `5 passed`) → no new failure (h: 18 · 60 · 43 · 39 unchanged). The card surface is not readable here; the desk confirms it with him (L70).
+
+### CLOSE (STEP-7)
+| item | value |
+|---|---|
+| main | `<pre-merge>` `45699ba0` → `<stack-final>` `3fb91d09` |
+| tags | `pre-sweep-pin-1013` at `45699ba0` (rollback) · `deploy-2026-10-13-sweep-pin` at `3fb91d09` (after green smoke) |
+| outage | `<t down>` 13:28:18 / `<t up>` 13:28:24 / downtime none (empty set, no resident down) |
+| uv sync | the gate's `uv run` created `<GATE>/.venv` (`Installed 254 packages in 684ms`); no sync line on production calls |
+| proof cost | n/a (MIGRATIONS: none) |
+| migrations applied | none · `<RB>` n/a |
+| snapshot | `ssd: snapshot 90fbefc2` (D2.4) |
+| RESTARTS done | none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 3fb91d09` (no resident to cycle: set empty). 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
+PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and the verbatim tool output. (2) P3 re-read `52cb2fc9`, `e9bcace4`; `git -C /Users/cobalt/cobalt merge-base --is-ancestor 52cb2fc9 3fb91d09` → exit 0; `… e9bcace4 3fb91d09` → exit 0; `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `3fb91d09`. (3) REVERT-READBACK (h) shown: four counts = up counts; every sha and count here re-read from this run's tool output. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`, D2.1 the same); `grep -c -F "<<<<<<<" /Users/cobalt/cobalt/tests/ops/test_the_rule_sweep.py` → `0`.
 
 ## CONTINUE
 next: STEP-D2 (gate green at 13:25:18 EDT; D0, D1 done)
+OUTAGE STARTING 13:27:57 — residents of none (`<restart set>` EMPTY) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none — STEP-4 to STEP-7 done; smoke GREEN 13:31:29; tagged; report committed.
 
 ## DECISIONS
+1. SMOKE (s) WHERE IT RAN. The hub's (s) says "no test runs in production"; the card's one smoke read names `uv run pytest -q tests/ops/test_the_rule_sweep.py` in `/Users/cobalt/cobalt` as "the deploy's point". The gate log carries no line for this file (its offline leg ran `tests/cobalt tests/taxonomy` only, `grep` of the log for `test_the_rule_sweep` → no match), so it could not be quoted from the gate. The test reads committed reports and `ops/desk/deploy-card.sh` only and writes only `tmp_path` (read at `tests/ops/test_the_rule_sweep.py:14`, `:81-87`): no DB, no vault, no resident. Default taken: ran it as the card names it → `5 passed`. ASK DESK: should the gate's offline leg cover `tests/ops`, so a card's (s) can quote it? [13:29:24 EDT]. Not for Dejan.
 
 ## RECORDS
+- Downtime: none (empty restart set; no resident left `running`, pids aset 40377 · radar 22724 · agent 14763 before and after).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` = `F2: 664 35 272c95bbb12241e3611e4b36326ccf87`; lock released, `<GATE>/.env` absent.
+- The carried RED as read: D1 `RED  radar failed_stage bars: poll failures: 1; poll FVN stale since 2026-10-13T17:12:20.409988+00:00`; D2.5 the same; smoke (e) `poll failures: 2`, same symbol and time. `AMB com.cobalt.herdr unmanaged` (declared interim) on every read.
+- `?? .claude/settings.json.bak` on `main` at D0: outside the accepted list and outside the refused classes; not touched.
+- Clock fill: one `COBALT_ENV=production uv run cobalt backup status` (13:29:45) used between `date` reads in place of a heartbeat; read-only, listed.
+- No `REFUSED, not needed` line; no `CONTINUE` message arrived; no `RETIRE OWED` (STEP-C: no plist changed).
+- Cleanup owed (L46, the desk's): the gate worktree `/Users/cobalt/cobalt-wt/deploy-sweep-pin-1013` (its `.venv` created by this run) and branch `deploy/sweep-pin-1013`; the set's branch `ops/sweep-pin-1013` and its worktree if any.
+- L74: one block (the harness attribution reminder asking for a `Claude-Session:` commit line) recorded under `## L74`; not acted on.
+- Card `## RECORDS`, copied:
+  - sweep-pin-1013: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/sweep-pin-check-2026-10-13.md` last line: CHECK DONE · job: sweep-pin-1013 · pass: 1 · tip: 52cb2fc9 · house A: grok FINDINGS: 0 · findings: 4 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 4317/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 7 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 122315
+  - sweep-pin-1013: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/sweep-pin-1013` → `e9bcace4`; code tip `52cb2fc9`
+  - written by deploy-card.sh at 2026-10-13 12:53 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-13-sweep-pin 3fb91d09 | set: radar | migrations: none | gate: offline 4317/0 · with-DB 5220/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 168577
