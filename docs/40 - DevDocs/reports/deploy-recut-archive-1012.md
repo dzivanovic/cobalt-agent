@@ -1,9 +1,9 @@
 # deploy recut-archive-1012 · set: none · migrations: none
 
 ## §0 Headline
-FAILED at D2.4 (21:41 EDT): the production snapshot (`backup run`) exited 1 on a missing staging dump. Nothing in production changed, nothing merged to `main`, and no resident went down.
+Attempt 1 ended at D2.4 (21:41 EDT): the production snapshot (`backup run`) exited 1 on a missing staging dump. Nothing in production changed, nothing merged to `main`, and no resident went down.
 Before that: AUTHORIZED; preflight clean; tree `05518bd2`; RESTARTS none; GATE GREEN (offline 4309/0 · with-DB 5212/0 · live-note 146/0); `<stack-final>` `f30db38e` = `<m1>` + docs.
-Next (the desk's): fix the backup, then `desk-launch.sh recut`.
+Next (the desk's): fix the backup, then `desk-launch.sh recut`. The desk relaunched with `CONTINUE: STEP-D0` at 21:44 EDT instead; see `# RELAUNCH` and `## RESUME (attempt 2)`.
 
 ## L74
 The launch context carried a harness attribution reminder asking that commits also end with a `Claude-Session:` line. Recorded here as data and not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -166,14 +166,20 @@ The run stopped at D2.4. D2.5, D2.6 (the `pre-recut-archive-1012` tag) and STEP-
 Not run: the deploy stopped before the merge.
 
 ## CONTINUE
-next: none — FAILED at D2.4. The desk decides: fix `backup run` (the missing staging dump `/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql`), then `desk-launch.sh recut "<card>"` (the hub's RECUT path for `rollback: not used`).
+Attempt 2 (resume): next: STEP-D2 (D2.0 commit, D2.1 `main` into the gate, D2.4 snapshot).
+Attempt 1: next was none — it stopped at D2.4. The desk decides: fix `backup run` (the missing staging dump `/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql`), then `desk-launch.sh recut "<card>"` (the hub's RECUT path for `rollback: not used`).
 
 ## DECISIONS
 1. ASK DESK: at D0, `status --porcelain` shows dirty paths that the accepted list does not name and the refused list does not name either: ` M` under `docs/00 - Project/` and `docs/30 - Design/`, and `?? .claude/settings.json.bak`. BACKLOG, SPRINT-LADDER and `cto-2026-10-12.md` were not dirty in the launch snapshot. All of them are unstaged working-tree edits, none is in `src/`, `tests/`, `ops/` or `configs/`, and none enters the merge, which lands only committed trees. Safe default taken: not a refusal, go on. [21:39 EDT]
 
 2. ASK DESK: `backup run` failed at D2.4 with `FileNotFoundError … /Users/cobalt/cobalt-backups/staging/cobalt_brain.sql`, yet `backup status` then reads `newest snapshot: 0.0 h old`. Whether that snapshot holds the production database is unproven (L70). The nightly `com.cobalt.backup` finished at 19:09 ET with exit 0 (heartbeat), so this run's own dump step failed and the cause is not read here. Safe default taken: no deploy without a proven snapshot (L73), so the run stopped with nothing in production changed. [21:41 EDT]
 
+3. ASK DESK: THE ONE RESUME check (c) writes `git -C /Users/cobalt/cobalt merge-base --is-ancestor <m1> HEAD`. In `/Users/cobalt/cobalt`, HEAD is `main`, and check (d) requires that `main` does NOT carry `<m1>`, so read literally (c) and (d) can never both hold. Safe default taken: ran it as `git -C <GATE> merge-base --is-ancestor 05518bd2 HEAD` (a listed `git -C * merge-base*` string), which tests the gate's HEAD → exit 0. The hub text is the desk's to fix. [21:44 EDT]
+
+4. ASK DESK: the hub's RECUT line says a run that FAILED with `rollback: not used` "is not resumed", and the desk's next step is `desk-launch.sh recut`. This session was launched as `CONTINUE: STEP-D0` instead. THE ONE RESUME's check (a) accepts any old last line that begins `FAILED:`, and (a)–(e) all held. Safe default taken: follow THE ONE RESUME. It is still bounded by D2.4: without a proven snapshot the run stops again before anything goes down. [21:45 EDT]
+
 ## RECORDS
+- Attempt 2 (resume): the launch context again carried the harness attribution reminder asking for a `Claude-Session:` line. L74 data, not acted on.
 - Downtime: none. No resident went down (`<restart set>` empty, and the run stopped before STEP-4).
 - `cobalt_dev: 0013 (F2 = F0)`: the gate's line, `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87`; lock released, `.env: removed`.
 - REFUSED, not needed: `grep -n -F ".env: removed" /Users/cobalt/cobalt-wt/.gate-logs/deploy-recut-archive-1012-all-20261012-210930.log` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. Read instead with `grep -n -F "released"` and the Read tool on the log.
@@ -189,4 +195,65 @@ next: none — FAILED at D2.4. The desk decides: fix `backup run` (the missing s
   - written by deploy-card.sh at 2026-10-12 21:07 ET (`date`); trial merge of the heads onto main in order: clean
 - PRE-STOP SELF-CHECK: (1) no smoke ran, and every D-row is quoted with its `date`; (2) `df775390` was re-read at P3 and is an ancestor of `<BRANCH>`, and `<m1>` `05518bd2` is an ancestor of `<stack-final>` `f30db38e`; (3) no merge landed, so no REVERT-READBACK applies, and every sha and count above was read from tool output this run; (4) STEP-T and D2.1 were clean merges with no conflict.
 
-FAILED: D2.4 — backup run exit 1: FileNotFoundError /Users/cobalt/cobalt-backups/staging/cobalt_brain.sql; no proven snapshot, nothing in production changed · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 123536
+# RELAUNCH
+Launch message: `CONTINUE: STEP-D0` (THE ONE RESUME). `date` → Mon Oct 12 21:44:21 EDT 2026. The report's last non-blank line before this resume, quoted:
+> `FAILED: D2.4 — backup run exit 1: FileNotFoundError /Users/cobalt/cobalt-backups/staging/cobalt_brain.sql; no proven snapshot, nothing in production changed · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 123536`
+
+Resume checks, each its own call, (e) first:
+- (e) `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 14738` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 14748` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 14763).` TRUE: residents up, nothing to restore, downtime none.
+- (a) the old last line begins `FAILED:` (quoted above). TRUE.
+- (b) `## L68 GATE` carries `GATE GREEN on 05518bd2`; `## RESTARTS` carries `<restart set>` = EMPTY (`RESTARTS: none`). Recorded: `<m1>` = `05518bd2`, `<restart set>` = none. TRUE.
+- (c) `git -C <GATE> status --short --branch` → `## deploy/recut-archive-1012` · `git -C <GATE> rev-parse --short=8 HEAD` → `f30db38e` (above `<m1>`: attempt 1's D2.1 `main`-into-gate merge) · `git -C <GATE> merge-base --is-ancestor 05518bd2 HEAD` → exit 0 · `git -C /Users/cobalt/cobalt diff --stat 05518bd2 deploy/recut-archive-1012 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing. TRUE. (The hub writes the ancestry call as `git -C /Users/cobalt/cobalt … HEAD`, but in that tree HEAD is `main`, which (d) proves does not carry `<m1>`. It was run with `-C <GATE>` so that HEAD is the gate's HEAD, which is what (c) tests. See `## DECISIONS` 3.)
+- (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor 05518bd2 main` → exit 1 (nothing merged to `main`). TRUE.
+- THE GATE'S OWN `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-recut-archive-1012/.env` → `No such file or directory`. No G (f) and no release are owed.
+
+## RESUME (attempt 2)
+### STEP-0, fresh rows
+| rule | command | exit | result |
+|---|---|---|---|
+| P0 | `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "<card>"` | 0 | the same eleven rows as `## AUTHORIZATION` (R1138 row now at line 157), last line `AUTHORIZED` |
+| P1 | `date` | 0 | Mon Oct 12 21:44:43 EDT 2026 |
+| P2 | `tail -n 3 "…/recut-archive-check-2026-10-12.md"` | 0 | last line unchanged: `CHECK DONE · … · tip: df775390 · … · held unfixed: 0 · open: 0 · … · ready: YES · …` |
+| P2 | `git -C /Users/cobalt/cobalt log -1 --format=%H -- "docs/40 - DevDocs/reports/recut-archive-check-2026-10-12.md"` | 0 | `1fddf882b7784f60e86c1b75559e8083096e424b` |
+| P2 | `git -C /Users/cobalt/cobalt diff --stat -- "docs/40 - DevDocs/reports/recut-archive-check-2026-10-12.md"` | 0 | nothing |
+| P3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 df775390` | 0 | `df775390` |
+| P3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/recut-archive-1012` | 0 | `df775390` |
+| P3 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor df775390 ops/recut-archive-1012` | 0 | — |
+| P3 | `git -C /Users/cobalt/cobalt diff --stat df775390 ops/recut-archive-1012 -- . ':(exclude)docs'` | 0 | nothing |
+| P4 | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` |
+| P5 | (resume) status / HEAD as check (c) found them: `## deploy/recut-archive-1012`, `f30db38e`; `<m0>` = `06440158` (the report's) | — | — |
+| P5 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor 06440158 main` | 0 | — (the EMPTY check is not run on a resume) |
+| P6 | `grep -c -F -e "archive/pre-" "/Users/cobalt/cobalt/ops/desk/desk-launch.sh"` | 0 | `0` (= before) |
+| P7 | `git -C /Users/cobalt/cobalt diff --stat main df775390 -- src/cobalt/db_migrations` | 0 | nothing |
+| P8 | `launchctl print` aset / radar (resume check (e), 21:44) | 0 | running; `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` |
+| P8 | `ls /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | listed |
+| P8 | `/Users/cobalt/cobalt/cobalt.sh status` (check (e)) | 0 | `Cobalt is ONLINE (PID: 14763).` |
+
+### D0
+| step | command | exit | result |
+|---|---|---|---|
+| MAIN | `git -C /Users/cobalt/cobalt status --short --branch` | 0 | `## main...origin/main [ahead 233]` |
+| MAIN | `git -C /Users/cobalt/cobalt status --porcelain` | 0 | no staged line; no dirty `src/`, `tests/`, `ops/`; `configs/` only ` M configs/cobalt/rules.yaml`; the same unnamed paths as attempt 1 (`## DECISIONS` 1, same default); this report ` M` |
+| MAIN | `git -C /Users/cobalt/cobalt diff --stat 06440158 main -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing |
+| PROBE | `tag scratch-allow-probe-recut-archive-1012` · `tag -d …` | 0 | `Deleted tag 'scratch-allow-probe-recut-archive-1012' (was 7ff8abae)` |
+| PROBE | `commit --allow-empty -m "scratch: allowlist probe (reverted next line)"` · `reset --soft HEAD~1` · `log --oneline -1` | 0 | `[main 255e4ed3] …` · — · `7ff8abae docs(desk): HANDOVER fd1710af to 745a6747, R1290 refresh` (HEAD back) |
+| TAG | `rev-parse --verify --quiet refs/tags/deploy-2026-10-12-recut-archive` | 1 | absent |
+| TAG | `rev-parse --verify --quiet refs/tags/pre-recut-archive-1012` | 1 | absent (attempt 1 never set it) |
+
+### D1 baseline (fresh)
+| read | command | result |
+|---|---|---|
+| date | `date` | Mon Oct 12 21:45:01 EDT 2026 |
+| `<hb0>` | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT RED — 1 job(s)  (2026-10-12 21:45:02 EDT)`. The one RED: `RED  com.cobalt.backup  failed  FileNotFoundError: [Errno 2] No such file or directory: '/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql'` + a traceback in `cobalt/jobs/wrapper.py` line 179 `job_run` (attempt 1's D2.4 run). Not the aset / sheet probe and not radar: named, not a stop. `OK backup newest snapshot 0.1 h old across ssd` · `OK sheet HTTP … -> 200` · `OK radar idle (overnight)` · `com.cobalt.aset running loaded, pid 14738` · `com.cobalt.radar running running 201 min, heartbeat fresh` · `com.cobalt.agent running pid 14763 alive` · `AMB com.cobalt.herdr` (declared interim) |
+| `<val0>` | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`; no `docs/_inflight/` line |
+| `<jobs0>` | (validate) | `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` · `registry <-> ops/: 15 label(s), exact match.` |
+| backup | `COBALT_ENV=production uv run cobalt backup status` | `ssd local ARMED /Volumes/COBALT-BACKUP/restic` · `b2 off` · `newest snapshot: 0.1 h old` |
+| aset / radar / agent | check (e) · `ps -p 14763` | running `14738` · running `14748` · ONLINE `14763` · `14763 ??  0:00.03 uv run src/cobalt_agent/main.py` |
+| radar.err | `tail -n 8 /Users/cobalt/cobalt/logs/radar.err` | 8 × `radar cycle: idle:overnight scan_id=None`, 21:33:22 → 21:45:02, no traceback |
+| `<a0>` `<ta0>` `<tr0>` `<tc0>` | the four `grep -c` | 278 · 217 · 0 · 0 |
+| `<rp0>` `<rpr0>` `<re0>` `<lc0>` | the four `grep -c` | 18 · 60 · 43 · 39 |
+| curl | `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` | `200` |
+| marker | P6 | `0` (= before) |
+| migration | — | `MIGRATIONS: none` |
+
+(run in progress — next step under ## CONTINUE)
