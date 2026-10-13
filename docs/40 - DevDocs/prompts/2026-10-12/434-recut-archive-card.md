@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/recut-archive-1012
 WORKTREE: recut-archive-1012
 BASE: 0990393f
-TIP:
+TIP: 9c2020e8
 REPORT: /Users/cobalt/cobalt-wt/recut-archive-1012/docs/40 - DevDocs/reports/recut-archive-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/recut-archive-check-2026-10-12.md
 HOUSE B: as needed
