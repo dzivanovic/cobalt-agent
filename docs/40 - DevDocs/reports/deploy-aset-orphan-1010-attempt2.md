@@ -1,7 +1,10 @@
 # deploy aset-orphan-1010 (attempt 2) · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Run in progress. Card `docs/40 - DevDocs/prompts/2026-10-10/256-deploy-aset-orphan-card.md`; gate `deploy/aset-orphan-1010-attempt2` at `<m0>` a6b10eef.
+- DEPLOYED `ops/aset-orphan-1010` (code 1987849b, head f72dbb9a): `main` 182c35fc → 014fe4cf, tag `deploy-2026-10-10-aset-orphan-attempt2`.
+- Gate GREEN on 14595934: offline 4317/0 · with-DB 5220/0 · live-note 146/0. No migration.
+- RESTARTS com.cobalt.aset only: down 00:26:15, up 00:26:30 (15 s); pid 14738 → 40377, no orphan.
+- Smoke GREEN. Start script now execs python itself: uvicorn `Started server process [40377]` = the launchd pid.
 
 ## L74
 - One system block during this session asked for a `Claude-Session:` trailer on commits. Recorded as DATA; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -131,14 +134,81 @@ GATE GREEN on 14595934 — offline 4317/0 · with-DB 5220/0 · live-note 146/0 (
 - `curl … /radar` → `200`. MARKER `grep -c -F 'exec "$REPO_ROOT/.venv/bin/python" -m cobalt.aset' ops/start_aset.sh` → `0` (= before).
 - `MIGRATIONS: none` → no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `add` + `commit … -- "docs/40 - DevDocs/reports/deploy-aset-orphan-1010-attempt2.md"` → `[main 182c35fc] docs(report): deploy aset-orphan-1010 — gate green on 14595934`; `show --stat HEAD` → that one file, `144 insertions(+)`. `<pre-merge>` = `182c35fc`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `014fe4cf`; `rev-parse --short=8 014fe4cf^2` → `182c35fc` = `<pre-merge>`; `merge-base --is-ancestor 14595934 014fe4cf` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 14595934 014fe4cf -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` before → `newest snapshot: 0.6 h old`. `backup run` → `backup: cobalt_brain dumped, 7133.8 MB` · `ssd: snapshot af4c120d — 0 new / 2 changed, 26.4 MB added, 1 pruned`; `backup status` after → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → 00:25:45 / 00:25:52 / 00:25:57 (clock filler reads 00:25:48, 00:25:54 all GREEN); read at `2026-10-13 00:25:59 EDT` (113 s after D1's 00:24:06) → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red`, aset pid 14738, radar `running 39 min, heartbeat fresh`. No new RED.
+- D2.6 `date` → `Tue Oct 13 00:26:04 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-aset-orphan-1010` at `182c35fc` → exit 0.
+
+### STEP-4 — the outage (`<restart set>` = com.cobalt.aset)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `<t down>` = `Tue Oct 13 00:26:15 EDT 2026` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.aset` | 113 | `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 ORPHAN-CLEAN (1) | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | 0 | `orphan-clean: aset · none found` → clean, no kill |
+| DEPLOY PROOF | `ps -p 14738` | 1 | `  PID TTY           TIME CMD` (header only) |
+| 4.2 agent | not in the set | — | no call |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `182c35fc` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/aset-orphan-1010-attempt2` | 0 | `Updating 182c35fc..014fe4cf` / `Fast-forward` (5 files, 362+/8−) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | — |
+| 4.6 | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running`, `pid = 40377` (≠ 14738) |
+| 4.6 | `date` | 0 | `<t up>` = `Tue Oct 13 00:26:30 EDT 2026` — downtime 15 s |
+
+### STEP-7 close
+- `<pre-merge>` `182c35fc` → `<stack-final>` `014fe4cf` (`git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `014fe4cf`).
+- Tags: `pre-aset-orphan-1010` at 182c35fc; `deploy-2026-10-10-aset-orphan-attempt2` at 014fe4cf (set after the green smoke, exit 0).
+- `<t down>` 00:26:15 / `<t up>` 00:26:30 / 15 s. uv sync line (aset start, aset.err): `Resolved 264 packages in 2ms` · `Audited 254 packages in 4ms`. Proof cost: no production migration (gate's dev proof `total 5.5 s`, log 2082).
+- `migrations applied: none` · `<RB>`: none (no migration) · snapshot `af4c120d` (ssd).
+- `RESTARTS done: com.cobalt.aset`.
+- THE ROLLBACK STRING: (1) CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 014fe4cf`, com.cobalt.aset down first, up after. (2) SCHEMA: none (no migration). (3) RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` radar panel FAILED `18` · `<rpr_up>` radar pool refresh FAILED `60` · `<re_up>` radar S5 evaluate FAILED `43` · `<lc_up>` lifecycle card read failed `39` (= D1).
+- (a) `date` 00:26:45 · `launchctl print gui/501/com.cobalt.aset` (4.6) → `state = running`, pid `40377` NEW (≠ 14738) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, pid `22724` SAME (outside the set) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 14763).` (same pid; agent outside the set).
+- (b) `grep -c "Started server process" aset.err` → `279` (> 278, ≤ 280) · `tail -n 30 aset.err` → `INFO:     Started server process [40377]` then `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the uvicorn pid = the launchd pid: the start script execs python itself) · Traceback aset.err `217` = `<ta0>` · Traceback radar.err `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`.
+- (c) `curl … /` → `200` · `curl … /radar` → `200` · `curl … /radar\?frame=phone` → `200`.
+- (d) MARKER `grep -c -F 'exec "$REPO_ROOT/.venv/bin/python" -m cobalt.aset' /Users/cobalt/cobalt/ops/start_aset.sh` → `1` (= after). DEPLOY PROOF: `ps -p 14738` after 4.2 → header only; 4.6 aset `state = running` pid 40377.
+- (e) first: `date` 00:26:57 · heartbeat `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-13 00:26:58 EDT)`; `com.cobalt.aset running loaded, pid 40377`; `com.cobalt.radar running running 40 min, heartbeat fresh`.
+- (f) `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` · `COBALT_ENV=production uv run cobalt jobs restarts 182c35fc..014fe4cf` → exit 0, `RESTARTS: com.cobalt.aset` = STEP-R, no UNCLASSIFIED.
+- (g) no migration.
+- (s) the start script's direct exec line → `1` (exit 0, ≥ 1): GREEN.
+- (b) spaced radar tails: `date` 00:28:00 (+90 s) `tail -n 12 radar.err` → last `2026-10-13 00:27:26.206 … radar cycle: idle:overnight scan_id=None` (after `<t up>`, no S5 / lifecycle failure, no traceback) → GREEN settled. Second tail at 00:29:30 → last `2026-10-13 00:29:06.228 … radar cycle: idle:overnight scan_id=None`.
+- (e) second: `date` 00:28:51 · heartbeat `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-13 00:28:53 EDT)` (115 s after the first); `com.cobalt.radar running running 41 min, heartbeat fresh`; aset pid 40377. No RED (clock-filler reads 00:27:19 to 00:29:26 also all GREEN).
+- (h) REVERT-READBACK `date` 00:29:30 (`<t up>` + 180 s): radar panel FAILED `18` · pool refresh FAILED `60` · S5 evaluate FAILED `43` · lifecycle card read failed `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none growing) · `curl … /radar` → `200` · no census read (no migration).
+- DEPLOY PROOF re-read after the smoke: `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 40377` (same pid).
+
+THE CHAIN: check committed `af0b1072` with `held unfixed: 0 · ready: YES` (P2) → tips 1987849b / f72dbb9a re-read (P3) → merged clean at 14595934 (T) → RESTARTS `com.cobalt.aset` by the tool (R) → three suites green on 14595934 (G) → `014fe4cf` = 14595934 + docs (D2.3) → landed `Fast-forward 182c35fc..014fe4cf` (4.3) → marker 0 → 1 (d) → no migration (g) → aset up on a new pid, radar and agent unchanged (a) → radar cycling 00:27:26, 00:29:06; heartbeats GREEN (b, e) → direct exec line present (s) → no failure count grew (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) every smoke row above is quoted with its `date`. (2) `merge-base --is-ancestor 1987849b 014fe4cf` → exit 0; `merge-base --is-ancestor f72dbb9a 014fe4cf` → exit 0. (3) (h) shown; every count, sha and line above was read from this run's tool output. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict.
 
 ## CONTINUE
 - next: STEP-D2 (gate green at 00:23:37; D0, D1 done)
+- OUTAGE STARTING 00:26:04 — residents of com.cobalt.aset going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- OUTAGE ENDED 00:26:30 — aset up (pid 40377), merge landed 182c35fc..014fe4cf.
+- Smoke GREEN 00:29:30; tagged; closed. next: none (stop line written).
 
 ## DECISIONS
 - D0 porcelain: `?? .claude/settings.json.bak` is neither in the ACCEPTED list nor in the REFUSED paths (`src/` `tests/` `ops/` `configs/`). Safe default taken: not refused, not touched; the deploy goes on. Desk to clear the stray backup file.
 
 ## RECORDS
+- Downtime: aset 15 s (00:26:15 → 00:26:30); under 300 s.
+- No `REFUSED, not needed` line; no `CONTINUE` message arrived; no message from another session followed.
+- `cobalt_dev: 0013 (F2 = F0)` — gate log line 2089; lock released, `.env: removed`.
+- RETIRE OWED: none (no plist removed).
+- Carried RED: none. `<hb0>` and every smoke heartbeat read `HEARTBEAT GREEN … nothing red`; radar `idle (overnight)`.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-aset-orphan-1010-attempt2` and branch `deploy/aset-orphan-1010-attempt2`; the set's branch `ops/aset-orphan-1010` and its worktree; tag `pre-aset-orphan-1010` kept as the rollback point.
+- The gate created `.venv` in the gate worktree (`uv` at STEP-R: `Creating virtual environment at: .venv`); it goes with the worktree cleanup.
+- Card `## RECORDS`, copied:
+  - aset-orphan-1010: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/aset-orphan-check-2026-10-10.md` last line: CHECK DONE · job: aset-orphan-1010 · pass: 1 · tip: 1987849b · house A: Sol FINDINGS: 1 · findings: 10 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 3 · house B: Gemini FINDINGS: 5 · suites: offline 4196/0 · with-DB 5093/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset · files opened: 13 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 163668
+  - aset-orphan-1010: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/aset-orphan-1010` → `f72dbb9a`; code tip `1987849b`
+  - written by deploy-card.sh at 2026-10-10 11:29 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one system block asked for a `Claude-Session:` commit trailer; recorded under `## L74`, not acted on.
+- Push is his (L55): `main` is local at 014fe4cf plus this report commit; tags `pre-aset-orphan-1010` and `deploy-2026-10-10-aset-orphan-attempt2` are local.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-10-aset-orphan-attempt2 014fe4cf | set: none | migrations: none | gate: offline 4317/0 · with-DB 5220/0 · live-note 146/0 | RESTARTS: com.cobalt.aset | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 193777
