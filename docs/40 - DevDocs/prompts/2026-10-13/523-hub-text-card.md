@@ -15,7 +15,7 @@ RULINGS: 2026-10-12 R1138
 
 ## ROWS
 
-WHY: brain direction R1295 (`reports/cto-2026-10-12.md:18`, `DESK RECORD, brain (L79)` on card 441: "D2.4 kept off 21:30-22:30 ET (hub row owed in the next hub-text card)") and R1309 (`reports/cto-2026-10-13.md:140`, `DESK RECORD, brain (L79)`: "one hub-text card: R1295 plus two BUILD-HUB rows (FIXED line per held id; no untracked file at stop)"), and his survey rows 11 and 31 (ruled and folded 10-13, R1341, R1324). Docs-only: every row edits ONE hub file under `docs/40 - DevDocs/prompts/` and pins it in ONE new test file, `tests/ops/test_hub_text_1013.py` (NEW; the shape of `tests/ops/test_hub_lines.py`: the real hub read from `HUBS = REPO / "docs" / "40 - DevDocs" / "prompts"`). Every `file:line` below was proved on `main` HEAD `ce548f10` (`git diff --stat HEAD` over every file named printed nothing, so the tree is HEAD's; `## RECORDS`). A row re-reads its `file:line` from the file before the edit (BUILD-HUB E3). No `desk-launch.sh` change; no `claude --bg ` line of any hub changes (`tests/ops/test_hub_lines.py` stays green unchanged).
+WHY: brain direction R1295 (`reports/cto-2026-10-12.md:18`, `DESK RECORD, brain (L79)` on card 441: "D2.4 kept off 21:30-22:30 ET (hub row owed in the next hub-text card)") and R1309 (`reports/cto-2026-10-13.md R1309`, `DESK RECORD, brain (L79)`: "one hub-text card: R1295 plus two BUILD-HUB rows (FIXED line per held id; no untracked file at stop)"), and his survey rows 11 and 31 (ruled and folded 10-13, R1341, R1324). Docs-only: every row edits ONE hub file under `docs/40 - DevDocs/prompts/` and pins it in ONE new test file, `tests/ops/test_hub_text_1013.py` (NEW; the shape of `tests/ops/test_hub_lines.py`: the real hub read from `HUBS = REPO / "docs" / "40 - DevDocs" / "prompts"`). Every `file:line` below was proved on `main` HEAD `ce548f10` (`git diff --stat HEAD` over every file named printed nothing, so the tree is HEAD's; `## RECORDS`). A row re-reads its `file:line` from the file before the edit (BUILD-HUB E3). No `desk-launch.sh` change; no `claude --bg ` line of any hub changes (`tests/ops/test_hub_lines.py` stays green unchanged).
 
 | row | what | red first | files |
 |---|---|---|---|
@@ -32,7 +32,7 @@ WHY: brain direction R1295 (`reports/cto-2026-10-12.md:18`, `DESK RECORD, brain 
 - The rules-cut cards 478-485: their rows and files stand (`## RECORDS` lists their line ranges).
 
 ## READ
-- `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-12.md:18` (R1295); `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-13.md:140` (R1309).
+- `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-12.md:18` (R1295); `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-13.md R1309` (R1309).
 - `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` lines 55-59 (P1, P2) and 131 (D2.4); `BUILD-HUB.md` lines 105-111; `UNATTENDED-LAUNCH.md` lines 4-6 and 13-19.
 - `/Users/cobalt/Vault/Think/6 - Permanent/Memory/LAWS.md` `### L61`, `### L62`, `### L66` (row H4 only).
 - `ops/desk/desk-launch.sh` lines 195-200 and 1620-1630 (the shadow exception); `tests/ops/test_hub_lines.py` lines 27-70 (`hub_line`), `tests/ops/test_build_hub_no_clutter.py` whole (60 lines).
