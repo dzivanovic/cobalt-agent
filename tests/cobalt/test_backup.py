@@ -409,5 +409,19 @@ class TestStagingLock:
         assert (tmp_path / ".backup.lock").exists()
         assert self._lock_is_free(tmp_path)
 
+    def test_check_o1_a_dump_that_raises_before_writing_leaves_a_prior_file(
+            self, tmp_path, monkeypatch):
+        monkeypatch.setattr(restic, "STAGING", tmp_path)
+        prior = tmp_path / "cobalt_brain.sql"
+        prior.write_bytes(b"-- constructed: not this run's\n")
+
+        def dump(name, into):
+            raise RuntimeError("constructed: no credentials, nothing written")
+
+        monkeypatch.setattr(restic, "dump_database", dump)
+        with pytest.raises(RuntimeError, match="nothing written"):
+            restic.snapshot(self._armed(tmp_path))
+        assert prior.exists(), "the finally removed a dump this run never wrote"
+
     def test_the_lock_wait_is_thirty_minutes(self):
         assert restic.LOCK_WAIT_S == 1800
