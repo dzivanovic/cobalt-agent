@@ -52,9 +52,6 @@ SWEEP_EXEMPT: dict[str, str] = {
     "s4-p1-1009-terra-check-2026-10-11.md":
         "shape: twenty-five `## RUNS` bullets ending `· HELD`, `## FIXES` prose: no NOT FIXED mark "
         "(n 25, read 0); ASK DESK 1",
-    "f4-refresh-build-2026-10-10.md":
-        "shape: `:262` a bulleted bold CARRIED line with a backticked id and a trailing sentence; read, it "
-        "would count 304's O1 twice beside row CR's plain line (`has 2 FIXED or CARRIED lines`); ASK DESK 4",
     "dev-rebuild-port-build-2026-10-03.md":
         "shape: `:101`, `:104` bullets `- SETTLED <path> by Edit` record a merge resolution, no claim (no "
         "colon, no id); the claim regex takes the word; DECISION C1-1",
