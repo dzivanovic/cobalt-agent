@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/backup-flock-1012
 WORKTREE: backup-flock-1012
 BASE: 86dc425a
-TIP:
+TIP: 964b6105
 REPORT: /Users/cobalt/cobalt-wt/backup-flock-1012/docs/40 - DevDocs/reports/backup-flock-build-2026-10-12.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/backup-flock-check-2026-10-12.md
-HOUSE B:
+HOUSE B: as needed
 RESTARTS: com.cobalt.radar
 RULINGS: 2026-10-12 R1138
 
