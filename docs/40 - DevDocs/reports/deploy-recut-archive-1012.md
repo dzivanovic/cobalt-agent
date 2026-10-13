@@ -1,6 +1,7 @@
 # deploy recut-archive-1012 · set: none · migrations: none
 
 ## §0 Headline
+Attempt 2 (resume at STEP-D0, 21:44 EDT) DEPLOYED: `backup run` succeeded (snapshot `57e8fb94`), and `main` fast-forwarded `0dc5c696..4bf3e614` at 21:47:26 with no resident down (RESTARTS none). Smoke GREEN, tag `deploy-2026-10-12-recut-archive`.
 Attempt 1 ended at D2.4 (21:41 EDT): the production snapshot (`backup run`) exited 1 on a missing staging dump. Nothing in production changed, nothing merged to `main`, and no resident went down.
 Before that: AUTHORIZED; preflight clean; tree `05518bd2`; RESTARTS none; GATE GREEN (offline 4309/0 · with-DB 5212/0 · live-note 146/0); `<stack-final>` `f30db38e` = `<m1>` + docs.
 Next (the desk's): fix the backup, then `desk-launch.sh recut`. The desk relaunched with `CONTINUE: STEP-D0` at 21:44 EDT instead; see `# RELAUNCH` and `## RESUME (attempt 2)`.
@@ -163,10 +164,33 @@ GATE GREEN on 05518bd2
 The run stopped at D2.4. D2.5, D2.6 (the `pre-recut-archive-1012` tag) and STEP-4 to STEP-7 (1) were not run. No resident went down, `main` is `d4b80886` with the report only, and no tag was set. `<restart set>` is empty, so this deploy would have had no outage. No ROLLBACK STRING is needed: nothing merged.
 
 ## Smoke
-Not run: the deploy stopped before the merge.
+Attempt 1: not run, because it stopped before the merge. Attempt 2 (`<t up>` = 21:47:26 EDT, `<restart set>` EMPTY):
+| row | date | command | result |
+|---|---|---|---|
+| first calls | 21:47:26+ | the four failure counts | `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 |
+| (a) | 21:47:41 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `cobalt.sh status` | aset `state = running` `pid = 14738` (SAME, outside the set) · radar `state = running` `pid = 14748` (SAME) · `Cobalt is ONLINE (PID: 14763).` (SAME). GREEN |
+| (b) | 21:47:44 | `grep -c "Started server process" …/aset.err` | `278` = `<a0>` (aset outside the set). GREEN |
+| (b) | 21:47:44 | `tail -n 30 …/aset.err` | ends `INFO:     Started server process [14744]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the 18:24 start, unchanged) |
+| (b) | 21:47:44 | Traceback aset / Traceback radar / TaxonomyConfigError | `217` / `0` / `0` = baseline. GREEN |
+| (c) | 21:47:44+ | `curl … https://cobalt.taild24291.ts.net/` · `…/radar` · `…/radar\?frame=phone` | `200` · `200` · `200`, first attempt each. GREEN |
+| (d) | 21:47:44+ | `grep -c -F -e "archive/pre-" "/Users/cobalt/cobalt/ops/desk/desk-launch.sh"` | `3` (after: 1 or more). GREEN |
+| (f) | 21:47:44+ | `COBALT_ENV=production uv run cobalt jobs restarts 0dc5c696..4bf3e614` | exit 0; three rows `DOCS -` / `operator script; no Cobalt reader -` / `test/documentation; no resident -`; `RESTARTS: none` = STEP-R's set; no `UNCLASSIFIED`. GREEN |
+| (f) | 21:47:55 | `COBALT_ENV=production uv run cobalt validate` | exit 0, as 4.5: `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` GREEN |
+| (g) | — | — | no migration |
+| (s) | 21:47:55 | `grep -c -F -e "archive/pre-" "/Users/cobalt/cobalt/ops/desk/desk-launch.sh"` (the recut archive step is on main) | exit 0, `3` (green: 1 or more). GREEN. The gate ran `tests/ops/test_desk_launch_recut.py` inside offline 4309/0 |
+| (e) 1 | 21:47:57 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-12 21:47:57 EDT)`; `com.cobalt.radar running running 204 min, heartbeat fresh` |
+| clock | 21:48:12 → 21:48:56 | `date` + `heartbeat show` pairs (the hub's only clock) | every read `HEARTBEAT GREEN — … nothing red` |
+| (b) tail 1 | 21:48:56 (`<t up>` + 90 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | 12 × `radar cycle: idle:overnight scan_id=None`, 21:30:02 → `2026-10-12 21:48:22.364 … radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`. No `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback. SETTLED GREEN |
+| (e) 2 | 21:49:47 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-12 21:49:49 EDT)`, 112 s after (e) 1; `com.cobalt.radar running running 206 min, heartbeat fresh`; no RED (attempt 1's `com.cobalt.backup` RED in `<hb0>` cleared: `done … 21:46 ET, exit 0`). GREEN |
+| clock | 21:49:53 → 21:50:26 | `date` + `heartbeat show` pairs | every read `HEARTBEAT GREEN — … nothing red` |
+| (h) | 21:50:26 (`<t up>` + 180 s) | the four failure counts · `curl … /radar` | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `200`. No `census` line on the card. GREEN |
+| tag (STEP-7 (1)) | after (h) | `git -C /Users/cobalt/cobalt tag deploy-2026-10-12-recut-archive` · `rev-parse --short=8 deploy-2026-10-12-recut-archive` | `4bf3e614` |
+
+THE CHAIN: every check committed (P2: `1fddf882`, unmodified, `held unfixed: 0` · `ready: YES`) → the tips re-read (P3: `df775390` = head = `TIP`) → the merged tree (T: `05518bd2`, one head, clean) → RESTARTS derived (R: none, no `UNCLASSIFIED`) → three suites green on `<m1>` (G: offline 4309/0 · with-DB 5212/0 · live-note 146/0) → `<stack-final>` `4bf3e614` = `<m1>` + docs (D2.3) → the landed code (4.3: fast-forward `0dc5c696..4bf3e614`) → the marker (d: `3`) → no migration (g) → residents up and unchanged after the merge (a: pids 14738 / 14748 / 14763) → radar cycling (b: 21:48:22, e: GREEN twice) → the set's read (s: `3`) → no new failure (h: counts flat). The desk confirms the card surface with him (L70); it does not apply here, because this set changes an operator script only.
 
 ## CONTINUE
-Attempt 2 (resume): next: STEP-D2 (D2.0 commit, D2.1 `main` into the gate, D2.4 snapshot).
+Attempt 2 (resume): D0, D1, D2, STEP-4, smoke and STEP-7 are done. next: none — DEPLOYED. The desk's next steps: push (his, L55) and the cleanup owed (`## RECORDS`).
+Outage entry as written before 4.1: OUTAGE STARTING 21:47:08 EDT — residents of <restart set> = none (EMPTY) going down: none; the merge lands with the residents up. If this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
 Attempt 1: next was none — it stopped at D2.4. The desk decides: fix `backup run` (the missing staging dump `/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql`), then `desk-launch.sh recut "<card>"` (the hub's RECUT path for `rollback: not used`).
 
 ## DECISIONS
@@ -179,6 +203,11 @@ Attempt 1: next was none — it stopped at D2.4. The desk decides: fix `backup r
 4. ASK DESK: the hub's RECUT line says a run that FAILED with `rollback: not used` "is not resumed", and the desk's next step is `desk-launch.sh recut`. This session was launched as `CONTINUE: STEP-D0` instead. THE ONE RESUME's check (a) accepts any old last line that begins `FAILED:`, and (a)–(e) all held. Safe default taken: follow THE ONE RESUME. It is still bounded by D2.4: without a proven snapshot the run stops again before anything goes down. [21:45 EDT]
 
 ## RECORDS
+- Attempt 2 (resume): `backup run` succeeded this time (snapshot `57e8fb94`, `cobalt_brain` dump 7133.7 MB, exit 0). Attempt 1's `FileNotFoundError` on `/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql` did not recur. Its cause was not read by this run (L70: unproven). Attempt 1's snapshot at 21:41 stays unproven.
+- Attempt 2: downtime none (`<restart set>` empty). `main` gained this session's D2.0 commit `0dc5c696`, the fast-forward to `4bf3e614`, and the STEP-7 report commit.
+- Attempt 2 cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-recut-archive-1012` and branch `deploy/recut-archive-1012` (now merged at `4bf3e614`), and the set's branch `ops/recut-archive-1012` and its worktree.
+- Attempt 2: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh session_01Sfa7tYNzoaZ6Gzckzyj3cs` → exit 2 `no transcript for session_01Sfa7tYNzoaZ6Gzckzyj3cs` (the remote-control id, not the transcript id). Re-run with the transcript id `171b5948` → `context 177654 of 400000 — ok`.
+- Attempt 2 PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and quotes its output; (2) `df775390` was re-read at P3 (attempt 2), and `git -C /Users/cobalt/cobalt merge-base --is-ancestor df775390 4bf3e614` → exit 0; (3) REVERT-READBACK (h) is shown (18 · 60 · 43 · 39, flat), and every sha and count was read from this run's tool output (`rev-parse --short=8 deploy-2026-10-12-recut-archive` → `4bf3e614`); (4) no conflict: STEP-T (attempt 1) and both D2.1 merges were clean. THE RELEASE: `ls -la <GATE>/.env` → `No such file or directory`; the lock was released by the gate at attempt 1.
 - Attempt 2 (resume): the launch context again carried the harness attribution reminder asking for a `Claude-Session:` line. L74 data, not acted on.
 - Downtime: none. No resident went down (`<restart set>` empty, and the run stopped before STEP-4).
 - `cobalt_dev: 0013 (F2 = F0)`: the gate's line, `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87`; lock released, `.env: removed`.
@@ -256,4 +285,43 @@ Resume checks, each its own call, (e) first:
 | marker | P6 | `0` (= before) |
 | migration | — | `MIGRATIONS: none` |
 
-(run in progress — next step under ## CONTINUE)
+### D2 (attempt 2)
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-recut-archive-1012.md"` · `commit -m "docs(report): deploy recut-archive-1012 — gate green on 05518bd2" …` | 0 | `[main 0dc5c696] … 1 file changed, 71 insertions(+), 4 deletions(-)` |
+| D2.0 | `git -C /Users/cobalt/cobalt show --stat HEAD` | 0 | one file: `.../reports/deploy-recut-archive-1012.md` |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `0dc5c696` = `<pre-merge>` |
+| D2.1 | `git -C /Users/cobalt/cobalt-wt/deploy-recut-archive-1012 merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.`: `docs/40 - DevDocs/reports/cto-2026-10-12.md` (14 ±) and `.../reports/deploy-recut-archive-1012.md` (114 ±), 2 files |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `4bf3e614` = `<stack-final>` |
+| D2.2 | `git -C /Users/cobalt/cobalt rev-parse --short=8 4bf3e614^2` | 0 | `0dc5c696` (= `<pre-merge>`) |
+| D2.2 | `git -C /Users/cobalt/cobalt rev-parse --short=8 4bf3e614^1` | 0 | `f30db38e` (attempt 1's main-into-gate merge, above `<m1>`; recorded) |
+| D2.2 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor 05518bd2 4bf3e614` | 0 | — |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 05518bd2 4bf3e614 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing (docs only) |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.1 h old` (attempt 1's unproven one) |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` (FOREGROUND, timeout 600000) | 0 | `21:46:44.662 … backup: cobalt_brain via pg_dump inside cobalt_memory — 7133.7 MB` · `backup: cobalt_brain dumped, 7133.7 MB` · `backup: ssd: snapshot 57e8fb94 — 0 new / 2 changed, 200.8 MB added, 1 pruned` · `F17: com.cobalt.backup DONE` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.0 h old` (= `57e8fb94`) |
+| D2.5 | `date` · `COBALT_ENV=production uv run cobalt heartbeat show` | 0 | 21:47:03 EDT (121 s after D1's 21:45:02) · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-12 21:47:05 EDT)`; `com.cobalt.backup done last finish 2026-10-12 21:46 ET, exit 0`; aset `pid 14738`, radar `running 203 min, heartbeat fresh`, agent `pid 14763 alive`; no new RED |
+| D2.6 | `date` | 0 | Mon Oct 12 21:47:08 EDT 2026 |
+| D2.6 | `git -C /Users/cobalt/cobalt tag pre-recut-archive-1012` · `rev-parse --short=8 pre-recut-archive-1012` | 0 | `0dc5c696` (= `<pre-merge>`) |
+
+### STEP-4 (attempt 2; `<restart set>` EMPTY)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | Mon Oct 12 21:47:26 EDT 2026 = `<t down>` (nothing went down) |
+| 4.2 | — | — | empty set: no bootout, no orphan-clean, no agent stop |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `0dc5c696` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/recut-archive-1012` | 0 | `Updating 0dc5c696..4bf3e614` / `Fast-forward`: `.../reports/recut-archive-build-2026-10-12.md` +140, `ops/desk/desk-launch.sh` 109 ±, `tests/ops/test_desk_launch_recut.py` +278; 3 files, 522 insertions, 5 deletions |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | — | — | empty set: nothing to bootstrap. `<t up>` = 4.3's `date`, 21:47:26 EDT. Downtime: none |
+
+### Deploy summary (attempt 2)
+- `<pre-merge>` `0dc5c696` → `<stack-final>` `4bf3e614` (`main` fast-forwarded). `<m0>` `06440158`, `<m1>` `05518bd2`.
+- Tags: rollback `pre-recut-archive-1012` at `0dc5c696`; release `deploy-2026-10-12-recut-archive` (STEP-7 (1), after green smoke).
+- `<t down>` 21:47:26 / `<t up>` 21:47:26 / 0 s: `none`, the set is empty and no resident went down.
+- uv sync line: none printed on the production calls. Proof cost: not run (`MIGRATIONS: none`). `migrations applied: none`. `<RB>`: none.
+- Snapshot: `57e8fb94` (ssd), `cobalt_brain` dump 7133.7 MB.
+- `RESTARTS done: none`.
+- THE ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 4bf3e614`. The set is empty, so no resident goes down. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
+DEPLOYED deploy-2026-10-12-recut-archive 4bf3e614 | set: none | migrations: none | gate: offline 4309/0 · with-DB 5212/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 4 · for Dejan: 0 · tokens: 177654
