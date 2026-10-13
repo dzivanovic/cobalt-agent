@@ -1,5 +1,5 @@
 JOB: k5-gate-1013
-LADDER: OFF-LADDER — reports/cto-2026-10-13.md R1310
+LADDER: OFF-LADDER — reports/cto-2026-10-13.md R1310, R1311, R1316
 CLASS: K5
 INSTALL: none
 BRANCH: ops/k5-gate-1013
@@ -11,7 +11,7 @@ CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/k5-gate-check-2026-
 HOUSE B: as needed
 DB: none
 RESTARTS: none
-RULINGS: 2026-10-13 R1310, 2026-10-13 R1311, 2026-10-13 R1316
+RULINGS: 2026-10-12 R1138
 
 ## ROWS
 
