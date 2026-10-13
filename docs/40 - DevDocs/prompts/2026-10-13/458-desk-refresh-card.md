@@ -49,6 +49,7 @@ WHY: desk record R1323 (`reports/cto-2026-10-13.md` row R1323, `DESK RECORD, bra
 - X5 Does the detached child outlive the hook and the old desk's `claude stop` (`start_new_session`, DEVNULL pipes), and does the hook return at once? Say UNPROVEN where only a live desk can prove it.
 - X6 Does the STATE stamp line ever break the OWED read or the QUEUE read (placed under the block, in the table, after a blank line)?
 FOR THE CHECK: desk refresh 2026-10-13 HIS RULING: size measured by hook every turn; REFRESH order at 300k; forced refresh after 1 turn or 10 min, handover written or FORCED line; successor reconciles live sessions; one install line by day; survey row 5 KEPT
+FOR THE CHECK: card 458 2026-10-13 brain: D1-D6 KEEP; R4 delivers WRITE HANDOVER NOW by the Stop-hook continuation on the next turn end, and an idle desk is forced at 5 min with §5 as the handover
 
 ## DEPLOY PROOF
 - `grep -c -F "card 458" /Users/cobalt/cobalt/ops/desk/stop-guard.py` · before `0` · after `1` or more
