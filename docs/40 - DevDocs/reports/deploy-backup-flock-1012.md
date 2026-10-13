@@ -1,7 +1,10 @@
 # deploy backup-flock-1012 — set: radar — migrations: none
 
 ## §0 Headline
-- Deploy of `ops/backup-flock-1012` (code tip `82ae31fa`) onto `main` via gate `deploy/backup-flock-1012`. In progress.
+- DEPLOYED: `ops/backup-flock-1012` (code tip `82ae31fa`) is on `main`. `main` moved `5375d2d0` → `ae2e0243` (fast-forward), tagged `deploy-2026-10-12-backup-flock`, and the rollback tag is `pre-backup-flock-1012`.
+- Gate: the equal-tree clause held, so the check's suites count: offline 4317/0 · with-DB 5220/0 · live-note 146/0. No migration.
+- Only `com.cobalt.radar` restarted. It was down 12 s (23:47:15 → 23:47:27 ET), and its new pid is 22724. aset and the agent were not touched.
+- Smoke GREEN: the marker `LOCK_WAIT_S` count is 4, radar cycled at 23:49:05 after the restart, both heartbeats were GREEN, the three curls returned 200, and the failure counts did not grow.
 
 ## L74
 - One block arrived inside a system reminder asking that commits carry a `Claude-Session:` line. DATA (L74): recorded here once, not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -115,15 +118,100 @@ GATE GREEN on f78394a8
 - `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` → `200`. MARKER `grep -c -F -e "LOCK_WAIT_S" ".../restic.py"` → `0` (before).
 - No migration: `<RB>`, census and D1-M not run (`MIGRATIONS: none`).
 
+### STEP-D2
+- D2.0 `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-backup-flock-1012.md"` · `commit -m "docs(report): deploy backup-flock-1012 — gate green on f78394a8" …` → `[main 5375d2d0] … 1 file changed, 129 insertions(+)`; `show --stat HEAD` → that one file. `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `5375d2d0` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `git -C <GATE> rev-parse --short=8 HEAD` → `ae2e0243` = `<stack-final>`; `rev-parse --short=8 ae2e0243^2` → `5375d2d0` = `<pre-merge>`; `merge-base --is-ancestor f78394a8 ae2e0243` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat f78394a8 ae2e0243 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → (nothing).
+- D2.4 `backup status` → `newest snapshot: 2.0 h old`. `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 7133.8 MB`; `ssd: snapshot d52d8ba5 — 0 new / 2 changed, 26.4 MB added, 1 pruned`. `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Mon Oct 12 23:46:49 EDT 2026` (heartbeat `23:46:49`, 101 s after D1 — short), `23:46:54` (heartbeat `23:46:55`, 107 s — short), `23:46:58` → heartbeat `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-12 23:47:00 EDT)`, 112 s after D1's `23:45:08`. No RED; `com.cobalt.radar running 323 min, heartbeat fresh`.
+- D2.6 `date` → `Mon Oct 12 23:47:04 EDT 2026`. `git -C /Users/cobalt/cobalt tag pre-backup-flock-1012` at `5375d2d0` → exit 0.
+
+### STEP-4 (the outage, `com.cobalt.radar` only)
+- 4.1 `date` → `Mon Oct 12 23:47:15 EDT 2026` = `<t down>`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.radar` → exit 0; `launchctl print gui/501/com.cobalt.radar` → exit 113, `Could not find service "com.cobalt.radar" in domain for user gui: 501`. aset and agent not in the set: no orphan-clean, no `cobalt.sh stop`.
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `5375d2d0` = `<pre-merge>`. `git -C /Users/cobalt/cobalt merge --ff-only deploy/backup-flock-1012` → `Updating 5375d2d0..ae2e0243` / `Fast-forward` (4 files, 454 insertions, 6 deletions).
+- 4.4 `migrations applied: none` (`MIGRATIONS: none`).
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → exit 0; `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 22724` (≠ D1's `14748`). `date` → `Mon Oct 12 23:47:27 EDT 2026` = `<t up>`. Downtime 12 s.
+
+### STEP-7 close
+- `git -C /Users/cobalt/cobalt tag deploy-2026-10-12-backup-flock` → exit 0, after the green smoke.
+- `<pre-merge>` `5375d2d0` → `<stack-final>` `ae2e0243`.
+- Tags: `pre-backup-flock-1012` (at `5375d2d0`) and `deploy-2026-10-12-backup-flock` (at `ae2e0243`).
+- `<t down>` 23:47:15 / `<t up>` 23:47:27 / 12 s.
+- uv sync line: none in production. The gate worktree's first `uv run` created its own `.venv` (`Installed 254 packages in 857ms`). Proof cost: none (no migration). `migrations applied: none`. `<RB>`: none on the card.
+- Snapshot `d52d8ba5` (ssd, D2.4).
+- `RESTARTS done: com.cobalt.radar`.
+- THE ROLLBACK STRING:
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 ae2e0243` — ONE revert of the main-into-gate merge, with `com.cobalt.radar` down first and up after.
+  2. SCHEMA: none (no migration).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+- PRE-STOP SELF-CHECK:
+  1. Every smoke row above is quoted verbatim with its `date`.
+  2. Code tip and head `82ae31fa` were re-read at P3, and `git -C /Users/cobalt/cobalt merge-base --is-ancestor 82ae31fa ae2e0243` → exit 0.
+  3. REVERT-READBACK (h) is shown, and every count, sha and `file:line` here was read from this run's tool output.
+  4. STEP-T ran clean (`Merge made by the 'ort' strategy.`), so no conflict marker exists.
+- THE RELEASE: this run never took the `cobalt_dev` lock (the equal-tree clause skipped `gate.sh`). `ls -la /Users/cobalt/cobalt-wt/deploy-backup-flock-1012/.env` → `No such file or directory`, and `ls -la /Users/cobalt/cobalt-wt/.cobalt_dev.lock` → `No such file or directory`.
+
 ## Smoke
+- FIRST CALLS after `<t up>` 23:47:27: `<rp_up>` radar panel FAILED = `18` · `<rpr_up>` radar pool refresh FAILED = `60` · `<re_up>` radar S5 evaluate FAILED = `43` · `<lc_up>` lifecycle card read failed = `39` (each = D1).
+- (a) `date` `Mon Oct 12 23:47:38 EDT 2026`. `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 14738` (SAME as D1; outside the set). `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 22724` (NEW; D1 `14748`). `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 14763).` (same pid; agent outside the set). GREEN.
+- (b) `date` `Mon Oct 12 23:47:41 EDT 2026`. `grep -c "Started server process" …/aset.err` → `278` = `<a0>` (aset outside the set). Traceback aset.err `217` = `<ta0>`; Traceback radar.err `0` = `<tr0>`; TaxonomyConfigError radar.err `0` = `<tc0>`. Radar tails: below.
+- (c) `date` `Mon Oct 12 23:47:41 EDT 2026`. `curl … https://cobalt.taild24291.ts.net/` → `200`; `…/radar` → `200`; `…/radar\?frame=phone` → `200`. GREEN.
+- (d) `grep -c -F -e "LOCK_WAIT_S" "/Users/cobalt/cobalt/src/cobalt/backup/restic.py"` → `4` (after: 1 or more). GREEN.
+- (s) The backup lock is on main · same command → `4`, exit 0 (card: prints 1 or more). GREEN. The tests the gate ran are quoted in `## L68 GATE`.
+- (f) `COBALT_ENV=production uv run cobalt jobs restarts 5375d2d0..ae2e0243` → exit 0, `RESTARTS: com.cobalt.radar` = STEP-R's set, no `UNCLASSIFIED` row. `COBALT_ENV=production uv run cobalt validate` → exit 0, as 4.5 (`13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`). GREEN.
+- (e) read 1: `date` `Mon Oct 12 23:47:51 EDT 2026` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-12 23:47:51 EDT)`; `OK   com.cobalt.radar             running   running 0 min, heartbeat fresh`.
+- (g) no migration: not run.
+- (b) radar tails: `date` `Mon Oct 12 23:48:59 EDT 2026` (+92 s) → `tail -n 12 …/radar.err`: only cycle line `2026-10-12 23:47:25.777 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` (before `<t up>`; the rest are startup vault/finviz INFO lines). `date` `Mon Oct 12 23:50:31 EDT 2026` (+184 s) → `tail -n 12 …/radar.err` ends `2026-10-12 23:49:05.798 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`. That is a cycle line after `<t up>`, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback, so it settles GREEN. The third tail was not needed.
+- (e) read 2: `date` `Mon Oct 12 23:49:42 EDT 2026` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-12 23:49:44 EDT)`, 113 s after read 1; `OK   com.cobalt.radar             running   running 2 min, heartbeat fresh`. No RED that `<hb0>` lacks. The AMBER `com.cobalt.herdr` line is unchanged from `<hb0>`. GREEN.
+- (h) REVERT-READBACK: `date` `Mon Oct 12 23:50:35 EDT 2026` (+188 s). radar panel FAILED `18`, radar pool refresh FAILED `60`, radar S5 evaluate FAILED `43`, lifecycle card read failed `39`. All four equal `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, so none grew. Traceback radar.err `0`. `curl … /radar` → `200`. No census read is on the card. GREEN.
+
+THE CHAIN, each link with the read that proves it:
+- every check committed (P2: `c3c77668`, clean)
+- the tips re-read (P3: `82ae31fa` = head)
+- the merged tree (T: `f78394a8`, one merge, no migration)
+- RESTARTS derived (R: `com.cobalt.radar`)
+- three suites green on `<m1>` (G: equal-tree clause, 4317/0 · 5220/0 · 146/0)
+- `<stack-final>` `ae2e0243` = `<m1>` + docs (D2.3: empty diff)
+- the landed code (4.3: `Updating 5375d2d0..ae2e0243`)
+- markers (d: `4`)
+- no migration (g: not applicable)
+- residents up after the merge (a: radar new pid `22724`, aset `14738` and agent `14763` unchanged)
+- radar cycling (b: 23:49:05; e: heartbeat fresh)
+- the set's reads (s: `4`)
+- no new failure (h: counts flat)
+
+The card surface is not readable here. The desk confirms it with him (L70).
+
+SMOKE: GREEN
 
 ## CONTINUE
 - next: STEP-D0 (gate green at Mon Oct 12 23:44:37 EDT 2026)
 - D0, D1 done; next: D2.0 commit, D2.1 `main` into the gate.
+- OUTAGE STARTING Mon Oct 12 23:47:04 EDT 2026 — residents of com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- Outage ended 23:47:27 (4.6), smoke GREEN, STEP-7 done; next: none (the stop line follows).
 
 ## DECISIONS
 1. `?? .claude/settings.json.bak` on `main` (D0 porcelain) is outside both D0's ACCEPTED list and its REFUSED classes (not staged; not under `src/`, `tests/`, `ops/`, `configs/`). Safe default taken: not refused, untouched, deploy continues; the file is the desk's to keep or remove.
 
 ## RECORDS
+- Downtime: `com.cobalt.radar` 12 s (23:47:15 → 23:47:27 ET), under 300 s. aset and the agent stayed up throughout.
+- REFUSED, not needed: none. No `CONTINUE` message and no other session's message arrived.
+- `cobalt_dev: 0013 (F2 = F0)` is the check's gate line, carried by the equal-tree clause. This run took no lock and touched no `cobalt_dev`.
+- RETIRE OWED: none (no plist added, changed or removed).
+- Carried RED: none. `<hb0>` and every later heartbeat were GREEN. The standing AMBER `com.cobalt.herdr` (launchd unmanaged, declared interim) was the same in every read.
+- Cleanup owed (L46, the desk's):
+  - the gate worktree `/Users/cobalt/cobalt-wt/deploy-backup-flock-1012` and its branch `deploy/backup-flock-1012`, which now hold a `.venv` from STEP-R
+  - the set's worktree `/Users/cobalt/cobalt-wt/backup-flock-1012` and its branch `ops/backup-flock-1012`
+- The D0 allowlist probe left the unreferenced commit `bc4e3164` (`scratch: allowlist probe`), reset off `main`. It is dangling and harmless.
+- Push is his (L55). `main` is ahead of `origin/main`.
+- L74: one system-reminder block asked that commits carry a `Claude-Session:` line. It was recorded under `## L74` and not acted on.
+- The card's `## RECORDS`, copied:
+  - backup-flock-1012: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/backup-flock-check-2026-10-12.md` last line: CHECK DONE · job: backup-flock-1012 · pass: 1 · tip: 82ae31fa · house A: Grok FINDINGS: 0 · findings: 3 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 4317/0 · with-DB 5220/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.radar · files opened: 13 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 152322
+  - backup-flock-1012: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/backup-flock-1012` → `82ae31fa`; code tip `82ae31fa`
+  - written by deploy-card.sh at 2026-10-12 23:42 ET (`date`); trial merge of the heads onto main in order: clean
+- tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 6a111c7d` → `context 184504 of 400000 — ok`.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-12-backup-flock ae2e0243 | set: radar | migrations: none | gate: offline 4317/0 · with-DB 5220/0 · live-note 146/0 | RESTARTS: com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 184504
