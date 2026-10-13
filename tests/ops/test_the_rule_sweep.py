@@ -35,11 +35,34 @@ CLAIM = re.compile(r"^(?:[-*]\s+)?\**(FIXED|CARRIED|SETTLED)\b")
 CLAIM_ID = re.compile(r"^(?:[-*]\s+)?\**(?:FIXED|CARRIED|SETTLED):?\**\s+`?([A-Za-z0-9._-]+)")
 
 # <report file name> → why no mark of it can be read (card 446 C1, drafter ASK DESK 1, 2, 4)
-SWEEP_EXEMPT: dict[str, str] = {}
+SWEEP_EXEMPT: dict[str, str] = {
+    "brain-hub-check-2026-10-03.md":
+        "shape: a `**HELD**` table row of a finding not left unfixed (O2, `**HELD** as a fact … OUT OF "
+        "SCOPE`) beside the one `HELD, NOT FIXED` row O1; card 361's `**HELD**` read counts both (n 1, "
+        "read 2); ASK DESK 1",
+    "drc-d5-check-2026-10-04.md":
+        "shape: one defect held under two ids in two passes, two `## RUNS` (O1, B3, both `HELD, NOT "
+        "FIXED`), each pass's stop line n 1: read 2, a count no mark resolves; ASK DESK 2",
+    "kill-hub-row-check-2026-10-10.md":
+        "shape: twelve `## RUNS` table rows with a bare `HELD` verdict and `## FIXES` prose: no NOT FIXED "
+        "mark (n 12, read 0); ASK DESK 1",
+    "radar-display-fix-1008-terra-check-2026-10-11.md":
+        "shape: six `## RUNS` bullets with a bare `HELD` or `HELD (shadow …)` verdict, `## FIXES` a prose "
+        "line: no NOT FIXED mark (n 6, read 0); ASK DESK 1",
+    "s4-p1-1009-terra-check-2026-10-11.md":
+        "shape: twenty-five `## RUNS` bullets ending `· HELD`, `## FIXES` prose: no NOT FIXED mark "
+        "(n 25, read 0); ASK DESK 1",
+    "f4-refresh-build-2026-10-10.md":
+        "shape: `:262` a bulleted bold CARRIED line with a backticked id and a trailing sentence; read, it "
+        "would count 304's O1 twice beside row CR's plain line (`has 2 FIXED or CARRIED lines`); ASK DESK 4",
+    "dev-rebuild-port-build-2026-10-03.md":
+        "shape: `:101`, `:104` bullets `- SETTLED <path> by Edit` record a merge resolution, no claim (no "
+        "colon, no id); the claim regex takes the word; DECISION C1-1",
+}
 
 # the reports the first run swept: a report added later is not swept, a report removed fails
-CHECKS_SWEPT: int | None = None
-BUILDS_SWEPT: int | None = None
+CHECKS_SWEPT: int | None = 18
+BUILDS_SWEPT: int | None = 85
 
 
 def in_window(name: str) -> bool:
@@ -116,6 +139,13 @@ def test_the_exempt_reasons_name_their_shape():
     for name, reason in SWEEP_EXEMPT.items():
         assert (REPORTS / name).is_file(), name
         assert len(reason.strip()) >= 20, name
+
+
+def test_the_304_check_reads_o1_and_a3(rule):
+    """Card 446 A1: card 304's check gives its two `HELD, NOT FIXED` table rows and nothing else
+    (0 ids before the card)."""
+    ids = seam(rule, "held_union", str(REPORTS / "f4-refresh-check-2026-10-10.md")).split()
+    assert ids == ["O1", "A3"]
 
 
 def test_the_sweep_swept_what_it_pins(sweep):

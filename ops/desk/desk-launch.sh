@@ -1124,8 +1124,15 @@ lock_dir_free() {
 # The readers are four seams (card 446, R1311), each reading its argument or stdin only, no git:
 # held_runs <check report> (the `## RUNS` ids, in file order), held_fixes <check report> (the
 # `## FIXES` ids), held_union <check report> (the `## RUNS` ids, then those of `## FIXES` that
-# `## RUNS` does not name) and fix_lines (a report's text on stdin; one line per FIXED, CARRIED or
-# SETTLED line it reads: `F <id> <path> <name> -`, `C <id> <path> <name> R<n>`, `S <id> R<n>`).
+# `## RUNS` does not name) and fix_lines (a report's text on stdin; one line per id of each FIXED,
+# CARRIED or SETTLED line it reads: `F <id> <path> <name> -`, `C <id> <path> <name> R<n>`,
+# `S <id> R<n>`). A held mark is `HELD, NOT FIXED` or `HELD, not fixed`, exactly these two
+# spellings; a `## RUNS` table row also counts when its last cell, past leading blanks and `*`,
+# starts with one (R1310). A FIXED, CARRIED or SETTLED line may name several ids one space apart,
+# `FIXED: O1 O2 — <test id>`. A test id may name its class, `tests/<path>.py::<Class>::<name>`
+# (<name> then reads `<Class>::<name>`): its def is the first indented `def <name>(` inside the
+# block of the first `class <Class>` (a class or def not found: absent), and a `pytestmark`
+# counts only at column 0 or inside that block; the plain form reads as before.
 held_n() {
     printf '%s\n' "$1" | grep -o -E '(^| )held unfixed: [0-9]+( |$)' | sed -n '1p' \
         | sed -e 's/^ *held unfixed: //' -e 's/ *$//' | grep -E '^[1-9][0-9]*$'
@@ -1145,26 +1152,29 @@ held_row() {
 # held_runs <check report> -> the ids of its `## RUNS` held bullets and table rows, one per line
 held_runs() {
     awk '/^## /{on = ($0 == "## RUNS"); next}
-        on && /^- [A-Za-z0-9._-]+ · / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/ · .*/, ""); print}
+        on && /^- [A-Za-z0-9._-]+ · / && (index($0, "HELD, NOT FIXED") || index($0, "HELD, not fixed")) {sub(/^- /, ""); sub(/ · .*/, ""); print}
         on && /^[|]/ {n = split($0, c, "|"); id = c[2]; v = c[n]; if (n > 2 && v ~ /^[ \t]*$/) v = c[n - 1]
-            sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); if (id ~ /^[A-Za-z0-9._-]+$/ && index(v, "**HELD**")) print id}' "$1"
+            sub(/^[ \t]+/, "", id); sub(/[ \t]+$/, "", id); w = v; sub(/^[ \t*]+/, "", w)
+            if (id ~ /^[A-Za-z0-9._-]+$/ && (index(v, "**HELD**") || w ~ /^HELD, (NOT FIXED|not fixed)/)) print id}' "$1"
 }
 # held_fixes <check report> -> the ids of its `## FIXES` held bullets, one per line
 held_fixes() {
     awk '/^## /{on = ($0 == "## FIXES"); next}
-        on && /^- [A-Za-z0-9._-]+: / && index($0, "HELD, NOT FIXED") {sub(/^- /, ""); sub(/: .*/, ""); print}' "$1"
+        on && /^- [A-Za-z0-9._-]+: / && (index($0, "HELD, NOT FIXED") || index($0, "HELD, not fixed")) {sub(/^- /, ""); sub(/: .*/, ""); print}' "$1"
 }
 # held_union <check report> -> the ids of `## RUNS`, then those of `## FIXES` that `## RUNS` does not name
 held_union() {
     { held_runs "$1" | sed 's/^/R /'; held_fixes "$1" | sed 's/^/F /'; } \
         | awk '$2 == "" {next} $1 == "R" {r[$2] = 1; print $2; next} !r[$2] {print $2}'
 }
-# fix_lines < report -> one normalized line per FIXED, CARRIED or SETTLED line
+# fix_lines < report -> one normalized line per id of each FIXED, CARRIED or SETTLED line
 fix_lines() {
     sed -n -E \
-        -e 's#^FIXED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+)$#F \1 \2 \3 -#p' \
-        -e 's#^CARRIED: ([A-Za-z0-9._-]+) — (tests/[A-Za-z0-9._/-]+\.py)::([A-Za-z0-9_]+) — (R[0-9]+)$#C \1 \2 \3 \4#p' \
-        -e 's#^SETTLED: ([A-Za-z0-9._-]+) — (R[0-9]+)$#S \1 \2#p'
+        -e 's#^FIXED: ([A-Za-z0-9._-]+( [A-Za-z0-9._-]+)*) — (tests/[A-Za-z0-9._/-]+\.py)::(([A-Za-z_][A-Za-z0-9_]*::)?[A-Za-z0-9_]+)$#F \1 \3 \4 -#p' \
+        -e 's#^CARRIED: ([A-Za-z0-9._-]+( [A-Za-z0-9._-]+)*) — (tests/[A-Za-z0-9._/-]+\.py)::(([A-Za-z_][A-Za-z0-9_]*::)?[A-Za-z0-9_]+) — (R[0-9]+)$#C \1 \3 \4 \6#p' \
+        -e 's#^SETTLED: ([A-Za-z0-9._-]+( [A-Za-z0-9._-]+)*) — (R[0-9]+)$#S \1 \3#p' \
+        | awk '$1 == "S" {for (i = 2; i < NF; i++) print "S", $i, $NF; next}
+            {for (i = 2; i < NF - 2; i++) print $1, $i, $(NF - 2), $(NF - 1), $NF}'
 }
 held_rule() {
     hr_who=$1 hr_check=$2 hr_last=$3 hr_tip=$4 hr_head=$5 hr_frep=$6
@@ -1265,7 +1275,8 @@ HELD_IDS
                     # `absent`, or the def's decorators (`strict`, `xfail` or `plain`) and ` pytestmark`
                     # when a `pytestmark` statement (module or class) holds xfail. The def is the
                     # column-0 one when there is one; its decorators are the `@` lines directly
-                    # above it, each with its bracketed continuation lines, comments skipped
+                    # above it, each with its bracketed continuation lines, comments skipped.
+                    # `<Class>::<name>`: the def and the `pytestmark` are read in that class's block
                     hr_shape=$(printf '%s\n' "$hr_src" | awk -v name="$hr_name" '
                         function judge(t, s) {
                             if (index(t, "xfail") && index(t, "strict=True")) return "strict"
@@ -1286,17 +1297,31 @@ HELD_IDS
                         }
                         { line[NR] = $0 }
                         END {
+                            cls = ""; cl = 0; be = NR + 1
+                            if ((k = index(name, "::")) > 0) { cls = substr(name, 1, k - 1); name = substr(name, k + 2) }
+                            if (cls != "") {
+                                for (i = 1; i <= NR; i++) if (line[i] ~ ("^[ \t]*class " cls "[ \t]*[(:]")) { cl = i; break }
+                                if (!cl) { print "absent"; exit }
+                                cind = match(line[cl], /[^ \t]/) - 1
+                                for (i = cl + 1; i <= NR; i++) {
+                                    if (line[i] ~ /^[ \t]*$/ || line[i] ~ /^[ \t]*#/) continue
+                                    if (match(line[i], /[^ \t]/) - 1 <= cind) { be = i; break }
+                                }
+                            }
                             pm = 0; inpm = 0; pind = 0
                             for (i = 1; i <= NR; i++) {
                                 ind = match(line[i], /[^ \t]/) - 1
                                 c = substr(line[i], ind + 1, 1)
-                                if (line[i] ~ /^[ \t]*pytestmark/) { inpm = 1; pind = ind }
+                                if (line[i] ~ /^[ \t]*pytestmark/ && (cls == "" || ind == 0 || (i > cl && i < be))) { inpm = 1; pind = ind }
                                 else if (inpm && (line[i] ~ /^[ \t]*$/ || (ind <= pind && c != ")" && c != "]"))) inpm = 0
                                 if (inpm && index(line[i], "xfail")) pm = 1
                             }
                             d = 0
-                            for (i = 1; i <= NR; i++) if (line[i] ~ ("^def " name "\\(")) { d = i; break }
-                            if (!d) for (i = 1; i <= NR; i++) if (line[i] ~ ("^[ \t]+def " name "\\(")) { d = i; break }
+                            if (cls != "") { for (i = cl + 1; i < be; i++) if (line[i] ~ ("^[ \t]+def " name "\\(")) { d = i; break } }
+                            else {
+                                for (i = 1; i <= NR; i++) if (line[i] ~ ("^def " name "\\(")) { d = i; break }
+                                if (!d) for (i = 1; i <= NR; i++) if (line[i] ~ ("^[ \t]+def " name "\\(")) { d = i; break }
+                            }
                             if (!d) { print "absent"; exit }
                             top = d
                             for (i = d - 1; i >= 1 && line[i] !~ /^[ \t]*$/; i--) {
