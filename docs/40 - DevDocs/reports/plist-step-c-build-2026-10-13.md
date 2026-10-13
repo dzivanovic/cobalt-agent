@@ -1,9 +1,9 @@
 # plist-step-c-1013 — build report (2026-10-13)
 
 ## §0 Headline
-Card 496 (`prompts/2026-10-13/496-plist-step-c-card.md`), BASE `5214e50b`, code tip `01fb7297`. All nine rows have code and tests. D1 is built except `STANDING-LIST.md:157`, which waits for the desk's answer, as the row says.
-Stopped at W (a0): the card says `DB: none`, but row OW1 puts `src/`, `configs/` and `tests/cobalt/` paths in the diff. Waiting for `CONTINUE: W`.
-RESTARTS derived: `com.cobalt.radar`. Every row's tests are green offline, and each row's mutation turned its tests red.
+Card 496 (`prompts/2026-10-13/496-plist-step-c-card.md`), BASE `5214e50b`, code tip `01fb7297`. Of the ten rows, nine are built whole. D1 is built except `STANDING-LIST.md:157`, which waits for the desk's answer, as the row says (DECISIONS 1).
+The first W stopped at (a0) because the card said `DB: none` while row OW1 changes `src/`. The desk removed the key (`2ff41ff1`), and the gate then ran green: offline 4327/0, with-DB 5230/0, live-note 146/0; `cobalt_dev` 0013 with F2 = F0; `.env` removed.
+RESTARTS: `com.cobalt.radar`. `tests/ops` at the tip: 1 failed, the pre-existing rule-sweep red outside the rows (DECISIONS 6).
 
 ## L74
 - One system notice in this session asked for a `Claude-Session:` line in commits. Recorded here once, not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -183,20 +183,61 @@ tests/cobalt/test_smoke.py
 tests/ops/test_deploy_step_c.py
 tests/ops/test_desk_launch_launchd.py
 ```
-Paths that start with none of `ops/`, `tests/ops/`, `docs/`: `configs/cobalt/smoke/s2.yaml`, `src/cobalt/jobs/watchdog.py`, `src/cobalt/smoke/checks.py`, `tests/cobalt/test_jobs.py`, `tests/cobalt/test_smoke.py`. All are row OW1's `files`. The hub's (a0) rule: `FAILED: W — the card says DB: none but the diff holds <path>; the desk removes the key from the card and sends CONTINUE: W`. No gate call was made. `cobalt_dev` was not taken, the lock was not taken, and no `.env` was copied.
+Paths that start with none of `ops/`, `tests/ops/`, `docs/`: `configs/cobalt/smoke/s2.yaml`, `src/cobalt/jobs/watchdog.py`, `src/cobalt/smoke/checks.py`, `tests/cobalt/test_jobs.py`, `tests/cobalt/test_smoke.py`. All are row OW1's `files`. The hub's (a0) rule: `FAILED: W — the card says DB: none but the diff holds <path>; the desk removes the key from the card and sends CONTINUE: W`. No gate call was made. `cobalt_dev` was not taken, the lock was not taken, and no `.env` was copied. Stopped `FAILED: W` (wip `2b39ef9d`). Resumed at 10:17 on the desk's `CONTINUE: W` (`## RECORDS`).
+- THE GATE, after `CONTINUE: W` (the card now carries no `DB:` key): `ls -la /Users/cobalt/cobalt-wt/plist-step-c-1013/.env` → No such file; `sh /Users/cobalt/cobalt/ops/desk/gate.sh plist-step-c-1013 all --deploy` (no `--deselect`: this build adds no with-DB test; no `--tickers`; no `--migration`) → exit 0. Verdict lines, whole:
+```
+offline 4327/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 5230/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 146/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/plist-step-c-1013-all-20261013-101742.log
+```
+  - (a) offline: log `:2` `$ uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → `:885` `4327 passed, 806 skipped, 1 xfailed`. That is 10 more than E0's 4317: this build's offline tests in `tests/cobalt` (five K18 in `test_smoke.py`, five `TestBootstrapOwed` in `test_jobs.py`).
+  - (b) log `:891` `lock taken: plist-step-c-1013`; `:902` `F0: 664 35 272c95bbb12241e3611e4b36326ccf87`; LEVEL 0013.
+  - (c) PASS 1, log `:956` `pass 1: whole (deploy)`, executed (`:958`): `COBALT_ENV=dev uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` plus the standing `--deselect`s of `ops/desk/gate-lists.md` (none of this build) → `:1115` `5025 passed, 7 skipped, 99 deselected, 3 xfailed`. Every SKIPPED line is quoted above. Each is in the allowed set (DEPLOY-HUB STEP-G (c): `test_cards_picks.py:388`, `:401`, `test_radar_evaluate.py:695`, the `COBALT_TEST_LIVE_DRC` skip of `test_replay_line.py`, `test_s3_c4_experiments.py` x14, `test_catalyst.py:365`, `test_predicate.py:262`); the gate marked none `OUTSIDE the allowed set`.
+  - (c2) `:1117` **`dev forward: APPLIED 10:41:48`**; `:1195` `F1: 908 45 126f2d6983fa59f9d0eaaff7da7dd29c`.
+  - (c3) PASS 2 (`:1197`, the gate-lists PASS 2 command) → `:1969` `205 passed, 1 deselected`. `with-DB 5230/0` = 5025 + 205.
+  - (c3r) stray rows: not read (no `--tickers`; this build writes no ticker).
+  - (f) `:2037` `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` = F0 field for field → **`cobalt_dev: 0013 — F2 = F0`**; `:2091` `lock released`; `.env: removed`; `ls /Users/cobalt/cobalt-wt/plist-step-c-1013/.env` → No such file.
+  - (e) live-note (`:2105`, `.env` absent) → `:2160` `146 passed, 1 skipped` (the `COBALT_TEST_LIVE_DRC` skip; none names `COBALT_LIVE_VAULT_ROOT`).
+- `<tip>`: the gate ran at HEAD `2b39ef9d` (the wip report commit). `git diff --stat 01fb7297 HEAD -- . ":(exclude)docs"` → nothing, so the tree the suites proved is code tip `01fb7297`.
+- `tests/ops` at the tip (the gate's offline pass does not run it; most of this build's tests live there): `uv run pytest -q -rs -p no:cacheprovider --color=no --tb=line tests/ops` → `1 failed, 3584 passed, 1 xfailed`. The one red is `tests/ops/test_the_rule_sweep.py:134` `AssertionError: ['f4-refresh-build-2026-10-10.md']`, the red outside the rows in DECISIONS 6 (inputs unchanged since BASE).
 
 ## PRE-STOP SELF-CHECK
-Not reached (stopped at W).
+1. "Every added or changed test shown RED for its named reason against a mutation or negative control; any test that stayed green was rewritten." — E2 reds: (a)–(e), (g)–(j), (l), (n)–(t), (u), (v), (x) (quoted under `## E2 RED`). Mutation reds for every test, including the pins (f), (k), (m), (w), (y), (z) and `test_l1_a_deferred_label_gets_no_string` (the THE MUTATIONS table). Rewritten after staying green: (b), (q), (r) (said under E3). The C1 positives `test_c1_a_changed_plist_named_change_is_admitted` (red under the status mutation) and `test_c1_a_removed_plist_is_retire_owed` (red on BASE, script absent) are included.
+2. "Every entry path of each rule pinned by a test." — `sweep` callers `heartbeat/runner.py:150` and `jobs/cli.py:129` (PREFLIGHT grep) both call `sweep()`, which reads `BOOTSTRAP_OWED_PATH` through `bootstrap_owed()`. `TestBootstrapOwed` drives `watchdog.sweep` itself, with listed, unlisted, absent-file and loaded states. `_launchctl` is reached only through `checks.evaluate` (`grep -rn -F "_launchctl(" src` → the definition only), and the K18 tests call `checks.evaluate`. `deploy-step-c.sh` has no caller but the hub; each of its three modes and every refusal branch has a test. The `desk-launch.sh deploy` case is pinned by dry launches with and without a section, a deferred line, and 14 refusals. The missing-file, empty-file and loaded-label edges are pinned; the not-JSON edge of `bootstrap_owed` has no test, so it goes under DECISIONS 8.
+3. "Every `file:line`, count and quote in the report re-read from tool output at the tip." — re-run at the tip: `grep -n -F "def bootstrap_owed" src/cobalt/jobs/watchdog.py` → `:63`; `grep -n -E "^4\.6L|^- \(1L\)|^- \(2L\)|…"` on DEPLOY-HUB → `:89` (STEP-C), `:144` (4.6L), `:145` (4.6L-BO), `:163` (1L), `:165` (2L); `grep -n -E "^launchd_line\(\)|s\| <launchd strings>" ops/desk/desk-launch.sh` → `:1511`, `:2184`; the gate's counts with their log line numbers (`grep -n -E … <log>`); `git diff --stat 01fb7297 HEAD -- . ":(exclude)docs"` → nothing.
 
 ## FOR THE CHECK
-Not written yet (stopped at W). So far: `5214e50b..01fb7297`, with commits `b4793b17 wip(plist-step-c-1013): red` and `01fb7297 feat(plist-step-c-1013): …`.
+- Range `5214e50b..01fb7297` (code tip). Commits: `b4793b17 wip(plist-step-c-1013): red`; `01fb7297 feat(plist-step-c-1013): STEP-C as one script admits card-named launchd one-shots; deferred bootstrap owed and read as OWED (C1 C2 B1 R1 L1 D1 DF1 BO1 OW1, L1 L3 L42)`; `2b39ef9d wip(plist-step-c-1013): W — card says DB: none, the diff holds src/configs/tests/cobalt paths of row OW1` (report only); then the report commit.
+- Per row, reds, mutations and greens: `## E2 RED`, `## E3 THE ROWS` (THE MUTATIONS table, the greens).
+- Caller greps: `## PREFLIGHT` CALLERS.
+- RUN row A1, whole: `## E0 BASELINE` A1.
+- The three suites and their executed commands, F0 / F1 / F2, and the lock take and release (log `:891`, `:2091`; forward at 10:41:48): `## W THE THREE SUITES`. A second W was not needed: there was no red at W from this build.
+- RESTARTS table: `## RESTARTS`, `RESTARTS: com.cobalt.radar`.
+- Records copied at PREFLIGHT: `## PREFLIGHT`, `## RECORDS`.
+- For house A (card CHECK ASKS): this build changes `DEPLOY-HUB.md` (`:3`, `:5`, `:11`, `:13`, the P8 table, STEP-C `:89`, D1, 4.6L / 4.6L-BO, smoke (s), STEP-5 (1L) / (2L) / (5), ROLLBACK STRING 1, STEP-7 2) and does NOT change `STANDING-LIST.md` (DECISIONS 1).
+- X1: a `## LAUNCHD` line holding `*`, `$`, a backtick, a quote, `;`, `|`, `&`, `<`, `>`, `\`, `(` or `)` is refused by `launchd_line` before any field is read. Labels are `[a-z0-9-]` and dry-run words `[a-z0-9-]` (at most 4). Tests: the `*` and `; rm x` refusal cases.
 
 ## CONTINUE
-next: W (the desk removes `DB: none` from card 496 and sends `CONTINUE: W`; then THE GATE, ONE CALL: `sh /Users/cobalt/cobalt/ops/desk/gate.sh plist-step-c-1013 all --deploy`, no `--deselect`, no `--tickers`, no `--migration`; this build adds no with-DB test).
+next: none (BUILT; the desk verifies and launches the check).
 
 ## DECISIONS
 1. ASK DESK [10:15 ET] — FOR DEJAN. `STANDING-LIST.md:157` is not edited. Row D1 says it is "Edited only after the desk's answer to report `## DECISIONS` item 1". No answer is in this session, and the file is his one approval (R60: a command string that changes returns to him). Safe default taken: the line stays as is. CARD.md and the hub are built. When the answer comes, the edit is one line: installing or changing one card-named one-shot is on the line through the strings `desk-launch.sh` generates from `## LAUNCHD` (`DEPLOY-HUB.md` 4.6L, STEP-5 (1L)); retiring one stays off.
-2. DECISION W (blocks the next step): the card's `DB: none` and row OW1 disagree. OW1 names `src/cobalt/smoke/checks.py`, `src/cobalt/jobs/watchdog.py`, `configs/cobalt/smoke/s2.yaml`, `tests/cobalt/test_smoke.py` and `tests/cobalt/test_jobs.py`, so (a0) fails (W above). Safe default: stop, as BUILD-HUB W (a0) says; the desk removes the key and sends `CONTINUE: W`.
+2. DECISION W (answered at 10:17: the desk removed the key, `2ff41ff1`, and sent `CONTINUE: W`; the gate is green): the card's `DB: none` and row OW1 disagree. OW1 names `src/cobalt/smoke/checks.py`, `src/cobalt/jobs/watchdog.py`, `configs/cobalt/smoke/s2.yaml`, `tests/cobalt/test_smoke.py` and `tests/cobalt/test_jobs.py`, so (a0) fails (W above). Safe default: stop, as BUILD-HUB W (a0) says; the desk removes the key and sends `CONTINUE: W`.
 3. DECISION OW1-v: the card places (v) at "`test_jobs.py:885`'s fixture". That class is `@requires_db` (`:842`), and E2 on a DB: none card holds no with-DB red. The sweep tests (`TestBootstrapOwed`) therefore run offline, on the `Store` stub shape of `test_jobs.py:667` (an existing offline sweep test), with the same one-shot `_spec` and card 304's label. Their reds and mutations are shown above. Safe default: offline. The with-DB `TestEveryPlistMustBeLoaded` is unchanged.
 4. DECISION DF1/BO1 shape (the card leaves these open):
    - (a) `deferred` is a mode of the `## LAUNCHD` line. Such a line ends ` · gate: <item>, <item>`, and that is where `<the card's gate items>` come from; it is admitted only on an `A`.
@@ -207,11 +248,13 @@ next: W (the desk removes `DB: none` from card 496 and sends `CONTINUE: W`; then
 5. DECISION L1 fill: the card writes `-e "s|<launchd strings>|$launchd|"`. The build uses `-e "s| <launchd strings>|$launchd|"` (the token's leading space goes with it, and each generated string carries its own leading space). This way a card with no `## LAUNCHD` gives today's line byte for byte (X4; (k) and its negative control above).
 6. UNPROVEN (L70), outside the rows, not fixed: `tests/ops/test_the_rule_sweep.py::test_every_exempt_entry_still_mismatches` FAILS with `AssertionError: ['f4-refresh-build-2026-10-10.md']` (`:134`). Its inputs are unchanged since BASE: `git diff --stat 5214e50b -- tests/ops/test_the_rule_sweep.py ops/desk/deploy-card.sh "docs/40 - DevDocs/reports"` prints nothing, and this build's report is dated 2026-10-13, outside its window (`LAST = "2026-10-12"`). The gate's offline pass will show it again.
 7. ASK DESK [10:15 ET]: a bootstrap-only deploy card has no launch path yet. `desk-launch.sh deploy` still requires `TIP`, `## SHIPS` and a check per ship; BO1's merge-free deploy needs a card shape the launcher accepts. This is outside the rows. Safe default: not built; the hub text (4.6L-BO) and the script mode exist.
+8. Self-check gap (2): `bootstrap_owed()`'s not-JSON path (`BootstrapOwedError`, which K18 turns into ERROR and the sweep into the unchanged red, plus a note) has no test. Safe default: left as built and named here for the check's fix round.
 
 ## RECORDS
 - REFUSED, not needed: `git -C /Users/cobalt/cobalt show fc6a1e2a:ops/com.cobalt.prefill-refresh.plist` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." (A1; the same bytes were read through the gate worktree, proved equal by `git -C … diff --stat fc6a1e2a -- …` printing nothing.)
 - The card's RECORDS, re-read at PREFLIGHT: R1341 is `HIS RULING · APPROVED` (authorize.sh row); `.gitignore:6` is `data/`; `restarts.py:198-206` is as quoted; 304 `:73` is the WRITER GATE; the K18 anchors are `checks.py:427-434`; the sweep anchor is `watchdog.py:397`; `test_jobs.py:885` is `test_an_unloaded_one_shot_is_red`. The other card records (seams 458/485/480, the L68 note, the RESTARTS class homes) are copied as the card has them. The derived RESTARTS (`com.cobalt.radar`) matches the card's class-home read.
 - `.env`: never present in this worktree (`ls /Users/cobalt/cobalt-wt/plist-step-c-1013/.env` → No such file, PREFLIGHT). No lock taken.
+- CONTINUED at W 10:17 (message from `cto-desk`: `CONTINUE: W — the DB: none key is removed from card 496 on main (commit 2ff41ff1)`). Verified: `git -C /Users/cobalt/cobalt log --oneline -3 -- <card>` → `2ff41ff1 docs(desk): R1404 card 496 DB key removed after W failure`; `git -C /Users/cobalt/cobalt diff 80f65fc9 2ff41ff1 -- <card>` → the one line `-DB: none`, nothing else; `grep -n -F "DB:" <card>` → nothing; `git -C /Users/cobalt/cobalt diff --stat -- <card>` → nothing (committed, clean).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — the card says DB: none but the diff holds configs/cobalt/smoke/s2.yaml src/cobalt/jobs/watchdog.py src/cobalt/smoke/checks.py tests/cobalt/test_jobs.py tests/cobalt/test_smoke.py — the desk removes the key from the card and sends CONTINUE: W
+BUILT · job: plist-step-c-1013 · tip: 01fb7297 | on 5214e50b | migration: none | offline 4327/0 | with-DB 5230/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 9 of 10 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 382312
