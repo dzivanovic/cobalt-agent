@@ -226,6 +226,19 @@ His words, brain session: "nothing should ever be waiting on me other than the d
   - HIS HAND, ONLY BY DAY: anything that truly needs his hand (a settings paste, a harness block no seat can clear) never waits at night. The blocked item stops only itself, everything else runs, and the item lands in the morning report, or at a daytime sitting, with a full explanation: what was blocked, by which rule or tool, why no seat could do it, what he types and what it unblocks. The seats work around the blocked ITEM, never around a permission check.
 - Harness limit: the auto-mode classifier is Claude Code's, not a law of his. Allow strings and hook rules shape it. A string he must paste into settings is the one-time install of this ruling, never a per-night command.
 
+## RULED 2026-10-13 — Grok resumes (R1315, R1317; desk records)
+- R1315: the Grok arm resumes, and its reads outside the folder are accepted (as Terra's). Brain plan: card 365's X1 row records the reads (three distinct decoys); rebuild 365 and 371, first build of 379; scored checks on 378, 368, 365, 371 and 379; Grok row n=2/2/1; the sitting rules on the Grok row.
+- R1317: the L27 routing wording changes only on the Grok and Terra findings.
+
+## RULED 2026-10-13 — blocker survey decisions (his "yes, yes, and remove")
+On `reports/survey-blockers-2026-10-12.md` `## DECISIONS`:
+- Row 5 KEPT (the 300k launch refusal). The desk refresh is made mandatory instead: `reports/desk-refresh-answer-2026-10-13.md`, HIS RULING.
+- Row 11 YES: L62 gains "…asked for by itself, unless a card inside an approved class of L81 adds it." UNATTENDED-LAUNCH `:6` follows.
+- Row 17 YES: L66 drops the 20:00–21:00 pause clause (it keeps residents down before the merge and up after, and its `trader_settings` clause); L61 drops "inside the window"; checklist K20 is struck.
+- REMOVE: `.claude/settings.json:33` `Edit(//Users/cobalt/cobalt/ops/desk/bare-guard.py)`. Guard rules change by card only (L81(4)).
+- The other B rows run by card inside K1–K5 with no word of his. Rows 21–33 KEEP, except row 31.
+- Row 31 REWRITTEN, his words: "this one stops desk now and everything else. The rule is if blocked check if you used bare commands". A blocked call follows three steps, in order: (1) a bare-command check: was it one bare command? If not, resend it as single bare calls (the guard's own "NOT A REFUSAL" route, never a workaround); (2) the approved route: if a script or string the seat already holds does the job (`scratch-clean.sh`, `job-clean.sh`, the R686 read), use it; (3) still denied: that ONE item stops, goes to `## NEEDS HIS HAND` with the full why, and everything else keeps running. Never: the same action disguised (a file pointer, a rename, another seat, another tool). Amends UNATTENDED-LAUNCH :13-19, L61 and checklist K19a by card (K5).
+
 ## PLAN ROWS ADDED 2026-10-09 night (brain judge answers; follow-ups, not his rulings)
 - Launcher card (with the owed "accept held items the fix report names fixed" row): `deploy-card.sh --fix-report "<path>"` per job card emits the CARD.md :48 fix-round SHIPS row, instead of refusing "adds paths outside docs/" (card 156, R771).
 - Archiver defect card (drafter, R685): bounded 429 retry with `Retry-After` inside the L53 bucket, and retried targets named in the run report. First 429s in history, 10-09 20:35–20:41, radar paused, strike not yet deployed (R808).
