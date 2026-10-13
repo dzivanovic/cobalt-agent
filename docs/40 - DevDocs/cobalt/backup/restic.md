@@ -50,3 +50,9 @@ boot disk onto the boot disk exits 0 and looks green forever.
 360 MB dump written and thrown away is a real cost, and the refusal is
 the point: a nightly job that runs, writes nothing and reports success
 is the exact failure this design exists to prevent.
+
+## 2026-10-12 — backup-flock-1012
+`snapshot()` takes an exclusive `flock` on `STAGING/.backup.lock` (mode `0o600`, holder pid written) after the mount refusals and before the dump; it waits up to `LOCK_WAIT_S = 1800` s, then raises `BackupError` naming the lock path, the seconds waited and the holder pid, having written and removed nothing. Its `finally` unlinks only `STAGING/<database>.sql`, the one file this run wrote, then releases the lock; the lock file is never unlinked.
+
+## 2026-10-12 — backup-flock-1012 check (O1)
+A dump that raises before it touches `STAGING/<database>.sql` leaves a file already at that path in place; the path becomes this run's to remove only once the dump has written (or truncated) it, compared by inode, size, mtime and ctime.
