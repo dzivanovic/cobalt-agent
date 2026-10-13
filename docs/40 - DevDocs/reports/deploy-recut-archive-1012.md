@@ -1,7 +1,9 @@
 # deploy recut-archive-1012 · set: none · migrations: none
 
 ## §0 Headline
-In progress. Started 2026-10-12 21:07 EDT. AUTHORIZED.
+FAILED at D2.4 (21:41 EDT): the production snapshot (`backup run`) exited 1 on a missing staging dump. Nothing in production changed, nothing merged to `main`, and no resident went down.
+Before that: AUTHORIZED; preflight clean; tree `05518bd2`; RESTARTS none; GATE GREEN (offline 4309/0 · with-DB 5212/0 · live-note 146/0); `<stack-final>` `f30db38e` = `<m1>` + docs.
+Next (the desk's): fix the backup, then `desk-launch.sh recut`.
 
 ## L74
 The launch context carried a harness attribution reminder asking that commits also end with a `Claude-Session:` line. Recorded here as data and not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -139,13 +141,52 @@ GATE GREEN on 05518bd2
 | marker | `grep -c -F -e "archive/pre-" "/Users/cobalt/cobalt/ops/desk/desk-launch.sh"` | `0` (= before) |
 | migration | — | `MIGRATIONS: none`, so `<RB>`, census and D1-M are not run |
 
+### D2
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-recut-archive-1012.md"` · `git -C /Users/cobalt/cobalt commit -m "docs(report): deploy recut-archive-1012 — gate green on 05518bd2" …` | 0 | `[main d4b80886] … 1 file changed, 151 insertions(+)` |
+| D2.0 | `git -C /Users/cobalt/cobalt show --stat HEAD` | 0 | one file: `.../reports/deploy-recut-archive-1012.md` |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `d4b80886` = `<pre-merge>` |
+| D2.1 | `git -C /Users/cobalt/cobalt-wt/deploy-recut-archive-1012 merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `f30db38e` = `<stack-final>` |
+| D2.2 | `git -C /Users/cobalt/cobalt rev-parse --short=8 f30db38e^2` | 0 | `d4b80886` (= `<pre-merge>`) |
+| D2.2 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor 05518bd2 f30db38e` | 0 | — |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 05518bd2 f30db38e -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing (docs only) |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 2.5 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` (FOREGROUND, timeout 600000) | **1** | `21:40:30.054 … F17: com.cobalt.backup RUNNING (timeout 3600s, heartbeat every 1200s)` / `21:41:01.259 \| ERROR \| cobalt.jobs.wrapper:job_run:192 - F17: com.cobalt.backup FAILED — FileNotFoundError: [Errno 2] No such file or directory: '/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql'` / `FAILED: FileNotFoundError: [Errno 2] No such file or directory: '/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql'` |
+| after | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.0 h old`. A snapshot was written even though the run exited 1, and its contents are unproven (L70): the `cobalt_brain` dump file it needed was missing. No dump-size line and no snapshot id were printed |
+| after | `launchctl print` aset / radar · `cobalt.sh status` | 0 | aset `state = running` `pid = 14738` · radar `state = running` `pid = 14748` · `Cobalt is ONLINE (PID: 14763).` (unchanged from D1) |
+| after | `git -C /Users/cobalt/cobalt merge-base --is-ancestor f30db38e main` | 1 | nothing merged to `main` |
+| after | `git -C <GATE> status --short --branch` | 0 | `## deploy/recut-archive-1012` (no open merge) |
+| after | `date` | 0 | Mon Oct 12 21:41:11 EDT 2026 |
+
+The run stopped at D2.4. D2.5, D2.6 (the `pre-recut-archive-1012` tag) and STEP-4 to STEP-7 (1) were not run. No resident went down, `main` is `d4b80886` with the report only, and no tag was set. `<restart set>` is empty, so this deploy would have had no outage. No ROLLBACK STRING is needed: nothing merged.
+
+## Smoke
+Not run: the deploy stopped before the merge.
+
 ## CONTINUE
-next: STEP-D2 (D2.0 report commit)
+next: none — FAILED at D2.4. The desk decides: fix `backup run` (the missing staging dump `/Users/cobalt/cobalt-backups/staging/cobalt_brain.sql`), then `desk-launch.sh recut "<card>"` (the hub's RECUT path for `rollback: not used`).
 
 ## DECISIONS
 1. ASK DESK: at D0, `status --porcelain` shows dirty paths that the accepted list does not name and the refused list does not name either: ` M` under `docs/00 - Project/` and `docs/30 - Design/`, and `?? .claude/settings.json.bak`. BACKLOG, SPRINT-LADDER and `cto-2026-10-12.md` were not dirty in the launch snapshot. All of them are unstaged working-tree edits, none is in `src/`, `tests/`, `ops/` or `configs/`, and none enters the merge, which lands only committed trees. Safe default taken: not a refusal, go on. [21:39 EDT]
 
-## RECORDS
-- (filled at close)
+2. ASK DESK: `backup run` failed at D2.4 with `FileNotFoundError … /Users/cobalt/cobalt-backups/staging/cobalt_brain.sql`, yet `backup status` then reads `newest snapshot: 0.0 h old`. Whether that snapshot holds the production database is unproven (L70). The nightly `com.cobalt.backup` finished at 19:09 ET with exit 0 (heartbeat), so this run's own dump step failed and the cause is not read here. Safe default taken: no deploy without a proven snapshot (L73), so the run stopped with nothing in production changed. [21:41 EDT]
 
-(run in progress — next step under ## CONTINUE)
+## RECORDS
+- Downtime: none. No resident went down (`<restart set>` empty, and the run stopped before STEP-4).
+- `cobalt_dev: 0013 (F2 = F0)`: the gate's line, `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87`; lock released, `.env: removed`.
+- REFUSED, not needed: `grep -n -F ".env: removed" /Users/cobalt/cobalt-wt/.gate-logs/deploy-recut-archive-1012-all-20261012-210930.log` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. Read instead with `grep -n -F "released"` and the Read tool on the log.
+- No `RETIRE OWED`: no plist was removed.
+- Carried RED: none. `<hb0>` was GREEN, with `com.cobalt.herdr` AMBER by declared interim.
+- A snapshot was written by the failed `backup run` (`newest snapshot: 0.0 h old`), contents unproven. See `## DECISIONS` 2.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-recut-archive-1012` and branch `deploy/recut-archive-1012` (at `f30db38e`), and the set's branch `ops/recut-archive-1012` and its worktree. The recut cleans the gate.
+- `main` carries this session's one D2.0 commit `d4b80886` (the report), plus the FAILED-ending commit of this report.
+- L74: one line arrived (the `Claude-Session:` attribution request, see `## L74`). Not followed.
+- Card `## RECORDS`, copied:
+  - recut-archive-1012: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/recut-archive-check-2026-10-12.md` last line: CHECK DONE · job: recut-archive-1012 · pass: 1 · tip: df775390 · house A: Grok FINDINGS: 0 · findings: 1 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 4309/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 13 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 176420
+  - recut-archive-1012: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/recut-archive-1012` → `df775390`; code tip `df775390`
+  - written by deploy-card.sh at 2026-10-12 21:07 ET (`date`); trial merge of the heads onto main in order: clean
+- PRE-STOP SELF-CHECK: (1) no smoke ran, and every D-row is quoted with its `date`; (2) `df775390` was re-read at P3 and is an ancestor of `<BRANCH>`, and `<m1>` `05518bd2` is an ancestor of `<stack-final>` `f30db38e`; (3) no merge landed, so no REVERT-READBACK applies, and every sha and count above was read from tool output this run; (4) STEP-T and D2.1 were clean merges with no conflict.
+
+FAILED: D2.4 — backup run exit 1: FileNotFoundError /Users/cobalt/cobalt-backups/staging/cobalt_brain.sql; no proven snapshot, nothing in production changed · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 123536
