@@ -1084,6 +1084,8 @@ lock_free() {
     [ -z "$step" ] || own="$WT/$wt/.env"
     for f in "$WT"/*/.env; do
         [ "$f" != "$own" ] || continue
+        # card 547 db-copy: a copy-mode .env is no lock (survey row 13)
+        [ ! -e "$WT/.devdb-copies/$(basename "$(dirname "$f")")" ] || continue
         [ ! -e "$f" ] || refuse "with-DB launch refused: the cobalt_dev lock is held ($f) (L76)"
     done
 }
