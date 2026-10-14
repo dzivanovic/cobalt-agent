@@ -259,15 +259,15 @@ class Tree:
             return []
         return [json.loads(line) for line in log.read_text().splitlines()]
 
-    def gate(self, name: str, env: dict) -> subprocess.CompletedProcess:
+    def gate(self, name: str, env: dict, *flags: str, mode: str = "withdb") -> subprocess.CompletedProcess:
         return subprocess.run(
-            ["sh", str(self.desk / "gate.sh"), name, "withdb"], env=env,
+            ["sh", str(self.desk / "gate.sh"), name, mode, *flags], env=env,
             capture_output=True, text=True, timeout=300,
         )
 
-    def popen(self, name: str, env: dict) -> subprocess.Popen:
+    def popen(self, name: str, env: dict, *flags: str) -> subprocess.Popen:
         return subprocess.Popen(
-            ["sh", str(self.desk / "gate.sh"), name, "withdb"], env=env,
+            ["sh", str(self.desk / "gate.sh"), name, "withdb", *flags], env=env,
             stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
         )
 
@@ -313,7 +313,7 @@ def assert_nothing_left(tree: Tree, name: str = NAME) -> None:
 
 def test_g1_copy_mode_creates_runs_on_the_copy_and_drops(tree):
     tree.worktree(NAME, copy_lists())
-    done = tree.gate(NAME, tree.env("a"))
+    done = tree.gate(NAME, tree.env("a"), "--copy")
     assert done.returncode == 0, done.stdout + done.stderr
     log = tree.calls("a")
     kinds = [kind(c) for c in log]
@@ -345,7 +345,7 @@ def test_g1_a_second_build_takes_the_lock_while_the_first_runs_on_its_copy(tree)
     started = tree.tmp / "first-started"
     go = tree.tmp / "first-go"
     first = tree.popen(NAME, tree.env("a", pytest=[
-        {"out": "5 passed in 0.10s", "rc": 0, "marker": str(started), "wait_for": str(go)}]))
+        {"out": "5 passed in 0.10s", "rc": 0, "marker": str(started), "wait_for": str(go)}]), "--copy")
     try:
         end = time.monotonic() + 120
         while not started.exists() and first.poll() is None and time.monotonic() < end:
@@ -354,7 +354,7 @@ def test_g1_a_second_build_takes_the_lock_while_the_first_runs_on_its_copy(tree)
         assert not (tree.wt / LOCK_NAME).exists()
         assert (tree.wt / NAME / ".env").exists()
         assert (tree.wt / MARKS / NAME).exists()
-        second = tree.gate("y-job", tree.env("b"))
+        second = tree.gate("y-job", tree.env("b"), "--copy")
         assert second.returncode == 0, second.stdout + second.stderr
         assert not tree.slept.exists(), tree.slept.read_text()
     finally:
@@ -371,7 +371,7 @@ def test_g1_a_second_build_takes_the_lock_while_the_first_runs_on_its_copy(tree)
 
 def test_g1_a_create_that_fails_leaves_nothing_and_exits_1(tree):
     tree.worktree(NAME, copy_lists())
-    done = tree.gate(NAME, tree.env("a", copy_create_rc=1))
+    done = tree.gate(NAME, tree.env("a", copy_create_rc=1), "--copy")
     assert done.returncode == 1, done.stdout + done.stderr
     assert "copy not created" in done.stdout.splitlines()
     log = tree.calls("a")
@@ -384,7 +384,7 @@ def test_g1_a_create_that_fails_leaves_nothing_and_exits_1(tree):
 
 def test_g1_a_red_suite_still_drops_the_copy(tree):
     tree.worktree(NAME, copy_lists())
-    done = tree.gate(NAME, tree.env("a", pytest=[{"out": "1 failed, 4 passed in 0.10s", "rc": 1}]))
+    done = tree.gate(NAME, tree.env("a", pytest=[{"out": "1 failed, 4 passed in 0.10s", "rc": 1}]), "--copy")
     assert done.returncode == 1, done.stdout + done.stderr
     log = tree.calls("a")
     assert kind(log[-1]) == f"dev-copy drop {COPY}", [kind(c) for c in log]
@@ -428,7 +428,7 @@ def test_g1_without_the_sections_the_gate_runs_on_the_one_lock(tree):
 def test_g1_a_copy_name_over_50_characters_is_refused(tree):
     long = "w" * 45
     tree.worktree(long, copy_lists())
-    done = tree.gate(long, tree.env("a"))
+    done = tree.gate(long, tree.env("a"), "--copy")
     assert done.returncode == 1, done.stdout + done.stderr
     assert "REFUSED: copy name too long" in done.stderr
     assert tree.calls("a") == []
@@ -440,7 +440,7 @@ def test_g1_a_leftover_marker_and_env_of_the_same_worktree_do_not_block_the_next
     (tree.wt / NAME / ".env").write_text(CONSTRUCTED_ENV)
     (tree.wt / MARKS).mkdir()
     (tree.wt / MARKS / NAME).write_text(COPY + "\n")
-    done = tree.gate(NAME, tree.env("a"))
+    done = tree.gate(NAME, tree.env("a"), "--copy")
     assert done.returncode == 0, done.stdout + done.stderr
     assert "lock not ours alone" not in done.stdout
     kinds = [kind(c) for c in tree.calls("a")]
@@ -466,7 +466,7 @@ def test_g1_check_o1_a_signal_while_the_create_runs_still_drops_the_copy(tree):
         'exit "$rc"\n'
     )
     (tree.bin / "uv").chmod(0o755)
-    first = tree.popen(NAME, tree.env("a"))
+    first = tree.popen(NAME, tree.env("a"), "--copy")
     pidfile.write_text(str(first.pid))
     out, err = first.communicate(timeout=300)
     assert first.returncode == 143, out + err
@@ -474,6 +474,109 @@ def test_g1_check_o1_a_signal_while_the_create_runs_still_drops_the_copy(tree):
     assert kinds[-1] == f"dev-copy drop {COPY}", kinds
     assert kinds.count(f"dev-copy drop {COPY}") == 2, kinds
     assert_nothing_left(tree)
+
+
+# ---- FR-O2: copy mode only with --copy (check O2, house A A1) ------------------------------------
+
+
+def test_g1_check_o2_the_deploy_gate_call_holds_the_lock_whole_with_the_sections(tree):
+    """CHECK O2 (G1 step 6): the deploy gate's own call, `all --deploy` on a lists file that holds
+    both sections, still runs on cobalt_dev under the lock."""
+    tree.worktree(NAME, copy_lists())
+    env = tree.env("a")
+    done = subprocess.run(
+        ["sh", str(tree.desk / "gate.sh"), NAME, "withdb", "--deploy"], env=env,
+        capture_output=True, text=True, timeout=300,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    log = tree.calls("a")
+    assert not any(dev_copy(c) for c in log), [kind(c) for c in log]
+    assert all(c["lock"] for c in log), log
+
+
+def test_g1_deploy_stays_on_cobalt_dev_under_the_lock(tree):
+    """HOUSE A A1 (the same defect as O2), its test as written."""
+    tree.worktree(NAME, copy_lists())
+    env = tree.env("dep")
+    done = subprocess.run(
+        ["sh", str(tree.desk / "gate.sh"), NAME, "withdb", "--deploy"],
+        env=env, capture_output=True, text=True, timeout=300,
+    )
+    assert done.returncode == 0, done.stdout + done.stderr
+    log = tree.calls("dep")
+    kinds = [kind(c) for c in log]
+    assert not any(dev_copy(c) for c in log), kinds
+    assert all(c["COBALT_DEV_DB_NAME"] is None for c in log), log
+    assert all(c["lock"] for c in log), log
+
+
+def test_fr_o2_without_copy_the_sections_run_on_the_one_lock(tree):
+    """FR-O2: both sections in the lists file and no --copy → lock mode, today's lines, no `copy:`."""
+    tree.worktree(NAME, copy_lists())
+    done = tree.gate(NAME, tree.env("a"))
+    assert done.returncode == 0, done.stdout + done.stderr
+    log = tree.calls("a")
+    assert not any(dev_copy(c) for c in log), [kind(c) for c in log]
+    assert all(c["COBALT_DEV_DB_NAME"] is None for c in log), log
+    assert all(c["lock"] for c in log), log
+    out = done.stdout.splitlines()
+    assert not [ln for ln in out if ln.startswith("copy")], out
+    assert out[:-1] == TODAY, out
+    assert not (tree.wt / MARKS).exists()
+
+
+@pytest.mark.parametrize("flags", [["--copy"], ["--deploy", "--copy"], ["--copy", "--deploy"]])
+def test_fr_o2_with_copy_the_sections_run_on_the_copy(tree, flags):
+    """FR-O2: both sections and --copy → copy mode (the build's W shape carries --deploy too)."""
+    tree.worktree(NAME, copy_lists())
+    done = tree.gate(NAME, tree.env("a"), *flags)
+    assert done.returncode == 0, done.stdout + done.stderr
+    out = done.stdout.splitlines()
+    assert f"copy: {COPY} created" in out, out
+    assert f"copy: {COPY} dropped" in out, out
+    assert_nothing_left(tree)
+
+
+def test_fr_o2_copy_without_both_sections_is_refused_before_anything_runs(tree):
+    """FR-O2: --copy on a lists file with neither section is refused before anything runs."""
+    tree.worktree(NAME, LISTS.read_text())
+    done = tree.gate(NAME, tree.env("a"), "--copy")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: --copy needs both ## COPY CREATE and ## COPY DROP" in done.stderr, done.stderr
+    assert tree.calls("a") == []
+    assert not (tree.wt / LOCK_NAME).exists()
+
+
+@pytest.mark.parametrize("mode", ["probe", "offline", "livenote"])
+def test_fr_o2_copy_belongs_to_withdb_and_all(tree, mode):
+    tree.worktree(NAME, copy_lists())
+    done = tree.gate(NAME, tree.env("a"), "--copy", mode=mode)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: --copy belongs to withdb and all" in done.stderr, done.stderr
+    assert tree.calls("a") == []
+
+
+# ---- FR-O3: in copy mode a worktree name is [a-z0-9-] (check O3) ----------------------------------
+
+
+@pytest.mark.parametrize("name", ["Db_Copy", "x_job", "X-JOB", "x.job"])
+def test_fr_o3_copy_mode_refuses_a_worktree_name_outside_a_z0_9_dash(tree, name):
+    """FR-O3: the name-to-copy mapping is one to one: `-` is the one character mapped to `_`."""
+    tree.worktree(name, copy_lists())
+    done = tree.gate(name, tree.env("a"), "--copy")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: copy mode needs a worktree name of [a-z0-9-]" in done.stderr, done.stderr
+    assert tree.calls("a") == []
+    assert not (tree.wt / LOCK_NAME).exists()
+    assert not (tree.wt / MARKS).exists()
+
+
+def test_fr_o3_without_copy_such_a_name_runs_on_the_one_lock(tree):
+    """NEGATIVE CONTROL: the [a-z0-9-] rule binds copy mode only; lock mode takes any valid name."""
+    tree.worktree("Db_Copy", copy_lists())
+    done = tree.gate("Db_Copy", tree.env("a"))
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert not any(dev_copy(c) for c in tree.calls("a"))
 
 
 # ---- L1: desk-launch.sh lock_free -----------------------------------------------------------------
