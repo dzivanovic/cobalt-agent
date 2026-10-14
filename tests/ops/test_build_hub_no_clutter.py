@@ -57,6 +57,8 @@ def test_the_launch_line_is_byte_identical_to_base():
 def test_no_other_line_changes_from_base():
     # card 2026-10-13/523 rows H2 and H3 (brain R1309): the one new FIX-ROUND line and the one
     # CLOSE line they change are dropped before the equality; pinned in tests/ops/test_hub_text_1013.py
+    # card 2026-10-14/547 row H1 (EXEMPT: it edits the W (b) line): every line that starts
+    # `- (b) THE LOCK` is dropped from both sides; pinned in tests/ops/test_db_copy_1014.py
     fix_round = "FIX-ROUND REPORT (brain R1309):"
     close_last = "- `## §0 Headline` (≤5 lines). Commit the report"
     ls = lines()
@@ -66,6 +68,9 @@ def test_no_other_line_changes_from_base():
     assert sum(ln.startswith(fix_round) for ln in now) == 1
     assert sum(ln.startswith(close_last) for ln in now) == 1
     assert sum(ln.startswith(close_last) for ln in then) == 1
+    assert sum(ln.startswith("- (b) THE LOCK") for ln in now) == 1
     now = [ln for ln in now if not ln.startswith((fix_round, close_last))]
     then = [ln for ln in then if not ln.startswith(close_last)]
+    now = [ln for ln in now if not ln.startswith("- (b) THE LOCK")]
+    then = [ln for ln in then if not ln.startswith("- (b) THE LOCK")]
     assert now == then

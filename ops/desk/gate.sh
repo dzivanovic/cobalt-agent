@@ -36,6 +36,27 @@
 # rollback when the forward was started and not yet rolled back, then ALWAYS the release, and
 # proves .env gone.
 #
+# THE COPY (card 547 db-copy, his R1471): copy mode is ON only when the lists file holds BOTH
+# `## COPY CREATE` and `## COPY DROP`, each ONE backticked line holding the token `<COPY>` once
+# (one without the other, or another token count, is refused before anything runs), AND the call
+# passes --copy (check O2, A1); without --copy every line of a run is the lock's as above, whatever
+# the lists file holds, and --copy without both sections is refused before anything runs. --copy
+# reaches withdb and all only; no deploy line passes it. In copy mode the worktree name must be
+# [a-z0-9-] (`REFUSED: copy mode needs a worktree name of [a-z0-9-]`, check O3), so the copy's
+# name, `cobalt_dev_` + the worktree name with `-` turned to `_`, is one to one;
+# over 50 characters in all is refused (`REFUSED: copy name too long`), never truncated. The lock
+# is held SHORT: the take, <F0> and the proof-only on cobalt_dev (the template) as above, then
+# `## COPY DROP` (a leftover of a crashed run of this worktree; its failure is logged, not fatal)
+# and `## COPY CREATE` (a failure prints `copy not created`, exit 1), then the release.
+# devdb-copy-env.sh place copies .env back by name and writes the marker
+# $WT/.devdb-copies/<worktree>; COBALT_DEV_DB_NAME=<copy> is exported, and the fingerprint, the
+# proof-only (`on <copy>`), the passes, the forward, the stray rows and the rollback run on the
+# copy, the verdict lines unchanged but for `copy: <copy> created` and `copy: <copy> dropped`.
+# On every exit the trap drops the copy (`copy: <copy> NOT dropped` → exit 1; the next run of the
+# same worktree clears it) and devdb-copy-env.sh remove takes .env and the marker, BEFORE the lock
+# release. The lock's `.env` check skips another worktree's marked .env, never this one's. A
+# deploy gate and a lock-mode run still hold the lock whole, and a take waits for them.
+#
 # THE LEVEL: `migrate --proof-only` ends with a `TABLES …` and a `FINGERPRINT …` line (L1). This
 # script prints `LEVEL <nnnn>` only when both equal the two halves of `## LEVEL <nnnn>`, with exit 0,
 # `on cobalt_dev` and no `CHANGED`; else exit 5, printing both lines as read. After the rollback
@@ -59,6 +80,8 @@ set -u
 set -f
 # every environment prefix a command carries is the hub's own spelling: none comes from the caller
 unset COBALT_ENV COBALT_LIVE_VAULT_ROOT
+# THE COPY's name is exported by this script alone, never taken from the caller
+unset COBALT_DEV_DB_NAME
 
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
 WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}
@@ -84,6 +107,7 @@ deselects=""
 tickers=""
 migration=""
 deploy=""
+copy_on=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --deselect)
@@ -104,6 +128,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --migration) migration=1; shift ;;
         --deploy) deploy=1; shift ;;
+        --copy) copy_on=1; shift ;;
         *) refuse "unknown argument '$1'" ;;
     esac
 done
@@ -192,7 +217,51 @@ level=$(cat "$tmp/level")
 TABLES_AT=$(cat "$tmp/tables")
 FINGERPRINT_AT=$(cat "$tmp/fingerprint")
 PASS1_DEPLOY=$(cat "$tmp/pass1_deploy")
+
+# ---- the copy: `## COPY CREATE` and `## COPY DROP`, both or neither (THE COPY above) -------------
+python3 - "$lists" "$tmp" <<'PY' || { rm -rf "$tmp"; refuse "gate-lists.md holds half a copy mode: $lists"; }
+import re, sys
+lines = open(sys.argv[1], encoding="utf-8").read().splitlines()
+out = sys.argv[2]
+
+sections, title = {}, None
+for line in lines:
+    if line.startswith("## "):
+        title = line[3:].strip()
+        sections[title] = []
+    elif title is not None and line.strip():
+        sections[title].append(line.strip())
+
+def one(title):
+    body = sections[title]
+    if len(body) != 1 or not re.fullmatch(r"`[^`]+`", body[0]):
+        sys.exit("## %s: not ONE backticked line" % title)
+    if body[0].count("<COPY>") != 1:
+        sys.exit("## %s: not exactly one <COPY>" % title)
+    return body[0][1:-1]
+
+have = [t for t in ("COPY CREATE", "COPY DROP") if t in sections]
+if len(have) == 1:
+    sys.exit("only ## %s" % have[0])
+if have:
+    for title, key in (("COPY CREATE", "copy_create"), ("COPY DROP", "copy_drop")):
+        open("%s/%s" % (out, key), "w", encoding="utf-8").write(one(title))
+PY
+COPY_CREATE=""
+COPY_DROP=""
+if [ -f "$tmp/copy_create" ]; then
+    COPY_CREATE=$(cat "$tmp/copy_create")
+    COPY_DROP=$(cat "$tmp/copy_drop")
+fi
 [ -z "$deploy" ] || [ -n "$PASS1_DEPLOY" ] || { rm -rf "$tmp"; refuse "--deploy: ## PASS 1 does not hold ' --db-only' exactly once: $lists"; }
+# THE COPY is ON only with --copy AND both sections (check O2, A1): a call without --copy is lock mode
+if [ -n "$copy_on" ]; then
+    case "$mode" in
+        withdb|all) ;;
+        *) rm -rf "$tmp"; refuse "--copy belongs to withdb and all" ;;
+    esac
+    [ -n "$COPY_CREATE" ] || { rm -rf "$tmp"; refuse "--copy needs both ## COPY CREATE and ## COPY DROP in gate-lists.md: $lists"; }
+fi
 
 logdir="$WT/.gate-logs"
 mkdir -p "$logdir" || { rm -rf "$tmp"; refuse "mkdir failed: $logdir"; }
@@ -256,7 +325,12 @@ held_env() {
     held=""
     set +f
     for f in "$WT"/*/.env; do
-        [ -e "$f" ] && held="$held $f"
+        [ -e "$f" ] || continue
+        # THE COPY: another worktree's marked .env is its copy's, not the lock; this one's never skips
+        n=${f%/.env}
+        n=${n##*/}
+        [ "$n" = "$name" ] || [ ! -e "$WT/.devdb-copies/$n" ] || continue
+        held="$held $f"
     done
     set -f
     held=${held# }
@@ -288,6 +362,8 @@ take() {
     [ "$held" = "$dir/.env" ] || { say "cobalt_dev lock not ours alone after the take — $held"; exit 4; }
 }
 
+# release [short]: `short` is THE COPY's release after the create: its `.env: removed` goes to the
+# log only, so stdout keeps the one `.env: removed` of the step's end
 release() {
     note "\$ sh $HERE/release-devdb-lock.sh $name"
     sh "$HERE/release-devdb-lock.sh" "$name" >> "$log" 2>&1
@@ -299,7 +375,81 @@ release() {
         return 1
     fi
     note "No such file or directory"
-    say ".env: removed"
+    if [ "${1:-}" = short ]; then
+        note ".env: removed"
+    else
+        say ".env: removed"
+    fi
+}
+
+# ---- the copy (THE COPY above) ----------------------------------------------------------------
+copy=""
+made=""
+placed=""
+
+# copy_name: the copy's name into $copy; refused over 50 characters in all, never truncated
+copy_name() {
+    [ -f "$HERE/devdb-copy-env.sh" ] || refuse "copy mode: devdb-copy-env.sh is not beside gate.sh: $HERE/devdb-copy-env.sh"
+    # check O3: only `-` is mapped, so two worktrees never share a copy name
+    case "$name" in
+        *[!a-z0-9-]*) refuse "copy mode needs a worktree name of [a-z0-9-]" ;;
+    esac
+    copy="cobalt_dev_$(printf '%s' "$name" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '_')"
+    [ "${#copy}" -le 50 ] || refuse "copy name too long: $copy (${#copy} characters; 50 in all)"
+}
+
+# copy_cmd <command>: the list line with its one <COPY> token replaced by the copy's name
+copy_cmd() {
+    printf '%s' "${1%%<COPY>*}$copy${1#*<COPY>}"
+}
+
+# copy_create: a leftover of this worktree dropped (logged, not fatal), then the create. `made` is
+# set BEFORE the create: a signal that lands while it runs is handled after it returns, and the trap
+# then drops the copy (check O1); a create that fails clears it, so nothing is dropped (test (7))
+copy_create() {
+    run "$(copy_cmd "$COPY_DROP")" || note "the leftover drop of $copy exited non-zero (not fatal)"
+    made=1
+    run "$(copy_cmd "$COPY_CREATE")" || { made=""; say "copy not created"; exit 1; }
+    say "copy: $copy created"
+}
+
+# copy_drop: the drop, with COBALT_DEV_DB_NAME unset; 1 when it fails
+copy_drop() {
+    made=""
+    unset COBALT_DEV_DB_NAME
+    if run "$(copy_cmd "$COPY_DROP")"; then
+        say "copy: $copy dropped"
+        return 0
+    fi
+    say "copy: $copy NOT dropped"
+    return 1
+}
+
+# copy_env <place|remove>: devdb-copy-env.sh beside this script, its output to the log
+copy_env() {
+    note "\$ sh $HERE/devdb-copy-env.sh $1 $name"
+    COBALT_DEV_DB_NAME=$copy sh "$HERE/devdb-copy-env.sh" "$1" "$name" >> "$log" 2>&1
+    crc=$?
+    note "[exit $crc]"
+    return "$crc"
+}
+
+# copy_end: step 5 — the drop, the `.env` and the marker removed and proven gone; 1 on a failure
+copy_end() {
+    cst=0
+    [ -z "$made" ] || copy_drop || cst=1
+    if [ -n "$placed" ]; then
+        placed=""
+        copy_env remove || cst=1
+        note "\$ ls $dir/.env $WT/.devdb-copies/$name"
+        if [ -e "$dir/.env" ] || [ -e "$WT/.devdb-copies/$name" ]; then
+            say ".env: STILL PRESENT — $dir/.env"
+            return 1
+        fi
+        note "No such file or directory"
+        say ".env: removed"
+    fi
+    return "$cst"
 }
 
 # fingerprint: <FP> into FPV (its value row, fields blank-separated); the query's exit. Never in a
@@ -356,6 +506,10 @@ cleanup() {
     if [ -n "$applied" ]; then
         rollback_and_prove || st=6
     fi
+    # THE COPY: dropped and its .env and marker removed BEFORE the lock release
+    if [ -n "$made$placed" ]; then
+        copy_end || { [ "$st" -ne 0 ] || st=1; }
+    fi
     if [ -n "$taken" ]; then
         release || { [ "$st" -ne 0 ] || st=1; }
     fi
@@ -372,13 +526,18 @@ trap 'exit 129' HUP
 trap 'exit 130' INT
 trap 'exit 143' TERM
 
+# proof_clean [<copy>]: on cobalt_dev, or with THE COPY's name on that copy, whose two lines go to
+# the log only (stdout keeps today's lines)
 proof_clean() {
+    on=${1:-cobalt_dev}
+    tell=say
+    [ -z "${1:-}" ] || tell=note
     run "$PROOF"
     rc=$?
     first=$(plain | sed -n '1p')
     case "$first" in
-        *"on cobalt_dev"*) ;;
-        *) say "cobalt_dev not at $level at the start: the proof-only is not on cobalt_dev — $first"; exit 5 ;;
+        *"on $on"*) ;;
+        *) say "cobalt_dev not at $level at the start: the proof-only is not on $on — $first"; exit 5 ;;
     esac
     if [ "$rc" -ne 0 ] || plain | grep -q -w CHANGED; then
         say "cobalt_dev not at $level at the start: the proof-only exited $rc or shows CHANGED (log)"
@@ -389,8 +548,8 @@ proof_clean() {
         level_said
         exit 5
     fi
-    say "proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))"
-    say "LEVEL $level"
+    $tell "proof-only: on $on, nothing CHANGED — the table is in the log (W (b))"
+    $tell "LEVEL $level"
 }
 
 # ---- the modes --------------------------------------------------------------------------------
@@ -425,6 +584,18 @@ do_withdb() {
     fp0=$FPV
     note "F0: $fp0"
     proof_clean
+    if [ -n "$copy" ]; then
+        # THE COPY: made under the lock, the lock given back, the rest on the copy
+        copy_create
+        release short || exit 1
+        placed=1
+        copy_env place || { say "copy: the .env of $copy was not placed (log)"; exit 1; }
+        export COBALT_DEV_DB_NAME=$copy
+        fingerprint || { say "the fingerprint query failed on $copy (log)"; exit 1; }
+        fp0=$FPV
+        note "F0 ($copy): $fp0"
+        proof_clean "$copy"
+    fi
     p1cmd=$PASS1
     if [ -n "$deploy" ]; then
         p1cmd=$PASS1_DEPLOY
@@ -491,7 +662,11 @@ for line in sys.stdin.read().splitlines():
         say "forward, back, forward, back — F = F0 twice"
     fi
     say "cobalt_dev: $level — F2 = F0"
-    release || exit 1
+    if [ -n "$copy" ]; then
+        copy_end || exit 1
+    else
+        release || exit 1
+    fi
     say "with-DB $((p1 + p2))/0"
     [ -z "$skips" ] || say "$skips"
     if [ -n "$stray" ]; then
@@ -501,6 +676,10 @@ for line in sys.stdin.read().splitlines():
 }
 
 lockway=""
+# THE COPY: the name is read, and refused, before anything runs
+case "$mode" in
+    withdb|all) [ -z "$copy_on" ] || copy_name ;;
+esac
 case "$mode" in
     probe) do_probe ;;
     offline) do_offline ;;

@@ -7,6 +7,12 @@ needing a level above `0013` edits this file and nothing else: its `--deselect <
 of PASS 1, its id at the end of PASS 2. Until card 02 makes BUILD-HUB.md and DEPLOY-HUB.md point
 here, the hub lines and these stay byte-equal (tests/ops/test_gate.py).
 
+`## COPY CREATE` and `## COPY DROP` (both or neither, each ONE backticked line holding the token
+`<COPY>` once; card 547 db-copy): when both are present gate.sh runs each with-DB step on its own
+throwaway database `cobalt_dev_<worktree>`, made by the first and dropped by the second; with
+neither it runs on the one cobalt_dev lock. Neither is here until the `cobalt db dev-copy` verb
+exists.
+
 `## LEVEL <nnnn>`: the two lines `cobalt db migrate --proof-only` prints last (L1), as cobalt_dev
 must show them at that level, `TABLES …` and `FINGERPRINT …` joined by ` · `; the ROLLBACK goes
 `--down-to` that same level. ALLOWED SKIPS: the skips DEPLOY-HUB.md STEP-G (c) allows, ` · `
