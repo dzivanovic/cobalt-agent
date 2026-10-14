@@ -4,7 +4,7 @@ BRANCH: deploy/smoke-string-1014
 WORKTREE: deploy-smoke-string-deploy-1014
 BASE: main
 TIP: c9fcabfa
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-smoke-string-1014.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-smoke-string-1014-r2.md
 RULINGS: 2026-10-12 R1138
 TAG: deploy-2026-10-14-smoke-string
 MIGRATIONS: none
