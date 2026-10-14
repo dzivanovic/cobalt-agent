@@ -992,6 +992,40 @@ OFF-LADDER work of 2026-10-12 (each with the ruling that ordered it):
 | Model bake-off shadow arms and results sitting | DONE (his routing words open) | All shadow checks done (R1248); table `complexity-shadow-results-2026-10-11.md` (R1253); sitting DONE, six cells closed, bands LOW Sonnet NOT YET, Terra WITH A REVIEW; MID Sonnet WITH A REVIEW, Terra CAN BUILD; HIGH Sonnet WITH A REVIEW, Terra NOT YET (R1274). Waits on his Grok read and L27. |
 | Survey sheet (C2) | SURVEYED | `survey-blockers-2026-10-12.md`, 33 rows; waits on his word (§5 OWED). |
 
+### Status 2026-10-13
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1013` for 10-13 alone from `reports/cto-2026-10-13.md` rows R1308–R1459 (00:31 → 20:20 ET; times of R1363–R1387 and R1389–R1396 were estimated, R1388, R1397); tags re-verified (L35): `git tag --list "deploy-2026-10-13*"` = `-desk-refresh`, `-k5-gate`, `-sweep-pin`; `deploy-2026-10-10-aset-orphan-attempt2` landed 10-13 (R1308). The 10-12 close ran (`CLOSE PUSHED 0f824ecb`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 | DONE-LIVE | Unchanged (see 10-08 to 10-12). |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | Deploy `0da4da0f` FAILED at STEP-C, hub refuses a plist outside `ops/desk/` (R1373, `deploy-f4-refresh-1010.md`); card 496 (plist step C) BUILT `342021e7`, CHECK DONE `f35779d1` ready YES (R1405, R1414), fix round BUILT `c1fc230d` (R1458). No 304 tag. |
+| S5 F21 (cards `468`, `469`) | NOT STARTED (cards DRAFTED) | Preflight r2 ready YES (R1371); host probe r2 PROBED 5 of 5 (R1391); Q3 CHANGED (R1392), card 469 cells filled `15d018d8` (R1396). No build. |
+| S5 F23 (card `503`) | NOT STARTED (card DRAFTED) | Brain D1-D5 (R1389); builds after card 496 deploys. |
+| S5 F5, F20 | NOT STARTED (FINALs APPROVED) | F5 drafter waits for the 304 deploy; F20 drafter waits for spike Q3 (R1446). |
+| S5 F16 close | NOT STARTED | No row. |
+
+**Stop date: 2026-10-14 (S4, capped, day 6 of 7 on 10-13). S4: ON TIME (PASSED).** Reason: S4 passed 10-12 (his R1223); no S4 change on 10-13. S5 opens 10-15; F4's deploy still waits on card 496's fix-round deploy, then 304.
+
+OFF-LADDER work of 2026-10-13 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Orphan-cause aset (card `256`) | DONE-LIVE | Brain R1309. `deploy-2026-10-10-aset-orphan-attempt2` `014fe4cf`, smoke GREEN (R1308). |
+| K5 gate (card `446`) | DONE-LIVE | Brain R1309, R1343. `deploy-2026-10-13-k5-gate` `f2f166dc` (R1354). |
+| Desk refresh (card `458`) | DONE-LIVE | Brain R1323, his R1341. `deploy-2026-10-13-desk-refresh` `2370e58c` (R1381). |
+| Sweep pin (card `516`, deploy card `517`) | DONE-LIVE | Brain R1406, R1423. `deploy-2026-10-13-sweep-pin` `3fb91d09`, smoke GREEN (R1433); first FR1 deploys failed at PREFLIGHT and STEP-D0 (R1419, R1422), nothing merged. |
+| Plist step C (card `496`) | BUILT-NOT-MERGED | His R1341 (K4), brain R1374. Fix round BUILT `c1fc230d` (R1458); deploys after the sweep pin, before 304. |
+| Hub-text (card `523`) | BUILT-NOT-MERGED | Brain R1309, R1450. Build `6b6dafe5` (R1450), BUILT `3894a878` (R1458); check owed. |
+| Gate `tests/ops` (card `521`) | NOT STARTED (card DRAFTED) | Brain R1436, R1454, R1456. Amend 2 `9299ecc2`, preflight `283f2f0c` LAUNCHED (R1458). |
+| DML-only roles (card `448`) | NOT STARTED (card DRAFTED) | Brain R1309, R1321. Builds after 304 merges. |
+| Brain-replace (card `462`) | NOT STARTED (card AMENDED) | Brain R1331, R1332. Preflight launched (R1334); builds after 446 and 304. |
+| L32 redaction (card `472`) | NOT STARTED (card AMENDED) | Brain R1347, R1370. Preflight r2 ready NO, stale hash only; no third round. |
+| Rules-cut cards 478-485 | NOT STARTED (cards DRAFTED) | His R1340, R1344; brain R1353, R1370. Gap-fillers behind the MVP cards. |
+| Model bake-off Grok arm (shadows 371, 365, 379; checks 378, 368) | BUILDING | His R1315, brain R1319, R1350, R1436. Shadows built, checks launched (R1458, R1459). Grok declines X1 (R1451, R1452). |
+| Touches survey | SURVEYED | His R1351, R1352. `touches-2026-10-13.md`: 97 items, 618 touches, 264 rework (R1380). |
+| Rules map survey | SURVEYED | His R1333, R1337, R1341. `rules-map-2026-10-13.md`; moves by card. |
+| `/strike` into radar | RULED | His R1318: design review first, after S4 deployed and all now-building work done. |
+| L27 routing wording | HELD | His R1317: waits for Grok and Terra results. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

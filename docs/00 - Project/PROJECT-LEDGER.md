@@ -4214,3 +4214,158 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-12*"` = `deploy-2026-10-12-db-apply-prod`, `-gate-alignment`, `-launcher-shadow-check`, `-needs-his-hand`, `-prodwrite-seat`, `-scratch-clean`, `-stage-set-clear`, `-recut-archive` (`4bf3e614`, DEPLOYED after R1287, hub stop line: smoke GREEN, RESTARTS none); also `deploy-2026-10-11-kill-hub-row` (R1276).
 - STOP LINE (L35), `reports/close-2026-10-11.md`: `CLOSE PUSHED 66ba3dc4 · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-12.md` `## 8`.
+
+### 2026-10-13 — Sweep pin, K5 gate and desk refresh deployed; plist step C, hub-text and Grok shadow cards built; FR1 fix rounds
+- R1308 00:31 RECORD: DEPLOYED card 256 aset-orphan attempt 2 `014fe4cf`, smoke GREEN.
+- R1309 00:32 DESK RECORD (brain): queue 10-13: 304 first; DML-only roles drafter; one hub-text card; F5 after 304.
+- R1310 00:34 DESK RECORD (brain): K5 card drafter; row CR on 304; then deploy card on 304.
+- R1311 00:35 DESK RECORD (brain): K5 card row (c), sweep test over every check and build report since 10-02.
+- R1312 00:36 RECORD: desk handover `44b067b5` from `745a6747`.
+- R1313 05:45 LAUNCHED: his order to start owed processes; drafters `draft-k5-gate`, `draft-dml-roles`.
+- R1314 05:46 RECORD: his order, close idle sessions; 7 gate seats and `close-1012` stopped, removed.
+- R1315 05:52 HIS RULING · APPROVED: Grok resumes, out-of-folder reads accepted as for Terra.
+- R1316 05:57 DESK RECORD (brain): card 446 six drafter decisions KEEP.
+- R1317 06:00 HIS WORD: L27 routing wording held for Grok and Terra results.
+- R1318 06:00 HIS RULING · APPROVED: `/strike` folds into radar, his design review first, after S4 deployed.
+- R1319 05:58 DESK RECORD (brain): Grok arm plan under R1315; builds behind 446 and 304.
+- R1320 05:59 LAUNCHED: card 446 preflight `2670c639` ready NO, 6 FAILs; amend drafter.
+- R1321 05:59 DESK RECORD (brain): card 448 DML roles, seven decisions KEEP.
+- R1322 06:03 LAUNCHED: card 446 preflight r2 ready YES; build `d590d2e9`.
+- R1323 06:28 DESK RECORD (brain): desk refresh card R1-R6, refresh at a measured 300k.
+- R1324 06:35 DESK RECORD (brain): survey rows 11, 17 law folds yes; drop `settings.json:33`.
+- R1325 06:42 DESK RECORD (brain): card 458 six decisions KEEP.
+- R1326 06:39 RECORD: desk handover `3f15c768` from `44b067b5`.
+- R1327 06:41 LAUNCHED: card 458 preflight `51612b2c`.
+- R1328 06:42 DESK RECORD (brain): idle desk forced at 15 min; amend drafter.
+- R1329 06:43 LAUNCHED: build `d05a54fa` on card 458.
+- R1330 06:46 DESK RECORD (brain): blocked call = bare check, approved route, then NEEDS HIS HAND.
+- R1331 06:51 DESK RECORD (brain): survey row 19 brain-replace drafter (prompt 461).
+- R1332 06:56 DESK RECORD (brain): card 462 D1 D3 D4 D5 KEEP, D2 CHANGED.
+- R1333 06:57 DESK RECORD (brain): his yes to one home per rule; survey `survey-rules-map`.
+- R1334 07:00 LAUNCHED: survey `83838cfc`; card 462 amended; preflight launching.
+- R1335 06:59 LAUNCHED: card 446 BUILT tip `5b3c525b`; check `4a81e5b8`.
+- R1336 07:01 DESK RECORD (brain): card 446 C1-1 and B1-1 KEEP.
+- R1337 07:04 DESK RECORD (brain): rules map, 13 of 14 defaults KEEP; preferences move.
+- R1338 07:08 LAUNCHED: card 458 BUILT tip `dbc79911`; check `34051482`.
+- R1339 07:09 DESK RECORD (brain): card 458 E2, ASK 1, ASK 2 KEEP.
+- R1340 07:12 DESK RECORD (brain): his words on the cut list, execute whole list.
+- R1341 07:25 HIS RULING · APPROVED: "Confirmed: R1323, R1324, R1330, R1340"; applied 07:27.
+- R1342 07:27 RECORD: R1341 applied (L61, L62, L66, K19a, K20, H1a, NOW).
+- R1343 07:28 DESK RECORD (brain): 446 then 304 deploy; MVP drafters ahead.
+- R1344 07:30 HIS RULING · APPROVED: all brain-relayed law and rules changes start now.
+- R1345 07:33 LAUNCHED: rules-cut card drafter (prompt 466).
+- R1346 07:36 LAUNCHED: MVP drafter `draft-f21-card` (prompt 467).
+- R1347 07:42 LAUNCHED: seam doc and L32 redaction drafters (prompts 470, 471).
+- R1348 07:48 RECORD: CHECK DONE card 446 ready YES tip `5b3c525b`; ship now.
+- R1349 07:32 DESK RECORD (brain): desk `d508104f` took over from `3f15c768`; first ready card merges first.
+- R1350 07:33 DESK RECORD (brain): full Grok plan, 371 first, cap 3; deploy 446 first.
+- R1351 07:36 DESK RECORD (brain): his ask, touches per item survey.
+- R1352 07:38 DESK RECORD (brain): his refinement, standard touches per card.
+- R1353 07:50 DESK RECORD (brain): rules-cut cards 467-474, 11 of 12 KEEP.
+- R1354 08:13 RECORD: card 446 DEPLOYED `f2f166dc` (`deploy-2026-10-13-k5-gate`), smoke GREEN; card 458 CHECK DONE ready YES.
+- R1355 08:14 LAUNCHED: drafters `draft-304-row-cr`, `draft-touches-survey`.
+- R1356 08:15 DESK RECORD (brain): F21 D1-D8 KEEP; rules-cut cards renumber 478-485.
+- R1357 08:16 LAUNCHED: builder `917c0418` on card 304 row CR; touches survey `ce31957b`.
+- R1358 08:17 LAUNCHED: preflights `l32-redaction-preflight`, `f21-genesis-preflight`.
+- R1359 08:18 DESK RECORD (brain): 304 SETTLED lines; row CR2 by a Sonnet drafter.
+- R1360 08:18 LAUNCHED: drafters `draft-304-row-cr2`, `draft-472-amend`.
+- R1361 08:19 LAUNCHED: builder `c748da49` on 304 FIX ROUND row CR2.
+- R1362 08:19 RECORD: F21 preflight 23 checks, 1 FAIL; drafter `draft-f21-amend`.
+- R1363 08:22 RECORD: card 472 amend `a6c6335c`, drafters stopped (times estimated, see R1388).
+- R1364 08:23 LAUNCHED: desk `8227b652` took over from `d508104f`; deploy card 491 for 304.
+- R1365 08:25 DESK RECORD (brain): deploy 491 refused for FILL blocks; Sonnet drafter, no preflight.
+- R1366 08:26 LAUNCHED: drafter `draft-491-fill` (prompt 492).
+- R1367 08:28 LAUNCHED: preflight `l32-redaction-preflight-r2` (prompt 493).
+- R1368 08:31 LAUNCHED: preflight `f21-genesis-preflight-r2` (prompt 494).
+- R1369 08:35 LAUNCHED: deploy 304 hub `0da4da0f`; card 472 preflight r2 ready NO, stale hash only.
+- R1370 08:37 DESK RECORD (brain): card 472 no third round; rules-cut cards 11 KEEP.
+- R1371 08:40 RECORD: F21 cards 468, 469 preflight r2 ready YES.
+- R1372 08:44 DESK RECORD (brain): F21 host-probe scope, synthetic text only.
+- R1373 08:50 RECORD: deploy 304 `0da4da0f` FAILED at STEP-C, hub refuses a plist outside `ops/desk/`; nothing merged.
+- R1374 08:52 DESK RECORD (brain): build survey row 15 at MVP priority; 458 deploys now.
+- R1375 08:56 LAUNCHED: `draft-plist-step-c`, `f21-host-probe`.
+- R1376 09:00 LAUNCHED: deploy of card 458 (deploy card 498).
+- R1377 09:10 DESK RECORD (brain): F21 probe r2 is K2; prompt 499.
+- R1378 09:15 RECORD: row-15 card 496 DRAFTED `4fdbd0e4`, 5 decisions.
+- R1379 09:30 DESK RECORD (brain): row-15 card 496 D3 add `BOOTSTRAP: deferred`.
+- R1380 09:45 RECORD: touches survey SURVEYED, 97 items, 618 touches, 264 rework.
+- R1381 09:50 RECORD: card 458 DEPLOYED `2370e58c` (`deploy-2026-10-13-desk-refresh`), smoke GREEN.
+- R1382 09:52 LAUNCHED: `draft-496-deferred`, `f21-host-probe-r2`.
+- R1383 10:05 LAUNCHED: card 496 amend DRAFTED `0315dbb6`; preflight (prompt 501).
+- R1384 10:10 LAUNCHED: Opus `draft-f23-card` (prompt 502).
+- R1385 10:20 RECORD: card 496 preflight 18 checks, 5 FAILs; `draft-496-amend2`.
+- R1387 10:30 RECORD: desk 258,661 at MEASURE, REFRESH; card 496 amend2 DRAFTED.
+- R1388 09:15 RECORD: correction, R1363-R1387 times estimated; desk `685a045f` took over.
+- R1389 09:25 DESK RECORD (brain): F23 card 503 decisions; D3 CHANGED.
+- R1390 09:27 LAUNCHED: `draft-k18-owed` (prompt 506).
+- R1391 09:35 RECORD: F21 probe r2 PROBED 5 of 5, 4 decisions.
+- R1392 09:42 DESK RECORD (brain): F21 probe r2 Q1 Q2 Q4 KEEP, Q3 CHANGED.
+- R1393 09:45 LAUNCHED: `draft-469-fill` (prompt 507); brain MEASURE 363,074.
+- R1394 09:55 RECORD: cards 496 (row OW1) and 503 DRAFTED `12361786`.
+- R1395 10:05 DESK RECORD (brain): one state file `bootstrap-owed.json`.
+- R1396 10:08 LAUNCHED: card 469 cells FILLED `15d018d8`; `draft-owed-file` (prompt 508).
+- R1397 09:20 RECORD: correction, R1389-R1396 times estimated.
+- R1398 09:21 LAUNCHED: cards 496, 503 re-amended `ebdfee90`; preflight r2 (prompt 509).
+- R1399 09:24 LAUNCHED: card 496 preflight r2 ready NO, 4 FAILs; `draft-496-amend3` (prompt 510).
+- R1400 09:24 DESK RECORD (brain): card 496 FOR THE CHECK, hub types the bootstrap.
+- R1401 09:26 LAUNCHED: card 496 amend3 DRAFTED `0954181a`; preflight r3 (prompt 511).
+- R1402 09:27 RECORD: card 496 preflight r3 14 checks, 1 FAIL, ready YES.
+- R1403 09:28 LAUNCHED: build `plist-step-c-1013-build` `342021e7` on card 496.
+- R1404 10:16 RECORD: build `342021e7` FAILED at W, `DB: none` removed; CONTINUE: W.
+- R1405 11:01 RECORD: card 496 BUILT `342021e7` tip `01fb7297`, 8 decisions, 1 for Dejan.
+- R1406 11:02 DESK RECORD (brain): card 496 D1 covered; sweep pin urgent row.
+- R1407 11:03 LAUNCHED: check `f35779d1` on card 496; drafter `draft-446-sweep-row`.
+- R1408 11:04 RECORD: row FR1 on card 446 DRAFTED `52fea29d`.
+- R1409 11:04 LAUNCHED: fix-round build `df1fd9f0` on card 446 row FR1.
+- R1410 11:05 RECORD: REFRESH at 250,349; build `df1fd9f0` refused at PREFLIGHT.
+- R1411 11:08 RECORD: desk `cbf4dc65` took over from `685a045f`.
+- R1412 11:09 DESK RECORD (brain): FR1-1 (A) fresh tree from main.
+- R1413 11:10 LAUNCHED: FR1 build `64694184` on card 446.
+- R1414 11:36 RECORD: BUILT FR1 `64694184` tip `58f500c8`; CHECK DONE card 496 `f35779d1`.
+- R1415 11:37 RECORD: FR1 deploy card 513 written (tip `5540c4e1`).
+- R1417 12:00 LAUNCHED: deploy hub `bd02ae11` on card 514 (FR1).
+- R1418 12:03 DESK RECORD (brain): card 496 check, one fix round, deploy after FR1.
+- R1419 12:10 RECORD: deploy hub `bd02ae11` FAILED PREFLIGHT, MARKERS copied from first deploy.
+- R1420 12:14 DESK RECORD (brain): card 514 MARKERS = f4-refresh exemption grep.
+- R1421 12:16 LAUNCHED: deploy hub `d092f0ed` on card 514 at STEP-D0.
+- R1422 12:25 RECORD: deploy `d092f0ed` FAILED, resume refused; `recut` refused on tag `pre-k5-gate-1013`.
+- R1423 12:32 DESK RECORD (brain): FR1 = own job `sweep-pin-1013`; deploy before 496 and 304.
+- R1424 12:36 LAUNCHED: drafter `draft-sweep-pin-card` `fc9cc295` (card 516).
+- R1425 12:42 RECORD: card 516 `sweep-pin-1013` DRAFTED, 1 decision.
+- R1426 12:44 LAUNCHED: build `sweep-pin-1013-build` `8067b068`.
+- R1427 12:52 RECORD: BUILT `sweep-pin-1013` tip `52cb2fc9`, offline 4317/0.
+- R1428 12:57 DESK RECORD (brain): one short check on card 516, then deploy.
+- R1429 13:00 LAUNCHED: check `sweep-pin-1013-check` `d30fb228`.
+- R1430 13:05 RECORD: CHECK DONE `sweep-pin-1013` ready YES.
+- R1431 13:08 RECORD: deploy card 517 written (tip `e9bcace4`).
+- R1432 13:10 LAUNCHED: deploy hub `1b6b7584` on card 517.
+- R1433 13:33 RECORD: DEPLOYED `sweep-pin-1013` `3fb91d09`, smoke GREEN.
+- R1434 13:37 RECORD: REFRESH at 253,000; NOW rewritten.
+- R1436 15:00 DESK RECORD (brain): Grok arm runs beside MVP cards: 371, 365, 379, then 378, 368.
+- R1437 15:03 LAUNCHED: drafter `draft-496-fixround` (prompt 518).
+- R1438 15:07 LAUNCHED: shadow `s4-p1-1009-grok` (card 371), hub `0ad3e367`.
+- R1439 15:08 LAUNCHED: shadows 365 `073091da` and 379 `d151c773`, grok-4.7.
+- R1441 15:10 LAUNCHED: build fix round on card 496, hub `710cb3dd`.
+- R1442 15:12 DESK RECORD (brain): 496 fix round also fixes `deploy-step-c.sh:106`.
+- R1443 15:14 DESK RECORD (brain): 496 builder FAILED PREFLIGHT head; `CONTINUE: PREFLIGHT`.
+- R1444 15:15 LAUNCHED: drafter `draft-gate-tests-ops` (prompt 519).
+- R1445 15:22 DESK RECORD (brain): day-open 10-13 started late in the Qwen pane `w2:p5`.
+- R1446 15:36 LAUNCHED: drafter `draft-hub-text` (prompt 522), card 523.
+- R1447 15:46 LAUNCHED: card 523 committed `4f46cc89`; preflight `0fcf649d`.
+- R1448 15:50 RECORD: he ran the sed line; `.claude/settings.json:33` removed.
+- R1449 15:55 RECORD: hub-text preflight `0fcf649d` ready NO, 1 fail (stale cite).
+- R1450 16:00 DESK RECORD (brain): card 523 cites R1309, no re-preflight; build `6b6dafe5`.
+- R1451 16:05 RECORD: Grok shadow 365 `073091da` FAILED X1, INCOMPLETE.
+- R1452 16:15 DESK RECORD (brain): Grok declines the X1 probe; X1 dropped for Grok.
+- R1453 16:25 LAUNCHED: Grok shadow 365 again, hub `2ce948e5`.
+- R1454 16:38 DESK RECORD (brain): card 521 D4, `tests/ops` at a deploy gate.
+- R1455 16:48 LAUNCHED: card 521 preflight `f4264f0c` (prompt 526).
+- R1456 16:55 DESK RECORD (brain): card 521 gets `--deploy-gate`; amend drafter `5487300e`.
+- R1458 20:15 RECORD: desk `8508b3bc` took over from `33dfd451`; 496 fix round `c1fc230d`; 521 amend 2 `9299ecc2`.
+- R1459 20:20 DESK RECORD (brain): 521 amend 2 default KEEP; Grok shadow checks 378 368 365 371 379.
+- R1461 21:15 DESK RECORD (brain): deploy card 529 (496) markers and smoke lines pasted; 496 deploys after the close pushes.
+- R1462 21:20 DESK RECORD (brain): 521 preflight ready NO, option (a) pytest drives the worktree gate.sh; amend drafter.
+- R1463 21:08 RECORD: card 521 amend 3 DRAFTED `0ce41ba2`; drafter `d51b1923` removed (R1461-R1462 times ran ~10 min ahead).
+- DEPLOY (L35): `git tag --list "deploy-2026-10-13*"` = `deploy-2026-10-13-desk-refresh` (R1381), `deploy-2026-10-13-k5-gate` (R1354), `deploy-2026-10-13-sweep-pin` (R1433).
+- STOP LINE (L35), `reports/close-2026-10-12.md`: `CLOSE PUSHED 0f824ecb · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-13.md` `## 8`.
