@@ -1,0 +1,29 @@
+# Card 537 `deploy-smoke-string-1014` — preflight round 2 (2026-10-14, main HEAD `0ffb6949`, read only)
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 14 (first) | read S1 (2), S2 (2) of the amended card; `git diff HEAD --stat` on `DEPLOY-HUB.md`, `STANDING-LIST.md`, `tests/ops`, `ops`, `src/cobalt/smoke`, `src/cobalt/jobs`, `prompts/2026-10-13` | S1 (2) compares only the launch line (line less the string and its one space = BASE's launch line), the deny list, the allow order; "NO assertion reads any other line of the file, or the file as a whole, against `<BASE>`". S2 (2) checks only the string's presence (once in the file) and the production-string count per section 1, 2, 4-9; "NO assertion compares the file's lines… to `<BASE>`". Diff empty (tree = HEAD). Cards 521 (`DEPLOY-HUB.md:101-102`) and 523 (`:57`) move none of these, so 537 and they deploy in either order. 523's old H1 test (2) pinned the launch line to `ce548f10` and would fail once 537 lands; 523's fix-round row FR-T1 deletes it (grep of `523-hub-text-card.md`), so it no longer binds | OK |
+| 1 | `git log --oneline -3 -- <card>`; `git diff HEAD --stat -- <card>` | last commit `0ffb6949` (amend), earlier `ef0637b6`; diff empty | OK |
+| 2 | header vs `prompts/CARD.md` (build kind) | JOB, LADDER, BRANCH, WORKTREE, REPORT, RULINGS present; `DB: none` valid (files under `docs/`, `tests/ops/`); `BASE:`/`TIP:` empty (the desk's); `CHECK REPORT`/`HOUSE B` already set (harmless). `CLASS:`, `INSTALL:`, `RESTARTS:` are not CARD.md keys; nothing reads them | OK (NOTE 1) |
+| 3 | `grep -c "FILL\|«\|TODO\|XXX" <card>` | `0`: no placeholder token but the empty BASE and TIP | OK |
+| 4 | `grep -n -o "^claude --bg "` and `grep -n -o "heartbeat show\*)\" \"Bash(…backup run\*)\""` on `DEPLOY-HUB.md` | `11:claude --bg`; `11:heartbeat show*)" "Bash(COBALT_ENV=production uv run cobalt backup run*)"`: one launch line, the insertion point exists once | OK |
+| 5 | `grep -c "cobalt smoke"` on `DEPLOY-HUB.md`, `STANDING-LIST.md`, `tests/ops/test_hub_lines.py`, `ops/desk/desk-launch.sh` | `0`, `0`, `0`, `0` (the DEPLOY PROOF "before 0" holds) | OK |
+| 6 | `grep -n` on `tests/ops/test_hub_lines.py` | `hub_line` `:54`, `tools` `:60`, `PROD_ALLOW_TODAY` `:97`, `"DEPLOY-HUB.md": [` `:102`, `heartbeat show*)` `:105` (CLOSE-HUB's at `:111`), `backup status*)` `:107`, W7 test `:133-134`, equality `:137` | OK |
+| 7 | red test on BASE: read the W7 test body and the pin | pin lists five strings today; after S3 it lists six; the line holds five → `assert production_allow(line) == PROD_ALLOW_TODAY[name]` fails with `AssertionError`, `(name, <five>)`; green after S1. Other nine ids untouched. Not run (no `uv run` here), read from the code | OK |
+| 8 | `grep -n "^## \|heartbeat show\|backup run\|56 allow\|53 without"` on `STANDING-LIST.md` | `:109` `## 3. DEPLOY-HUB.md — 56 allow … (53 without a migration; …)`; `:139` `heartbeat show*` row, `:140` `backup run*` row, `:159` `## 4`; sections 1, 2, 5, 6, 7, 8, 9 headings at their lines | OK |
+| 9 | `grep -n` on `src/cobalt/smoke/cli.py` (X3, read-only claim) | `:6` "runs every check read-only", `:8` "`--json` prints the same content and writes nothing", `:38` `run()` "Writes nothing — `cmd_run` owns the file", `:73-76` `--json` prints, else `write_report(…, REPORTS_DIR)`; no `--allow-prod` option (`:90` is `--json`). The "can touch" cell is true | OK |
+| 10 | `grep -n "claude --bg\|<launchd strings>\|<prod migrate strings>"` on `ops/desk/desk-launch.sh` | deploy line copied from the fixed file with tokens filled at `:2174-2186` (`<launchd strings>` `:2185`, `<prod migrate strings>` `:2186`); no script change needed | OK |
+| 11 | `grep -n "DOCS\|no resident" src/cobalt/jobs/restarts.py` | `docs/` → `DOCS` `:225-228`; `tests/` → "test/documentation; no resident" `:246`. S3 (tests), S1 (docs + tests), S2 (docs) all fall in these homes (K10); `RESTARTS: none` fits | OK |
+| 12 | one allow string only (R411, R412) | the card adds `Bash(COBALT_ENV=production uv run cobalt smoke *)` alone: S3 pin, S1 line, S2 table row mirror the same string; `NOT IN THIS JOB` fences every other string, settings files and `desk-launch.sh` | OK |
+| 13 | `grep -n "DEPLOY-HUB\|STANDING-LIST"` in `521-gate-tests-ops-card.md`, `523-hub-text-card.md` | 521: `DEPLOY-HUB.md:101-102`, `BUILD-HUB.md:80,82`. 523: `DEPLOY-HUB.md:57`, `BUILD-HUB.md:105`, new `:112`. Neither touches `DEPLOY-HUB.md:11`, `STANDING-LIST.md` or `test_hub_lines.py`: no line-range overlap | OK |
+| 15 | what blocks 537's own deploy | see ISSUES 2 | NOTE |
+
+## ISSUES
+1. NOTE (check 2): `CLASS:`, `INSTALL:`, `RESTARTS:` are header lines CARD.md does not list; nothing reads them. `BASE` and `TIP` are the desk's to fill.
+2. NOTE (check 15, blockers): (a) this is a BUILD card: no BASE/TIP, no build or check yet, and a deploy card (`## SHIPS`) is still to be made. (b) One deploy at a time (the `desk-launch.sh` lock, a live `deploy-hub-` session); I cannot read live sessions (no `claude agents`), so the desk reads that before launching. Order: 537 deploys BEFORE 521 and 523 (brain R1466 "front of the gap-fillers"; its smoke string lets their own smoke reads run). Either order is test-safe now; 523's fix round FR-T1 (prompt 538) must still land before 523 redeploys.
+3. NOTE (check 14): S1 (2) pins the launch line to BASE's, so any other card that edits `DEPLOY-HUB.md:11` before 537's build is checked makes it red; the desk re-sets `BASE` if `main` moves (the card says so).
+4. NOTE: card X1 (CHECK ASKS) still reads "every other line of the file equal to `BASE`'s". It is a checker's read, not a test; the amend report left it (default). If 521 or 523 deploys first, a checker applying X1 literally would fail on their lines; the desk may reword it to "the launch line".
+
+PREFLIGHT DONE · card: deploy-smoke-string-1014 · checks: 14 · fails: 0 · ready: YES
