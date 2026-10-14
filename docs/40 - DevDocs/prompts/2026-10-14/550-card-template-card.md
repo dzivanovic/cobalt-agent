@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/card-template-1014
 WORKTREE: card-template-1014
 BASE: fe59722f
-TIP:
+TIP: 5a29de43
 REPORT: /Users/cobalt/cobalt-wt/card-template-1014/docs/40 - DevDocs/reports/card-template-build-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/card-template-check-2026-10-14.md
 HOUSE B: as needed
