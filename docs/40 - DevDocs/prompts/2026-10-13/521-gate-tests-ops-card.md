@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/gate-tests-ops-1013
 WORKTREE: gate-tests-ops-1013
 BASE: 1526b50e
-TIP:
+TIP: 4339f5d1
 REPORT: /Users/cobalt/cobalt-wt/gate-tests-ops-1013/docs/40 - DevDocs/reports/gate-tests-ops-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gate-tests-ops-check-2026-10-13.md
 HOUSE B: as needed
