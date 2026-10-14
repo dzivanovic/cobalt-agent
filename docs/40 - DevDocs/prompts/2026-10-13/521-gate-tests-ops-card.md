@@ -11,7 +11,7 @@ CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gate-tests-ops-chec
 HOUSE B: as needed
 DB: none
 RESTARTS: none
-RULINGS: 2026-10-12 R1138 (the class K5 approval; brain direction R1436, L79: the gate runs tests/ops; amended D4, 15:41 ET: at deploy gates always, at a build or check W only when ops paths change)
+RULINGS: 2026-10-12 R1138
 
 ## ROWS
 
