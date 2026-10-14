@@ -448,6 +448,34 @@ def test_g1_a_leftover_marker_and_env_of_the_same_worktree_do_not_block_the_next
     assert_nothing_left(tree)
 
 
+def test_g1_check_o1_a_signal_while_the_create_runs_still_drops_the_copy(tree):
+    """CHECK O1 (X2, G1 step 5): a TERM that lands while `## COPY CREATE` runs, the create itself
+    done, must not leave the copy behind: the trap drops it before the lock release."""
+    tree.worktree(NAME, copy_lists())
+    pidfile = tree.tmp / "gate-pid"
+    real = tree.bin / "uv-real"
+    (tree.bin / "uv").rename(real)
+    (tree.bin / "uv").write_text(
+        "#!/bin/sh\n"
+        f'"{real}" "$@"\n'
+        "rc=$?\n"
+        'case " $* " in *" dev-copy create "*)\n'
+        f'    while [ ! -s "{pidfile}" ]; do :; done\n'
+        f'    kill -TERM "$(cat "{pidfile}")" ;;\n'
+        "esac\n"
+        'exit "$rc"\n'
+    )
+    (tree.bin / "uv").chmod(0o755)
+    first = tree.popen(NAME, tree.env("a"))
+    pidfile.write_text(str(first.pid))
+    out, err = first.communicate(timeout=300)
+    assert first.returncode == 143, out + err
+    kinds = [kind(c) for c in tree.calls("a")]
+    assert kinds[-1] == f"dev-copy drop {COPY}", kinds
+    assert kinds.count(f"dev-copy drop {COPY}") == 2, kinds
+    assert_nothing_left(tree)
+
+
 # ---- L1: desk-launch.sh lock_free -----------------------------------------------------------------
 
 
