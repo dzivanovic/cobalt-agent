@@ -24,9 +24,10 @@ TICKERS: none
 
 ## SMOKE READS
 - RULE: the three counts on `TIP` are the counts printed above (one string, one line in each file); a count other than `1` on `TIP` fails the deploy's marker read.
-- ONE SMOKE READ after the merge: `COBALT_ENV=production uv run cobalt smoke s2 --cutoff <the deploy instant, ISO 8601 with offset> --prod --json` (the deploy hub's own line, now on its allow list: green is the command running, no `Permission to use Bash has been denied`; `--json` prints the verdict table and writes no report file; the verdict colour is the set's smoke, not this proof's).
+- SMOKE READ: none beyond the markers — this set installs `cobalt smoke *` on the deploy line, so its own hub cannot run it (bootstrap, brain 0e848919 10-14). OWED: the first deploy launched after 537 is on main (523's recut) runs `COBALT_ENV=production uv run cobalt smoke s2 --prod --json` once as its own extra read and records it as 537's DEPLOY PROOF.
 
 ## RECORDS
+- 567 SMOKE READ deferred to 523 recut deploy as 537's DEPLOY PROOF (bootstrap: a set cannot use the string it installs) — brain 0e848919 10-14
 - deploy-smoke-string-1014: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-smoke-string-check-2026-10-14.md` last line: CHECK DONE · job: deploy-smoke-string-1014 · pass: 1 · tip: f21900fc · house A: Grok FINDINGS: 1 · findings: 7 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 4328/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 15 · ready: YES · decisions: 2 · for Dejan: 0 · tokens: 178351
 - deploy-smoke-string-1014: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/deploy-smoke-string-1014` → `c9fcabfa`; code tip `f21900fc`
 - written by deploy-card.sh at 2026-10-14 13:56 ET (`date`); trial merge of the heads onto main in order: clean
