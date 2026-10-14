@@ -53,6 +53,8 @@ On a row with no fix report the code tip is the `tip:` of the check's stop line 
 
 `## CHECK ASKS` (check; optional) — questions beyond the rows, one line each, numbered X1, X2 …; the fixed HOUSE TEXT carries them to the houses verbatim.
 
+`## DEPLOY PROOF` (build, check; REQUIRED, his R1471 item 6) — what the deploy reads from this card: `ops/desk/deploy-card.sh` takes the deploy card's `## MARKERS` from the lines of this section that carry `· before ` and `· after `, and its `## SMOKE READS` from every other line (`deploy-card.sh:534-543`); a card without the section, or without a line of either kind, leaves a `«FILL` in the deploy card and the deploy does not launch. One marker line per file the set changes, in the form of `## MARKERS`: `grep -c -F "<fixed string>" <absolute path>` · before `<value>` · after `<value>`. Then at least one smoke read line: the command typed whole and what a green answer looks like.
+
 `## RECORDS` (optional) — facts the desk read at launch that the hub copies into its report and re-reads where it can (a listing, the answer to a `## DECISIONS` item, an item carried as OUT OF SCOPE with its owed row). Each with its command and time.
 
 `## MARKERS` (deploy) — reads that prove production does NOT carry the set before and DOES after. One line each: `<command>` · before `<value>` · after `<value>`. Commands: `ls <absolute path under /Users/cobalt/cobalt>` or `grep -c -F "<fixed string>" <absolute path>` only.
@@ -71,6 +73,13 @@ On a row with no fix report the code tip is the `tip:` of the check's stop line 
 - His words. A read of `cto-<date>-words.md`.
 - A count the hub must reach ("expected 3320 passed"): the gate is `0 failed`, `0 errors`; a count is what the hub reports.
 - State of the desk (a meter that is out, a tab id, a watch id).
+
+## HOW A CARD CITES AND PINS
+Owed by his R1471 (item 6); the test rule is brain R1472.
+- RULINGS: a ruling is cited by its number (`<date> R<n>`, or `R<n>` of the named report); no HEAD hash.
+- ANCHORS: an anchor is cited by `file:line`.
+- TESTS: a test pins only the lines its own card changes, found by their content; no test holds a whole fixed-file line equal to a commit; no test holds a BASE hash (brain R1472).
+- DEPLOY PROOF: required; its form is the body's `## DEPLOY PROOF`.
 
 ## EXAMPLE 1 — the E1 fix, at its BUILD launch (values of `prompts/2026-09-30/47-e1-fix-build.md`)
 
