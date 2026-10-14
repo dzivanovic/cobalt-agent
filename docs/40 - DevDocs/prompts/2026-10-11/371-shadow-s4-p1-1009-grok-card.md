@@ -3,7 +3,7 @@ LADDER: S4-P1 · F9
 BRANCH: shadow/s4-p1-1009-grok
 WORKTREE: s4-p1-1009-grok
 BASE: e4586978
-TIP:
+TIP: ed512d5f
 REPORT: /Users/cobalt/cobalt-wt/s4-p1-1009-grok/docs/40 - DevDocs/reports/s4-p1-1009-grok-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/s4-p1-1009-grok-check-2026-10-11.md
 HOUSE B: as needed
