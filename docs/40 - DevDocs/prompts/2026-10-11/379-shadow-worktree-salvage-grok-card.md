@@ -3,6 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-07-words.md 2026-10-07 R613
 BRANCH: shadow/worktree-salvage-grok
 WORKTREE: worktree-salvage-grok
 BASE: c4e52f4e
+TIP: b43b85fe
 REPORT: /Users/cobalt/cobalt-wt/worktree-salvage-grok/docs/40 - DevDocs/reports/worktree-salvage-grok-build-2026-10-11.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/worktree-salvage-grok-check-2026-10-11.md
 HOUSE B: as needed
