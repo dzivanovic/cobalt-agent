@@ -1,9 +1,12 @@
 # desk-installs-1014 — build report (2026-10-14)
 
 ## §0 Headline
-- Rows I1 and I2 are built (`6ff7d9a4`): `"SendMessage"` is on the desk line's `--allowedTools`, it has a §4 row in STANDING-LIST, and the BASE pin of the launch line is repaired. Every red and mutation was shown.
-- W: offline 4328/0 and live-note 146/0 are green. `tests/ops` has 1 red, `test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins` (21 vs 18). That red is on BASE, from desk commit `8b813ca7`, and outside the rows.
-- STOPPED at W (DECISION W-1). Waiting for the desk's `CONTINUE: W`.
+- BUILT, tip `4bc73283`, 4 of 4 rows (I1, I2, S1, and R3 run):
+  - I1: `"SendMessage"` is on the desk line's `--allowedTools`, and the BASE pin of the launch line is repaired.
+  - I2: STANDING-LIST has a §4 row for it.
+  - S1: the rule sweep holds a floor of 18 checks and zero mismatches, not a count.
+- W on `4bc73283`: offline 4328/0, live-note 146/0, `tests/ops` 3603/0. DB: none. `RESTARTS: none`.
+- The run stopped once at W, on a BASE red from desk commit `8b813ca7`. The desk added row S1, and the run resumed at 08:14:40.
 
 ## L74
 - A system note in this session asked that commits end with a `Claude-Session:` line. Recorded once here; not followed (L74): commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -115,25 +118,74 @@ No UNCLASSIFIED row. As the card expected.
   `test_the_sweep_swept_what_it_pins` (`CHECKS_SWEPT = 18`, `:61`) counts the check reports dated 2026-10-02…2026-10-12 whose last line carries `held unfixed: <n>`. Run alone it fails the same way: `1 failed, 15 warnings in 1.36s`. It is NOT this build's red:
   - `git diff --stat 6ee9b8d6 -- "docs/40 - DevDocs/reports" ops/desk/deploy-card.sh tests/ops/test_the_rule_sweep.py` prints nothing. None of the test's inputs changed since BASE (this report is dated 10-14, outside the window, and is a build report; builds stand at 85 = 85).
   - `git log --oneline --name-only --diff-filter=AM 52cb2fc9..6ee9b8d6 -- <in-window check reports>` → `8b813ca7 docs(desk): backlog (sitting r2 prompts, JEV design, K5 drafter prompt, Grok checks), R1471-R1472` added `s4-p1-1009-grok-check-2026-10-11.md`, `strike-fallback-env-1010-grok-check-2026-10-11.md` and `worktree-salvage-grok-check-2026-10-11.md`: three in the window, 18 + 3 = 21. `52cb2fc9` is the last commit on the test (sweep-pin-1013, which built it green).
-  - The only fix is in `tests/ops/test_the_rule_sweep.py` (the pin, or the window), and that file is not one of this card's rows (`## NOT IN THIS JOB`; THE ROWS: "the fix widens nothing"). Not fixed here.
+  - The only fix is in `tests/ops/test_the_rule_sweep.py` (the pin, or the window), and that file is not one of this card's rows (`## NOT IN THIS JOB`; THE ROWS: "the fix widens nothing"). Not fixed here. The run stopped `FAILED: W` at 08:13:07.
+
+### CONTINUED at W, 08:14:40 — row S1
+The desk's message (`cto-desk`): "CONTINUE at step W. Card 549 gained row S1 (committed on main) …". I checked it myself (L35) before acting:
+- The card on main now carries row S1 (`:32`) and the `## RECORDS` line "Row S1 (brain, L79, 2026-10-14, desk record R1476): a second feature riding on this card …".
+- `authorize.sh build "<card>"` re-run → `AUTHORIZED`: `CARD COMMITTED · … · 0 · 84804d58ec752ed3b48ce3133584b692f1072877`, `CARD UNCHANGED · … · 0 · nothing`, R60 and R1471 rows as before.
+So the row stands in the committed, authorized card, not in the message alone.
+
+S1, red first on today's main (21 reports): `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_the_rule_sweep.py` → `1 failed, 4 passed` — `FAILED tests/ops/test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins` · `assert (21, 85) == (18, 85)`.
+Empty glob BEFORE (Edit: the checks glob `*-check*-` → `*-nomatch*-`, undone) → `1 failed` · `assert (0, 85) == (18, 85)`.
+The edit: `CHECKS_SWEPT: int | None = 18` / `BUILDS_SWEPT: int | None = 85` → `CHECKS_FLOOR = 18` / `BUILDS_FLOOR = 85`; the test asserts `len(checks) >= CHECKS_FLOOR`, `len(builds) >= BUILDS_FLOOR` and zero mismatches outside `SWEEP_EXEMPT`. `grep -rn -F "CHECKS_SWEPT" tests ops` → only a `__pycache__` .pyc (no source reader).
+GREEN after: `5 passed, 15 warnings in 1.19s`.
+MUTATIONS after the fix (Edit, each undone):
+| mutation | result | first failing line |
+|---|---|---|
+| empty glob (`*-nomatch*-`) | `1 failed` | `assert 0 >= 18` (`:151`) |
+| the mismatch arm loses its exemption filter (`if name not in SWEEP_EXEMPT` → `if name`) | `1 failed` | `AssertionError:` listing `brain-hub-check-2026-10-03.md · n 1 · read 2 (O1 O2) · shape: check` and the other six exempt mismatches (`:154`) |
+Undoing the fix is the BEFORE red above. After undo, `git diff -- tests/ops/test_the_rule_sweep.py` shows only the fix hunks (`@@ -57,9 +57,10 @@` and `@@ -146,5 +147,8 @@`).
+Pins green: `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_the_rule_sweep.py tests/ops/test_desk_installs_1014.py tests/ops/test_desk_refresh_wakeup.py tests/ops/test_hub_lines.py` → `44 passed, 15 warnings in 3.19s`.
+Commit `4bc73283 fix(desk-installs-1014): the rule sweep holds a floor and zero mismatches, not a count (S1, L79, R1476)`.
+RESTARTS again: `uv run cobalt jobs restarts 6ee9b8d6..HEAD` → the six paths (`CTO-DESK-WAKEUP.md`, `STANDING-LIST.md` and this report as `DOCS`; `test_desk_installs_1014.py`, `test_desk_refresh_wakeup.py` and `test_the_rule_sweep.py` as `test/documentation; no resident`) · `RESTARTS: none`.
+
+### W again on `<tip>` = `4bc73283`
+(a0) `git diff --name-only --no-renames 6ee9b8d6` → `docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md` · `docs/40 - DevDocs/prompts/STANDING-LIST.md` · `docs/40 - DevDocs/reports/desk-installs-build-2026-10-14.md` · `tests/ops/test_desk_installs_1014.py` · `tests/ops/test_desk_refresh_wakeup.py` · `tests/ops/test_the_rule_sweep.py` — every path under `docs/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 6 paths)`**.
+The desk's message says "re-run the deploy gate". This card is `DB: none`, and the hub's W (a0) says `--deploy is not typed here, gate.sh accepts it with withdb and all only`. So W runs as (a0): offline, livenote and `tests/ops`, with no `--deploy` (see `## RECORDS`).
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh desk-installs-1014 offline` → exit 0: `offline 4328/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/desk-installs-1014-offline-20261014-081552.log`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh desk-installs-1014 livenote` → exit 0: `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/desk-installs-1014-livenote-20261014-081553.log`. Its one skip: `56:SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set` (does not name `COBALT_LIVE_VAULT_ROOT`).
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → exit 0: `3603 passed, 1 xfailed, 16 warnings in 793.11s (0:13:13)`. `grep -n -F "SKIPPED"` of its output → nothing. It includes this build's 4 new tests (`test_desk_installs_1014.py`) and the rewritten `test_the_sweep_swept_what_it_pins`.
+- with-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/desk-installs-1014/.env` → `No such file or directory`.
 
 ## PRE-STOP SELF-CHECK
-(not reached: the run stopped at W)
+(1) Every added or changed test was shown RED for its named reason. `test_i1_the_desk_line_allows_sendmessage_once` and `test_i2_…_names_sendmessage_once`: E2 red (`assert 0 == 1`; `AssertionError: []`) and mutations A and C. The negative controls `test_i1_no_other_string…` and `test_i2_the_other_section_4_rows_stand`: mutations B (`['SendMessage', 'Write']`) and D. `test_desk_refresh_wakeup.py`: only a removal, with its red shown before the edit (`FAILED …::test_w1_the_launch_line_is_unchanged`). `test_the_sweep_swept_what_it_pins`: BEFORE red `(21, 85) == (18, 85)`; the empty glob red before (`(0, 85) == (18, 85)`) and after (`0 >= 18`); the exemption-filter mutation red. — holds.
+(2) Entry paths. The desk line has three readers. `desk-launch.sh desk` (`:550-552`) needs one `- LAUNCH` line and its backticked span, both held by `desk_span()`'s `len(launch) == 1` in test (1). `test_hub_lines.py` `launch_line` / `:151-155` is unchanged (`git diff --stat 6ee9b8d6..HEAD -- tests/ops/test_hub_lines.py` → nothing) and green in the 44-pass run. `test_desk_refresh_wakeup.py`'s other five tests are green. §4 readers: the card's records name the two other readers of `STANDING-LIST.md` (§7, `## 9.`), both green in `tests/ops` 3603/0. Sweep: `CHECKS_SWEPT` has no other source reader (`grep -rn -F "CHECKS_SWEPT" tests ops` → a .pyc only). — holds.
+(3) Re-read at the tip:
+- `grep -c -F "\"SendMessage\" --disallowedTools"` of the wake-up → `1`.
+- `grep -n -F "class K5 of L81, his 2026-10-14 R1471"` of the list → `167:`.
+- `grep -n -F "FLOOR" tests/ops/test_the_rule_sweep.py` → `:62`, `:63`, `:151`, `:152`.
+- `git diff --stat 6ee9b8d6 4bc73283` → 6 files, `257 insertions(+), 20 deletions(-)`.
+— holds.
 
 ## FOR THE CHECK
-(not reached: the run stopped at W). Done so far: `6ee9b8d6..6ff7d9a4`: `7e1f3020 wip(desk-installs-1014): red — I1, I2 tests` and `6ff7d9a4 feat(desk-installs-1014): SendMessage on the desk line and its STANDING-LIST §4 row; launch-line BASE pin repaired (I1, I2; L81 K5, R1471)`. Reds, mutations and greens are under E2 and E3. The RESTARTS table is under RESTARTS.
+- Range `6ee9b8d6..4bc73283`:
+  - `7e1f3020 wip(desk-installs-1014): red — I1, I2 tests`
+  - `6ff7d9a4 feat(desk-installs-1014): SendMessage on the desk line and its STANDING-LIST §4 row; launch-line BASE pin repaired (I1, I2; L81 K5, R1471)`
+  - `d77c0e9c wip(desk-installs-1014): W — tests/ops red outside the rows (test_the_rule_sweep 21 vs 18, from 8b813ca7)` (the report at the stop)
+  - `4bc73283 fix(desk-installs-1014): the rule sweep holds a floor and zero mismatches, not a count (S1, L79, R1476)`
+- Per row, the reds, mutations and greens are under `## E2 RED`, `## E3 THE ROWS` (I1, I2, repair (3)) and `### CONTINUED at W` (S1).
+- Caller greps: `## PREFLIGHT` (X3: `grep -rn -F "merge-base*)\" --disallowedTools" tests ops` → nothing).
+- R3: the RESTARTS tables, quoted twice, both `RESTARTS: none`.
+- Suites on `4bc73283`: offline 4328/0, live-note 146/0, `tests/ops` 3603 passed / 0 failed. with-DB: not run (DB: none).
+- F0/F1/F2: not run (DB: none). Lock taken/released: not run (DB: none).
+- Records copied at PREFLIGHT: see `## PREFLIGHT`. The card's S1 record was re-read at CONTINUE.
+- X2: `desk-launch.sh` is unchanged (not in the diff).
 
 ## CONTINUE
-next: W — on the desk's `CONTINUE: W. <fact>`, run `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` again (offline and live-note are green on `6ff7d9a4`; they are re-run only if the tip moves), then PRE-STOP SELF-CHECK and CLOSE.
+next: none — BUILT.
 
 ## DECISIONS
-- DECISION W-1 (blocks BUILT): `tests/ops` is red on a BASE red outside this card's rows: `tests/ops/test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins` `assert (21, 85) == (18, 85)`, from the three 10-11 Grok check reports that desk commit `8b813ca7` added. Safe default taken: the test file is not touched (outside the rows), and the run stops `FAILED: W` and stays for `CONTINUE: W`. What the desk must decide: repin `CHECKS_SWEPT` (or settle the three reports) on another card, or say this build may close with that red named. `main` HEAD carries the same red for every build that runs `tests/ops`.
+none. (DECISION W-1, the BASE red of `test_the_sweep_swept_what_it_pins`, was answered by the desk's committed row S1 and is closed by `4bc73283`: `tests/ops` 3603/0.)
 
 ## RECORDS
 - `.env`: never present in this worktree (DB: none; PREFLIGHT `env here` · 1 · No such file). No lock taken.
 - L74: a system note asked for a `Claude-Session:` line on commits. Recorded under `## L74`; not followed.
 - The card's records, as re-read at PREFLIGHT: see `## PREFLIGHT`.
 - Stopped at W 08:13:07 EDT (`date`).
+- CONTINUED at W 08:14:40 EDT (`date`), on the `cto-desk` message. Its fact was checked: row S1 is in the card on main, and `authorize.sh` re-run gave `AUTHORIZED` on card commit `84804d58`.
+- Row S1 is a second feature riding on this card (the card's `## RECORDS`: brain, L79, desk record R1476). It was built in the same tree on the same branch, with no new card.
+- "Re-run the deploy gate" (desk message): not typed with `--deploy`. The card is `DB: none`, and BUILD-HUB W (a0) runs offline and livenote with `--deploy` not typed. The deploy gate stays the desk's / DEPLOY-HUB's.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — tests/ops red outside the rows — tests/ops/test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins: assert (21, 85) == (18, 85) (three 10-11 Grok check reports from desk commit 8b813ca7; file not in the card's rows)
+BUILT · job: desk-installs-1014 · tip: 4bc73283 | on 6ee9b8d6 | migration: none | offline 4328/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 161189
