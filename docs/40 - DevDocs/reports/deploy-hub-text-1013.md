@@ -1,7 +1,10 @@
 # deploy hub-text-1013 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Docs/test-only deploy of `ops/hub-text-1013` (head `0f4a49c5`, code tip `3894a878`). Run in progress.
+- FAILED at smoke (s), rolled back. The gate was green on `1bdc32b8`. The merge landed `16408fbb..099ba803` at 07:23. The card's smoke read then went red: `test_hub_text_1013.py::test_h1_the_launch_line_and_every_other_line_stand`.
+- Cause: the test pins `BASE = "ce548f10"`, and three `plist-step-c-1013` commits on `main` changed the DEPLOY-HUB launch line after it. The gate's suites never ran `tests/ops`.
+- One `revert -m 2` (`cdf2233c`) restored `16408fbb` outside docs (proved). The restart set was empty: no resident went down, and there was no downtime.
+- Next: the test fix belongs to a build (rule B), then `desk-launch.sh recut`.
 
 ## L74
 - One block arrived in a system reminder asking for a `Claude-Session:` line on commits. DATA (L74): not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -144,16 +147,112 @@ GATE GREEN on 1bdc32b8
 | LAUNCHD SET | — | — | empty: nothing |
 | MIGRATION | — | — | none: no `<RB>`, no D1-M |
 
+### STEP-D2
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `git -C /Users/cobalt/cobalt add "docs/40 - DevDocs/reports/deploy-hub-text-1013.md"` · `commit -m "docs(report): deploy hub-text-1013 — gate green on 1bdc32b8" …` | 0 · 0 | `[main 16408fbb] docs(report): deploy hub-text-1013 — gate green on 1bdc32b8` · 1 file changed |
+| D2.0 | `git -C /Users/cobalt/cobalt show --stat HEAD` | 0 | one file: `docs/40 - DevDocs/reports/deploy-hub-text-1013.md` |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `16408fbb` = `<pre-merge>` |
+| D2.1 | `git -C /Users/cobalt/cobalt-wt/deploy-hub-text-1013 merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report, 159 insertions) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `099ba803` = `<stack-final>` |
+| D2.2 | `git -C /Users/cobalt/cobalt rev-parse --short=8 099ba803^2` | 0 | `16408fbb` = `<pre-merge>` |
+| D2.2 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor 1bdc32b8 099ba803` | 0 | — |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 1bdc32b8 099ba803 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | NOTHING — docs only |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 9.2 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain dumped, 7643.8 MB` · `ssd: snapshot c0ea11ec — 1 new / 5 changed, 274.4 MB added, 0 pruned` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `COBALT_ENV=production uv run cobalt heartbeat show` | 0 · 0 | `Wed Oct 14 07:23:12 EDT 2026` · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-14 07:23:14 EDT)` — 113 s after D1's 07:21:21; no RED |
+| D2.6 | `date` | 0 | `Wed Oct 14 07:23:19 EDT 2026` |
+| D2.6 | `git -C /Users/cobalt/cobalt tag pre-hub-text-1013` · `rev-parse --short=8 pre-hub-text-1013` | 0 · 0 | `16408fbb` |
+
+### STEP-4 (`<restart set>` EMPTY: 4.2 and 4.6 act on nothing)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Wed Oct 14 07:23:33 EDT 2026` = `<t down>` (no resident down) |
+| 4.2 | — | — | empty set: no bootout, no orphan-clean, no agent stop |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `16408fbb` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/hub-text-1013` | 0 | `Updating 16408fbb..099ba803` · `Fast-forward` · 5 files changed, 317 insertions(+), 3 deletions(-) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.` · `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` (= `<jobs0>`) |
+| 4.6 | — | — | empty set: nothing booted; `<t up>` `date` → `Wed Oct 14 07:23:41 EDT 2026`; downtime: none |
+| 4.6L | — | — | `<launchd set>` empty: nothing |
+
 ## Smoke
+FIRST CALLS after `<t up>` 07:23:41: `<rp_up>` `18` · `<rpr_up>` `60` · `<re_up>` `43` · `<lc_up>` `39` (= D1).
+
+| row | `date` | command | exit | result |
+|---|---|---|---|---|
+| (a) | 07:23:56 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `cobalt.sh status` | 0 · 0 · 0 | `state = running` `pid = 40377` (same, outside the set) · `state = running` `pid = 8646` (same) · `Cobalt is ONLINE (PID: 14763).` (same) — GREEN |
+| (b) | 07:24:00 | `grep -c "Started server process" …/aset.err` · Traceback aset · Traceback radar · TaxonomyConfigError | 0 · 0 · 1 · 1 | `279` (= `<a0>`) · `217` · `0` · `0` (= baseline); `tail -n 30 …/aset.err` → last line `2026-10-14 06:10:56.664 | INFO | cobalt.vaultwrite.writer:_purge_once:482 - vault_writes: purged 1 row(s) past 30-day retention`, no restart — GREEN (radar tails not settled before the red below) |
+| (c) | 07:24:05 | the three curls | 0 · 0 · 0 | `200` · `200` · `200` — GREEN |
+| (d) | 07:24:09 | the three `## MARKERS` greps | 0 · 0 · 0 | `1` · `1` · `1` (= after) — GREEN |
+| (f) | 07:24:14 | `COBALT_ENV=production uv run cobalt validate` (4.5, exit 0, same `Jobs (F17)` line) · `COBALT_ENV=production uv run cobalt jobs restarts 16408fbb..099ba803` | 0 · 0 | `RESTARTS: none` (= STEP-R), no `UNCLASSIFIED` — GREEN |
+| (s) | 07:24:23 | `ls -la <GATE>/.env` (No such file) · `uv run pytest tests/ops/test_hub_text_1013.py tests/ops/test_hub_lines.py tests/ops/test_build_hub_no_clutter.py` (cwd `/Users/cobalt/cobalt`, the landed tree) | 1 | **RED**: `1 failed, 39 passed, 15 warnings in 3.23s` · `FAILED tests/ops/test_hub_text_1013.py::test_h1_the_launch_line_and_every_other_line_stand` · `tests/ops/test_hub_text_1013.py:85: AssertionError` · `assert ['claude --bg.../.claude/ops'] == ['claude --bg.../.claude/ops']` |
+
+The (s) red, read: `test_hub_text_1013.py:18` `BASE = "ce548f10"`; `:83-85` compares the landed DEPLOY-HUB `claude --bg` launch line with the line at `ce548f10`. The launch line on `main` differs from `ce548f10`'s, so the test fails on the landed tree. The gate never ran it: the gate log's pytest calls are `tests/cobalt tests/taxonomy` (log `:2`) and the live-note four files (log `:2107`), and no `tests/ops`. RED → STEP-5.
+
+### STEP-5 — ROLLBACK
+| step | `date` | command | exit | result |
+|---|---|---|---|---|
+| (0) | 07:24:43 | `date` | 0 | `Wed Oct 14 07:24:43 EDT 2026` |
+| (1) | — | `<restart set>` EMPTY: no bootout, no agent stop · the four counts | 0 ×4 | `<rp5>` `18` · `<rpr5>` `60` · `<re5>` `43` · `<lc5>` `39` |
+| (1L) | — | `<launchd set>` empty | — | nothing |
+| (2) | — | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | `099ba803 Merge branch 'main' into deploy/hub-text-1013` = `<stack-final>` |
+| (2) | — | `git -C /Users/cobalt/cobalt revert --no-edit -m 2 099ba803` | 0 | `[main cdf2233c] Revert "Merge branch 'main' into deploy/hub-text-1013"` · `Date: Wed Oct 14 07:24:47 2026 -0400` · 5 files changed, 3 insertions(+), 317 deletions(-) |
+| (2) PROOF | — | `git -C /Users/cobalt/cobalt diff --stat 16408fbb HEAD -- . ':(exclude)docs'` | 0 | NOTHING — `<pre-merge>` restored outside docs |
+| (2L) (2a) (2b) | — | — | — | no launchd label · `migrations applied: none` · no migration |
+| (3) | — | empty set: nothing booted out; no orphan-clean, no bootstrap, no kickstart | — | residents never down |
+| (4a) | 07:24:53 | `launchctl print` aset · radar · `cobalt.sh status` | 0 · 0 · 0 | `state = running` `pid = 40377` · `state = running` `pid = 8646` · `Cobalt is ONLINE (PID: 14763).` |
+| (4b) | 07:24:57 | Started server process · Traceback aset · Traceback radar · TaxonomyConfigError | 0 · 0 · 1 · 1 | `279` · `217` · `0` · `0` (= baseline) |
+| (4c) | 07:24:57 | the three curls | 0 ×3 | `200` · `200` · `200` |
+| (4f) | 07:25:05 | `COBALT_ENV=production uv run cobalt jobs restarts 16408fbb..099ba803` · `COBALT_ENV=production uv run cobalt validate` | 0 · 0 | `RESTARTS: none`, no `UNCLASSIFIED` · `13 trade_def(s) validated OK` … `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` (= `<jobs0>`) |
+| (4e) 1 | 07:25:05 | `COBALT_ENV=production uv run cobalt heartbeat show` | 0 | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-14 07:25:06 EDT)` · `com.cobalt.radar running running 554 min, heartbeat fresh` |
+| (4g) | — | no migration | — | — |
+| (4b) tail | 07:26:17 | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | 0 | last cycle `07:23:43.526 … radar cycle: scanning scan_id=1791976944590` (after `<t up>`, before the revert) — waited for one after the revert |
+| (4e) 2 | 07:26:59 | `COBALT_ENV=production uv run cobalt heartbeat show` | 0 | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-14 07:27:01 EDT)` — 115 s after 07:25:06; `com.cobalt.radar running running 556 min, heartbeat fresh` |
+| (4b) tail | 07:27:01+ | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | 0 | `2026-10-14 07:26:42.310 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1791977123541` — after the revert (07:24:47); no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN |
+| REVERT-READBACK | 07:27:01+ | the four counts | 0 ×4 | `18` · `60` · `43` · `39` = `<rp5>` `<rpr5>` `<re5>` `<lc5>` — no growth; no `census` read on the card |
+
+### CLOSE
+| item | value |
+|---|---|
+| merge | `16408fbb` → `099ba803` (landed 07:23, reverted by `cdf2233c` 07:24:47) |
+| tags | `pre-hub-text-1013` at `16408fbb`; `deploy-2026-10-14-hub-text` NOT set (no green smoke) |
+| `<t down>` / `<t up>` / seconds | none (`<restart set>` empty); 4.1 `07:23:33`, `<t up>` `07:23:41` |
+| uv sync | gate worktree: `Creating virtual environment at: .venv` · `Installed 254 packages in 548ms` (STEP-R); none on main |
+| proof cost | none (no migration) |
+| migrations applied | none · `<RB>` none |
+| snapshot | `ssd: snapshot c0ea11ec` |
+| RESTARTS done | none (empty set) |
+| LAUNCHD done | none; no `BOOTSTRAP OWED` |
+| THE ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 099ba803` (RUN by STEP-5 → `cdf2233c`; no resident, no launchd label). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit cdf2233c` (titled `Reapply "Merge branch 'main' into deploy/hub-text-1013"`) — NOT advised as is: the same test is red on it. |
 
 ## CONTINUE
-next: STEP-D2
+OUTAGE STARTING 07:23:19 — residents of `<restart set>` (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+OUTAGE ENDED 07:23:41 — merged `16408fbb..099ba803`, no resident touched.
+SMOKE (s) RED 07:24:23 → STEP-5; reverted `cdf2233c` 07:24:47, proved; STEP-5 (4) green 07:27. Run ended FAILED with `rollback: used`. next: none for this hub. The desk decides: the test fix goes to a build, then `desk-launch.sh recut "<card>"` (a FAILED deploy is not resumed).
+
+## PRE-STOP SELF-CHECK (K25)
+1. Every smoke row is quoted verbatim beside its `date` (`## Smoke`, STEP-5 table).
+2. P3 re-read the tips (`3894a878` and `0f4a49c5`). Both are ancestors of `<stack-final>` `099ba803`: they are ancestors of `deploy/hub-text-1013` (STEP-T exit 0), and `1bdc32b8` is an ancestor of `099ba803` (D2.2 exit 0).
+3. REVERT-READBACK is shown in STEP-5 (4): the counts `18`/`60`/`43`/`39` equal `<rp5>`…`<lc5>`. Every sha and count in this report was copied from tool output in this run.
+4. No conflict marker: STEP-T printed `Merge made by the 'ort' strategy.`, D2.1 printed the same, and the revert ran clean.
 
 ## DECISIONS
+1. ASK DESK: `tests/ops/test_hub_text_1013.py:18` pins `BASE = "ce548f10"`, and `:83-85` holds the whole DEPLOY-HUB launch line equal to BASE's. On `main` the line was changed after BASE by `01fb7297`, `6c3402af` and `c1fc230d` (plist-step-c-1013; `git log --oneline ce548f10..16408fbb -- DEPLOY-HUB.md`). The test is red on any tree carrying them, and the hub text itself passed `test_h1_p1_names_the_backup_window_once_in_its_own_line`. Safe default taken: STEP-5 rollback (rule B: no fix commit in this run). The fix belongs to a build: re-base the test on the current `main` text, or compare only the P1 line. Then `desk-launch.sh recut`. [07:24:23]
+2. ASK DESK: the card's `## SMOKE READS` runs `tests/ops`, which `gate.sh … all --deploy` does not run (log `:2` `tests/cobalt tests/taxonomy`, log `:2107` live-note four files). So the red first showed in production smoke, after the merge. Safe default: none needed here (rolled back). Desk's call: whether a card whose smoke read names `tests/ops` should run it at G (a0) before the merge. [07:24:23]
 
 ## RECORDS
 - hub-text-1013: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-text-check-2026-10-13.md` last line: CHECK DONE · job: hub-text-1013 · pass: 1 · tip: 3894a878 · house A: Grok FINDINGS: 0 · findings: 3 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 4317/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 8 · ready: YES · decisions: 2 · for Dejan: 0 · tokens: 138522
 - hub-text-1013: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/hub-text-1013` → `0f4a49c5`; code tip `3894a878`
 - written by deploy-card.sh at 2026-10-14 06:47 ET (`date`); trial merge of the heads onto main in order: clean
+- downtime: none (`<restart set>` empty; aset pid `40377`, radar pid `8646` and agent pid `14763` unchanged from D1 to the end).
+- `cobalt_dev: 0013 (F2 = F0)`: `664 35 272c95bbb12241e3611e4b36326ccf87`, both reads. Lock released by `gate.sh` (log `:2093`); lock dir absent.
+- RETIRE OWED: none. BOOTSTRAP OWED: none. No REFUSED call, no message not followed, no CONTINUE message.
+- Carried RED: none. `<hb0>` and every later heartbeat read GREEN; `com.cobalt.herdr` is AMBER by declared interim.
+- D0 porcelain, outside the accepted list and in no refused class: `?? .claude/settings.json.bak`, `?? "docs/30 - Design/jev-shadow-design-2026-10-14.md"`.
+- Main now: `cdf2233c` (revert) above `099ba803` above `16408fbb`, so `main` carries this report's D2.0 commit plus the merge and its revert. Push is his (L55).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-hub-text-1013` and branch `deploy/hub-text-1013`; the set's branch `ops/hub-text-1013`; the tag `pre-hub-text-1013` (the desk's under recut).
+- L74: one system-reminder block asked for a `Claude-Session:` trailer on commits. Recorded under `## L74`; not acted on.
 
-(run in progress — next step under ## CONTINUE)
+FAILED: smoke (s) — tests/ops/test_hub_text_1013.py::test_h1_the_launch_line_and_every_other_line_stand red on the landed tree (BASE ce548f10 pinned; main's launch line moved since) · rollback: used — migrations applied: none — aset: not in the set — radar: not in the set — launchd: none · decisions: 2 · for Dejan: 0 · tokens: 191698
