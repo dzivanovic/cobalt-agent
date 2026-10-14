@@ -386,11 +386,13 @@ copy_cmd() {
     printf '%s' "${1%%<COPY>*}$copy${1#*<COPY>}"
 }
 
-# copy_create: a leftover of this worktree dropped (logged, not fatal), then the create
+# copy_create: a leftover of this worktree dropped (logged, not fatal), then the create. `made` is
+# set BEFORE the create: a signal that lands while it runs is handled after it returns, and the trap
+# then drops the copy (check O1); a create that fails clears it, so nothing is dropped (test (7))
 copy_create() {
     run "$(copy_cmd "$COPY_DROP")" || note "the leftover drop of $copy exited non-zero (not fatal)"
-    run "$(copy_cmd "$COPY_CREATE")" || { say "copy not created"; exit 1; }
     made=1
+    run "$(copy_cmd "$COPY_CREATE")" || { made=""; say "copy not created"; exit 1; }
     say "copy: $copy created"
 }
 
