@@ -3,7 +3,7 @@ MODEL: Sonnet 5.5 (`claude-sonnet-5-5`) — card preflight (his 2026-10-03 R115,
 # Card 550 `card-template-1014` — preflight (read-only)
 CARD: `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-14/550-card-template-card.md` (committed before this launch). Drafter report: `reports/draft-k5-card-template-2026-10-14.md` (decisions 5; the desk takes each default). His ruling: R1471 (`reports/cto-2026-10-14.md` row R1471); brain R1472.
 SPEC: `prompts/CARD.md`
-REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/card-template-preflight-2026-10-14.md`
+REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/card-template-preflight-r2-2026-10-14.md` (round 2: the card was amended by `reports/draft-550-amend-2026-10-14.md` after round 1's three FAILs in `reports/card-template-preflight-2026-10-14.md`; re-check checks 15, 16, 17 first, then all)
 
 Checks: the card is committed and `git diff` of it against HEAD is empty; the header holds every field CARD.md requires and no placeholder token but BASE and TIP (the desk's); every `file:line` anchor proven against `git show HEAD:<file>` and every count matches; each row's red test names its failing reason on BASE; no test pins a whole file, a whole fixed-file line equal to a commit, or a BASE literal (brain R1472: only the lines its own card changes, found by content); the wording added to `CARD.md` traces only to R1471 and R1472; each row's files hold its RESTARTS class home (K10); the card does not overlap the line ranges of cards 521, 523, 537, 549 and of 546, 547, 548 where those files now exist in `prompts/2026-10-14/`; name what blocks the card's own deploy (one deploy at a time; 537 deploys first).
 
