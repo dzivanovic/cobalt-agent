@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/desk-installs-1014
 WORKTREE: desk-installs-1014
-BASE:
+BASE: 6ee9b8d6
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/desk-installs-1014/docs/40 - DevDocs/reports/desk-installs-build-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-installs-check-2026-10-14.md
