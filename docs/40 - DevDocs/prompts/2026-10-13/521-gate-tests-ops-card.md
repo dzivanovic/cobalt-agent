@@ -4,14 +4,14 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/gate-tests-ops-1013
 WORKTREE: gate-tests-ops-1013
-BASE: 91ecb686
+BASE: 1526b50e
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/gate-tests-ops-1013/docs/40 - DevDocs/reports/gate-tests-ops-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gate-tests-ops-check-2026-10-13.md
 HOUSE B: as needed
 DB: none
 RESTARTS: none
-RULINGS: 2026-10-13 R1436 (brain L79: the gate runs tests/ops; amended D4, 15:41 ET: at deploy gates always, at a build or check W only when ops paths change)
+RULINGS: 2026-10-12 R1138 (the class K5 approval; brain direction R1436, L79: the gate runs tests/ops; amended D4, 15:41 ET: at deploy gates always, at a build or check W only when ops paths change)
 
 ## ROWS
 
