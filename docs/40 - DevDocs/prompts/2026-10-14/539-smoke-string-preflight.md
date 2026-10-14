@@ -3,7 +3,7 @@ MODEL: Sonnet 5.5 (`claude-sonnet-5-5`) — card preflight (his 2026-10-03 R115,
 # Card 537 `deploy-smoke-string-1014` — preflight (read-only)
 CARD: `/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-14/537-deploy-smoke-string-card.md` (committed `ef0637b6` before this launch). Drafter report: `reports/draft-k5-smoke-string-2026-10-14.md` (decisions 3; the desk takes each default). Brain direction (L79): `reports/cto-2026-10-13.md` row R1466 (read the row; the brain's words are quoted in prompt 536).
 SPEC: `prompts/CARD.md`
-REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/smoke-string-preflight-2026-10-14.md`
+REPORT: `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/smoke-string-preflight-r2-2026-10-14.md` (round 2: the card was amended by `reports/draft-537-amend-2026-10-14.md` after round 1's FAIL in `reports/smoke-string-preflight-2026-10-14.md`; re-check check 14 first)
 
 Checks: the card is committed and `git diff` of it against HEAD is empty; the header holds every field CARD.md requires and no placeholder token but BASE and TIP (the desk's); every `file:line` anchor proven against `git show HEAD:<file>` and every count matches (the DEPLOY-HUB launch line and STANDING-LIST line); the red test (`tests/ops/test_hub_lines.py` pin) names its failing reason on BASE; the card adds only the string `Bash(COBALT_ENV=production uv run cobalt smoke *)` and no other allow string (R411, R412); each row's files hold its RESTARTS class home (K10); the card does not overlap the line ranges of cards 521 and 523 (`grep -n "DEPLOY-HUB\|STANDING-LIST" ` in `prompts/2026-10-13/521-gate-tests-ops-card.md` and `523-hub-text-card.md`), and names which of them must deploy before or after it; name what blocks the card's own deploy (one deploy at a time).
 
