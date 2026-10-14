@@ -57,9 +57,9 @@ SWEEP_EXEMPT: dict[str, str] = {
         "colon, no id); the claim regex takes the word; DECISION C1-1",
 }
 
-# the reports the first run swept: a report added later is not swept, a report removed fails
-CHECKS_SWEPT: int | None = 18
-BUILDS_SWEPT: int | None = 85
+# the floor of the sweep (card 537 T1): a report added later is swept too; a glob that finds
+# fewer check reports than the first run swept (18) fails
+CHECKS_FLOOR = 18
 
 
 def in_window(name: str) -> bool:
@@ -146,5 +146,7 @@ def test_the_304_check_reads_o1_and_a3(rule):
 
 
 def test_the_sweep_swept_what_it_pins(sweep):
-    checks, builds, _ = sweep
-    assert (len(checks), len(builds)) == (CHECKS_SWEPT, BUILDS_SWEPT), [p.name for p in checks]
+    checks, _, found = sweep
+    assert len(checks) >= CHECKS_FLOOR, [p.name for p in checks]
+    left = [ln for name, lines in sorted(found.items()) if name not in SWEEP_EXEMPT for ln in lines]
+    assert not left, "\n" + "\n".join(left)
