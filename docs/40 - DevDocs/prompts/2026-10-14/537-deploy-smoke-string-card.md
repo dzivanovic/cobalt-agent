@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/deploy-smoke-string-1014
 WORKTREE: deploy-smoke-string-1014
-BASE:
+BASE: 7aa5d470
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/deploy-smoke-string-1014/docs/40 - DevDocs/reports/deploy-smoke-string-build-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-smoke-string-check-2026-10-14.md
