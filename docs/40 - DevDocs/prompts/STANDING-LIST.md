@@ -106,7 +106,7 @@ THE SEAT ORDER AND THE SECOND PASS change no string: pass 2 starts house B with 
 
 THE TOKEN TOTAL of a check is not the session's to report: the desk measures it at the stop line (`sh /Users/cobalt/.claude/ops/desk-context.sh <id>`, a command already on the desk's side) and writes it beside the stop line's `files opened`. `desk-launch.sh` launches a check while the lock is held (R20); the check takes the lock at its with-DB step and waits there.
 
-## 3. `DEPLOY-HUB.md` — 56 allow with one head and a migration (53 without a migration; +1 per extra head; the two lock-script strings and the four dev `cobalt db` strings stand as the two CLASS strings, 2026-10-02 R39), 7 deny · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/Library/LaunchAgents /Users/cobalt/.claude/ops`
+## 3. `DEPLOY-HUB.md` — 57 allow with one head and a migration (54 without a migration; +1 per extra head; the two lock-script strings and the four dev `cobalt db` strings stand as the two CLASS strings, 2026-10-02 R39), 7 deny · `--permission-mode dontAsk` · `--add-dir /Users/cobalt/Vault /Users/cobalt/cobalt /Users/cobalt/cobalt-wt /Users/cobalt/Library/LaunchAgents /Users/cobalt/.claude/ops`
 
 PREFIX NOTE (probe G, R62 session): an allow with no `*` matches by PREFIX — `Bash(echo hi)` ran `echo hi there`. Every 'exact' string in this table therefore also admits trailing arguments to the same command; none admits another command. The two production `migrate` dangers (`--rollback`, `--down-to`) are denied above; the rest is accepted as the same command (desk reading).
 
@@ -137,6 +137,7 @@ THE FILE-TOOL STRINGS — 4 (F1): `Read` · `Grep` · `Glob` (proven) and **NEW*
 | `Bash(COBALT_ENV=production uv run cobalt validate)` | config and registry validation, before and after | read only | — |
 | `Bash(COBALT_ENV=production uv run cobalt jobs restarts *)` | the RESTARTS table | read only | restarts nothing |
 | `Bash(COBALT_ENV=production uv run cobalt heartbeat show*)` | the baseline and smoke heartbeat reads | read only | — |
+| `Bash(COBALT_ENV=production uv run cobalt smoke *)` | the set's smoke read after the merge (`## SMOKE READS`, `cobalt smoke s2 --cutoff …`), added by card 537 inside class K5 (brain R1466; `reports/deploy-plist-step-c-1013.md` DECISIONS 3) | read only: the suite's checks read, and the one smoke report `docs/40 - DevDocs/reports/<suite>-smoke-<date>.md` is written (ASK DESK 1) | writes no production row, no job, no config; carries no `--allow-prod` |
 | `Bash(COBALT_ENV=production uv run cobalt backup run*)` | the snapshot before the outage | writes a backup snapshot of production | production's data |
 | `Bash(COBALT_ENV=production uv run cobalt backup status*)` | the newest snapshot line | read only | — |
 | `Bash(COBALT_ENV=production uv run cobalt db migrate --allow-prod --proof-only)` | WITH A MIGRATION ONLY: the proof before the outage | read only: `NOTHING WAS APPLIED` | — |

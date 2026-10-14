@@ -103,6 +103,7 @@ PROD_ALLOW_TODAY = {
         "Bash(COBALT_ENV=production uv run cobalt validate)",
         "Bash(COBALT_ENV=production uv run cobalt jobs restarts *)",
         "Bash(COBALT_ENV=production uv run cobalt heartbeat show*)",
+        "Bash(COBALT_ENV=production uv run cobalt smoke *)",
         "Bash(COBALT_ENV=production uv run cobalt backup run*)",
         "Bash(COBALT_ENV=production uv run cobalt backup status*)",
     ],
