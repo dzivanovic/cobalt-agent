@@ -5,9 +5,9 @@ INSTALL: none
 BRANCH: ops/hub-text-1013-fr1
 WORKTREE: hub-text-1013-fr1
 BASE: 4a7b221f
-TIP:
+TIP: e82cdcc7
 REPORT: /Users/cobalt/cobalt-wt/hub-text-1013-fr1/docs/40 - DevDocs/reports/hub-text-build-fr1-2026-10-14.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-text-check-2026-10-13.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-text-fr1-check-2026-10-14.md
 HOUSE B: as needed
 DB: none
 RESTARTS: none
