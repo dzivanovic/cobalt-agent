@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/db-copy-1014
 WORKTREE: db-copy-1014
 BASE: 0a151491
-TIP:
+TIP: 0e136e4f
 REPORT: /Users/cobalt/cobalt-wt/db-copy-1014/docs/40 - DevDocs/reports/db-copy-build-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/db-copy-check-2026-10-14.md
 HOUSE B: as needed
