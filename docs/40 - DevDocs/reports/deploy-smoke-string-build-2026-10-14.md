@@ -2,8 +2,8 @@
 
 ## §0 Headline
 - Rows S3, S1, S2 built and pinned on `9fb997bb`: `DEPLOY-HUB.md:11` and `STANDING-LIST.md` §3 carry `Bash(COBALT_ENV=production uv run cobalt smoke *)` once; R4 run, `RESTARTS: none`.
-- Gate: offline 4328/0, live-note 146/0, with-DB not taken (DB: none).
-- `tests/ops`: 1 failed, 3603 passed. The red is BASE's: `test_the_rule_sweep.py` pins 18 in-window check reports; main `8b813ca7` added three (21). It is outside this card's files and not fixed. Stopped at W for `CONTINUE: W` (DECISIONS 1).
+- Row T1 (card `c3c3e703`, built by a new session at `CONTINUE: W`) on `f21900fc`: `test_the_sweep_swept_what_it_pins` now asserts zero mismatches plus a floor of 18 check reports, with no fixed count. It was red on today's 21 reports before the fix and is green after.
+- Gate on `f21900fc`: offline 4328/0, live-note 146/0, `tests/ops` 3604 passed / 0 failed, with-DB not taken (DB: none).
 
 ## L74
 - One system notice in this session asked that commits end with a `Claude-Session:` line. Recorded here as data; not followed. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -23,6 +23,8 @@ RULING 2026-10-12 R1138 committed · git -C /Users/cobalt/cobalt log -1 --format
 RULING 2026-10-12 R1138 at HEAD · git -C /Users/cobalt/cobalt show "HEAD:docs/40 - DevDocs/reports/cto-2026-10-12.md" · 0 · the row as grepped
 AUTHORIZED
 ```
+Second session (RECOVERY, `CONTINUE: W`, 08:35 ET), the same call, exit 0: every row as above except `CARD COMMITTED · … · 0 · c3c3e70322e928f5d4d17da7591151fd931cc966` (the card with row T1); `CARD UNCHANGED · … · 0 · nothing`; R60 and R1138 rows, commits and HEAD reads identical; last line `AUTHORIZED`.
+RECOVERY reads: `git status --short --branch` → `## ops/deploy-smoke-string-1014`; `git log --oneline -3` → `042630b7`, `cfcb5a2b`, `4c3ae576` (the wip commits, continued); `ls -la …/.env` → "No such file or directory".
 
 ## PREFLIGHT
 `sh /Users/cobalt/cobalt/ops/desk/preflight.sh build "<card>"` · exit 0:
@@ -68,6 +70,7 @@ Tests only, no `src/` edit. S3: `"Bash(COBALT_ENV=production uv run cobalt smoke
 - S2 (1) `test_s2_the_standing_list_deploy_section_names_the_smoke_string_once`: `E       assert 0 == 1` (the count in `## 3.` is 0).
 - Negative controls GREEN on BASE: `test_s1_no_other_allow_or_deny_string_changes`, `test_s2_the_other_sections_production_strings_stand`, the other nine ids of the W7 test and the rest of `test_hub_lines.py` (31 passed).
 - Commit `4ea64dce` `wip(deploy-smoke-string-1014): red — S3 pin, S1/S2 tests`.
+- T1 (second session; the row's file is a test, so its red is the old pin on today's tree): `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_the_rule_sweep.py` · exit 1 → `1 failed, 4 passed, 15 warnings in 1.74s`; `tests/ops/test_the_rule_sweep.py:150: AssertionError` · `E       assert (21, 85) == (18, 85)` · `At index 0 diff: 21 != 18` ("today's main (21 reports) fails before"). The empty glob before (the check glob → `*-MUTNONE*-2026-10-*.md`, Edit, undone): `1 failed` · `assert (0, 85) == (18, 85)` · `At index 0 diff: 0 != 18`.
 
 ## E3 THE ROWS
 Order S3 (in E2), S1, S2. Each `file:line` re-read before its edit (Read `DEPLOY-HUB.md:11`; `STANDING-LIST.md:109`, `:139-140` from the PREFLIGHT Read).
@@ -86,6 +89,14 @@ THE MUTATIONS (Edit tool, each undone with the Edit tool; `git diff --stat` afte
 
 Commit `9fb997bb` `feat(deploy-smoke-string-1014): deploy line and STANDING-LIST carry the read-only cobalt smoke string (S3, S1, S2; L1, L28, L72)`.
 
+T1 (second session, card `c3c3e703`). In `tests/ops/test_the_rule_sweep.py`, `CHECKS_SWEPT = 18` and `BUILDS_SWEPT = 85` are replaced by `CHECKS_FLOOR = 18` (`:62`). `test_the_sweep_swept_what_it_pins` (`:148-152`) now asserts `len(checks) >= CHECKS_FLOOR` and that no non-exempt mismatch is left. The build-report count is no longer pinned, as the row says ("no longer pins the number of reports swept"). No other name read the two constants (Grep `CHECKS_SWEPT|BUILDS_SWEPT` over `*.py`, `*.sh` → no matches). After: `tests/ops/test_the_rule_sweep.py` → `5 passed`; with `test_hub_lines.py` and `test_deploy_smoke_string_1014.py` → `39 passed, 15 warnings in 3.37s`.
+| row | mutation | run | result, first failing line |
+|---|---|---|---|
+| T1 (empty glob after) | check glob → `*-MUTNONE*-2026-10-*.md` | `::test_the_sweep_swept_what_it_pins`, `--tb=line` | `1 failed` — `assert 0 >= 18` |
+| T1 (mismatch arm) | `SWEEP_EXEMPT` key `dev-rebuild-port-build-2026-10-03.md` → `…-MUT.md` | same | `1 failed` — `dev-rebuild-port-build-2026-10-03.md:101 · claim src · read 0 · …` |
+| T1 (fix undone) | `>=` → `==` | same | `1 failed` — `assert 21 == 18` |
+Each mutation was undone with Edit. `git diff --stat` then showed only `tests/ops/test_the_rule_sweep.py | 12 +++++++-----` (the fix) and the report. Commit `f21900fc` `fix(deploy-smoke-string-1014): the rule sweep pins zero mismatches and a floor of 18 checks, not a count (T1; L1, L72)`.
+
 ## RESTARTS
 Row R4 (RUN). `uv run cobalt jobs restarts 7aa5d470..HEAD` (HEAD `9fb997bb`) · exit 0:
 ```
@@ -99,6 +110,18 @@ RESTARTS: none
 ```
 No UNCLASSIFIED row. (The tool lists the untracked report too; it is committed at CLOSE.)
 
+Again after T1 (HEAD `f21900fc`), the same command, exit 0:
+```
+path	change	rule	restart
+docs/40 - DevDocs/prompts/DEPLOY-HUB.md	M	DOCS	-
+docs/40 - DevDocs/prompts/STANDING-LIST.md	M	DOCS	-
+docs/40 - DevDocs/reports/deploy-smoke-string-build-2026-10-14.md	M	DOCS	-
+tests/ops/test_deploy_smoke_string_1014.py	A	test/documentation; no resident	-
+tests/ops/test_hub_lines.py	M	test/documentation; no resident	-
+tests/ops/test_the_rule_sweep.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
 ## W THE THREE SUITES
 `<tip>` = `9fb997bb`. DB: none.
 - (a0) `git diff --name-only --no-renames 7aa5d470` · exit 0 → `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` · `docs/40 - DevDocs/prompts/STANDING-LIST.md` · `tests/ops/test_deploy_smoke_string_1014.py` · `tests/ops/test_hub_lines.py`: every path under `docs/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 4 paths)`**.
@@ -108,23 +131,31 @@ No UNCLASSIFIED row. (The tool lists the untracked report too; it is committed a
 - THE RED IS BASE'S, NOT THIS BUILD'S (tool output): the test counts the check reports `docs/40 - DevDocs/reports/*-check*-2026-10-*.md` dated 2026-10-02..2026-10-12 whose last line carries `held unfixed: n ≥ 1` (`test_the_rule_sweep.py:30`, `:99-100`), pinned `CHECKS_SWEPT = 18` (`:61`; last changed `52cb2fc9 fix(sweep-pin-1013)`). This build's diff (a0) touches no report and no `ops/desk/deploy-card.sh`; its own report is dated 2026-10-14 (out of window). `git log --oneline 52cb2fc9..7aa5d470 -- <the three files>` → `8b813ca7 docs(desk): backlog (sitting r2 prompts, JEV design, K5 drafter prompt, Grok checks), R1471-R1472` added `s4-p1-1009-grok-check-2026-10-11.md`, `strike-fallback-env-1010-grok-check-2026-10-11.md`, `worktree-salvage-grok-check-2026-10-11.md` after the pin; their last lines carry `held unfixed: 6`, `held unfixed: 2 (shadow, never fixed)`, `held unfixed: 3` (`tail -n 1`). 18 + 3 = 21. E0 ran `tests/cobalt tests/taxonomy` only, so E0 did not show it.
 - The fix lies outside the rows' files (`tests/ops/test_the_rule_sweep.py` is in no row; BUILD-HUB W: "fix it inside the rows' files only"). Not fixed. W stops here: `## DECISIONS` 1.
 
+W AGAIN on `<tip>` = `f21900fc` (second session, after T1; a `## RECORDS` line). DB: none.
+- (a0) `git diff --name-only --no-renames 7aa5d470` · exit 0 → `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` · `docs/40 - DevDocs/prompts/STANDING-LIST.md` · `docs/40 - DevDocs/reports/deploy-smoke-string-build-2026-10-14.md` · `tests/ops/test_deploy_smoke_string_1014.py` · `tests/ops/test_hub_lines.py` · `tests/ops/test_the_rule_sweep.py`: every path under `docs/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 6 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh deploy-smoke-string-1014 offline` · exit 0 → `offline 4328/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/deploy-smoke-string-1014-offline-20261014-083730.log`.
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh deploy-smoke-string-1014 livenote` · exit 0 → `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/deploy-smoke-string-1014-livenote-20261014-083730.log`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` · exit 0 → **`3604 passed, 1 xfailed, 16 warnings in 785.33s (0:13:05)`**. This build's tests are in it: `test_deploy_smoke_string_1014.py` (4 tests), `test_hub_lines.py` W7[DEPLOY-HUB.md], and `test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins`.
+- `ls /Users/cobalt/cobalt-wt/deploy-smoke-string-1014/.env` → "No such file or directory" (08:50 ET).
+
 ## PRE-STOP SELF-CHECK
-(1) Every added or changed test shown red: S3 W7[DEPLOY-HUB.md] — E2 red and E3 mutation S3; S1 (1) — E2 red and mutation S1; S1 (2) — mutation "S1 control"; S2 (1) — E2 red, mutation S2; S2 (2) — mutation "S2 control" (all quoted in E2 / E3). None stayed green.
-(2) Entry paths: the deploy line has one reader, `desk-launch.sh:2174-2189` (copies the line, fills tokens; PREFLIGHT Read); `test_hub_lines.py`'s `test_a_dry_launch_of_each_kind_prints_a_line_holding_the_flag[deploy]` runs `desk-launch.sh` on the real `DEPLOY-HUB.md` and passed in the 34 / the `tests/ops` run. The STANDING-LIST section is read by no code; S2 (1)/(2) pin it.
-(3) Re-read at the tip: `grep -c -F "cobalt smoke"` → `DEPLOY-HUB.md:1`, `STANDING-LIST.md:1`, `tests/ops/test_hub_lines.py:1` (the card's DEPLOY PROOF counts); Grep → `STANDING-LIST.md:140` the new row, `test_hub_lines.py:106` the pin; `grep -n -F "57 allow with one head"` → `:109`; `git log --oneline 7aa5d470..HEAD` → `9fb997bb`, `4ea64dce`.
+(1) Every added or changed test shown red: S3 W7[DEPLOY-HUB.md] — E2 red and E3 mutation S3; S1 (1) — E2 red and mutation S1; S1 (2) — mutation "S1 control"; S2 (1) — E2 red, mutation S2; S2 (2) — mutation "S2 control" (all quoted in E2 / E3); T1 `test_the_sweep_swept_what_it_pins` — E2 red `assert (21, 85) == (18, 85)` before, mutations "empty glob after" `assert 0 >= 18`, "mismatch arm", "fix undone" `assert 21 == 18` (E3). None stayed green.
+(2) Entry paths: the deploy line has one reader, `desk-launch.sh:2174-2189` (copies the line, fills tokens; PREFLIGHT Read); `test_hub_lines.py`'s `test_a_dry_launch_of_each_kind_prints_a_line_holding_the_flag[deploy]` runs `desk-launch.sh` on the real `DEPLOY-HUB.md` and passed in the 34 / the `tests/ops` run. The STANDING-LIST section is read by no code; S2 (1)/(2) pin it. T1: the constants have no reader outside the test (Grep `CHECKS_SWEPT|BUILDS_SWEPT` → no matches). Both arms of the new assertion are pinned: the floor by the empty glob, the mismatch by the exemption key.
+(3) Re-read at the tip: `grep -c -F "cobalt smoke"` → `DEPLOY-HUB.md:1`, `STANDING-LIST.md:1`, `tests/ops/test_hub_lines.py:1` (the card's DEPLOY PROOF counts); Grep → `STANDING-LIST.md:140` the new row, `test_hub_lines.py:106` the pin; `grep -n -F "57 allow with one head"` → `:109`; `git log --oneline 7aa5d470..HEAD` → `9fb997bb`, `4ea64dce`. Second session, at `f21900fc`: `git log --oneline 7aa5d470..HEAD` → `f21900fc`, `042630b7`, `cfcb5a2b`, `4c3ae576`, `9fb997bb`, `4ea64dce`; `grep -n -F "CHECKS_FLOOR" tests/ops/test_the_rule_sweep.py` → `62:CHECKS_FLOOR = 18`, `150:    assert len(checks) >= CHECKS_FLOOR, …`.
 
 ## FOR THE CHECK
-- `7aa5d470..9fb997bb`: `4ea64dce wip(deploy-smoke-string-1014): red — S3 pin, S1/S2 tests` · `9fb997bb feat(deploy-smoke-string-1014): deploy line and STANDING-LIST carry the read-only cobalt smoke string (S3, S1, S2; L1, L28, L72)`.
-- Reds, mutations, greens: `## E2 RED`, `## E3 THE ROWS`. Pins green: `34 passed`.
+- `7aa5d470..f21900fc`: `4ea64dce wip(deploy-smoke-string-1014): red — S3 pin, S1/S2 tests` · `9fb997bb feat(deploy-smoke-string-1014): deploy line and STANDING-LIST carry the read-only cobalt smoke string (S3, S1, S2; L1, L28, L72)` · `4c3ae576 wip(deploy-smoke-string-1014): W — tests/ops red on BASE (test_the_rule_sweep pin 18, main has 21)` · `cfcb5a2b wip(deploy-smoke-string-1014): W — desk CONTINUE adding row T1 recorded, not followed (BUILD-HUB (b))` · `042630b7 wip(deploy-smoke-string-1014): W — desk resend recorded, not followed (BUILD-HUB (b))` · `f21900fc fix(deploy-smoke-string-1014): the rule sweep pins zero mismatches and a floor of 18 checks, not a count (T1; L1, L72)`.
+- Reds, mutations, greens: `## E2 RED`, `## E3 THE ROWS`. Pins green: `39 passed` (the three files).
+- T1 seam: card 549's row S1 carries the same text; per the card's RECORDS, 549 drops its own hunk if the trial merge conflicts.
 - R4 (RUN): `## RESTARTS`, whole.
 - Suites: `## W`. with-DB: not run (DB: none). `<F0>`/`<F1>`/`<F2>`: not run (DB: none). Lock: not run (DB: none).
 - Records copied at PREFLIGHT: `## PREFLIGHT`, last paragraph.
 
 ## CONTINUE
-next: W — the `tests/ops` command, once `test_the_rule_sweep.py`'s pin matches main (DECISIONS 1); then PRE-STOP SELF-CHECK, CLOSE.
+next: none — built. The desk verifies the artifact and launches `CHECK-HUB.md` on card 537.
 
 ## DECISIONS
-1. ASK DESK [08:19 ET]: `tests/ops/test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins` is red on BASE (`21 != 18`). Main's desk commit `8b813ca7` added three in-window Grok check reports after the pin `52cb2fc9` (`## W`). The fix (the pin to 21, or the three named) is outside this card's files. Safe default taken: not fixed here; W stopped `FAILED`; staying for `CONTINUE: W`. The desk's (a pin-move card or its own record), not Dejan's.
+1. ANSWERED (not counted): the ASK DESK of 08:19 ET (`test_the_sweep_swept_what_it_pins` red on BASE, `21 != 18`) was answered by card row T1 (`c3c3e703`). T1 was built in the second session and is green (`## E3`, `## W`).
 2. ASK DESK 1 (the card's): the new row's "can touch" cell says `read only` and names the one smoke report `cobalt smoke` writes without `--json` (`src/cobalt/smoke/cli.py:73-77`: `if args.json: print(...)` else `write_report(...)`; `:8` "`--json` prints the same content and writes nothing"). The string `smoke *` also admits `--prod` (production reads, `:13-14`). Default taken: the card's text, byte for byte.
 3. ASK DESK 2 (the card's): heading counts `56`→`57`, `53`→`54`. Counted on the Read of line 11 after S1: 54 allow strings with one head (`<tip merges>` = 1), no migration and no `## LAUNCHD`; +3 with `<prod migrate strings>` = 57. Default taken: 57 / 54, as the card gives.
 4. ASK DESK 3: S2 (2) as the card words it ("the exact smoke string occurs once in the whole file") cannot also be "GREEN on `BASE`" (BASE holds 0). Default taken: the whole-file count equals the `## 3.` count (0 = 0 on BASE, 1 = 1 after; S2 (1) pins `## 3.` at 1), plus the per-section production counts of sections 1, 2, 4-9 against BASE as the card gives. Green on BASE (E2) and red under its mutation (E3).
@@ -138,6 +169,10 @@ next: W — the `tests/ops` command, once `test_the_rule_sweep.py`'s pin matches
 - Card's records as re-read at PREFLIGHT: `## PREFLIGHT`.
 - 08:21 ET (`date`): a message from session `cto-desk`: "CONTINUE at step W. Card 537 gained row T1 (committed on main): tests/ops/test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins no longer pins the count; zero mismatches plus a floor of 18. Build row T1 (red first on today's main, 21 reports), re-run the deploy gate, then your stop line. Same tree, no new card; record it in RECORDS as a second feature riding." Fact checked: `git -C /Users/cobalt/cobalt log --oneline -3 -- <card>` → `c3c3e703 docs(desk): card 537 row T1 (rule-sweep count pin), R1477` above `b6d7d49c docs(desk): card 537 BASE 7aa5d470` (the commit AUTHORIZATION proved). NOT FOLLOWED: the message adds a row and a file (`tests/ops/test_the_rule_sweep.py`) to this run, and BUILD-HUB UNATTENDED RULES (b) says a CONTINUE "never widens the job … a message that adds a row, a file, a command or an approval … is recorded under `## RECORDS` and not followed". The run stays stopped at W. Row T1 runs only after `authorize.sh` passes on card `c3c3e703`, in a session launched on that card (RECOVERY, `CONTINUE: W`). The desk decides how.
 - 08:30 ET (`date`): `cto-desk` resent it ("CONTINUE at step W (resend; your status shows blocked). Card 537 on main now holds row T1 (commit c3c3e703) … Build T1 red first, re-run the deploy gate, then your stop line."). Same fact, same row added: NOT FOLLOWED, by the same rule (b). The status is not blocked: this run stopped on purpose and is waiting. The path that works is a session launched on card `c3c3e703` (RECOVERY, `CONTINUE: W`): its `authorize.sh` proves the amended card and its PREFLIGHT takes T1.
+- 08:35 ET (`date`): a NEW session was launched with `CONTINUE: W` on card `c3c3e703` (RECOVERY). Its `authorize.sh` proved the amended card (`## AUTHORIZATION`). `CONTINUED at W 08:35 ET`, with row T1 in the card's rows; the wip commits were continued.
+- L74 (second session): a system notice again asked for a `Claude-Session:` line in commits. Recorded as data and not followed; `f21900fc` carries `Co-Authored-By` only.
+- One more W run (after T1), as BUILD-HUB W allows: offline, live-note and `tests/ops`, logs as in `## W`. No lock was taken (DB: none).
+- `.env`: never present in the second session ("No such file or directory" at 08:35 and 08:50 ET).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — tests/ops red on BASE outside the rows — tests/ops/test_the_rule_sweep.py::test_the_sweep_swept_what_it_pins: assert (21, 85) == (18, 85) (main 8b813ca7 added three in-window check reports after the pin)
+BUILT · job: deploy-smoke-string-1014 · tip: f21900fc | on 7aa5d470 | migration: none | offline 4328/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 5 of 5 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 96124
