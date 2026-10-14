@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/card-template-1014
 WORKTREE: card-template-1014
-BASE:
+BASE: fe59722f
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/card-template-1014/docs/40 - DevDocs/reports/card-template-build-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/card-template-check-2026-10-14.md
@@ -34,7 +34,7 @@ ORDER: the test file first with both RED tests quoted on `BASE` (`uv run pytest 
 
 ## READ
 - `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-14.md` rows R1471 and R1472; `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-14-words.md` R1471.
-- `docs/40 - DevDocs/prompts/CARD.md` whole (150 lines): `:33`, `:54-56`, `:63-75`, `:138`.
+- `docs/40 - DevDocs/prompts/CARD.md` whole (149 lines): `:33`, `:54-56`, `:63-75`, `:138`.
 - `ops/desk/deploy-card.sh` lines 24-31 and 534-543 (how `## DEPLOY PROOF` is read).
 - `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-hub-text-1013.md` `## DECISIONS` 1 and 2 (the failed deploy).
 - `tests/ops/test_prodwrite_hub.py` lines 1-30 and 145-150 (the shape of a test that reads `CARD.md`); `tests/ops/test_deploy_card.py:383-386`, `:426-434`; `tests/ops/test_deploy_step_c.py:332-334`; `tests/ops/test_desk_launch_prechecks.py:826-832`.
