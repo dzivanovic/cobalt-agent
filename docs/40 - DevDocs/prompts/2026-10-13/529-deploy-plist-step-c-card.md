@@ -5,7 +5,7 @@ WORKTREE: deploy-plist-step-c-1013
 BASE: main
 TIP: 6b2dabd5
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-plist-step-c-1013.md
-RULINGS: 2026-10-13 R1341, 2026-10-13 R1418
+RULINGS: 2026-10-13 R1341
 TAG: deploy-2026-10-13-plist-step-c
 MIGRATIONS: none
 SET: radar
