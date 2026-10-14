@@ -59,3 +59,6 @@ scroll past.
 the probe itself cannot run, and the sweep turns that into a red
 `UNKNOWN`. "The probe is broken" and "the job is gone" are different
 facts; collapsing them is how a red condition becomes invisible.
+
+## 2026-10-13 — plist-step-c-1013
+`bootstrap_owed()` (new, the one reader of `data/deploy/bootstrap-owed.json`, `BOOTSTRAP_OWED_PATH`; missing or empty = nothing, not JSON = `BootstrapOwedError`): in `sweep`'s `not status.loaded` branch a listed label is `Finding(ok=True, state="OWED (deferred bootstrap)")`; an unlisted one is today's `not loaded` red; `mark_probe` unchanged (card 496 OW1).

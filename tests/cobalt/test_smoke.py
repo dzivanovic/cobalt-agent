@@ -1572,3 +1572,72 @@ def test_an_absent_drc_relation_fails_k10_naming_it_never_errors(check_id):
     assert out.verdict is Verdict.FAIL, out.detail
     assert DRC_GUARD in out.detail
     assert len(read) == 1, read
+
+
+# ---------------------------------------------------------------------
+# Card 496 OW1: K18 reads data/deploy/bootstrap-owed.json — a listed,
+# enabled, unloaded label is OWED (deferred bootstrap), not red. The state
+# file lives in tmp_path; the label is card 304's.
+# ---------------------------------------------------------------------
+
+OWED_LABEL = "com.cobalt.prefill-refresh"
+
+
+class _Spec:
+    def __init__(self, label, enabled=True):
+        self.label, self.enabled = label, enabled
+
+
+def _k18(monkeypatch, tmp_path, *, listed, loaded, specs=None):
+    from cobalt.jobs import watchdog
+
+    path = tmp_path / "data" / "deploy" / "bootstrap-owed.json"
+    if listed is not None:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({lab: {"gate": ["X8"], "card": "constructed"} for lab in listed}))
+    # raising=False: on BASE the name is absent and each test reds (or pins) on its verdict
+    monkeypatch.setattr(watchdog, "BOOTSTRAP_OWED_PATH", path, raising=False)
+    match = LaunchctlCheck(id="K18", title="drift", kind="launchctl", mode="registry_match",
+                           expect_text="no drift")
+    specs = specs or [_Spec("com.cobalt.radar"), _Spec(OWED_LABEL)]
+    return checks.evaluate(match, ctx(), deps(job_specs=lambda: specs, launchctl_loaded=loaded.__getitem__))
+
+
+def test_ow1_k18_prints_owed_for_a_listed_label(monkeypatch, tmp_path):
+    out = _k18(monkeypatch, tmp_path, listed=[OWED_LABEL],
+               loaded={"com.cobalt.radar": True, OWED_LABEL: False})
+    assert out.verdict is Verdict.PASS, out.detail
+    assert f"OWED (deferred bootstrap): {OWED_LABEL}" in out.detail
+    assert f"{OWED_LABEL}\tenabled=True\tloaded=False\towed" in out.raw
+
+
+def test_ow1_an_entry_removed_and_still_unloaded_is_red_in_both(monkeypatch, tmp_path):
+    out = _k18(monkeypatch, tmp_path, listed=[],
+               loaded={"com.cobalt.radar": True, OWED_LABEL: False})
+    assert out.verdict is Verdict.FAIL
+    assert OWED_LABEL in out.detail and "OWED" not in out.detail
+
+
+def test_ow1_an_unlisted_unloaded_label_is_red_before_and_after(monkeypatch, tmp_path):
+    other = "com.cobalt.other-one-shot"
+    out = _k18(monkeypatch, tmp_path, listed=[OWED_LABEL],
+               loaded={"com.cobalt.radar": True, OWED_LABEL: False, other: False},
+               specs=[_Spec("com.cobalt.radar"), _Spec(OWED_LABEL), _Spec(other)])
+    assert out.verdict is Verdict.FAIL
+    assert other in out.detail
+    assert OWED_LABEL not in out.detail, out.detail
+
+
+def test_ow1_no_state_file_is_today(monkeypatch, tmp_path):
+    out = _k18(monkeypatch, tmp_path, listed=None,
+               loaded={"com.cobalt.radar": True, OWED_LABEL: False})
+    assert out.verdict is Verdict.FAIL
+    assert out.detail == f"enabled but not loaded: {[OWED_LABEL]}; loaded but enabled: false: none"
+
+
+def test_ow1_a_loaded_listed_label_is_a_match(monkeypatch, tmp_path):
+    out = _k18(monkeypatch, tmp_path, listed=[OWED_LABEL],
+               loaded={"com.cobalt.radar": True, OWED_LABEL: True})
+    assert out.verdict is Verdict.PASS
+    assert "OWED" not in out.detail
+    assert out.detail == "2 registry label(s) match launchd"

@@ -930,3 +930,94 @@ class TestEveryPlistMustBeLoaded:
             "com.cobalt.cards-expire"
         ]
         assert not finding.ok and "UNKNOWN" in finding.detail
+
+
+# =====================================================================
+# Card 496 OW1: the sweep reads data/deploy/bootstrap-owed.json — a
+# listed, enabled, unloaded label is OWED (deferred bootstrap), not red.
+# Offline: the `Store` stub of test_real_sweep_calls_launchctl_and_reports_
+# missed_after_grace (the card is DB: none); the one-shot of :885's
+# fixture with card 304's label; the state file in tmp_path.
+# =====================================================================
+
+OWED_LABEL = "com.cobalt.prefill-refresh"
+
+
+class TestBootstrapOwed:
+    @staticmethod
+    def _sweep(monkeypatch, tmp_path, *, listed, loaded, labels=(OWED_LABEL,)):
+        import json
+
+        from cobalt.jobs import watchdog
+
+        path = tmp_path / "data" / "deploy" / "bootstrap-owed.json"
+        if listed is not None:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(json.dumps({lab: {"gate": ["X8"], "card": "constructed"} for lab in listed}))
+        # raising=False: on BASE the name is absent and each test reds (or pins) on its finding
+        monkeypatch.setattr(watchdog, "BOOTSTRAP_OWED_PATH", path, raising=False)
+        registry = JobRegistry(jobs=[_spec(label=lab) for lab in labels],
+                               kill_phrase="STOP", resume_phrase="GO")
+        marked = []
+
+        class Store:
+            def ensure_schema(self):
+                pass
+
+            def all(self):
+                return []
+
+            def register(self, spec):
+                pass
+
+            def mark_probe(self, label, **kw):
+                marked.append(label)
+
+        monkeypatch.setattr(
+            watchdog, "launchctl_status",
+            lambda label, **kw: watchdog.LaunchdStatus(
+                label, loaded[label], None, 0 if loaded[label] else None,
+                "loaded, not running (last exit 0)" if loaded[label] else "NOT LOADED in launchd",
+            ),
+        )
+        findings = watchdog.sweep(store=Store(), registry=registry,
+                                  now=datetime(2026, 1, 6, 12, 0, tzinfo=ET))
+        assert marked == []  # a one-shot is never marked
+        return {f.label: f for f in findings}
+
+    def test_ow1_sweep_prints_owed_for_a_listed_label(self, monkeypatch, tmp_path):
+        f = self._sweep(monkeypatch, tmp_path, listed=[OWED_LABEL], loaded={OWED_LABEL: False})[OWED_LABEL]
+        assert f.ok
+        assert f.state == "OWED (deferred bootstrap)"
+
+    def test_ow1_an_entry_removed_and_still_unloaded_is_red_in_both(self, monkeypatch, tmp_path):
+        f = self._sweep(monkeypatch, tmp_path, listed=[], loaded={OWED_LABEL: False})[OWED_LABEL]
+        assert not f.ok and f.state == "not loaded"
+
+    def test_ow1_an_unlisted_unloaded_label_is_red_before_and_after(self, monkeypatch, tmp_path):
+        other = "com.cobalt.other-one-shot"
+        found = self._sweep(monkeypatch, tmp_path, listed=[OWED_LABEL],
+                            loaded={OWED_LABEL: False, other: False}, labels=(OWED_LABEL, other))
+        assert not found[other].ok and found[other].state == "not loaded"
+        assert found[OWED_LABEL].ok
+
+    def test_ow1_no_state_file_is_today(self, monkeypatch, tmp_path):
+        f = self._sweep(monkeypatch, tmp_path, listed=None, loaded={OWED_LABEL: False})[OWED_LABEL]
+        assert not f.ok and f.state == "not loaded" and "NOT LOADED" in f.detail
+
+    def test_ow1_not_json_is_refused_loud(self, monkeypatch, tmp_path):
+        # card 496 FR-A4: the sweep catches the reader's refusal; the label stays red, the file named
+        path = tmp_path / "data" / "deploy" / "bootstrap-owed.json"
+        path.parent.mkdir(parents=True)
+        path.write_text("{")
+        f = self._sweep(monkeypatch, tmp_path, listed=None, loaded={OWED_LABEL: False})[OWED_LABEL]
+        assert not f.ok
+        assert f.state == "not loaded"
+        assert "NOT LOADED" in f.detail
+        assert "bootstrap-owed.json" in f.detail and "not JSON" in f.detail
+
+    def test_ow1_a_loaded_listed_label_is_a_match(self, monkeypatch, tmp_path):
+        listed = self._sweep(monkeypatch, tmp_path, listed=[OWED_LABEL], loaded={OWED_LABEL: True})[OWED_LABEL]
+        plain = self._sweep(monkeypatch, tmp_path, listed=None, loaded={OWED_LABEL: True})[OWED_LABEL]
+        assert listed.state != "OWED (deferred bootstrap)"
+        assert (listed.ok, listed.state, listed.detail) == (plain.ok, plain.state, plain.detail)

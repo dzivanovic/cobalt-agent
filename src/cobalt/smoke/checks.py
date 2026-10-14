@@ -420,19 +420,35 @@ def _launchctl(check: LaunchctlCheck, ctx: SmokeContext, deps: SmokeDeps) -> Che
         verdict = Verdict.PASS if status.running_with_pid else Verdict.FAIL
         return _out(check, verdict, detail, command, status.raw)
     specs = deps.job_specs()
-    lines, not_loaded, loaded_disabled = [], [], []
+    lines, not_loaded, loaded_disabled, owed_labels = [], [], [], []
+    owed = None
     for spec in specs:
         loaded = deps.launchctl_loaded(spec.label)
-        lines.append(f"{spec.label}\tenabled={spec.enabled}\tloaded={loaded}")
+        line = f"{spec.label}\tenabled={spec.enabled}\tloaded={loaded}"
         if spec.enabled and not loaded:
-            not_loaded.append(spec.label)
+            # Card 496 OW1: listed in data/deploy/bootstrap-owed.json = a
+            # deploy merged it and deferred its bootstrap: OWED, not drift.
+            # An unreadable file raises (ERROR), never reads as nothing owed.
+            if owed is None:
+                from cobalt.jobs.watchdog import bootstrap_owed
+
+                owed = bootstrap_owed()
+            if spec.label in owed:
+                owed_labels.append(spec.label)
+                line += "\towed"
+            else:
+                not_loaded.append(spec.label)
         if not spec.enabled and loaded:
             loaded_disabled.append(spec.label)
+        lines.append(line)
     if not_loaded or loaded_disabled:
         detail = (f"enabled but not loaded: {not_loaded or 'none'}; "
                   f"loaded but enabled: false: {loaded_disabled or 'none'}")
         return _out(check, Verdict.FAIL, detail, command, "\n".join(lines))
-    return _out(check, Verdict.PASS, f"{len(specs)} registry label(s) match launchd", command, "\n".join(lines))
+    detail = f"{len(specs)} registry label(s) match launchd"
+    if owed_labels:
+        detail += f"; OWED (deferred bootstrap): {', '.join(owed_labels)}"
+    return _out(check, Verdict.PASS, detail, command, "\n".join(lines))
 
 
 def _grade(check, row: dict[str, Any], expect: list[Predicate], ctx: SmokeContext,

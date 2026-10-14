@@ -633,4 +633,5 @@ checks:
     mode: registry_match
     expect_text: >-
       every `enabled: true` label in configs/cobalt/jobs.yaml is loaded in
-      launchd and no `enabled: false` label is
+      launchd and no `enabled: false` label is, except a label listed in
+      data/deploy/bootstrap-owed.json (OWED, deferred bootstrap)

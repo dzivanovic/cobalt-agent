@@ -29,21 +29,57 @@ working".
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 from cobalt.session import clock as clock_mod
 from cobalt.session.clock import ET, session_clock
 
-from .config import JobRegistry, JobSpec, load_job_registry
+from .config import REPO_ROOT, JobRegistry, JobSpec, load_job_registry
 from .models import RED_STATES, JobKind, JobState, Supervisor
 from .store import JobStore
 
 MISSED_GRACE_KEY = "jobs.missed_grace_min"
+
+#: Card 496 DF1/OW1: the labels a deploy merged but did not load. Written by
+#: `ops/desk/deploy-step-c.sh` at STEP-C (a `deferred` `## LAUNCHD` line),
+#: an entry removed by its `--owed-clear` once the bootstrap-only deploy
+#: loaded the label. Gitignored (`data/`). The sweep and smoke K18 read a
+#: listed, enabled, unloaded label as OWED, not red.
+BOOTSTRAP_OWED_PATH = REPO_ROOT / "data" / "deploy" / "bootstrap-owed.json"
+OWED_STATE = "OWED (deferred bootstrap)"
+
+
+class BootstrapOwedError(RuntimeError):
+    """The owed file exists and is not a JSON object keyed by label."""
+
+
+def bootstrap_owed(path: Optional[Path] = None) -> frozenset[str]:
+    """The one reader of the owed file: the labels it lists.
+
+    A missing or empty file lists nothing. A file that is not a JSON
+    object is refused loud (L1) — never read as "nothing owed" silently.
+    """
+    p = path or BOOTSTRAP_OWED_PATH
+    try:
+        text = p.read_text()
+    except FileNotFoundError:
+        return frozenset()
+    if not text.strip():
+        return frozenset()
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError as e:
+        raise BootstrapOwedError(f"{p}: not JSON ({e})") from e
+    if not isinstance(data, dict):
+        raise BootstrapOwedError(f"{p}: not a JSON object keyed by label")
+    return frozenset(data)
 
 
 @dataclass
@@ -394,7 +430,22 @@ def sweep(
                 # row still said failed). It is reported, not written.
                 if row is not None and spec.kind is JobKind.RESIDENT:
                     store.mark_probe(spec.label, alive=False, detail=status.detail, now=ts)
-                findings.append(Finding(spec.label, False, "not loaded", status.detail))
+                # Card 496 OW1: a label a deploy merged and deliberately did
+                # not load is OWED, not red, while the owed file lists it.
+                # An unreadable file lists nothing here: the red stays red.
+                try:
+                    owed = bootstrap_owed()
+                    owed_note = ""
+                except BootstrapOwedError as e:
+                    owed, owed_note = frozenset(), f" (bootstrap-owed file unreadable: {e})"
+                if spec.label in owed:
+                    findings.append(
+                        Finding(spec.label, True, OWED_STATE,
+                                f"{status.detail}; listed in data/deploy/bootstrap-owed.json "
+                                "— a deploy merged it and deferred its bootstrap")
+                    )
+                else:
+                    findings.append(Finding(spec.label, False, "not loaded", status.detail + owed_note))
                 continue
 
         if row is None:
