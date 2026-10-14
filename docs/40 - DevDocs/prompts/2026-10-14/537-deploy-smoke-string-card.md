@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/deploy-smoke-string-1014
 WORKTREE: deploy-smoke-string-1014
 BASE: 7aa5d470
-TIP:
+TIP: f21900fc
 REPORT: /Users/cobalt/cobalt-wt/deploy-smoke-string-1014/docs/40 - DevDocs/reports/deploy-smoke-string-build-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-smoke-string-check-2026-10-14.md
 HOUSE B: as needed
