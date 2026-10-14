@@ -38,9 +38,12 @@
 #
 # THE COPY (card 547 db-copy, his R1471): copy mode is ON only when the lists file holds BOTH
 # `## COPY CREATE` and `## COPY DROP`, each ONE backticked line holding the token `<COPY>` once
-# (one without the other, or another token count, is refused before anything runs); with neither,
-# every line of a run is the lock's as above. It reaches withdb and all only. The copy's name is
-# `cobalt_dev_` + the worktree name lower-cased, every character outside [a-z0-9] turned to `_`;
+# (one without the other, or another token count, is refused before anything runs), AND the call
+# passes --copy (check O2, A1); without --copy every line of a run is the lock's as above, whatever
+# the lists file holds, and --copy without both sections is refused before anything runs. --copy
+# reaches withdb and all only; no deploy line passes it. In copy mode the worktree name must be
+# [a-z0-9-] (`REFUSED: copy mode needs a worktree name of [a-z0-9-]`, check O3), so the copy's
+# name, `cobalt_dev_` + the worktree name with `-` turned to `_`, is one to one;
 # over 50 characters in all is refused (`REFUSED: copy name too long`), never truncated. The lock
 # is held SHORT: the take, <F0> and the proof-only on cobalt_dev (the template) as above, then
 # `## COPY DROP` (a leftover of a crashed run of this worktree; its failure is logged, not fatal)
@@ -104,6 +107,7 @@ deselects=""
 tickers=""
 migration=""
 deploy=""
+copy_on=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --deselect)
@@ -124,6 +128,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --migration) migration=1; shift ;;
         --deploy) deploy=1; shift ;;
+        --copy) copy_on=1; shift ;;
         *) refuse "unknown argument '$1'" ;;
     esac
 done
@@ -249,6 +254,14 @@ if [ -f "$tmp/copy_create" ]; then
     COPY_DROP=$(cat "$tmp/copy_drop")
 fi
 [ -z "$deploy" ] || [ -n "$PASS1_DEPLOY" ] || { rm -rf "$tmp"; refuse "--deploy: ## PASS 1 does not hold ' --db-only' exactly once: $lists"; }
+# THE COPY is ON only with --copy AND both sections (check O2, A1): a call without --copy is lock mode
+if [ -n "$copy_on" ]; then
+    case "$mode" in
+        withdb|all) ;;
+        *) rm -rf "$tmp"; refuse "--copy belongs to withdb and all" ;;
+    esac
+    [ -n "$COPY_CREATE" ] || { rm -rf "$tmp"; refuse "--copy needs both ## COPY CREATE and ## COPY DROP in gate-lists.md: $lists"; }
+fi
 
 logdir="$WT/.gate-logs"
 mkdir -p "$logdir" || { rm -rf "$tmp"; refuse "mkdir failed: $logdir"; }
@@ -377,6 +390,10 @@ placed=""
 # copy_name: the copy's name into $copy; refused over 50 characters in all, never truncated
 copy_name() {
     [ -f "$HERE/devdb-copy-env.sh" ] || refuse "copy mode: devdb-copy-env.sh is not beside gate.sh: $HERE/devdb-copy-env.sh"
+    # check O3: only `-` is mapped, so two worktrees never share a copy name
+    case "$name" in
+        *[!a-z0-9-]*) refuse "copy mode needs a worktree name of [a-z0-9-]" ;;
+    esac
     copy="cobalt_dev_$(printf '%s' "$name" | tr 'A-Z' 'a-z' | tr -c 'a-z0-9' '_')"
     [ "${#copy}" -le 50 ] || refuse "copy name too long: $copy (${#copy} characters; 50 in all)"
 }
@@ -661,7 +678,7 @@ for line in sys.stdin.read().splitlines():
 lockway=""
 # THE COPY: the name is read, and refused, before anything runs
 case "$mode" in
-    withdb|all) [ -z "$COPY_CREATE" ] || copy_name ;;
+    withdb|all) [ -z "$copy_on" ] || copy_name ;;
 esac
 case "$mode" in
     probe) do_probe ;;
