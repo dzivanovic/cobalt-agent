@@ -5,7 +5,7 @@ WORKTREE: deploy-jev-shadow-1015
 BASE: main
 TIP: 5316fafe
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-jev-shadow-1015.md
-RULINGS: 2026-10-15 R1532 R1535
+RULINGS: 2026-10-15 R1532, 2026-10-15 R1535
 TAG: deploy-2026-10-15-jev-shadow
 MIGRATIONS: none
 SET: none
