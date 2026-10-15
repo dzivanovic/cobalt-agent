@@ -120,3 +120,14 @@ object. The first no-flag test passed on the first DB read alone.
 
 ## 2026-10-12 — db-apply-prod-1012
 The usage block names `cobalt db apply --side {user,system} [--prod] --sha256 <hex> <date>/<nn>-<name>-apply.sql` under the `db migrate` line (the verb is `db_apply.py`, registered by `db_migrations/cli.py`).
+
+## 2026-09-23 — JEV trial: `cobalt classify`
+
+`classify_cli.add_parser(sub)` (import `from cobalt.classify import cli as
+classify_cli`) mounts `cobalt classify`. `discover` is the KEYLESS
+verification of his JEV model id on OpenRouter. `probe` is ONE keyed,
+metered FLOOR call through the System One door, run only by build `31`
+through `ops/run_classify_trial.sh`. `trial … --dry-run | --run` is the
+trial runner. See `classify/cli.md`. Branch `jev/trial-0923`, not merged.
+The registration puts `src/cobalt/classify/*` in
+`com.cobalt.radar`'s static import reach (`cobalt jobs restarts`).

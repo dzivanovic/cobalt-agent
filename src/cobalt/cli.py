@@ -61,6 +61,7 @@ load_dotenv(Path(__file__).resolve().parents[2] / ".env")
 
 from cobalt.aset.config import load_config as load_aset_config  # noqa: E402
 from cobalt.cards import cli as cards_cli  # noqa: E402
+from cobalt.classify import cli as classify_cli  # noqa: E402
 from cobalt.daymode import cli as daymode_cli  # noqa: E402
 from cobalt.generated import cli as generated_cli  # noqa: E402
 from cobalt.db_migrations import cli as db_cli  # noqa: E402
@@ -539,6 +540,7 @@ def main() -> None:
     # reflows none of its neighbours.
     archiver_cli.add_parser(sub)
     drc_cli.add_parser(sub)
+    classify_cli.add_parser(sub)
     jobs_cli.add_stop_parsers(sub)
     voice_cli.add_parser(sub)
     strike_cli.add_parser(sub)
