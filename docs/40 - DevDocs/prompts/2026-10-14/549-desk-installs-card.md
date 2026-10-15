@@ -5,9 +5,10 @@ INSTALL: none
 BRANCH: ops/desk-installs-1014
 WORKTREE: desk-installs-1014
 BASE: 6ee9b8d6
-TIP: 4bc73283
+TIP: 7c8db6e1
 REPORT: /Users/cobalt/cobalt-wt/desk-installs-1014/docs/40 - DevDocs/reports/desk-installs-build-2026-10-14.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-installs-check-2026-10-14.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-installs-fr1-check-2026-10-15.md
+HOUSE A: grok
 HOUSE B: as needed
 DB: none
 RESTARTS: none
