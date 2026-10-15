@@ -908,3 +908,96 @@ def test_f12_no_route_wrapper_in_ops():
             except UnicodeDecodeError:
                 continue
     assert hits == []
+
+
+# -- the check of jev-shadow-1015 (CHECK-HUB ## 4): held findings -------------------------
+
+def test_o1_a_closed_card_with_no_launch_commit_is_a_status_row_not_a_crash(tmp_path, monkeypatch, fake_vault):
+    repo = _repo(tmp_path)
+    good = _closed_card(repo, 1)
+    path = f"{PROMPTS}/02-c2-card.md"
+    report = f"{REPORTS}/c2-check.md"
+    _commit(repo, {path: _card("c2", tip="t2-tip", check_report=report),
+                   report: f"# check c2\n\n{CHECK_DONE}\n"})
+    stub = Stub((200, json.dumps(_answers()).encode()))
+    rows, _ = _batch(tmp_path, monkeypatch, repo, stub)
+    assert sorted(r["card_path"] for r in rows) == sorted([good, path])
+
+
+def test_o3_a_check_and_a_deploy_outcome_of_one_card_count_once(tmp_path):
+    from cobalt.classify import route
+
+    cfg = _route_cfg(tmp_path)
+    sha = cfg.question_set().sha256
+    at = datetime(2026, 1, 5, 12, tzinfo=timezone.utc)
+    rows = []
+    for i in range(15):
+        card = f"c{i}"
+        rows.append(_dec(card, band="low", card_band="LOW", model="grok-4.7", set_sha=sha, at=at))
+        for stage in ("check", "deploy"):
+            rows.append({**_out(card, builder="grok-4.7", held=i % 3), "stage": stage})
+    text = route.weekly_read(rows, cfg, week=date(2026, 1, 5))
+    assert "n=15 insufficient data" in text
+    assert "mean" not in text
+
+
+def test_o4_an_openrouter_model_never_reaches_litellm_with_the_environment_key(old_tree, tmp_path, monkeypatch):
+    import litellm.main as lm
+    from cobalt_agent.config import _load_config
+    from cobalt_agent.llm import LLM
+
+    key, conf = old_tree
+    _vault(tmp_path / "data" / ".cobalt_vault", key, {})
+    settings = _load_config(conf)
+    settings.active_profile = {"default": "cloud_claude_4_6_opus"}
+    monkeypatch.setenv(KEY_NAME, "dummy-or-env")
+    monkeypatch.setattr("cobalt_agent.config.get_config", lambda: settings)
+    seen: dict = {}
+
+    def fake_http(**kwargs):
+        seen["api_key"] = kwargs.get("api_key")
+        raise RuntimeError("constructed stop")
+
+    monkeypatch.setattr(lm.base_llm_http_handler, "completion", fake_http)
+    llm = LLM(role="default")
+    with pytest.raises(Exception):
+        llm._call_provider([{"role": "user", "content": "hi"}])
+    assert seen.get("api_key") != "dummy-or-env"
+
+
+def test_o5_a_spend_ledger_inside_the_main_checkout_is_refused(tmp_path):
+    from cobalt.classify import config as cfg_mod
+
+    raw = yaml.safe_load(TRIAL_YAML.read_text())
+    raw["classify"]["spend_ledger"] = "/Users/cobalt/cobalt/scratch/classify-spend.jsonl"
+    p = tmp_path / "trial.yaml"
+    p.write_text(yaml.safe_dump(raw, sort_keys=False))
+    with pytest.raises(cfg_mod.ClassifyConfigError, match="outside every checkout"):
+        cfg_mod.load_trial_config(p)
+
+
+def test_o6_a_shadow_check_done_line_gives_its_held_count(tmp_path):
+    from cobalt.classify import route
+
+    repo = _repo(tmp_path)
+    path = f"{PROMPTS}/01-c1-card.md"
+    report = f"{REPORTS}/c1-check.md"
+    line = CHECK_DONE.replace("held: 3 ·", "held: 3 (opus-own 2 · house 1) ·")
+    _commit(repo, {path: _card("c1", check_report=report), report: f"# check c1\n\n{line}\n"})
+    out = route.write_outcome(repo, path, tmp_path / "routing-ledger.jsonl")
+    assert out is not None and out["held"] == 3
+
+
+def test_f11_the_under_30_read_prints_no_median(tmp_path):
+    from cobalt.classify import route
+
+    cfg = _route_cfg(tmp_path)
+    sha = cfg.question_set().sha256
+    at = datetime(2026, 1, 5, 12, tzinfo=timezone.utc)
+    rows = []
+    for i in range(29):
+        card = f"c{i}"
+        rows += [_dec(card, band="low", card_band="LOW", model="grok-4.7", set_sha=sha, at=at),
+                 _out(card, builder="grok-4.7", held=i % 3)]
+    text = route.weekly_read(rows, cfg, week=date(2026, 1, 5))
+    assert "median" not in text
