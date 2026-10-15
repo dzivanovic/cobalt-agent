@@ -4,11 +4,11 @@ BAND: MID
 INSTALL: none
 BRANCH: feat/jev-shadow-1015
 WORKTREE: jev-shadow-1015
-BASE:
+BASE: d601b1f6
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/jev-shadow-1015/docs/40 - DevDocs/reports/jev-shadow-build-2026-10-15.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/jev-shadow-check-2026-10-15.md
-HOUSE B:
+HOUSE B: as needed
 RESTARTS: com.cobalt.agent com.cobalt.radar
 RULINGS: 2026-09-23 R42, 2026-10-11 R1112, 2026-10-14 R1467, 2026-10-15 R1532, 2026-10-15 R1535
 
@@ -80,7 +80,7 @@ ORDER: Z0 (the read; a STOP ends the build there); P0 (the port, its PROOF per f
 - `ls /Users/cobalt/cobalt/configs/cobalt/classify/route.yaml` · before `No such file or directory` · after `/Users/cobalt/cobalt/configs/cobalt/classify/route.yaml`
 - `ls /Users/cobalt/cobalt/src/cobalt/classify/collector.py` · before `No such file or directory` · after `/Users/cobalt/cobalt/src/cobalt/classify/collector.py` (P0)
 - `grep -c -F "'openrouter_api_key': 'api_key'" /Users/cobalt/cobalt/src/cobalt_agent/config.py` · before `1` · after `0` (only when Z0 found no `openrouter` live provider; after a Z0 STOP the card does not deploy)
-- `grep -c -E "^spend_ledger:" /Users/cobalt/cobalt/configs/cobalt/classify/trial.yaml` · before `No such file or directory` (the trial package is not on `main`) · after `1`
+- `grep -c -F "spend_ledger:" /Users/cobalt/cobalt/configs/cobalt/classify/trial.yaml` · before `No such file or directory` · after `1`
 - SMOKE READ, no marker (ASK DESK 19; outside `/Users/cobalt/cobalt`): `ls /Users/cobalt/.cobalt/classify` → `No such file or directory` (the deploy makes no keyed call and writes no ledger).
 - ONE SMOKE READ after the merge: `uv run pytest -q tests/cobalt/test_jev_shadow_1015.py` → `0 failed`; and `uv run cobalt classify route --card "docs/40 - DevDocs/prompts/2026-10-15/580-close-automation-card.md" --dry-run` → one `ROUTE DRY` line and `cards=1 calls=1`, zero network.
 - RESTARTS at the deploy: the table R2 derives (expected `com.cobalt.agent com.cobalt.radar`): the old agent restarts with no OpenRouter key in its config (R1535), Z0 having found no running service on `openrouter` (brain 0e848919, 2026-10-15).
