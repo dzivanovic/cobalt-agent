@@ -57,7 +57,9 @@ if not hit:
                     fi
                 fi
                 if [ "$guard_mode" = shipped ]; then
-                    guard_hits=$(printf '%s\n' "$guard_other" | while IFS= read -r guard_p; do
+                    # --no-renames: a staged rename lists its source path too (check O1)
+                    guard_hits=$(git -c core.quotePath=false diff --cached --name-only --no-renames \
+                        | while IFS= read -r guard_p; do
                         printf '%s\n' "$guard_ship" | grep -q -x -F -- "$guard_p" && printf '%s\n' "$guard_p"
                     done)
                     if [ -n "$guard_hits" ]; then
