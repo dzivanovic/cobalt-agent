@@ -26,6 +26,10 @@
 #             `## PASS 1` with its one ` --db-only` token removed, everything else byte-equal,
 #             printing `pass 1: whole (deploy)`; a PASS 1 that does not hold that token exactly
 #             once is refused before anything runs. Without it pass 1 is `## PASS 1` as written.
+#   --deploy-gate  (offline, all; card 2026-10-13/521) `## OFFLINE OPS` (tests/ops) runs after
+#             `## OFFLINE` whatever the diff holds, printing `tests/ops: run (deploy gate)`; without
+#             it tests/ops runs only on an ops diff from `git merge-base main HEAD` (ops_reason).
+#             DEPLOY-HUB's gate call and a check's W type it; a build's W does not.
 #
 # THE LOCK (card 2026-10-03/03c M2): taken ONLY by take-devdb-lock.sh <worktree> 90 and given back
 # by release-devdb-lock.sh <worktree>, both beside this script (probe, withdb and all are refused
