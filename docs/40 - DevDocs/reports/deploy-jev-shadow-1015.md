@@ -8,6 +8,7 @@ Desk: recut or relaunch (`CONTINUE: STEP-D0`); see DECISIONS 1–2.
 
 ## L74
 - The session's harness attribution reminder asked commits to also end with a `Claude-Session:` line. Recorded as data per L74 / DEPLOY-HUB; not acted on — commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- Resume attempt 2: the same `Claude-Session:` attribution request arrived again in this session's harness reminder. Recorded, not acted on.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-15/618-jev-shadow-1015-card.md"` → exit 0, output WHOLE:
@@ -214,6 +215,7 @@ STEP-5 (4) — re-run on the OLD tree (nothing merged), `<t up>` 18:19:05:
 next: STEP-D0 (gate green at 18:15:52) — D0, D1, D2 done
 OUTAGE STARTING 18:18:21 — residents of com.cobalt.agent com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
 OUTAGE ENDED 18:19:05 — STEP-5 (3) restored all three on the old code; nothing merged. next: the desk's (recut, or a new session at `CONTINUE: STEP-D0`).
+RESUME attempt 2 (18:22:24): resume checks TRUE; STEP-0, D0, D1 done. next: STEP-D2
 
 ## DECISIONS
 1. FOR THE DESK — the run FAILED at 4.2 on aset's slow exit (`state = SIGTERMed` at the one retry), not on the set's code: the gate is green on `d1daf9fe` and nothing merged. This hub has no RECUT path for a `rollback: used` ending with nothing merged; the RECUT clause covers `rollback: not used` only. Safe default taken: residents restored on the OLD code, `main` at `8685057a` (docs only), rollback tag `pre-jev-shadow-1015` left at `8685057a`, gate worktree and branch left as they are. The desk decides between a recut and a relaunch (`CONTINUE: STEP-D0`, whose (a) the `FAILED:` last line satisfies). Not his: no scope, money or schema touched.
@@ -237,4 +239,49 @@ OUTAGE ENDED 18:19:05 — STEP-5 (3) restored all three on the old code; nothing
 - ROLLBACK STRING: not written — nothing merged (THE ROLLBACK STRING applies to an ending that merged).
 - RELEASE: the lock was released by `gate.sh` at STEP-G; `<GATE>/.env` and the lock dir absent (STEP-G reads).
 
-FAILED: 4.2 — com.cobalt.aset still loaded (state = SIGTERMed) after bootout and one retry · rollback: used — migrations applied: none — aset: UP — radar: UP — launchd: none · decisions: 3 · for Dejan: 0 · tokens: 198005
+# RELAUNCH
+Launch message: `CONTINUE: STEP-D0` (THE ONE RESUME, attempt 2). `date` → Thu Oct 15 18:22:24 EDT 2026. The report's last non-blank line before this launch, quoted:
+> `FAILED: 4.2 — com.cobalt.aset still loaded (state = SIGTERMed) after bootout and one retry · rollback: used — migrations applied: none — aset: UP — radar: UP — launchd: none · decisions: 3 · for Dejan: 0 · tokens: 198005`
+
+Resume checks, each its own call, (e) first:
+- (e) `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 77670`, `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist`; `…/com.cobalt.radar` → `state = running`, `pid = 77683`, `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist`; `cobalt.sh status` → `Cobalt is ONLINE (PID: 77694).` TRUE — no restore needed.
+- GATE `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-jev-shadow-1015/.env` → `No such file or directory` — no G (f), no release by hand.
+- (a) the old last line begins `FAILED:` (quoted above). TRUE.
+- (b) `## L68 GATE` carries `GATE GREEN on d1daf9fe`; `## RESTARTS` carries `<restart set>` = `com.cobalt.agent com.cobalt.aset com.cobalt.radar`. TRUE.
+- (c) `git -C <GATE> status --short --branch` → `## deploy/jev-shadow-1015` alone; `rev-parse --short=8 HEAD` → `ccb86121` (the earlier attempt's main-into-gate merge, above `<m1>`); `merge-base --is-ancestor d1daf9fe ccb86121` → exit 0; `diff --stat d1daf9fe deploy/jev-shadow-1015 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → (nothing). TRUE.
+- (d) `merge-base --is-ancestor d1daf9fe main` → exit 1 (nothing merged). TRUE.
+
+## RESUME (attempt 2)
+### STEP-0 (fresh rows)
+| rule | command | exit | result |
+|---|---|---|---|
+| P0 | `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "<card>"` | 0 | WHOLE as in `## AUTHORIZATION` with these row-number changes: `R1532 row … 98:| R1532 |…` and `R1535 row … 95:| R1535 |…` (same text, same commits `1ddcdc64…`, `1f067493…`); card commit `b20aa7f0…`, CARD UNCHANGED nothing; last line `AUTHORIZED` |
+| P1 | `date` | 0 | Thu Oct 15 18:22:48 EDT 2026 — outside 21:30-22:30 ET |
+| P2 | `tail -n 3 ".../jev-shadow-check-2026-10-15.md"` | 0 | last line unchanged (`… tip: 5316fafe … held unfixed: 0 … ready: YES …`) |
+| P2 | `log -1 --format=%H -- "<check report>"` | 0 | `223e0859f121289334e1b9239d9f7311db9eeb35` |
+| P2 | `diff --stat -- "<check report>"` | 0 | (nothing) |
+| P3 | `rev-parse --short=8 5316fafe` · `… feat/jev-shadow-1015` | 0 · 0 | `5316fafe` · `5316fafe` = row = TIP |
+| P3 | `merge-base --is-ancestor 5316fafe feat/jev-shadow-1015` · `diff --stat 5316fafe feat/jev-shadow-1015 -- . ':(exclude)docs'` | 0 · 0 | — · (nothing) |
+| P4 | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` |
+| P5 | `status --short --branch` · `rev-parse --short=8 HEAD` (GATE) | 0 · 0 | `## deploy/jev-shadow-1015` · `ccb86121` (as (c) found); `<m0>` = `b20aa7f0` (the report's); `merge-base --is-ancestor b20aa7f0 main` → exit 0; EMPTY check not run (resume) |
+| P6 | the five `## MARKERS` | 1·1·1·0·2 | `No such file or directory` ×3 · `1` · `grep: …trial.yaml: No such file or directory` — each `before` |
+| P7 | `diff --stat main 5316fafe -- src/cobalt/db_migrations` | 0 | (nothing) — MIGRATIONS: none holds |
+| P8 | `launchctl print` aset / radar (at (e)) · `ls …/ops/com.cobalt.aset.plist` · `cobalt.sh status` | 0·0·0·0 | aset `running` pid 77670, path = the ops plist · radar `running` pid 77683, path = the LaunchAgents plist · listed · `Cobalt is ONLINE (PID: 77694).` |
+
+### STEP-D0
+- `status --short --branch` → `## main...origin/main [ahead 176]`. `status --porcelain` → only ` M` / `??` under `docs/40 - DevDocs/`, ` M configs/cobalt/rules.yaml`, ` M .claude/settings.json`, `?? .claude/settings.json.bak`; no staged line; no `src/`, `tests/`, `ops/`, other `configs/` path.
+- `diff --stat b20aa7f0 main -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → (nothing).
+- ALLOWLIST PROBE: `tag scratch-allow-probe-jev-shadow-1015` → ok; `tag -d` → `Deleted tag 'scratch-allow-probe-jev-shadow-1015' (was 255dab0e)`; `commit --allow-empty …` → `[main 910e96c8] scratch: allowlist probe (reverted next line)`; `reset --soft HEAD~1` → ok; `log --oneline -1` → `255dab0e docs(desk): R1621-R1623 JEV deploy FAILED 4.2 (nothing merged), 546 port check DONE ready YES` (HEAD back).
+- TAG NAMES: `refs/tags/deploy-2026-10-15-jev-shadow` → exit 1. `refs/tags/pre-jev-shadow-1015` → exit 0 `8685057aba6204bdee7261a197e35452b80fd056` (attempt 1's) → `tag -d pre-jev-shadow-1015` → `Deleted tag 'pre-jev-shadow-1015' (was 8685057a)`.
+
+### STEP-D1 (fresh baseline)
+- `date` → Thu Oct 15 18:23:17 EDT 2026. `<hb0>` = `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 18:23:18 EDT)`; `AMB com.cobalt.herdr unmanaged AMBER …declared interim` (not RED); `OK radar scanning (aftermarket), members 50`; `OK com.cobalt.radar running running 4 min, heartbeat fresh`. No RED.
+- `<val0>`: `validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `<jobs0>` = `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` / `registry <-> ops/: 15 label(s), exact match.`
+- `backup status` → `newest snapshot: 0.1 h old` (ssd local ARMED).
+- aset `state = running` `<aset pid>` 77670; radar `state = running` `<radar pid>` 77683; `cobalt.sh status` → `Cobalt is ONLINE (PID: 77694).`; `ps -p 77694` → `77694 ??  0:00.04 uv run src/cobalt_agent/main.py`.
+- `tail -n 8 radar.err` → last cycle `2026-10-15 18:20:32.837 | INFO | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792102742817`, then price-floor INFO lines at 18:22:25; no traceback.
+- LOG BASELINES: `<a0>` 280 · `<ta0>` 217 · `<tr0>` 0 · `<tc0>` 0 · `<rp0>` 18 · `<rpr0>` 60 · `<re0>` 43 · `<lc0>` 39.
+- `curl … /radar` → `200`. MARKERS again → each `before` (route.py / route.yaml / collector.py `No such file or directory`; openrouter `1`; trial.yaml `No such file or directory`).
+- LAUNCHD SET: empty. MIGRATION: none — no `<RB>`, no proof-only.
+
+(run in progress — next step under ## CONTINUE)
