@@ -7,7 +7,7 @@ TIP: f4e8de85
 REPORT: /Users/cobalt/cobalt-wt/jev-trial-0923/docs/40 - DevDocs/reports/jev-fix-r3-build-2026-09-23.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/jev-trial-74-check-2026-10-15.md
 HOUSE B: as needed
-RULINGS: 2026-10-14 R1467, 2026-10-15 R1535
+RULINGS: 2026-10-15 R1535
 
 ## ROWS
 
