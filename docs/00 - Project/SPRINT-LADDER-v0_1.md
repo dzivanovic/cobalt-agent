@@ -1026,6 +1026,34 @@ OFF-LADDER work of 2026-10-13 (each with the ruling that ordered it):
 | `/strike` into radar | RULED | His R1318: design review first, after S4 deployed and all now-building work done. |
 | L27 routing wording | HELD | His R1317: waits for Grok and Terra results. |
 
+### Status 2026-10-14
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1014` for 10-14 alone from `reports/cto-2026-10-14.md` rows R1467–R1510 (07:40 → 20:45 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-14*"` = `-db-copy`, `-hub-text-fr1`, `-smoke-string`. The 10-13 close ran (`CLOSE PUSHED 348e3581`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 | DONE-LIVE | Unchanged (see 10-08 to 10-13). |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | Card 496 (plist step C) deployed `b693d220` on 10-13, K18 UNPROVEN (R1466); 304's recut is a K5 drafter owed, not started today (§5 of `cto-2026-10-14.md`). No 304 tag. |
+| S5 F21 (cards `468`, `469`) | NOT STARTED (cards DRAFTED) | r3 and X8 probe owed behind the K5 drafters (§5). No build. |
+| S5 F23 (card `503`) | NOT STARTED (card DRAFTED) | 503 preflight owed (§5). |
+| S5 F5, F20 | NOT STARTED (FINALs APPROVED) | F20/F5 drafters owed (§5). |
+| S5 F16 close | NOT STARTED | No row. |
+
+**Stop date: 2026-10-14 (S4, capped, day 7 of 7). S4: ON TIME (PASSED).** Reason: S4 passed 10-12 (his R1223); no S4 change on 10-14. S5 opens 10-15; F4's deploy still waits on its 304 recut.
+
+OFF-LADDER work of 2026-10-14 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Smoke-string (card `537`, deploy card `567`) | DONE-LIVE | Brain R1477, R1483. `deploy-2026-10-14-smoke-string` `266cf4c3`, smoke GREEN (R1484); first deploy FAILED at D0 (R1483), nothing merged; proof MET (R1508). |
+| Hub-text fresh port (card `523`, `hub-text-1013-fr1`, deploy card `568`) | DONE-LIVE | Brain R1472, R1485. `deploy-2026-10-14-hub-text-fr1` `bcf791ee`, smoke GREEN (R1488); the first deploy was rolled back (`de2965d9`, R1472). |
+| DB copy (card `547`, deploy card `572`) | DONE-LIVE | Brain R1500, R1503. `deploy-2026-10-14-db-copy` `f2b42a0e`, gate green (R1506); 537 proof exit 1 AMBER then MET (R1508); s2 AMBER at `f2b42a0e` is a production finding, read by 548's deploy hub. |
+| Result file (card `548`) | BUILT-NOT-MERGED | Brain R1508. BUILT `8211b562` (R1509); check hub `c26e577c` launched (R1510). |
+| Gate `tests/ops` (card `521`) | NOT STARTED (check ready NO) | Brain R1478, R1503. O2 row after 548 deploys; no re-check (L75). |
+| Desk installs (card `549`), card template (card `550`) | BUILT-NOT-MERGED | Checks ready YES; deploy after 548 and 521 (§5). |
+| Deploy freeze (card `546`) | NOT STARTED (card DRAFTED) | Preflight r2 READY YES; build, check, deploy last (§5). |
+| JEV shadow design | DESIGNED | His R1467 (confirmed), R1469. Drafted `8b813ca7`; 8 decisions answered (R1505), brain file `1fc1c647`; L67 tribunal next; X1 waits on him. |
+| Results sitting r2 (Grok row) | DONE | R1468, R1497. 5 of 5 cells closed; nothing routes (L29). Routing table A/B/C waits on him (R1504). |
+| K5 cards 546-550 | DRAFTED | His R1471. Preflight r2 READY YES for 546, 549, 550; 547, 548 built (R1474). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

@@ -4369,3 +4369,53 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-13*"` = `deploy-2026-10-13-desk-refresh` (R1381), `deploy-2026-10-13-k5-gate` (R1354), `deploy-2026-10-13-sweep-pin` (R1433).
 - STOP LINE (L35), `reports/close-2026-10-12.md`: `CLOSE PUSHED 0f824ecb · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-13.md` `## 8`.
+
+### 2026-10-14 — 537 smoke-string, 523 fresh port and 547 db-copy deployed; sitting r2 done; 548 built, check launched; JEV design decisions answered
+
+- R1467 07:40 HIS RULING (relayed by brain, confirmed by him): JEV on the OpenRouter key, shadow first; APPLIED LAWS L27 at 08:40.
+- R1468 07:55 DESK RECORD (brain): sitting r2 launches now; JEV drafter waits.
+- R1469 08:10 LAUNCHED: JEV design drafter (prompt 534), design only.
+- R1470 08:40 DESK RECORD (brain): R1112 and R1467 folded into LAWS L27.
+- R1471 09:25 HIS RULING (approved in the desk): brain relays count as his confirmation; Grok cap removed; APPLIED LAWS L79, checklist L15 at 09:40.
+- R1472 10:05 DESK RECORD (brain): 523 deploy FAILED smoke, rolled back `de2965d9`; fix round pins only 523's own lines.
+- R1473 07:46 LAUNCHED: builds 537 `91b68031`, 549 `9224fd9c`, 550 `24ac66aa`; 523 fix round `6aa20813`.
+- R1474 07:46 LAUNCHED: K5 cards 546-550 drafted; preflight r2 READY YES for 546 549 550.
+- R1475 07:58 LAUNCHED: desk `a46c063d` took over from `ce27c393`; 547 amend2 drafter `c25b6290` (prompt 562).
+- R1476 12:15 DESK RECORD (brain): main red on the rule-sweep pin; row S1 on card 549.
+- R1477 13:35 DESK RECORD (brain): 537 carries the repair as row T1, deploys first.
+- R1478 14:35 DESK RECORD (brain): 521 check ready NO; O2 fix row after 523/547/548 deploy, no re-check.
+- R1479 14:35 DESK RECORD (brain): brain at 446,337 of 500,000 asks its replacement.
+- R1480 13:25 RECORD: desk `34a22a1c` took over; 537 BUILT `f21900fc`; 549 check ready YES.
+- R1481 13:25 DESK RECORD (brain `0e848919`): 537 build decisions 2-4 KEEP.
+- R1482 13:56 LAUNCHED: 537 check ready YES; deploy card 567, tag `deploy-2026-10-14-smoke-string`.
+- R1483 14:30 DESK RECORD (brain): 537 deploy `f0163b2b` FAILED at D0; 567 SMOKE READ none, relaunched.
+- R1484 15:11 RECORD: 537 DEPLOYED `266cf4c3`, smoke GREEN; 523 recut refused, CONFLICT.
+- R1485 15:20 DESK RECORD (brain): 523 recut becomes fresh job `hub-text-1013-fr1`, row FR-P1.
+- R1486 15:45 DESK RECORD (brain): 523 port BUILT `e82cdcc7`; check scoped to `4a7b221f..e82cdcc7`.
+- R1487 16:00 LAUNCHED: 523 fr1 check ready YES (`207ba05e`); deploy card 568.
+- R1488 16:41 RECORD: 523 fr1 DEPLOYED `bcf791ee`, smoke GREEN; 537 EXTRA READ proof moves to 547's deploy.
+- R1489 17:17 LAUNCHED: 547 db-copy BUILT `0e136e4f`; check launched.
+- R1490 17:18 DESK RECORD (brain): 547 build decisions 1-3 KEEP.
+- R1491 17:26 LAUNCHED: sitting r2 preflight (prompt 569); his "Yes to both questions" relayed by brain, not seen in the desk.
+- R1492 17:26 OPEN RECORD: his-ruling row not written, auto classifier refused the commit; Dejan decides.
+- R1493 17:35 RECORD: sitting r2 preflight `f59de227` NOT READY (F1: hub name).
+- R1494 17:30 DESK RECORD (brain B): sitting r2 hub renamed to a `-tribunal` name; rename drafter 570.
+- R1495 17:31 LAUNCHED: hub renamed `532-results-sitting-r2-tribunal.md` (`c274c988`); re-preflight prompt 571.
+- R1496 17:32 LAUNCHED: sitting r2 hub 532, preflight r2 READY YES.
+- R1497 17:45 RECORD: sitting r2 DONE, 5 of 5 cells closed; nothing routes (L29).
+- R1498 17:54 DESK RECORD (brain): routing table put to him, `routing-table-answer-2026-10-14.md`; OPEN.
+- R1499 17:59 RECORD: 547 CHECK ready NO (tip `a157d731`).
+- R1500 18:00 DESK RECORD (brain A): 547 fix round rows FR-O2, FR-O3, no re-check.
+- R1501 18:52 LAUNCHED: 547 fix round BUILT `51d83a3a`; deploy card 572.
+- R1502 19:05 LAUNCHED: desk `4f9460d6` took over from `34a22a1c`; deploy hub `dafc772f` on card 572.
+- R1503 19:20 DESK RECORD (brain): 547 FR-O2 option-loop lines KEEP; 521 fix rows built against them.
+- R1504 19:25 ASKED: routing table A/B/C put to him, recommended A; nothing routes until he answers.
+- R1505 19:40 DESK RECORD (brain): JEV decisions 1,2,3,5,8 KEEP; 6 KEEP; 4 both MID; 7 no vault check, X1 to him.
+- R1506 19:58 RECORD: 547 db-copy DEPLOYED `f2b42a0e`, gate green; 537 proof exit 1 AMBER.
+- R1507 20:05 LAUNCHED: 548 result-file build, hub `b0ce4ce8`, BASE `1fc1c647`.
+- R1508 20:20 DESK RECORD (brain): 537 proof MET (cutoff 19:39:41-04:00); s2 AMBER is a production finding.
+- R1509 20:35 RECORD: 548 BUILT `8211b562`, 6 of 6 rows; hub `b0ce4ce8` removed.
+- R1510 20:45 LAUNCHED: 548 result-file check, hub `c26e577c`.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-14*"` = `deploy-2026-10-14-db-copy` (R1506), `deploy-2026-10-14-hub-text-fr1` (R1488), `deploy-2026-10-14-smoke-string` (R1484).
+- STOP LINE (L35), `reports/close-2026-10-13.md`: `CLOSE PUSHED 348e3581 · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-14.md` `## 8`.
