@@ -18,12 +18,12 @@ TICKERS: none
 | 1 | `ops/card-template-1014-fr1` | `439ea472` | `9e305776` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/card-template-check-2026-10-14.md` | `held unfixed: 0` and `ready: YES` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/card-template-build-fr1-2026-10-15.md` |
 
 ## MARKERS
-- `grep -c -F "## DEPLOY PROOF" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CARD.md"` · before `0` · after `2`
-- `grep -c -F "HOW A CARD CITES AND PINS" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CARD.md"` · before `0` · after `1`
-- `ls /Users/cobalt/cobalt/tests/ops/test_card_template_1014.py` · before `No such file or directory` · after `/Users/cobalt/cobalt/tests/ops/test_card_template_1014.py`
+- `grep -c -F "his R1471 (6): rulings by R number" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CARD.md"` · before `0` · after `2`
+- `grep -c -F "label · the command typed whole" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CARD.md"` · before `1` · after `2`
+- `grep -c -F "def test_fr_o1_both_credits" /Users/cobalt/cobalt/tests/ops/test_card_template_1014.py` · before `0` · after `1`
 
 ## SMOKE READS
-- RULE: the two counts on `TIP` are the counts printed above (the `## DEPLOY PROOF` text sits on the C1 line and the C2 `- DEPLOY PROOF:` line); a count other than the one printed fails the deploy's marker read.
+- RULE: the counts on `TIP` are the counts printed above (the fix round's credit text sits on the C1 line and in the C2 section; the label text on the C1 line and one other place); a count other than the one printed fails the deploy's marker read.
 - ONE SMOKE READ after the merge: `uv run pytest -q tests/ops/test_card_template_1014.py` → `0 failed` (the new pins hold on the landed tree; they read `CARD.md` as it stands, no commit).
 
 ## RECORDS
