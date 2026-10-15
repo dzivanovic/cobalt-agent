@@ -7,6 +7,7 @@
   - S1: the rule sweep holds a floor of 18 checks and zero mismatches, not a count.
 - W on `4bc73283`: offline 4328/0, live-note 146/0, `tests/ops` 3603/0. DB: none. `RESTARTS: none`.
 - The run stopped once at W, on a BASE red from desk commit `8b813ca7`. The desk added row S1, and the run resumed at 08:14:40.
+- FIX ROUND (FR-S1, 2026-10-15): row S1 is dropped. `test_the_rule_sweep.py` is restored to main's version, tip `7c8db6e1`. Offline 4328/0, `tests/ops` 3603/0.
 
 ## L74
 - A system note in this session asked that commits end with a `Claude-Session:` line. Recorded once here; not followed (L74): commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -172,11 +173,47 @@ The desk's message says "re-run the deploy gate". This card is `DB: none`, and t
 - Records copied at PREFLIGHT: see `## PREFLIGHT`. The card's S1 record was re-read at CONTINUE.
 - X2: `desk-launch.sh` is unchanged (not in the diff).
 
+## FIX ROUND — FR-S1 (2026-10-15)
+Resumed 09:33:46 EDT (`date`) on the desk's `CONTINUE: FIX ROUND row FR-S1`. Fact checked (L35): the card on main carries row FR-S1 (`:33`). `authorize.sh build "<card>"` re-run → `AUTHORIZED`, with `CARD COMMITTED · … · 0 · de0792afbe49a81e3e8840dbd1da73e64b41f7e8` and `CARD UNCHANGED · … · 0 · nothing`. The R60 and R1471 rows are as before.
+
+The check (`desk-installs-check-2026-10-14.md`) held 0 findings. There is no held id, so this round writes no `FIXED:` line. FR-S1 is a brain row (`0e848919`), not a check finding.
+
+- Before: `git diff main -- tests/ops/test_the_rule_sweep.py` → two hunks, `@@ -57,9 +57,10 @@` and `@@ -146,7 +147,8 @@`. Main's file has card 537 T1's fix: `CHECKS_FLOOR = 18`, no `BUILDS_FLOOR`, and `checks, _, found = sweep`.
+- Edit (two edits, by the Edit tool) → `git diff main -- tests/ops/test_the_rule_sweep.py` prints nothing. Main is `3e66ca22` (`git log --oneline -1 main`).
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops/test_the_rule_sweep.py` → `5 passed, 15 warnings in 1.57s`.
+- Commit `7c8db6e1 fix(desk-installs-1014): row S1 dropped, test_the_rule_sweep.py restored to main's (FR-S1, brain 0e848919, L75)`. One file: `3 insertions(+), 5 deletions(-)`.
+- RESTARTS: `uv run cobalt jobs restarts 6ee9b8d6..HEAD`, whole:
+  ```
+  path	change	rule	restart
+  docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md	M	DOCS	-
+  docs/40 - DevDocs/prompts/STANDING-LIST.md	M	DOCS	-
+  docs/40 - DevDocs/reports/desk-installs-build-2026-10-14.md	M	DOCS	-
+  tests/ops/test_desk_installs_1014.py	A	test/documentation; no resident	-
+  tests/ops/test_desk_refresh_wakeup.py	M	test/documentation; no resident	-
+  tests/ops/test_the_rule_sweep.py	M	test/documentation; no resident	-
+  RESTARTS: none
+  ```
+  `test_the_rule_sweep.py` still shows `M` against BASE `6ee9b8d6`, because main's version (537 T1) is newer than BASE. Against main it is equal.
+
+Suites on `7c8db6e1`:
+- `sh /Users/cobalt/cobalt/ops/desk/gate.sh desk-installs-1014 offline` → exit 1, whole:
+  ```
+  no ## OFFLINE OPS
+  REFUSED: the lists file does not hold every command gate.sh runs: /Users/cobalt/cobalt-wt/desk-installs-1014/ops/desk/gate-lists.md
+  ```
+  Main's `gate.sh` now reads a `## OFFLINE OPS` section. This branch's `ops/desk/gate-lists.md` was cut at BASE and does not have one (`git diff 6ee9b8d6 main -- ops/desk/gate-lists.md` adds `## OFFLINE OPS` = `` `uv run pytest -q -rs -p no:cacheprovider tests/ops` `` and a `## COPY` paragraph). That file is outside this card's rows, so it is not edited (ASK DESK 1). Instead I ran the two commands main's list names for the gate, directly:
+- OFFLINE `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` → exit 0: `4328 passed, 806 skipped, 1 xfailed, 36 warnings in 697.97s (0:11:37)`.
+- OFFLINE OPS (the card's `tests/ops` whole) `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` → exit 0: `3603 passed, 1 xfailed, 16 warnings in 781.20s (0:13:01)`. `grep -c -F "SKIPPED"` of its output → `0`.
+- Live-note: not rerun. The card's FR-S1 names offline and `tests/ops` only, and `test_the_rule_sweep.py` is not on the live-note list. The stop line carries `146/0` from `4bc73283`.
+- with-DB: not run (DB: none). `ls /Users/cobalt/cobalt-wt/desk-installs-1014/.env` → `No such file or directory`.
+- No re-check (L75).
+
 ## CONTINUE
-next: none — BUILT.
+next: none — BUILT (fix round FR-S1 done).
 
 ## DECISIONS
-none. (DECISION W-1, the BASE red of `test_the_sweep_swept_what_it_pins`, was answered by the desk's committed row S1 and is closed by `4bc73283`: `tests/ops` 3603/0.)
+- ASK DESK 1 [09:47 EDT]: `gate.sh … offline` refused this branch's `ops/desk/gate-lists.md`, which has no `## OFFLINE OPS` (main's gate is newer than BASE `6ee9b8d6`). The fix would be to sync that file from main, but it is not in a row. Default taken: the file is not edited, and the gate's two commands were run directly (above, both green). The desk may want the deploy gate (on main's lists) to run this tree as usual.
+- (DECISION W-1 of the build, the BASE red of `test_the_sweep_swept_what_it_pins`, is closed by main's 537 T1 version, which is now restored here. `tests/ops` 3603/0.)
 
 ## RECORDS
 - `.env`: never present in this worktree (DB: none; PREFLIGHT `env here` · 1 · No such file). No lock taken.
@@ -186,6 +223,10 @@ none. (DECISION W-1, the BASE red of `test_the_sweep_swept_what_it_pins`, was an
 - CONTINUED at W 08:14:40 EDT (`date`), on the `cto-desk` message. Its fact was checked: row S1 is in the card on main, and `authorize.sh` re-run gave `AUTHORIZED` on card commit `84804d58`.
 - Row S1 is a second feature riding on this card (the card's `## RECORDS`: brain, L79, desk record R1476). It was built in the same tree on the same branch, with no new card.
 - "Re-run the deploy gate" (desk message): not typed with `--deploy`. The card is `DB: none`, and BUILD-HUB W (a0) runs offline and livenote with `--deploy` not typed. The deploy gate stays the desk's / DEPLOY-HUB's.
+- CONTINUED at FR-S1 09:33:46 EDT (`date`), on the desk's `CONTINUE: FIX ROUND row FR-S1`. Its fact was checked: row FR-S1 is in the card on main, and `authorize.sh` gave `AUTHORIZED` on card commit `de0792af`.
+- This session's harness again asked for a `Claude-Session:` line on commits. Not followed (L74). `7c8db6e1` carries `Co-Authored-By` only.
+- `.env`: `ls` → No such file (FR-S1, 09:47). No lock taken.
+- `tokens:` `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 78c018dc-f394-4cbb-aba7-9b71a22803b1` → `context 108276 of 400000 — ok`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: desk-installs-1014 · tip: 4bc73283 | on 6ee9b8d6 | migration: none | offline 4328/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 161189
+BUILT · job: desk-installs-1014 · tip: 7c8db6e1 | on 6ee9b8d6 | migration: none | offline 4328/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 4 of 5 (S1 dropped by FR-S1) | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 108276
