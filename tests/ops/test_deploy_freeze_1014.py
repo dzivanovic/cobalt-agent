@@ -290,6 +290,18 @@ def test_f1_a_staged_rename_of_a_shipped_path_is_refused(guarded):
     assert HUB_PATH in done.stderr, done.stderr
 
 
+def test_f1_a_report_line_with_a_trailing_blank_freezes_all_once_committed(guarded):
+    repo, env, live = guarded
+    card = repo / CARD_DIR / "90-x-card.md"
+    text = card.read_text().replace(REPORT_PATH + "\n", REPORT_PATH + " \n")
+    commit_file(repo, f"{CARD_DIR}/90-x-card.md", text, "card report blank")
+    first = commit_with_hook(repo, REPORT_PATH, "report\n", env)
+    assert first.returncode == 0, first.stderr
+    done = commit_with_hook(repo, "docs/other.md", "other\n", env)
+    assert done.returncode == 1, done.stderr
+    assert "a deploy hub is live" in done.stderr, done.stderr
+
+
 def test_f1_the_hook_is_one_deploy_guard_and_one_row_gate():
     """NEGATIVE CONTROL, green on BASE and after."""
     text = HOOK.read_text()
