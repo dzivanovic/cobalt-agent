@@ -88,6 +88,7 @@ class LLM(BaseModel):
             config = get_config()
             
             api_key = None
+            openrouter_closed = False
             if self._env_key_ref:
                 # ZERO-TRUST VAULT EXTRACTION
                 try:
@@ -106,13 +107,19 @@ class LLM(BaseModel):
                         
                     # Now extract from the dictionary exactly as we see it in the logs
                     target_key_name = keys_dict.get(self._env_key_ref, f"{self._env_key_ref.upper()}_API_KEY")
-                    
-                    # Grab the actual AIzaSy... hash!
-                    api_key = keys_dict.get(target_key_name)
-                    
-                    # Fallback to standard OS env if it wasn't in the dict
-                    if not api_key:
-                        api_key = os.getenv(target_key_name)
+
+                    # R1535: the OpenRouter key is JEV's alone — neither the
+                    # vault RAM nor the environment is read for it here
+                    if self._env_key_ref.lower() == "openrouter" or str(target_key_name).upper() == "OPENROUTER_API_KEY":
+                        api_key = None
+                        openrouter_closed = True
+                    else:
+                        # Grab the actual AIzaSy... hash!
+                        api_key = keys_dict.get(target_key_name)
+
+                        # Fallback to standard OS env if it wasn't in the dict
+                        if not api_key:
+                            api_key = os.getenv(target_key_name)
                         
                 except Exception as e:
                     from loguru import logger
@@ -141,6 +148,10 @@ class LLM(BaseModel):
                 kwargs["api_base"] = self._api_base
             if api_key:
                 kwargs["api_key"] = api_key
+            if openrouter_closed:
+                # R1535: a non-secret placeholder, so LiteLLM never falls back to
+                # OPENROUTER_API_KEY in the environment (litellm/main.py openrouter branch)
+                kwargs["api_key"] = "openrouter-key-closed-r1535"
             if tools:
                 kwargs["tools"] = tools
             if response_format:

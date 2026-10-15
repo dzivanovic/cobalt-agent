@@ -1,0 +1,85 @@
+# JEV shadow router — set ROUTE, the routing table, the ledgers (L10).
+#
+# Card 591 (jev-shadow-1015); design docs/30 - Design/jev-shadow-design-2026-10-14.md
+# §2-§6. Schema: src/cobalt/classify/route.py — a bad file crashes, no default.
+# Dry-run: `cobalt classify route --card <path> --dry-run` (renders, sends nothing).
+#
+# SHADOW ONLY: the router writes routing-ledger rows and nothing else.
+# NO CREDENTIAL LIVES HERE: the key is read by collector.py at call time.
+# A wording change of ROUTE is a new set: its sha256 changes, and the
+# retire block below must be declared again for it (fold F10).
+
+route:
+  # The trial's one door (desk R47) and HIS model id (R42), as trial.yaml holds them.
+  door_url: https://openrouter.ai/api/v1/systemone
+  door: systemone
+  model_id: typesafe/jev-1.13
+  model_id_source: "ruling: cto-2026-09-23.md R42"
+  entry_record: tests/fixtures/classify/openrouter-model-entry.real-shape.json
+  timeout_s: 10
+  # fold F2: the SAME host-wide spend ledger and cap as trial.yaml (the
+  # loader refuses a difference); the carried paid lines come from trial.yaml.
+  spend_ledger: /Users/cobalt/.cobalt/classify/classify-spend.jsonl
+  spend_cap_usd: 5
+  spend_cap_source: "ruling: cto-2026-09-23.md R42"
+  # fold F1: engine tunables, no money (ASK DESK 11).
+  call_ceiling: 518
+  call_ceiling_source: "engine: 2 x (147 cards (R1 listing of prompts 2026-10-06 to 2026-10-13) + 11 M-LABEL + 100 M5 (10 x 10)) + 2 paid calls = 518"
+  batch_wall_clock_s: 1470
+  batch_wall_clock_source: "engine: 147 cards (R1 listing) x timeout_s 10 = 1470"
+  # fold F8: append-only, outside the repo and every worktree.
+  routing_ledger: /Users/cobalt/.cobalt/classify/routing-ledger.jsonl
+  # fold F5: band -> builder by HIS table only; unsure takes the high row.
+  routing_table:
+    source: "ruling: cto-2026-10-15.md R1532"
+    low:
+      builder: grok-4.7
+      backup: gpt-5.6-terra
+    mid:
+      builder: grok-4.7
+      backup: gpt-5.6-terra
+    high:
+      builder: claude-opus-5-5
+      backup: null
+  # fold F10: predeclared before any outcome is read (ASK DESK 10). The
+  # weekly read compares only rows of this set dated on or after `declared`.
+  retire:
+    declared: 2026-10-15
+    set_sha256: "39f70d33f3fd2324da0d0c3eeea226c25be6416db69a1e4863e9f8835704a72d"
+    source: "engine: card 591 ASK DESK 10 default; retirement itself is a card"
+    outcomes:
+      opus_own_held:
+        method: "each held-out card's outcome predicted by its band's average over the rows before it, for JEV band, rows_band and card_band alike"
+        loss: "mean absolute error"
+      fix_rounds:
+        method: "each held-out card's outcome predicted by its band's average over the rows before it, for JEV band, rows_band and card_band alike"
+        loss: "mean absolute error"
+      tokens:
+        method: "each held-out card's outcome predicted by its band's average over the rows before it, for JEV band, rows_band and card_band alike"
+        loss: "mean absolute error"
+
+  sets:
+    # Design §2 table (:68-74); criteria written by KIND, no cut point sent.
+    ROUTE:
+      version: 1
+      questions:
+        band:
+          type: choice
+          instructions: "How large and how risky is the change this build card asks for?"
+          options:
+            low: "a few rows, no schema migration, at most one service restarted, no shared seam, a pattern earlier cards already used, and nothing about money"
+            mid: "several rows, no schema migration, one or two services restarted or one shared seam, mostly a pattern earlier cards already used, and nothing about money"
+            high: "many rows, or a schema migration, or several services restarted, or several shared seams, or something no earlier card or design did, or money, sizing or the owner's notes"
+            unsure: "cannot tell from the card"
+        write_path:
+          type: noul
+          instructions: "The card writes to the vault or the database, adds a migration, deletes data, or does recovery or forensics work."
+        migration:
+          type: noul
+          instructions: "The card adds a database schema migration."
+        money:
+          type: noul
+          instructions: "The card touches money, position sizing or the owner's own vault notes."
+        new_horizon:
+          type: noul
+          instructions: "No earlier card or design exists for the card to copy."

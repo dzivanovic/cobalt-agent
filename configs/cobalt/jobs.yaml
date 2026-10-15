@@ -342,6 +342,23 @@ no_resident_reads:
       com.cobalt.prefill-daily is the one job whose loader reaches
       configs/cobalt/templates/ (prefill/daily.py:238, FileSystemLoader(TEMPLATES_DIR)).
       Ruled 2026-09-30.
+  - path: configs/cobalt/classify/trial.yaml
+    readers: [com.cobalt.generated]
+    because: >
+      Read only by classify/config.py:40 CONFIG_PATH + load_trial_config, called
+      from the manual `cobalt classify` commands (classify/cli.py, route.py
+      load_route_config). No job runs `cobalt classify`; no resident loads it.
+      com.cobalt.generated is named because the schema needs a registered
+      one-shot: its `uv run cobalt` process imports the loader (cobalt.cli ->
+      cobalt.classify.cli) without calling it, the drc.md.j2 precedent.
+      Card 591, 2026-10-15.
+  - path: configs/cobalt/classify/route.yaml
+    readers: [com.cobalt.generated]
+    because: >
+      Read only by classify/route.py ROUTE_CONFIG_PATH + load_route_config,
+      called from the manual `cobalt classify route | route-read` commands.
+      No job runs them; no resident loads it. com.cobalt.generated is named
+      as for trial.yaml above. Card 591, 2026-10-15.
   # configs/cobalt/rules.yaml LEFT this list in DRC D3 ([F-28]): the DRC build
   # calls regenerate_rules_config() inside com.cobalt.aset — it is now in that
   # job's `reads:` (the 15:40 prefill-drc reader is retired).
