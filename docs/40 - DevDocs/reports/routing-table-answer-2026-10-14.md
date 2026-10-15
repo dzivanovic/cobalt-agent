@@ -30,6 +30,18 @@ Conditions, each a line of the same ruling:
 5. Sonnet's MID and HIGH "WITH A REVIEW" grades are not used. LOW graded BELOW, the inverse of a real skill curve, which reads as noise at n = 1. Sonnet stays router and hub, as he read it.
 6. Grok's reads outside its folder: settled (R1315). Astra's owner line on it is closed by that ruling.
 
+## HIS RULING — 2026-10-15 (B), brain session, verbatim
+"low grok, terra backup / medium grok, terra backup / High opus, grok when I say so / Sonnett routing for now / JEV paralel run and learning"
+| band | builder | backup |
+|---|---|---|
+| LOW | Grok 4.7 | Terra |
+| MID | Grok 4.7 | Terra |
+| HIGH | Opus 5.5 | Grok only on his word, per card |
+| routing, hubs, preflights | Sonnet 5.5 ("for now") | — |
+- JEV runs in parallel (shadow) and learns from every routed card (R1467, `jev-design-decisions-2026-10-14.md`).
+- Conditions 1–4 above stand as proposed (Opus check on every non-Opus build; L29/L27 amended for LOW and MID only; drafter sets `BAND:`, higher when unsure; the ledger and re-grade triggers). Condition 5 is his line "Sonnet routing for now".
+- Supersedes the THE TABLE rows above where they differ (MID: Grok first, Terra backup, not "by meter").
+
 ## FOR HIM (one word)
 A = adopt the table and conditions 1–6 · B = adopt with a change he names · C = wait for more data (every merged build stays Opus 5.5).
 Recommended: A. After A, the desk records it, folds L27/L29, and a K5 card puts `BAND:` in CARD.md and the routing in the launcher.
