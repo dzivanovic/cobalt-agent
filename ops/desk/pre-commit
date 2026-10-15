@@ -41,7 +41,8 @@ if not hit:
                     guard_report=$(git -c core.quotePath=false grep -l -e "^JOB: $guard_job\$" main \
                         -- "docs/40 - DevDocs/prompts" 2>/dev/null | while IFS= read -r guard_hit; do
                         git grep -q -e '^BASE: main$' main -- "${guard_hit#main:}" 2>/dev/null \
-                            && git show "$guard_hit" 2>/dev/null | sed -n 's/^REPORT: //p'
+                            && git show "$guard_hit" 2>/dev/null \
+                            | sed -n '/^REPORT: /{s/^REPORT: //;s/[[:space:]]*$//;p;}'
                     done)
                     case "$guard_report" in
                         *"
