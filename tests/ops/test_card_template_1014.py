@@ -57,3 +57,45 @@ def test_c2_card_md_states_the_citing_and_pinning_rules_once():
     last = _one(lines, "- State of the desk (a meter that is out, a tab id, a watch id).")
     example = _one(lines, "## EXAMPLE 1 — the E1 fix, at its BUILD launch")
     assert last < h < example
+
+
+# Fix round (card 2026-10-15 597, FR-O1, FR-O2, FR-G2, FR-G3): the C1 line and the C2 section,
+# found by their content.
+
+CREDIT = ("his R1471 (6): rulings by R number, no HEAD hashes, anchors by file:line; the rest per "
+          "the brain's gap-filler rows (handover 520 OWED 6, DESK RECORD)")
+
+
+def _proof_line(lines: list[str]) -> str:
+    return lines[_one(lines, PROOF_START)]
+
+
+def _cites_text(lines: list[str]) -> str:
+    h = _one(lines, CITES)
+    end = next(n for n in range(h + 1, len(lines)) if lines[n].startswith("## "))
+    return "\n".join(lines[h + 1:end])
+
+
+def test_fr_o1_both_credits_read_r1471_6_and_the_gap_filler_rows():
+    lines = _lines()
+    line, text = _proof_line(lines), _cites_text(lines)
+    assert CREDIT in line
+    assert CREDIT in text
+    assert "R1471 item 6" not in line
+    assert "R1471 (item 6)" not in text
+
+
+def test_fr_o2_marker_clause_is_the_markers_form_with_grep_or_ls():
+    line = _proof_line(_lines())
+    assert "marker lines in the form of `## MARKERS` (grep -c -F or ls)" in line
+    assert "per file" not in line
+
+
+def test_fr_g2_smoke_line_carries_a_label_first():
+    line = _proof_line(_lines())
+    assert "label · the command typed whole · what a green answer looks like" in line
+
+
+def test_fr_g3_refusal_clause_cites_desk_launch_994_and_deploy_card_31():
+    line = _proof_line(_lines())
+    assert "does not launch (`desk-launch.sh:994`, `deploy-card.sh:31`)" in line
