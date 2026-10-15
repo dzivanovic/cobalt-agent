@@ -484,13 +484,31 @@ for card in "$@"; do
     # the job's fix report, read before the check line's refusals: with one, a line carrying
     # `held unfixed: <n>`, n >= 1, takes THE RULE's path below (card 317 H1)
     frep=$(printf '%s' "$fixes" | sed -n "s/^$job=//p" | sed -n '1p')
+    # card 548 RF4 (his R1471): the check's `.result`, beside it; `hn` is read whenever it exists,
+    # so a held line keeps today's path (and with no fix report today's refusal) and the file is ignored
+    resf="${creport%.md}.result"
     hn=""
-    [ -z "$frep" ] || hn=$(held_n "$last")
-    if [ -z "$hn" ]; then
-        printf '%s\n' "$last" | grep -q -E '(^| )held unfixed: 0( |$)' || refuse "$job: the check's last line lacks 'held unfixed: 0': $last"
-        printf '%s\n' "$last" | grep -q -E '(^| )ready: YES( |$)' || refuse "$job: the check's last line lacks 'ready: YES': $last"
+    { [ -z "$frep" ] && [ ! -f "$resf" ]; } || hn=$(held_n "$last")
+    [ -z "$hn" ] || [ -n "$frep" ] || refuse "$job: the check's last line lacks 'held unfixed: 0': $last"
+    if [ -z "$hn" ] && [ -f "$resf" ]; then
+        # committed and unchanged, exactly as the report above
+        resrel=$(git -C "$REPO" ls-files --full-name --error-unmatch -- "$resf" 2>/dev/null) || refuse "$job: the check's result file is not committed or is modified since its commit: $resf"
+        res_blob=$(git -C "$REPO" rev-parse --verify --quiet "HEAD:$resrel") || refuse "$job: the check's result file is not committed or is modified since its commit: $resf"
+        [ "$(git -C "$REPO" ls-files -s -- "$resf" | awk '{print $2}')" = "$res_blob" ] || refuse "$job: the check's result file is not committed or is modified since its commit: $resf"
+        [ "$(git -C "$REPO" hash-object -- "$resf")" = "$res_blob" ] || refuse "$job: the check's result file is not committed or is modified since its commit: $resf"
+        rhu=$(sh "$(dirname "$0")/result-read.sh" held_unfixed < "$resf" 2>&1) || refuse "$job: the check's result file $resf: $rhu"
+        rready=$(sh "$(dirname "$0")/result-read.sh" ready < "$resf" 2>&1) || refuse "$job: the check's result file $resf: $rready"
+        tip=$(sh "$(dirname "$0")/result-read.sh" tip < "$resf" 2>&1) || refuse "$job: the check's result file $resf: $tip"
+        [ "$rhu" = 0 ] || refuse "$job: the check's result file $resf says held_unfixed=$rhu, not 0"
+        [ "$rready" = YES ] || refuse "$job: the check's result file $resf says ready=$rready, not YES"
+        printf '%s\n' "$tip" | grep -q -x -E '[0-9a-f]{7,40}' || refuse "$job: the check's result file $resf names no tip: tip=$tip"
+    else
+        if [ -z "$hn" ]; then
+            printf '%s\n' "$last" | grep -q -E '(^| )held unfixed: 0( |$)' || refuse "$job: the check's last line lacks 'held unfixed: 0': $last"
+            printf '%s\n' "$last" | grep -q -E '(^| )ready: YES( |$)' || refuse "$job: the check's last line lacks 'ready: YES': $last"
+        fi
+        tip=$(printf '%s\n' "$last" | grep -o -E '(^| )tip: [0-9a-f]{7,40}' | sed -n '1p' | sed 's/.*tip: //')
     fi
-    tip=$(printf '%s\n' "$last" | grep -o -E '(^| )tip: [0-9a-f]{7,40}' | sed -n '1p' | sed 's/.*tip: //')
     [ -n "$tip" ] || refuse "$job: the check's last line names no tip: $last"
     ctip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$tip^{commit}") || refuse "$job: code tip '$tip' is not a commit in $REPO"
     head=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "refs/heads/$branch^{commit}") || refuse "$job: no branch '$branch' in $REPO"
@@ -501,9 +519,16 @@ for card in "$@"; do
         fblob=$(git -C "$REPO" show "$head:${frep#"$REPO"/}" 2>/dev/null) || refuse "$job: the fix report is absent at the branch head $head: $frep"
         flast=$(printf '%s\n' "$fblob" | grep -v '^[[:space:]]*$' | tail -n 1)
         ftip=""
-        case "$flast" in
-            "BUILT ·"*) ftip=$(printf '%s\n' "$flast" | grep -o -E '(^| )tip: [0-9a-f]{8,40}' | sed -n '1p' | sed 's/.*tip: //') ;;
-        esac
+        frel="${frep#"$REPO"/}"
+        if fres=$(git -C "$REPO" show "$head:${frel%.md}.result" 2>/dev/null); then
+            # card 548 RF4: the fix report's `.result` at the same head answers its tip
+            ftip=$(printf '%s\n' "$fres" | sh "$(dirname "$0")/result-read.sh" tip 2>&1) || refuse "$job: the fix report's result file ${frep%.md}.result: $ftip"
+            printf '%s\n' "$ftip" | grep -q -x -E '[0-9a-f]{8,40}' || refuse "$job: the fix report's result file ${frep%.md}.result names no tip: tip=$ftip"
+        else
+            case "$flast" in
+                "BUILT ·"*) ftip=$(printf '%s\n' "$flast" | grep -o -E '(^| )tip: [0-9a-f]{8,40}' | sed -n '1p' | sed 's/.*tip: //') ;;
+            esac
+        fi
         [ -n "$ftip" ] || refuse "$job: the fix report's last line is not 'BUILT ·' with a 'tip:': $flast"
         fixtip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$ftip^{commit}") || refuse "$job: fix tip '$ftip' is not a commit in $REPO"
         git -C "$REPO" merge-base --is-ancestor "$ctip" "$fixtip" || refuse "$job: the check's tip $ctip is not an ancestor of the fix tip $fixtip"

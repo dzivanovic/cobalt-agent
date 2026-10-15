@@ -54,23 +54,57 @@ def test_the_launch_line_is_byte_identical_to_base():
     assert len(now) == 1 and now == then
 
 
+# card 2026-10-14/548 RF2 (brain R1472: a card pins only the lines its own card changes): a BASE
+# line that starts with one of these is another card's to change, and is not held here. Each
+# other line of BASE is still in the file, in order; a line a card adds (the FIX-ROUND line of
+# 523 H2, the RESULT FILE text 548 appends) is free.
+EXEMPT = (
+    'A "DB: none" build writes',  # 548 RF2 (:109)
+    "claude --bg ",  # 537 (:12)
+    "L1 a missing input",  # 480 H6 (:17)
+    "`uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy`",  # 537 (:65)
+    '- (a0) A "DB: none" CARD ONLY:',  # 537 (:80)
+    "- THE GATE, ONE CALL",  # 537 (:81)
+    "- (a) OFFLINE",  # 537 (:82)
+    "- `## §0 Headline`",  # 523 H3 (:105)
+    "`<tip>` = the last code commit",  # 480 H6 (:111)
+    "- (b) THE LOCK",  # 547 H1 (:83)
+)
+
+
+def unmatched(now: list[str], then: list[str]) -> list[str]:
+    """The BASE lines, exempt ones aside, that `now` does not hold in BASE's order."""
+    missing, at = [], 0
+    for ln in then:
+        if ln.startswith(EXEMPT):
+            continue
+        if ln in now[at:]:
+            at = now.index(ln, at) + 1
+        else:
+            missing.append(ln)
+    return missing
+
+
 def test_no_other_line_changes_from_base():
     # card 2026-10-13/523 rows H2 and H3 (brain R1309): the one new FIX-ROUND line and the one
-    # CLOSE line they change are dropped before the equality; pinned in tests/ops/test_hub_text_1013.py
-    # card 2026-10-14/547 row H1 (EXEMPT: it edits the W (b) line): every line that starts
-    # `- (b) THE LOCK` is dropped from both sides; pinned in tests/ops/test_db_copy_1014.py
+    # CLOSE line they change; pinned in tests/ops/test_hub_text_1013.py
+    # card 2026-10-14/547 row H1 (EXEMPT: it edits the W (b) line); pinned in tests/ops/test_db_copy_1014.py
     fix_round = "FIX-ROUND REPORT (brain R1309):"
     close_last = "- `## §0 Headline` (≤5 lines). Commit the report"
-    ls = lines()
-    i = ls.index(NO_CLUTTER)
-    now = ls[:i] + ls[i + 2:]
+    now = lines()
     then = base_lines()
     assert sum(ln.startswith(fix_round) for ln in now) == 1
     assert sum(ln.startswith(close_last) for ln in now) == 1
     assert sum(ln.startswith(close_last) for ln in then) == 1
     assert sum(ln.startswith("- (b) THE LOCK") for ln in now) == 1
-    now = [ln for ln in now if not ln.startswith((fix_round, close_last))]
-    then = [ln for ln in then if not ln.startswith(close_last)]
-    now = [ln for ln in now if not ln.startswith("- (b) THE LOCK")]
-    then = [ln for ln in then if not ln.startswith("- (b) THE LOCK")]
-    assert now == then
+    assert unmatched(now, then) == []
+
+
+def test_the_pin_fails_on_a_missing_base_line_and_passes_on_an_exempt_change():
+    """Negative control (548 RF2 (5)): a copy missing a non-exempt BASE line is caught; a copy
+    whose exempt line of another card is replaced is not."""
+    then = base_lines()
+    held = next(i for i, ln in enumerate(then) if ln.startswith("## E0 "))
+    assert unmatched(then[:held] + then[held + 1:], then) == [then[held]]
+    other = next(i for i, ln in enumerate(then) if ln.startswith("- THE GATE, ONE CALL"))
+    assert unmatched(then[:other] + ["- THE GATE, ONE CALL (another card's text)"] + then[other + 1:], then) == []
