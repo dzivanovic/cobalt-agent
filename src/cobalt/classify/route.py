@@ -436,6 +436,14 @@ class Router(OpenRouterClassifier):
         """A row for a card that got no call (timeout, after an auth_error)."""
         return self.write(RouteDecision(**self._base(card), status=status, error=error))
 
+    def unloaded_row(self, path: str, error: str) -> RouteDecision:
+        """A row for a card that could not be read at its launch commit
+        (fold F9: a ClassifyError of a card is a status row, never a crash)."""
+        return self.write(RouteDecision(
+            card_path=path, set_id=self.qset.id, set_sha256=self.qset.sha256,
+            table_sha256=self.table_sha256, score_band=UNKNOWN, score_components={},
+            status="invalid", error=error))
+
     def route(self, card: CardText) -> RouteDecision:
         """ONE keyed call through `_send` (no retry); the decision row is
         written whatever came back."""
@@ -581,7 +589,9 @@ def write_outcome(repo: Path, path: str, ledger: Path, *, stage: str = "check") 
     if not last.startswith("CHECK DONE"):
         return None
     kv = {}
-    for seg in last.split(" · "):
+    # a shadow card's `held: <n> (opus-own <a> · house <b>)`: the bracket is
+    # the split of <n>, not a field of its own (CHECK-HUB :22)
+    for seg in re.sub(r"\s*\([^)]*\)", "", last).split(" · "):
         if ": " in seg:
             k, v = seg.split(": ", 1)
             kv[k.strip()] = v.strip()
@@ -631,9 +641,12 @@ def weekly_read(rows: list[dict], cfg: RouteConfig, *, week: Optional[date],
     dec = [r for r in rows if r.get("kind") == "decision"]
     if week is not None:
         dec = [r for r in dec if (d := _day(r)) is not None and week <= d < week + timedelta(days=7)]
-    outs = [r for r in rows if r.get("kind") == "outcome"]
+    # ONE outcome per decision: the check's (its latest row); a deploy-stage
+    # row of the same card is not a second observation (n is cards, L8)
+    outs = {(r.get("card_path"), r.get("launch_sha")): r for r in rows
+            if r.get("kind") == "outcome" and r.get("stage", "check") == "check"}
     by_key = {(r.get("card_path"), r.get("launch_sha")): r for r in dec}
-    joined = [(by_key[k], o) for o in outs if (k := (o.get("card_path"), o.get("launch_sha"))) in by_key]
+    joined = [(by_key[k], o) for k, o in outs.items() if k in by_key]
 
     out = [f"# Routing read — {'week of ' + week.isoformat() if week else 'all rows'}", "",
            "Aggregates only (fold F8). Every cell under n=30 reads insufficient data (L8).", ""]
@@ -657,7 +670,8 @@ def weekly_read(rows: list[dict], cfg: RouteConfig, *, week: Optional[date],
     for band in (*BANDS, "unsure"):
         rb = [r["rows_band"] for r in dec if r.get("band") == band and isinstance(r.get("rows_band"), int)]
         out.append(f"- G4 rows_band at JEV band={band}: n={len(rb)}"
-                   + (f" median rows={statistics.median(rb):g}" if rb else ""))
+                   + ("" if not rb else " insufficient data" if len(rb) < MIN_N
+                      else f" median rows={statistics.median(rb):g}"))
     off = sum(1 for r in dec if r.get("model") and r.get("model") != OPUS)
     out.append(f"G5 decision rows naming a model other than {OPUS}: {off} of {len(dec)}")
     cost = sum(r.get("cost_usd") or 0.0 for r in dec)
@@ -718,17 +732,27 @@ def cmd_route(args: argparse.Namespace) -> int:
     repo = Path(args.repo) if args.repo else cfgmod.REPO_ROOT
     paths = list(args.card) if args.card else closed_cards(repo, args.day)
     router = Router(cfg)
+    loaded: list[tuple[str, CardText]] = []
+    unloaded: list[tuple[str, str]] = []
+    for path in paths:
+        try:
+            loaded.append((path, load_card(repo, path)))
+        except ClassifyError as e:          # fold F9: a status, never a crash of the batch
+            unloaded.append((path, str(e)))
     if args.dry_run:
         total = 0.0
-        for path in paths:
-            line, usd = _dry(router, path, load_card(repo, path))
+        for path, card in loaded:
+            line, usd = _dry(router, path, card)
             total += usd
             print(line)
-        print(f"ROUTE DRY TOTAL cards={len(paths)} calls={len(paths) * args.reps} "
+        for path, err in unloaded:
+            print(f"ROUTE DRY card={path} guard=invalid error={err}")
+        print(f"ROUTE DRY TOTAL cards={len(paths)} calls={len(loaded) * args.reps} "
               f"projected_usd={total * args.reps:.8f} (nothing sent)")
         return 0
-    cards = [load_card(repo, p) for p in paths for _ in range(args.reps)]
-    rows = run_batch(router, cards, wall_clock_s=cfg.batch_wall_clock_s)
+    rows = [router.unloaded_row(path, err) for path, err in unloaded]
+    cards = [card for _, card in loaded for _ in range(args.reps)]
+    rows += run_batch(router, cards, wall_clock_s=cfg.batch_wall_clock_s)
     counts: dict[str, int] = {}
     for r in rows:
         counts[r.status] = counts.get(r.status, 0) + 1

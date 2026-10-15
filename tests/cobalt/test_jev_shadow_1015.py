@@ -988,6 +988,20 @@ def test_o6_a_shadow_check_done_line_gives_its_held_count(tmp_path):
     assert out is not None and out["held"] == 3
 
 
+def test_f9_the_wall_clock_bound_is_reached_at_equality(tmp_path, fake_vault):
+    from cobalt.classify import route
+
+    cfg = _route_cfg(tmp_path)
+    repo, path = _one_card(tmp_path)
+    card = route.load_card(repo, path)
+    stub = Stub((200, json.dumps(_answers()).encode()))
+    ticks = iter([0.0, 5.0])
+    rows = route.run_batch(route.Router(cfg, transport=stub, pricing=PRICING), [card],
+                           wall_clock_s=5.0, clock=lambda: next(ticks))
+    assert [r.status for r in rows] == ["timeout"]
+    assert stub.calls == []
+
+
 def test_f11_the_under_30_read_prints_no_median(tmp_path):
     from cobalt.classify import route
 

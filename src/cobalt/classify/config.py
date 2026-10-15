@@ -47,6 +47,10 @@ ALLOWED_HOST = "openrouter.ai"
 #: Every worktree lives under here; a host ledger never does (fold F2, F8).
 WORKTREES_ROOT = Path("/Users/cobalt/cobalt-wt")
 
+#: The main checkout: a run from a worktree has REPO_ROOT = that worktree,
+#: so the main checkout is named on its own (fold F2: outside EVERY checkout).
+MAIN_CHECKOUT = Path("/Users/cobalt/cobalt")
+
 
 class ClassifyConfigError(RuntimeError):
     """Missing/invalid trial config — crash, never fall back."""
@@ -326,7 +330,7 @@ def host_ledger_path(value: str, key: str) -> Path:
         raise ValueError(f"{key} {value!r} is relative — a host ledger is an absolute path "
                          "outside every checkout and worktree (fold F2)")
     p = p.resolve()
-    for root in (REPO_ROOT, WORKTREES_ROOT):
+    for root in (REPO_ROOT, MAIN_CHECKOUT, WORKTREES_ROOT):
         r = Path(root).resolve()
         if p == r or r in p.parents:
             raise ValueError(f"{key} {value!r} lies under {r} — a host ledger lives outside "
@@ -394,6 +398,7 @@ __all__ = [
     "CONFIG_PATH",
     "CarriedSpend",
     "ClassifyConfigError",
+    "MAIN_CHECKOUT",
     "REPO_ROOT",
     "SET_NAMES",
     "TrialConfig",

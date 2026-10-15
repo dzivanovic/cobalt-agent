@@ -47,3 +47,6 @@ Holds or names a credential, touches the network, a database or the vault.
 
 ## 2026-10-15 — jev-shadow-1015
 New keys `spend_ledger` (validated by `host_ledger_path`: absolute, outside `REPO_ROOT` and `WORKTREES_ROOT`) and `carried_spend` (`CarriedSpend`: `cost_usd`, `source`), both required (F2). `host_ledger_path` is also the routing ledger's check (route.py, F8).
+
+## 2026-10-15 — jev-shadow-1015 check
+`host_ledger_path` also refuses a path under `MAIN_CHECKOUT` (`/Users/cobalt/cobalt`): from a worktree, `REPO_ROOT` is the worktree (O5).

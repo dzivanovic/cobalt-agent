@@ -72,3 +72,6 @@ the vault, or retries a call.
 
 ## 2026-10-15 — jev-shadow-1015
 New module (card 591 rows J1, F4-F11, F1).
+
+## 2026-10-15 — jev-shadow-1015 check
+`cmd_route`: a card `load_card` cannot read is an `invalid` row (`Router.unloaded_row`), never a crash of the batch (O1). `weekly_read`: one check-stage outcome per decision (O3); the G4 `rows_band` median only at n ≥ 30 (H1). `write_outcome`: a shadow line's `held: <n> (opus-own … · house …)` parses as `<n>` (O6).
