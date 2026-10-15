@@ -64,3 +64,25 @@ next: none — run ended at P1 (backup window). The desk relaunches outside 21:3
 - card RECORDS: written by deploy-card.sh at 2026-10-14 21:32 ET (`date`); trial merge of the heads onto main in order: clean
 
 FAILED PREFLIGHT: P1 — backup window (date Wed Oct 14 21:33:06 EDT 2026) · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 83425
+
+# RELAUNCH
+- launch message: `CONTINUE: STEP-D0` · first `date`: Wed Oct 14 22:31:49 EDT 2026
+- old last non-blank line, quoted: `FAILED PREFLIGHT: P1 — backup window (date Wed Oct 14 21:33:06 EDT 2026) · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 83425`
+- 22:31:49 EDT is outside the 21:30-22:30 ET backup window.
+- (e) FIRST, residents: `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 40377`, `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 8646`, `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 14763).` → (e) TRUE, nothing restored.
+- THE GATE'S OWN `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-result-file-1014/.env` → exit 1, `No such file or directory` → no G (f), no release owed.
+- (a) the old last line begins `FAILED PREFLIGHT:`, a FAILED ending (not the in-progress line).
+- (b) FALSE: `grep -c -F "GATE GREEN on" <REPORT>` → `0`; `## L68 GATE` reads `not run.` and `## RESTARTS` reads `not run.` — the earlier attempt ended at P1, so there is no `<m1>` and no `<restart set>` to resume on.
+- (c) read for the record: `git -C /Users/cobalt/cobalt-wt/deploy-result-file-1014 status --short --branch` → `## deploy/result-file-1014`; `rev-parse --short=8 HEAD` → `a6f30163` (the gate at its cut, nothing merged; no `<m1>` to compare). (d) not read: no `<m1>`.
+- Nothing else touched: no STEP-0 re-run, no merge, no gate, no production change.
+
+## DECISIONS (resume)
+- ASK DESK: a `STEP-D0` resume needs a `GATE GREEN on <m1>` from an earlier attempt; this run's earlier attempt stopped at P1 before STEP-T, so the hub's path is RECUT (`desk-launch.sh recut "<card>"`) or a fresh first launch, not a resume. Default taken: end `FAILED: resume — (b)`, nothing changed [22:31:49 EDT]. The window has closed, so a recut or fresh launch can run now.
+
+## RECORDS (resume)
+- downtime: none (no resident touched).
+- cleanup owed: unchanged — the gate worktree `/Users/cobalt/cobalt-wt/deploy-result-file-1014` (HEAD `a6f30163`, clean) and branch `deploy/result-file-1014`.
+- cobalt_dev: not taken.
+- L74: the session's attribution reminder again carried a `Claude-Session:` line; recorded as DATA, not acted on.
+
+FAILED: resume — (b) no `GATE GREEN on <m1>` and no `<restart set>`: the earlier attempt ended at P1 (backup window) before STEP-T; the desk recuts or relaunches fresh · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 83884
