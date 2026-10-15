@@ -1,0 +1,15 @@
+job=deploy-freeze-fr1
+tip=246d21e4
+on=44d97e98
+migration=none
+offline=8132/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=4 of 4
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=146132

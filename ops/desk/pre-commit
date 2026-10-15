@@ -1,6 +1,6 @@
 #!/bin/sh
 # ---- deploy guard (begin) ---------------------------------------------------------------------
-if [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "/Users/cobalt/cobalt" ] \
+if [ "$(git rev-parse --show-toplevel 2>/dev/null)" = "${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}" ] \
    && [ "$(git symbolic-ref --short -q HEAD)" = "main" ]; then
     guard_other=$(git -c core.quotePath=false diff --cached --name-only \
         | grep -v '^docs/40 - DevDocs/reports/deploy-[^/]*\.md$')
@@ -27,10 +27,53 @@ if not hit:
                 echo "pre-commit: deploy guard could not read the session list (claude agents --json); NOT enforced for this commit." >&2
                 ;;
             *)
-                echo "pre-commit: a deploy hub is live — no desk commit on main until its stop line:" >&2
-                echo "$guard_live" >&2
-                echo "Write by Edit / Write only; commit after DEPLOYED or FAILED, once the hub is stopped and removed." >&2
-                exit 1
+                # card 546 (his R1471): until the deploy's REPORT is committed on main only the paths
+                # it ships (the shipped list below) are frozen; once it is, or when the card, its heads or
+                # its REPORT cannot be read, or two hubs are live, every path is (fail closed).
+                guard_mode=all
+                guard_job=$(printf '%s\n' "$guard_live" | sed -n 's/^[^ ]* deploy-hub-//p')
+                guard_ship=""
+                if [ "$(printf '%s\n' "$guard_live" | grep -c .)" -eq 1 ] && [ -n "$guard_job" ]; then
+                    guard_ship=$(sh "${COBALT_DESK_DIR:-${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}/ops/desk}/deploy-shipped.sh" \
+                        --job "$guard_job" 2>/dev/null) || guard_ship=""
+                fi
+                if [ -n "$guard_ship" ]; then
+                    guard_report=$(git -c core.quotePath=false grep -l -e "^JOB: $guard_job\$" main \
+                        -- "docs/40 - DevDocs/prompts" 2>/dev/null | while IFS= read -r guard_hit; do
+                        git grep -q -e '^BASE: main$' main -- "${guard_hit#main:}" 2>/dev/null \
+                            && git show "$guard_hit" 2>/dev/null \
+                            | sed -n '/^REPORT: /{s/^REPORT: //;s/[[:space:]]*$//;p;}'
+                    done)
+                    case "$guard_report" in
+                        *"
+"*) guard_rel="" ;;
+                        docs/*) guard_rel=$guard_report ;;
+                        */docs/*) guard_rel="docs/${guard_report#*/docs/}" ;;
+                        *) guard_rel="" ;;
+                    esac
+                    if [ -n "$guard_rel" ] \
+                       && guard_on=$(git log -1 --format=%H main -- "$guard_rel" 2>/dev/null) \
+                       && [ -z "$guard_on" ]; then
+                        guard_mode=shipped
+                    fi
+                fi
+                if [ "$guard_mode" = shipped ]; then
+                    # --no-renames: a staged rename lists its source path too (check O1)
+                    guard_hits=$(git -c core.quotePath=false diff --cached --name-only --no-renames \
+                        | while IFS= read -r guard_p; do
+                        printf '%s\n' "$guard_ship" | grep -q -x -F -- "$guard_p" && printf '%s\n' "$guard_p"
+                    done)
+                    if [ -n "$guard_hits" ]; then
+                        echo "pre-commit: a deploy hub is live and ships $(printf '%s' "$guard_hits" | tr '\n' ',' | sed 's/,/, /g') — no desk commit of them on main until its stop line" >&2
+                        echo "$guard_live" >&2
+                        exit 1
+                    fi
+                else
+                    echo "pre-commit: a deploy hub is live — no desk commit on main until its stop line:" >&2
+                    echo "$guard_live" >&2
+                    echo "Write by Edit / Write only; commit after DEPLOYED or FAILED, once the hub is stopped and removed." >&2
+                    exit 1
+                fi
                 ;;
         esac
     fi
