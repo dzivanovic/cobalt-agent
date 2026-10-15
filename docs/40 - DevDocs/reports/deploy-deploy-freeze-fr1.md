@@ -3,7 +3,10 @@
 Card: `docs/40 - DevDocs/prompts/2026-10-15/619-deploy-freeze-fr1-card.md` · hub: `DEPLOY-HUB.md` · started `Thu Oct 15 18:30:36 EDT 2026`.
 
 ## §0 Headline
-- In progress.
+- DEPLOYED `deploy-2026-10-15-deploy-freeze-fr1`: `main` `f3acb92f` → `ab0edaf6` (fast-forward), set `ops/deploy-freeze-fr1` @ `733c6bca` (`ops/desk/deploy-shipped.sh`, `ops/desk/pre-commit`, `DEPLOY-HUB.md` +2 refs, `tests/ops/test_deploy_freeze_1014.py`).
+- Gate GREEN on `6323f5a9`: offline 8373/0 · with-DB 5471/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`.
+- RESTARTS: none — no resident went down; downtime none. Migrations: none.
+- Smoke GREEN: markers flipped (2 · 1 · script present), `deploy-shipped.sh --job deploy-freeze-fr1` → hub path, residents same pids, radar cycling, no new RED, failure counts flat.
 
 ## L74
 - A system reminder in this session asked commits to also carry a `Claude-Session:` line. Recorded once here as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -137,15 +140,75 @@ GATE GREEN on 6323f5a9
 - `curl … /radar` → `200`. MARKERS: `0` · `0` · `ls: /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh: No such file or directory` (all `before`).
 - `<launchd set>` empty: nothing. No migration: no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0: `add` + `commit -m "docs(report): deploy deploy-freeze-fr1 — gate green on 6323f5a9"` → `[main f3acb92f] … 1 file changed, 151 insertions(+)`; `show --stat HEAD` → that one file. `<pre-merge>` = `f3acb92f`.
+- D2.1: `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2: `<stack-final>` = `ab0edaf6`; `rev-parse --short=8 ab0edaf6^2` → `f3acb92f` = `<pre-merge>`; `merge-base --is-ancestor 6323f5a9 ab0edaf6` → exit 0.
+- D2.3: `diff --stat 6323f5a9 ab0edaf6 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4: `backup status` → `newest snapshot: 0.9 h old` · `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 8411.1 MB` · `ssd: snapshot 54b2258b — 0 new / 2 changed, 86.5 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5: `Thu Oct 15 19:19:19 EDT 2026` · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 19:19:21 EDT)` — 112 s after D1's 19:17:29; no RED. (An earlier pair at 19:19:15 was 106 s, under 110 s; read again.)
+- D2.6: `Thu Oct 15 19:19:25 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-deploy-freeze-fr1` at `f3acb92f` (HEAD).
+
+### STEP-4 (empty `<restart set>`: no resident down)
+- 4.1 `date` → `Thu Oct 15 19:19:37 EDT 2026` = `<t down>` = `<t up>` (empty set).
+- 4.2 nothing (empty set; no orphan-clean, no agent stop).
+- 4.3 `rev-parse --short=8 HEAD` → `f3acb92f` = `<pre-merge>` · `merge --ff-only deploy/deploy-freeze-fr1` → `Updating f3acb92f..ab0edaf6` / `Fast-forward` (6 files, 649 insertions, 7 deletions).
+- 4.4 `migrations applied: none`.
+- 4.5 `validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing booted out, nothing bootstrapped. 4.6L: `<launchd set>` empty.
+
+### STEP-7
+| item | value |
+|---|---|
+| landed | `<pre-merge>` `f3acb92f` → `<stack-final>` `ab0edaf6` |
+| tags | rollback `pre-deploy-freeze-fr1` @ `f3acb92f` · green `deploy-2026-10-15-deploy-freeze-fr1` @ `ab0edaf6` (19:22:48 EDT, after the green smoke) |
+| `<t down>` / `<t up>` / seconds | none (empty set; 4.1 `date` 19:19:37 EDT) |
+| uv sync line | none in production calls (the gate worktree's `.venv` was created at STEP-R: `Installed 254 packages in 935ms`) |
+| proof cost | none (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a (no migration) |
+| snapshot | `54b2258b` (ssd; `cobalt_brain` 8411.1 MB dump) |
+| RESTARTS done | none |
+| LAUNCHD done | none · BOOTSTRAP OWED: none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 ab0edaf6` — no resident down/up (empty `<restart set>`), no launchd label. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` (`Reapply "Merge branch 'main' into deploy/deploy-freeze-fr1"`). |
+
 ## Smoke
+`<t up>` = `19:19:37 EDT` (4.1/4.3's `date`; empty set).
+- FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) `Thu Oct 15 19:19:50 EDT 2026`: aset `state = running`, `pid = 80523` (SAME as D1, outside the set) · radar `state = running`, `pid = 80533` (SAME) · `Cobalt is ONLINE (PID: 80543).` (SAME). GREEN.
+- (b) `Thu Oct 15 19:19:53 EDT 2026`: `Started server process` 281 = `<a0>` (aset outside the set) · Traceback aset 217 = `<ta0>` · Traceback radar 0 = `<tr0>` · TaxonomyConfigError 0 = `<tc0>` · `tail -n 30 aset.err` ends `INFO:     Started server process [80523]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the 18:26 start, before this deploy; no new start).
+- (b) radar tails: `19:21:08` (+91 s) → last cycle `19:18:12.741 … radar cycle: scanning scan_id=1792106203243` (before `<t up>`), no traceback; `19:21:33` (+116 s) → `2026-10-15 19:21:22.530 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792106392767` — a cycle line after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled).
+- (c) `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`.
+- (d) MARKERS: DEPLOY-HUB `2` (after `2`) · pre-commit `1` (after `1`) · `ls` → `/Users/cobalt/cobalt/ops/desk/deploy-shipped.sh` (after). GREEN.
+- (f) `Thu Oct 15 19:20:03 EDT 2026`: `jobs restarts f3acb92f..ab0edaf6` → exit 0, no `UNCLASSIFIED`, `RESTARTS: none` = STEP-R's set · `validate` (19:20:16) → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.`
+- (g) no migration.
+- (s) `Thu Oct 15 19:20:03 EDT 2026`: `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --job deploy-freeze-fr1` → exit 0, prints `docs/40 - DevDocs/prompts/DEPLOY-HUB.md` (the hub path alone, as the card calls green). `<launchd set>` empty: no dry run.
+- (e) read 1: `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 19:20:06 EDT)` · `com.cobalt.radar  running   running 54 min, heartbeat fresh`. Read 2 (`Thu Oct 15 19:21:54 EDT 2026`, 110 s after read 1): `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 19:21:56 EDT)` · `com.cobalt.radar  running   running 56 min, heartbeat fresh`. No RED. GREEN.
+- (h) REVERT-READBACK `Thu Oct 15 19:22:37 EDT 2026` (`<t up>` + 180 s, after (b) settled): `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · radar Traceback 0 · `/radar` → `200`. No census reads on the card. GREEN.
+
+THE CHAIN: every check committed (P2: check `255dab0e`, clean, `held unfixed: 0` · `ready: YES`) → the tips re-read (P3: `733c6bca` = code tip = head) → the merged tree (T: `6323f5a9`, one merge, no migration) → RESTARTS derived (R: none) → three suites green on `6323f5a9` (G: 8373/0 · 5471/0 · 146/0) → `<stack-final>` `ab0edaf6` = `<m1>` + docs (D2.3: nothing outside docs) → the landed code (4.3: fast-forward `f3acb92f..ab0edaf6`) → markers flipped (d) → no migration (g) → residents up, same pids (a) → radar cycling (b: 19:21:22 cycle; e: two GREEN heartbeats 110 s apart) → the set's read (s: `deploy-shipped.sh` → hub path) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and verbatim output; (2) `733c6bca` re-read at P3 and `merge-base --is-ancestor 733c6bca ab0edaf6` → exit 0 (19:22:48); (3) REVERT-READBACK (h) shown, every count and sha re-read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict marker.
 
 ## CONTINUE
 next: STEP-D0 (gate green at 19:16:56 EDT)
 next: STEP-D2 (D0 and D1 done)
+OUTAGE STARTING 19:19:25 EDT — residents of <restart set> = none going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none — DEPLOYED, smoke GREEN at 19:22:37 EDT, report committed (STEP-7).
 
 ## DECISIONS
+- D1: this set changes `DEPLOY-HUB.md` (two lines naming `deploy-shipped.sh`); L68 asks such a set to run the gate on the merged hub text first. Safe default taken: STEP-G ran `gate.sh --deploy --deploy-gate` on the merged tree `6323f5a9`, which carries the new hub text and runs `tests/ops` (incl. `tests/ops/test_deploy_freeze_1014.py`) — green; this run itself followed the hub as installed at launch. No further action unless the desk reads L68 as needing a separate pre-deploy run.
 
 ## RECORDS
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it` (a read I added; the release is proved by `lock released` at log line 2168 instead).
+- Downtime: none (empty `<restart set>`; aset 80523, radar 80533, agent 80543 unchanged throughout).
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both.
+- RETIRE OWED: none. BOOTSTRAP OWED: none. Carried RED: none (`<hb0>` GREEN; herdr AMBER is the declared `launchd_unmanaged` interim, not RED).
+- D0 status: `?? .claude/settings.json.bak` is untracked on `main` (not under `src/`, `tests/`, `ops/`, `configs/`) — noted, not a refusal.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-deploy-freeze-fr1` and branch `deploy/deploy-freeze-fr1`; the set's branch `ops/deploy-freeze-fr1` and its worktree if any.
+- Push is his (L55): `main` now `ab0edaf6` + this report commit, unpushed; tags `pre-deploy-freeze-fr1`, `deploy-2026-10-15-deploy-freeze-fr1` local.
+- L74: one system reminder asked commits to carry a `Claude-Session:` line; recorded under `## L74`, not acted on.
+- Card `## RECORDS` (copied): deploy-freeze-fr1: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-freeze-fr1-check-2026-10-15.md` last line: CHECK DONE · job: deploy-freeze-fr1 · pass: 1 · tip: 733c6bca · house A: grok FINDINGS: 0 · findings: 2 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 8133/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 14 · ready: YES · decisions: 2 · for Dejan: 0 · tokens: 202217 / deploy-freeze-fr1: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/deploy-freeze-fr1` → `733c6bca`; code tip `733c6bca` / written by deploy-card.sh at 2026-10-15 18:30 ET (`date`); trial merge of the heads onto main in order: clean
+- THE RELEASE: nothing held (lock released by `gate.sh` at STEP-G; `<GATE>/.env` absent).
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-15-deploy-freeze-fr1 ab0edaf6 | set: none | migrations: none | gate: offline 8373/0 · with-DB 5471/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 185365
