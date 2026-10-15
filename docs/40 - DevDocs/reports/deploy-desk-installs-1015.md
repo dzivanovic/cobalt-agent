@@ -1,8 +1,10 @@
 # deploy desk-installs-1015 · set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/desk-installs-1014` (code tip `7c8db6e1`, head `66cf78d8`): docs and tests only, no migration.
-- Authorized, preflight clean. In progress.
+- DEPLOYED `deploy-2026-10-15-desk-installs`: `ops/desk-installs-1014` (code tip `7c8db6e1`, head `66cf78d8`) landed on `main` at `fe5dadf9` (`8d7869a3..fe5dadf9`, fast-forward).
+- Docs and tests only. No migration, `RESTARTS: none`, no resident went down (downtime 0 s).
+- Gate green on `a09d2a9d`: offline 8065/0 · with-DB 5231/0 · live-note 146/0. Smoke GREEN, the three markers flipped.
+- The new `SendMessage` allow string reaches the desk at its next REFRESH (`desk-launch.sh desk`). The running desk keeps its old line until then.
 
 ## L74
 - The session's attribution notice asked for a `Claude-Session:` line in commits. Treated as data (L74). Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -124,13 +126,71 @@ STEP-D1 (`date` → `Thu Oct 15 11:15:29 EDT 2026`):
 - `curl … /radar` → `200`. MARKERS: `0`, `0`, `No such file or directory` (each its `before`).
 - `<launchd set>` empty: nothing. No migration: no `<RB>`, no proof-only.
 
+STEP-D2:
+- D2.0 report committed `8d7869a3` (`show --stat HEAD` → the one file, 136 insertions). `<pre-merge>` = `8d7869a3`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report file).
+- D2.2 `<stack-final>` = `fe5dadf9`; `rev-parse --short=8 fe5dadf9^2` → `8d7869a3` = `<pre-merge>`; `merge-base --is-ancestor a09d2a9d fe5dadf9` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat a09d2a9d fe5dadf9 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 2.2 h old`; `backup run` → `backup: cobalt_brain dumped, 8187.7 MB` · `ssd: snapshot 7a421a8a — 17 new / 3 changed, 161.2 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` 11:17:18 → `heartbeat show` `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 11:17:21 EDT)` (110 s after D1's 11:15:31); no RED.
+- D2.6 `date` → `Thu Oct 15 11:17:25 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-desk-installs-1015` at `8d7869a3`.
+
+STEP-4 (`<restart set>` empty):
+- 4.1 `date` → `Thu Oct 15 11:17:34 EDT 2026` = `<t down>` = `<t up>` (empty set).
+- 4.2 nothing booted out; no orphan-clean (aset not in the set); agent not stopped.
+- 4.3 `rev-parse --short=8 HEAD` → `8d7869a3` = `<pre-merge>`. `git -C /Users/cobalt/cobalt merge --ff-only deploy/desk-installs-1015` → `Updating 8d7869a3..fe5dadf9` / `Fast-forward` (6 files, 356 insertions, 15 deletions).
+- 4.4 migrations applied: none.
+- 4.5 `validate` → exit 0, `13 trade_def(s) validated OK from the vault.`, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bootstrap; downtime 0 s. 4.6L: `<launchd set>` empty.
+
 ## Smoke
+`<t up>` = 4.3's `date` = 11:17:34 (empty set).
+- FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39.
+- (a) [11:17:48] aset `state = running`, `pid = 40377` (same as D1, outside the set); radar `state = running`, `pid = 8646` (same); `Cobalt is ONLINE (PID: 14763).` (same). GREEN.
+- (b) [11:17:51] `Started server process` 279 = `<a0>`; aset Traceback 217 = `<ta0>`; radar Traceback 0 = `<tr0>`; TaxonomyConfigError 0 = `<tc0>`. `tail -n 30 aset.err` → normal card writes (last `10:52:03 … [WRITE] updated … unit=card-20261015T105203`), no traceback.
+- (c) `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) marker 1 → `1` · marker 2 → `1` · marker 3 → `/Users/cobalt/cobalt/tests/ops/test_desk_installs_1014.py`. Each its `after`. GREEN.
+- (e) read 1 [11:18:03] `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 11:18:03 EDT)`; `com.cobalt.radar running 2227 min, heartbeat fresh`.
+- (f) `validate` → exit 0, as 4.5 (`13 trade_def(s) validated OK`, `Jobs (F17): 15 registered — 6 resident, 9 one-shot.`, `Placement … tree clean.`). `COBALT_ENV=production uv run cobalt jobs restarts 8d7869a3..fe5dadf9` → exit 0, same 6 rows, `RESTARTS: none` = STEP-R's set, no `UNCLASSIFIED`. GREEN.
+- (g) no migration.
+- (b) radar tail 1 [11:19:04, `<t up>` + 90 s] `tail -n 12 radar.err` → `2026-10-15 11:17:42.962 | INFO | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792077380129`, stamped after `<t up>`, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback (the other 11 lines: one `radar price floor 5.0` INFO at 11:16:32 and ten `cards.expire` INFO at 11:17:42). Settled GREEN on the first tail.
+- (e) read 2 [11:19:52] `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 11:19:54 EDT)` (111 s after read 1); `com.cobalt.radar running 2229 min, heartbeat fresh`. No RED in either read, so nothing new against `<hb0>`. GREEN.
+- (s) The card's `## SMOKE READS` takes no production command (docs and tests). Proof of the string is its first use by the desk, after this stop line. The test `tests/ops/test_desk_installs_1014.py` ran in the gate (offline 8065/0).
+- (h) [11:20:35, `<t up>` + 181 s] counts 18 · 60 · 43 · 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none growing). `/radar` → `200`. No `census` reads on this card. GREEN.
+
+THE CHAIN: every check was committed (P2: `85c6e242`). The tips were re-read (P3: `7c8db6e1`, `66cf78d8`). The tree merged clean (T: `a09d2a9d`). The tool derived `RESTARTS: none` (R). All three suites passed on `a09d2a9d` (G). `<stack-final>` `fe5dadf9` = `<m1>` + docs (D2.3). The code landed (4.3: `8d7869a3..fe5dadf9`). All three markers read their `after` values (d). There was no migration to read back (g). The residents never went down and kept their D1 pids (a). Radar cycled after the merge (b, e). The set has no production reads (s). No failure count grew (h). The card surface is not readable here: the desk confirms it with him (L70).
+
+## Deploy table — close
+- `<pre-merge>` `8d7869a3` → `<stack-final>` `fe5dadf9`. Tags: `pre-desk-installs-1015` (at `8d7869a3`), `deploy-2026-10-15-desk-installs` (at `fe5dadf9`, after the green smoke).
+- `<t down>` / `<t up>`: none (empty set), 0 s. uv sync: venv created in `<GATE>` at STEP-R (`Installed 254 packages in 893ms`); none in production. Proof cost: none (no migration). migrations applied: none. `<RB>`: none.
+- Snapshot `7a421a8a` (ssd). RESTARTS done: none. LAUNCHD done: none. BOOTSTRAP OWED: none.
+- ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 fe5dadf9` (no resident to cycle, empty `<restart set>` and `<launchd set>`). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
+## PRE-STOP SELF-CHECK
+1. Each smoke row quotes its evidence verbatim, with its `date` (11:17:48, 11:17:51, 11:18:03, 11:19:04, 11:19:52, 11:20:35).
+2. The tips were re-read at P3. `merge-base --is-ancestor 7c8db6e1 fe5dadf9` → exit 0, and `merge-base --is-ancestor 66cf78d8 fe5dadf9` → exit 0. `rev-parse --short=8 main` → `fe5dadf9`.
+3. The REVERT-READBACK is shown at (h). Every count and sha in this report was re-read from this run's tool output.
+4. No conflict marker exists: STEP-T ran clean (`Merge made by the 'ort' strategy.`), and so did D2.1.
 
 ## CONTINUE
-next: STEP-D2 (D1 done at Thu Oct 15 11:15:29 EDT 2026)
+OUTAGE STARTING Thu Oct 15 11:17:25 EDT 2026 — residents of <restart set> = none going down (empty set: nothing goes down); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 done (empty set, nothing down). Smoke GREEN at 11:20:35. Tagged. next: none (closed).
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: 0 s (empty `<restart set>`).
+- REFUSED, not needed: `grep -n -F ".env: removed" <gate log>`. The hook said: `route: .env is never read; ` + "`ls -la <path>/.env`" + ` shows it is there, and the lock scripts copy and remove it`. I read the release from the gate's verdict line and from log line 2162 `lock released`.
+- `cobalt_dev: 0013 (F2 = F0)` (the gate's verdict line).
+- RETIRE OWED: none. Carried RED: none (`<hb0>` GREEN; herdr AMBER is a declared interim, not RED).
+- `main` porcelain at D0 also held `?? .claude/settings.json.bak` (untracked, outside `src/` `tests/` `ops/` `configs/`). Accepted, and left as found.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-desk-installs-1015` and branch `deploy/desk-installs-1015`, plus the set's branch `ops/desk-installs-1014` and its worktree if one exists.
+- Card `## RECORDS`, copied:
+  - desk-installs-1014: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/desk-installs-fr1-check-2026-10-15.md` last line: CHECK DONE · job: desk-installs-1014 · pass: 1 · tip: 7c8db6e1 · house A: grok FINDINGS: 0 · findings: 5 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 4328/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 14 · ready: YES · decisions: 3 · for Dejan: 0 · tokens: 173481
+  - desk-installs-1014: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/desk-installs-1014` → `66cf78d8`; code tip `7c8db6e1`
+  - written by deploy-card.sh at 2026-10-15 10:27 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: the session's attribution notice asked for a `Claude-Session:` commit line. I recorded it once and did not act on it.
+- The new allow string first works at the desk's next REFRESH. A denial at its first use is the desk's `## RECORDS` line (L81 (3)).
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-15-desk-installs fe5dadf9 | set: none | migrations: none | gate: offline 8065/0 · with-DB 5231/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 200071
