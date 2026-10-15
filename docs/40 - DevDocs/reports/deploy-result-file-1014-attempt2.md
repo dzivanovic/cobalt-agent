@@ -2,9 +2,12 @@
 
 ## §0 Headline
 - Card `prompts/2026-10-14/573-deploy-result-file-card.md` (attempt 2, gate `deploy/result-file-1014-attempt2`). First launch at 22:33:11 EDT, outside the 21:30-22:30 backup window.
+- DEPLOYED: `ops/result-file-1014` (`55198484`) is on `main`. `main` went `ce93e20b` → `c2e500d5` at 23:07 EDT. The tag is `deploy-2026-10-14-result-file-attempt2`.
+- Gate green on `2026bfdf`: offline 4328/0 · with-DB 5231/0 · live-note 146/0. RESTARTS: none, so no resident went down. Migrations: none.
+- Smoke GREEN, and the card's S2 extra read is `OVERALL: GREEN` with no FAIL line. One ASK DESK: `tests/ops` sits outside the gate's suites (`## DECISIONS` 1).
 
 ## L74
-- none yet
+- No block inside a tool result asked for a `Claude-Session:` line or gave an instruction. The harness's attribution reminder offered a `Claude-Session:` trailer, and the hub's L74 rule wins: commits carry `Co-Authored-By` only.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-14/573-deploy-result-file-card.md"` → exit 0:
@@ -139,13 +142,77 @@ GATE GREEN on 2026bfdf
 - `curl … /radar` → `200`. MARKERS again: `No such file or directory` · `0` · `0` = before.
 - `<launchd set>` empty: nothing. `MIGRATIONS: none`: no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `git add` + `git commit -m "docs(report): deploy result-file-1014 — gate green on 2026bfdf" …` → `[main ce93e20b]`; `show --stat HEAD` → the one file (151 insertions). `<pre-merge>` = `ce93e20b`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report alone).
+- D2.2 `<stack-final>` = `c2e500d5`; `c2e500d5^2` → `ce93e20b` = `<pre-merge>`; `merge-base --is-ancestor 2026bfdf c2e500d5` → exit 0.
+- D2.3 `git diff --stat 2026bfdf c2e500d5 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.4 h old`; `backup run` → `backup: cobalt_brain dumped, 7983.8 MB` · `ssd: snapshot c42c486a — 0 new / 2 changed, 23.1 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `Wed Oct 14 23:06:43 EDT 2026` · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-14 23:06:44 EDT)` — 110 s after D1's 23:04:54 (two earlier pairs at 23:06:34 and 23:06:39 were short of 110 s, both GREEN); no RED.
+- D2.6 `date` → `Wed Oct 14 23:06:47 EDT 2026`; `git tag pre-result-file-1014` → `rev-parse --short=8 pre-result-file-1014` = `ce93e20b`.
+
+### STEP-4 (restart set EMPTY — no resident went down)
+- 4.1 `date` → `Wed Oct 14 23:07:00 EDT 2026` (`<t down>`/`<t up>` = this, downtime: none).
+- 4.2 nothing (empty set; no bootout, no orphan-clean, no agent stop).
+- 4.3 `rev-parse --short=8 HEAD` → `ce93e20b` = `<pre-merge>`; `git merge --ff-only deploy/result-file-1014-attempt2` → `Updating ce93e20b..c2e500d5` / `Fast-forward` (9 files, 1113 insertions, 23 deletions).
+- 4.4 `migrations applied: none`.
+- 4.5 `validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing (empty set). 4.6L nothing (empty `<launchd set>`).
+
+### STEP-7 table
+| item | value |
+|---|---|
+| main | `ce93e20b` (`<pre-merge>`) → `c2e500d5` (`<stack-final>`) |
+| tags | `pre-result-file-1014` = `ce93e20b`; `deploy-2026-10-14-result-file-attempt2` set after the green smoke |
+| `<t down>` / `<t up>` / seconds | none (empty set; merge at 23:07:00 EDT with residents up) |
+| uv sync | the gate tree's first `uv run` created `.venv` (`Installed 254 packages in 836ms`); none in production |
+| proof cost | none (`MIGRATIONS: none`) |
+| migrations applied | none |
+| `<RB>` before / after | none |
+| snapshot | `c42c486a` (ssd) |
+| RESTARTS done | none |
+| LAUNCHD done | none |
+| ROLLBACK STRING (desk's) | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 c2e500d5` — no resident down/up (empty set), no launchd label. 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
 ## Smoke
+`<t up>` = 4.3's `date` 23:07:00 EDT (empty set).
+- FIRST CALLS (after 4.5): `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1 baselines).
+- (a) `Wed Oct 14 23:07:21 EDT 2026` — aset `state = running`, pid 40377 (SAME as D1, outside the set) · radar `state = running`, pid 8646 (SAME) · `Cobalt is ONLINE (PID: 14763).` (same pid; agent outside the set). GREEN.
+- (b) `Wed Oct 14 23:07:24 EDT 2026` — `grep -c "Started server process" aset.err` → 279 = `<a0>` (aset outside the set) · `tail -n 30 aset.err` → last entries 2026-10-14 10:01, no new start, no traceback (it holds a daily-note diff; not copied here) · Traceback aset 217 = `<ta0>` · Traceback radar 0 = `<tr0>` · TaxonomyConfigError 0 = `<tc0>`. RADAR TAIL `Wed Oct 14 23:10:24 EDT 2026` (`<t up>` + 204 s) → `2026-10-14 23:08:22.669 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` and `23:10:02.688 … radar cycle: idle:overnight scan_id=None` after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → settled GREEN on the first tail.
+- (c) `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200` (first attempt each). GREEN.
+- (d) MARKERS: `ls /Users/cobalt/cobalt/ops/desk/result-read.sh` → `/Users/cobalt/cobalt/ops/desk/result-read.sh` · BUILD-HUB `grep -c -F "RESULT FILE (his R1471)"` → `1` · CHECK-HUB → `1`. All = `after`. GREEN.
+- (e) first read `Wed Oct 14 23:10:24` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-14 23:10:26 EDT)`; `OK com.cobalt.radar running running 1499 min, heartbeat fresh`; only the AMB herdr line of `<hb0>`.
+- (f) `validate` (4.5) exit 0 · `COBALT_ENV=production uv run cobalt jobs restarts ce93e20b..c2e500d5` → exit 0, the same nine rows as STEP-R, `RESTARTS: none` = `<restart set>`, no UNCLASSIFIED. GREEN.
+- (g) no migration.
+- (s) SMOKE READS: the card's tests ran from `<GATE>` (= `c2e500d5`, the tree on `main`; `.env` absent; offline, nothing in production): `uv run pytest -q tests/ops/test_deploy_step0.py tests/ops/test_deploy_card.py tests/ops/test_the_rule_sweep.py tests/ops/test_result_file.py` → `276 passed, 15 warnings in 149.37s (0:02:29)` — 0 failed. The gate's suites cover `tests/cobalt tests/taxonomy` only (log line 2), so these were not quotable from the gate; see `## DECISIONS` 1. No production `db query`, no launchd, no restart.
+- EXTRA READ (desk row R1508): `Wed Oct 14 23:10:31 EDT 2026` · `COBALT_ENV=production uv run cobalt smoke s2 --cutoff 2026-10-14T19:39:41-04:00 --prod` → exit 0, `wrote /Users/cobalt/cobalt/docs/40 - DevDocs/reports/s2-smoke-2026-10-14.md`, `OVERALL: GREEN`. Check lines holding FAIL: NONE. Three KNOWN lines (not FAIL): `K6 | picks — one row per post-deploy FILLED transition | KNOWN | KNOWN: no fill yet` · `K10.1 | miss line unit in the DRC note | KNOWN | pending — no DRC event for 2026-10-14` · `K10.2 | miss line vault_writes row | KNOWN | KNOWN: pending — no DRC event for the last trading day`. Every other check PASS (K1–K5.2, K7–K9.12, K11.1–K18).
+- (e) second read `Wed Oct 14 23:12:16 EDT 2026` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-14 23:12:17 EDT)` (111 s after the first), `OK com.cobalt.radar running running 1501 min, heartbeat fresh`. No RED. Radar tail 3 at 23:11:59 → `23:11:42.704 … radar cycle: idle:overnight scan_id=None`. GREEN.
+- (h) REVERT-READBACK `Wed Oct 14 23:10:36 EDT 2026` (`<t up>` + 216 s, after (b) settled): 18 · 60 · 43 · 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none growing) · `/radar` → `200`. No census read (no migration).
+
+THE CHAIN: every check committed (P2, `d1833bfc`) · the tip re-read (P3, `55198484`) · the merged tree (T, `2026bfdf`) · RESTARTS derived (R, none) · three suites green on `2026bfdf` (G) · `c2e500d5` = `2026bfdf` + docs (D2.3) · the landed code (4.3, ff `ce93e20b..c2e500d5`) · markers after (d) · no migration (g) · residents up and unchanged (a) · radar cycling (b, e) · the set's reads (s) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) each smoke row quotes its evidence verbatim with its `date` (above). (2) `git merge-base --is-ancestor 55198484 c2e500d5` → exit 0; head = code tip = `55198484` (P3). (3) REVERT-READBACK (h) is shown; every count, sha and `file:line` here was re-read from tool output in this run; `git rev-parse --short=8 main` → `c2e500d5`. (4) STEP-T merged clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/result-file-1014-attempt2` alone, so no conflict marker.
 
 ## CONTINUE
-next: STEP-D2 (gate green at 23:04:26 EDT; D0, D1 done)
+OUTAGE STARTING 23:06:47 EDT — residents of <restart set> going down: the set is EMPTY, no resident goes down (merge with residents up); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+merged at 23:07 (`main` = `c2e500d5`); 4.6 done; smoke GREEN at 23:12:17; tag `deploy-2026-10-14-result-file-attempt2` set → `c2e500d5`. The run ends with the stop line below.
 
 ## DECISIONS
+1. ASK DESK: the card's `## SMOKE READS` names four `tests/ops` files, but the hub says "a test the gate ran is quoted from the gate; no test runs in production", and `gate.sh` runs `tests/cobalt tests/taxonomy` only (log line 2), so `tests/ops` was not quotable from the gate. Safe default taken: ran them once offline from `<GATE>` (tree = `c2e500d5` = `main`, `.env` absent, nothing in production touched) → `276 passed`. Should the gate's offline leg also cover `tests/ops` for desk-script sets? [23:08 EDT]
 
 ## RECORDS
+- Downtime: none (`<restart set>` empty; no resident went down; pids 40377 / 8646 / 14763 unchanged).
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both; lock released by `gate.sh`.
+- REFUSED, not needed: `grep -n -F ".env: removed" /Users/cobalt/cobalt-wt/.gate-logs/deploy-result-file-1014-attempt2-all-20261014-223454.log` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; ls -la <path>/.env shows it is there, and the lock scripts copy and remove it`. I read the release from `grep -n -F "released"` instead (a different read of the log, not a retry of the same command).
+- `?? .claude/settings.json.bak` untracked on `main` at D0 (not in the accepted list, and not under `src/` `tests/` `ops/` `configs/`); left untouched.
+- The EXTRA READ `cobalt smoke s2 … --prod` wrote its own file `docs/40 - DevDocs/reports/s2-smoke-2026-10-14.md` (the tool's write, left uncommitted for the desk).
+- The hub's `RESULT FILE` cutover: the next build and check that ship write the `.result` file; the deploy of the set after this one reads it (card `## SMOKE READS` FIRST USE). A gate refusing a good file is the rollback signal.
+- No RETIRE OWED, no BOOTSTRAP OWED (`STEP-C: ADMITTED 0`). No carried RED (heartbeat GREEN throughout; herdr AMB is the declared interim).
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-result-file-1014-attempt2` and branch `deploy/result-file-1014-attempt2`; the set's branch `ops/result-file-1014` and its worktree; attempt 1's gate leftovers, if any.
+- L74: no block inside a tool result asked for a `Claude-Session:` line. The harness's system attribution offered a `Claude-Session:` trailer; the hub (L74) says commits carry `Co-Authored-By` only, and I followed the hub.
+- Card `## RECORDS` (the desk's, copied):
+  - result-file-1014: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/result-file-check-2026-10-14.md` last line: CHECK DONE · job: result-file-1014 · pass: 1 · tip: 55198484 · house A: grok FINDINGS: 5 · findings: 7 · dropped: 0 · held: 5 · fixed: 5 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 4328/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 14 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 231660
+  - result-file-1014: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/result-file-1014` → `55198484`; code tip `55198484`
+  - written by deploy-card.sh at 2026-10-14 21:32 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-14-result-file-attempt2 c2e500d5 | set: none | migrations: none | gate: offline 4328/0 · with-DB 5231/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 187550
