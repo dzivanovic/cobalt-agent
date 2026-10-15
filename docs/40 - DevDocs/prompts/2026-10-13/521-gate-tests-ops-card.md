@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/gate-tests-ops-fr1
 WORKTREE: gate-tests-ops-fr1
-BASE: 1526b50e
+BASE: f095fe7d
 TIP: 4339f5d1
 REPORT: /Users/cobalt/cobalt-wt/gate-tests-ops-fr1/docs/40 - DevDocs/reports/gate-tests-ops-build-fr1-p1-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gate-tests-ops-check-2026-10-13.md
