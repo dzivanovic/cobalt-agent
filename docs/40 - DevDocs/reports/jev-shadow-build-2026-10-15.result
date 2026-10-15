@@ -1,0 +1,15 @@
+job=jev-shadow-1015
+tip=d0fdd674
+on=d601b1f6
+migration=none
+offline=4561/0
+with_db=5464/0
+live_note=146/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.agent com.cobalt.aset com.cobalt.radar
+rows=20 of 20
+self_check=3 of 3
+decisions=9
+for_dejan=0
+tokens=479505
