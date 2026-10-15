@@ -28,7 +28,7 @@ if not hit:
                 ;;
             *)
                 # card 546 (his R1471): until the deploy's REPORT is committed on main only the paths
-                # it ships (deploy-shipped.sh) are frozen; once it is, or when the card, its heads or
+                # it ships (the shipped list below) are frozen; once it is, or when the card, its heads or
                 # its REPORT cannot be read, or two hubs are live, every path is (fail closed).
                 guard_mode=all
                 guard_job=$(printf '%s\n' "$guard_live" | sed -n 's/^[^ ]* deploy-hub-//p')
