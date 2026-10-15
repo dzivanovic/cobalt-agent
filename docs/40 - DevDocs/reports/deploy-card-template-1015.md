@@ -1,7 +1,10 @@
 # deploy card-template-1015 · set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/card-template-1014` (code tip `5a29de43`, head `ec9c8926`) — in progress.
+- DEPLOYED `ops/card-template-1014` (code tip `5a29de43`, head `ec9c8926`): `main` `e2695630` → `e4fa9e7b`, tag `deploy-2026-10-15-card-template`, rollback tag `pre-card-template-1015`.
+- Gate green on `4ea6498b`: offline 8067/0 · with-DB 5231/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`.
+- RESTARTS: none — no resident went down, no downtime; migrations: none; launchd set: none.
+- Smoke GREEN: markers 2 / 1 / file present; `tests/ops/test_card_template_1014.py` 2 passed on the landed tree; no failure count grew.
 
 ## L74
 - One block arrived (a system reminder, not a tool result) asking commits to carry a `Claude-Session:` line. Recorded as DATA, not acted on: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -154,13 +157,102 @@ GATE GREEN on 4ea6498b
 | launchd set | (empty) | | nothing |
 | migration | `MIGRATIONS: none` | | no `<RB>`, no proof-only |
 
+### STEP-D2
+| step | command | exit | result verbatim |
+|---|---|---|---|
+| D2.0 | `git add` + `git commit … -- "docs/40 - DevDocs/reports/deploy-card-template-1015.md"` | 0 | `[main e2695630] docs(report): deploy card-template-1015 — gate green on 4ea6498b` · `1 file changed, 166 insertions(+)` |
+| D2.0 | `git show --stat HEAD` | 0 | `.../reports/deploy-card-template-1015.md \| 166 +++` — one file |
+| D2.0 | `git rev-parse --short=8 main` | 0 | `e2695630` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report, 1 file) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `e4fa9e7b` = `<stack-final>` |
+| D2.2 | `git rev-parse --short=8 e4fa9e7b^2` | 0 | `e2695630` = `<pre-merge>` |
+| D2.2 | `git merge-base --is-ancestor 4ea6498b e4fa9e7b` | 0 | (nothing) |
+| D2.3 | `git diff --stat 4ea6498b e4fa9e7b -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | (nothing) — docs only |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.9 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain via pg_dump inside cobalt_memory — 8212.2 MB` · `ssd: snapshot 1f34bc5f — 0 new / 2 changed, 312.9 MB added, 1 pruned` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | 0 | `12:10:53` → `HEARTBEAT GREEN … (2026-10-15 12:10:53 EDT)` (106 s after D1, under 110 s) |
+| D2.5 | `date` · `heartbeat show` | 0 | `Thu Oct 15 12:10:57 EDT 2026` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 12:10:58 EDT)` — 111 s after D1; no new RED |
+| D2.6 | `date` | 0 | `Thu Oct 15 12:11:02 EDT 2026` |
+| D2.6 | `git tag pre-card-template-1015` · `git rev-parse --short=8 pre-card-template-1015` | 0 | `e2695630` |
+
+### STEP-4 (restart set EMPTY)
+| step | command | exit | result verbatim |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Thu Oct 15 12:11:16 EDT 2026` = `<t down>` (nothing goes down) |
+| 4.2 | (empty set) | | no bootout, no orphan-clean, no agent stop |
+| 4.3 | `git rev-parse --short=8 HEAD` | 0 | `e2695630` = `<pre-merge>` |
+| 4.3 | `git merge --ff-only deploy/card-template-1015` | 0 | `Updating e2695630..e4fa9e7b` · `Fast-forward` · `3 files changed, 210 insertions(+)` |
+| 4.3 | `date` | 0 | `Thu Oct 15 12:11:19 EDT 2026` = `<t up>` (empty set) |
+| 4.4 | — | | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | `13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | (empty set) | | nothing to bootstrap; downtime: none |
+| 4.6L | (empty `<launchd set>`) | | nothing |
+
+### STEP-7 close
+| item | value |
+|---|---|
+| landed | `<pre-merge>` `e2695630` → `<stack-final>` `e4fa9e7b` (`git rev-parse --short=8 main` → `e4fa9e7b`) |
+| tags | `pre-card-template-1015` at `e2695630`; `deploy-2026-10-15-card-template` set after the green smoke (at `e4fa9e7b`) |
+| outage | `<t down>` 12:11:16 / `<t up>` 12:11:19 — none (empty set) |
+| uv sync | none on `main` (the gate worktree's `.venv` was created at STEP-R, in the gate tree) |
+| proof cost | n/a (no migration) |
+| migrations applied | none · `<RB>` n/a |
+| snapshot | `ssd: snapshot 1f34bc5f` |
+| RESTARTS done | none |
+| LAUNCHD done | none · BOOTSTRAP OWED: none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 e4fa9e7b` (no resident to cycle; no launchd label). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
 ## Smoke
+`<t up>` = 12:11:19 EDT (empty set: 4.3's `date`). FIRST CALLS: `<rp_up>` `18` · `<rpr_up>` `60` · `<re_up>` `43` · `<lc_up>` `39` (= D1).
+
+| row | `date` | command | exit | result verbatim | verdict |
+|---|---|---|---|---|---|
+| (a) | 12:11:33 | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running` · `pid = 40377` (SAME as D1; outside the set) | GREEN |
+| (a) | 12:11:33 | `launchctl print gui/501/com.cobalt.radar` | 0 | `state = running` · `pid = 8646` (SAME as D1) | GREEN |
+| (a) | 12:11:33 | `/Users/cobalt/cobalt/cobalt.sh status` | 0 | `Cobalt is ONLINE (PID: 14763).` (SAME) | GREEN |
+| (b) | 12:11:33 | `grep -c "Started server process" .../aset.err` | 0 | `279` = `<a0>` (aset outside the set) | GREEN |
+| (b) | 12:11:33 | `tail -n 30 .../aset.err` | 0 | last entries `2026-10-15 10:52:03.528 \| INFO \| cobalt.aset.daily_note:_write_unit:189 - [WRITE] updated: …` — no restart (aset outside the set), no traceback | GREEN |
+| (b) | 12:11:33 | Traceback aset · Traceback radar · TaxonomyConfigError | 0 / 1 / 1 | `217` · `0` · `0` = `<ta0>` `<tr0>` `<tc0>` | GREEN |
+| (c) | 12:11:33 | `curl … https://cobalt.taild24291.ts.net/` · `/radar` · `/radar\?frame=phone` | 0 | `200` · `200` · `200` | GREEN |
+| (d) | 12:11:33 | `grep -c -F "## DEPLOY PROOF" ".../prompts/CARD.md"` | 0 | `2` = after | GREEN |
+| (d) | 12:11:33 | `grep -c -F "HOW A CARD CITES AND PINS" ".../prompts/CARD.md"` | 0 | `1` = after | GREEN |
+| (d) | 12:11:33 | `ls /Users/cobalt/cobalt/tests/ops/test_card_template_1014.py` | 0 | `/Users/cobalt/cobalt/tests/ops/test_card_template_1014.py` = after | GREEN |
+| (e) 1 | 12:11:46 | `COBALT_ENV=production uv run cobalt heartbeat show` | 0 | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 12:11:47 EDT)` · `com.cobalt.radar             running   running 2281 min, heartbeat fresh` | GREEN |
+| (f) | 12:11:46 | `COBALT_ENV=production uv run cobalt jobs restarts e2695630..e4fa9e7b` | 0 | `CARD.md M DOCS -` · `card-template-build-2026-10-14.md A DOCS -` · `test_card_template_1014.py A test/documentation; no resident -` · `RESTARTS: none` = STEP-R | GREEN |
+| (f) | 12:11:19 | validate (4.5) | 0 | `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>` | GREEN |
+| (g) | — | (no migration) | | — | n/a |
+| (s) | 12:11:46 | `ls -la <GATE>/.env` (No such file) · `uv run pytest -q tests/ops/test_card_template_1014.py` | 0 | `2 passed, 15 warnings in 0.93s` → `0 failed` (warnings: litellm `asyncio.iscoroutinefunction` DeprecationWarning) | GREEN |
+| (b) tail 1 | 12:12:50 (`<t up>` + 91 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | 0 | `2026-10-15 12:12:40.830 \| INFO \| cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792080677494`; other lines `cards.expire: falling back to the session close (16:00:00)` INFO; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → settled; tails 2, 3 not needed | GREEN |
+| (e) 2 | 12:13:39 | `COBALT_ENV=production uv run cobalt heartbeat show` | 0 | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 12:13:40 EDT)` (113 s after read 1) · `com.cobalt.radar             running   running 2283 min, heartbeat fresh`; no RED not in `<hb0>` | GREEN |
+| (h) | 12:14:20 (`<t up>` + 181 s) | the four failure counts | 0 | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` — none grew | GREEN |
+| (h) | 12:14:20 | `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` | 0 | `200` · no `census` reads on the card | GREEN |
+
+THE CHAIN: every check committed (P2: `00bae84e…`, clean) → the tips re-read (P3: `5a29de43`, `ec9c8926`) → the merged tree (T: `<m1>` `4ea6498b`) → RESTARTS derived (R: none) → three suites green on `4ea6498b` (G: offline 8067/0 · with-DB 5231/0 · live-note 146/0) → `<stack-final>` `e4fa9e7b` = `<m1>` + docs (D2.3: nothing outside docs) → the landed code (4.3: `Updating e2695630..e4fa9e7b`) → markers (d: `2`, `1`, file present) → no migration (g: n/a) → residents untouched and running (a: same pids) → radar cycling (b: `12:12:40.830 radar cycle: scanning`; e: heartbeat fresh twice) → the set's read (s: `2 passed`) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and the output quoted verbatim; (2) `git merge-base --is-ancestor 5a29de43 e4fa9e7b` → exit 0, `git merge-base --is-ancestor ec9c8926 e4fa9e7b` → exit 0, both re-read at P3; (3) REVERT-READBACK (h) shown above; every count, sha and `file:line` here was read from tool output this run; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict marker.
 
 ## CONTINUE
 next: STEP-D2 (gate green at 12:08:39 EDT; D0, D1 done)
+OUTAGE STARTING 12:11:02 EDT — residents of <restart set> (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none — 4.6 ended 12:11:19 (empty set), smoke GREEN at 12:14:20, tagged; run closed.
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: none (restart set EMPTY; no resident went down; aset 40377, radar 8646, agent 14763 unchanged).
+- `REFUSED, not needed`: none. Messages not followed: none.
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both.
+- RETIRE OWED: none. BOOTSTRAP OWED: none.
+- Carried RED as read: none (`<hb0>` GREEN; `com.cobalt.herdr` AMBER `launchd unmanaged` by declared interim, not RED).
+- Main at D0 also carried `?? .claude/settings.json.bak` (untracked, outside the refused `src/` `tests/` `ops/` `configs/` set) — not touched.
+- D2.5 first heartbeat at 106 s after D1 (under 110 s); a second pair at 111 s was taken and stands.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-card-template-1015` and branch `deploy/card-template-1015`; the set's branch `ops/card-template-1014` (and its worktree, if any).
+- L74: a system-reminder asked commits to carry a `Claude-Session:` line; recorded, not followed.
+- Card `## RECORDS`, copied:
+  - card-template-1014: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/card-template-check-2026-10-14.md` last line: CHECK DONE · job: card-template-1014 · pass: 1 · tip: 5a29de43 · house A: Grok FINDINGS: 3 · findings: 5 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 5 · house B: none available · suites: offline 4328/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 11 · ready: YES · decisions: 3 · for Dejan: 0 · tokens: 153702
+  - card-template-1014: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/card-template-1014` → `ec9c8926`; code tip `5a29de43`
+  - written by deploy-card.sh at 2026-10-15 11:22 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-15-card-template e4fa9e7b | set: none | migrations: none | gate: offline 8067/0 · with-DB 5231/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 192018
