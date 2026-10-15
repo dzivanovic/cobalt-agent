@@ -339,6 +339,16 @@ def test_c1_a_listed_row_that_stays_is_kept(stubs, tmp_path):
     assert done.stdout.splitlines()[-1] == "KEPT aaaa1111: LIST row still present", done.stdout
 
 
+def test_c1_an_unreadable_pane_list_is_kept_before_any_stop(stubs):
+    report, calls, stop_exit, agents, env = stubs
+    (agents.parent / "panes.json").write_text("not json")
+    report.write_text("BUILT · job: x-job · tip: 1a2b3c4d\n")
+    done = done_("aaaa1111", str(report), "build", env=env)
+    assert done.returncode == 1
+    assert done.stdout == "KEPT aaaa1111: pane list unreadable\n"
+    assert recorded(calls) == []
+
+
 def test_c1_an_agents_row_that_stays_is_kept(stubs, tmp_path):
     """A `claude rm` that exits 0 and leaves the row (a stopped row included) is no close."""
     report, calls, stop_exit, agents, env = stubs

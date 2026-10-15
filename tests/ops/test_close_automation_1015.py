@@ -157,6 +157,40 @@ def test_c2_a_dirty_tree_an_uncommitted_report_or_a_busy_session_is_kept(tmp_pat
     assert len(w.finished.read_text().splitlines()) == 1
 
 
+@pytest.mark.parametrize("rows,want", [
+    ((), "KEPT x-job-build: no listed session"),
+    ((IDLE_BUILD, IDLE_BUILD.replace("aaaa0001", "aaaa0009")), "KEPT x-job-build: 2 listed sessions"),
+])
+def test_c2_no_listed_row_or_two_are_kept(tmp_path, rows, want):
+    w = Watch(tmp_path)
+    w.rows(*rows)
+    done = w.run(DESK_WATCH_CLOSE_WAIT="0")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [STOP, want]
+    assert w.logged() == []
+
+
+def test_c2_deploy_prodwrite_and_close_kinds(tmp_path):
+    w = Watch(tmp_path)
+    w.rows("aaaa0005 · deploy-hub-x-job · ~/cobalt · idle · idle",
+           "aaaa0006 · prodwrite-x-job · ~/cobalt · idle · idle")
+    deployed = "DEPLOYED deploy-t notahead | set: none"
+    w.build.write_text(f"# d\n\n{deployed}\n")
+    done = w.run("deploy", DESK_WATCH_CLOSE_WAIT="0")
+    assert done.stdout.splitlines()[:2] == [deployed, "CLOSED aaaa0005"], done.stdout
+    assert w.logged() == [f"aaaa0005 {w.build} deploy"]
+    w.build.write_text("# d\n\nFAILED: 4.3 — x\n")
+    done = w.run("deploy", DESK_WATCH_CLOSE_WAIT="0")
+    assert done.stdout.splitlines() == [
+        "FAILED: 4.3 — x", "KEPT deploy-hub-x-job: FAILED deploy, closed through desk-done.sh by the desk"]
+    written = "WRITTEN · job: x-job · rows: 3"
+    w.build.write_text(f"# p\n\n{written}\n")
+    done = w.run("prodwrite", DESK_WATCH_CLOSE_WAIT="0")
+    assert done.stdout.splitlines() == [written, "KEPT prodwrite-x-job: closed through desk-done.sh by the desk"]
+    assert w.logged() == [f"aaaa0005 {w.build} deploy"]
+    assert len(w.finished.read_text().splitlines()) == 1
+
+
 def test_c2_control_the_stop_line_alone_when_no_desk_done(tmp_path):
     w = Watch(tmp_path, done=False)
     w.rows(IDLE_BUILD)
@@ -339,6 +373,15 @@ def test_c3_three_blocks_then_gives_up_and_records(tmp_path):
     assert codes == [2, 2, 2, 0]
     lines = d.desk_stop.read_text().splitlines()
     assert len(lines) == 1 and lines[0].endswith("start it: close b43daef9-0000"), lines
+
+
+def test_c3_an_unreadable_list_blocks_as_unreadable(tmp_path):
+    d = Desk(tmp_path)
+    d.finish(FINISHED_LINE)
+    (d.hook.parent / "desk-list.sh").write_text("#!/bin/sh\nexit 1\n")
+    d.owed("owed: none")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "session list unreadable — fix it\n")
 
 
 def test_c3_control_a_kept_worker_lets_the_turn_end(tmp_path):
