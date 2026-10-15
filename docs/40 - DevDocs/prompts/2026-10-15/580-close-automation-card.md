@@ -11,7 +11,7 @@ CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/close-automation-ch
 HOUSE B: as needed
 DB: none
 RESTARTS: none
-RULINGS: 2026-10-15 R1536
+RULINGS: 2026-10-14 R1471
 
 ## ROWS
 
