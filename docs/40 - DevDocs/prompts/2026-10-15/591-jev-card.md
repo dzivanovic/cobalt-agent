@@ -10,7 +10,7 @@ REPORT: /Users/cobalt/cobalt-wt/jev-shadow-1015/docs/40 - DevDocs/reports/jev-sh
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/jev-shadow-check-2026-10-15.md
 HOUSE B: as needed
 RESTARTS: com.cobalt.agent com.cobalt.radar
-RULINGS: 2026-09-23 R42, 2026-10-11 R1112, 2026-10-14 R1467, 2026-10-15 R1532, 2026-10-15 R1535
+RULINGS: 2026-10-15 R1532, 2026-10-15 R1535
 
 ## ROWS
 
