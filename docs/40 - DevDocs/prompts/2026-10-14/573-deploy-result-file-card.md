@@ -18,7 +18,9 @@ TICKERS: none
 | 1 | `ops/result-file-1014` | `55198484` | `55198484` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/result-file-check-2026-10-14.md` | `held unfixed: 0` and `ready: YES` | |
 
 ## MARKERS
-- «FILL: markers for result-file-1014 (its ## DEPLOY PROOF holds none)»
+- `ls /Users/cobalt/cobalt/ops/desk/result-read.sh` · before `No such file` · after the path
+- `grep -c -F "RESULT FILE (his R1471)" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/BUILD-HUB.md"` · before `0` · after `1`
+- `grep -c -F "RESULT FILE (his R1471)" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CHECK-HUB.md"` · before `0` · after `1`
 
 ## SMOKE READS
 - MARKERS (the desk's, for the deploy card): `ls /Users/cobalt/cobalt/ops/desk/result-read.sh` before: no such file; after: the file. `grep -c -F "RESULT FILE (his R1471)" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/BUILD-HUB.md"` before `0`, after `1`; the same on `CHECK-HUB.md`: before `0`, after `1`.
