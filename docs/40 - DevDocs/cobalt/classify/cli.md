@@ -71,3 +71,6 @@ L1 (no match / no id / bad record / no price → FAILED), L4 / L41 (the
 key only in the one keyed request's header), L45 (the real record, byte
 for byte), L9 (one collector class behind `Classifier`), L53 (the
 ledger's total demand), L57 (the probe's record).
+
+## 2026-10-15 — jev-shadow-1015
+`add_parser` also mounts `route` and `route-read` through `route.add_route_parsers` (J1, F9, F11; see `route.md`).

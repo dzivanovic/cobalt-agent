@@ -38,6 +38,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Callable, Optional, Protocol
 from urllib import error as urlerror
 from urllib import request as urlrequest
@@ -49,7 +50,7 @@ from cobalt.redact import redact
 from cobalt.redact import secrets as vault_secrets
 
 from .config import TrialConfig
-from .ledger import LEDGER_NAME, Ledger
+from .ledger import OVERRUN_FACTOR, Ledger
 from .models import Answer, CallRecord, Choice, ModelEntry, Noul, QuestionSet, Score, TrialItem, Usage
 
 KEY_NAME = "OPENROUTER_API_KEY"
@@ -174,7 +175,12 @@ def render_systemone(model_id: str, qset: QuestionSet, item: TrialItem) -> dict:
 
 
 def _is_number(x: Any) -> bool:
-    return isinstance(x, (int, float)) and not isinstance(x, bool) and math.isfinite(x)
+    if not isinstance(x, (int, float)) or isinstance(x, bool):
+        return False
+    try:
+        return math.isfinite(x)
+    except OverflowError:  # D2: an int too large for a float is no number we book
+        return False
 
 
 def parse_answers(qset: QuestionSet, resp: Any) -> list[Answer]:
@@ -293,10 +299,12 @@ class OpenRouterClassifier:
                  ledger: Optional[Ledger] = None, pricing: Optional[dict] = None):
         self.cfg = cfg
         self.transport: Transport = transport or urllib_transport
+        # fold F2: the ONE host-wide spend ledger, never a per-checkout file
         self.ledger = ledger or Ledger(
-            cfg.results_path() / LEDGER_NAME,
+            Path(cfg.spend_ledger),
             cap_usd=cfg.spend_cap_usd,
             call_ceiling=cfg.call_ceiling,
+            carried=[c.cost_usd for c in cfg.carried_spend],
         )
         self._pricing_given = pricing
 
@@ -581,7 +589,9 @@ class OpenRouterClassifier:
         retried (the trial measures raw behaviour)."""
         body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
         self._guard_outbound(body, keyed=True)
-        self.ledger.check(projected_usd, calls=1)
+        # fold F3: the cap is checked on this call's WORST-CASE cost — the
+        # largest returned cost it can book before check_cost stops the run
+        self.ledger.check(OVERRUN_FACTOR * projected_usd, calls=1)
         headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self._key()}",

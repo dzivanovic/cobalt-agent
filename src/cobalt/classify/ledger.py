@@ -1,6 +1,7 @@
 """The spend ledger — his cap, enforced in code, as TOTAL demand (L53).
 
-    scratch/classify-spend.jsonl      one line per metered call
+    <spend_ledger>                    one line per metered call — ONE host-wide
+                                      file outside every checkout (fold F2)
 
 Plan §5: "Before ANY `--run`: projected cost of the run + everything
 already in the ledger > cap → REFUSED, zero calls. During a run: the
@@ -31,6 +32,7 @@ import math
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Iterable
 
 LEDGER_NAME = "classify-spend.jsonl"
 
@@ -40,10 +42,14 @@ OVERRUN_FACTOR = 10
 
 
 class Ledger:
-    def __init__(self, path: Path, *, cap_usd: float, call_ceiling: int):
+    def __init__(self, path: Path, *, cap_usd: float, call_ceiling: int,
+                 carried: Iterable[float] = ()):
         self.path = Path(path)
         self.cap_usd = float(cap_usd)
         self.call_ceiling = int(call_ceiling)
+        # fold F2: paid calls made before the host ledger existed — counted by
+        # spent() and calls() before the file's lines, never written to it
+        self.carried = tuple(float(c) for c in carried)
         # parallel mode: a read never sees a half-written line
         self._lock = threading.Lock()
 
@@ -56,10 +62,10 @@ class Ledger:
             return [json.loads(line) for line in self.path.read_text().splitlines() if line.strip()]
 
     def spent(self) -> float:
-        return float(sum(e["cost_usd"] for e in self.entries()))
+        return float(sum(self.carried) + sum(e["cost_usd"] for e in self.entries()))
 
     def calls(self) -> int:
-        return len(self.entries())
+        return len(self.carried) + len(self.entries())
 
     # -- gates --------------------------------------------------------------
 

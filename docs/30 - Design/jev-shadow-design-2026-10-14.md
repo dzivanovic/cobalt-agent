@@ -45,14 +45,14 @@ What the trial already proved (two keyed calls, ledger `$3.402e-05` of `$5`, `re
 What the trial did NOT measure: any percentile (n=1 per shape), and any label on real text — every set but T9 is constructed (`JEV-TRIAL-PLAN-2026-09-23.md:38-42`).
 
 **Refresh, in order:**
-1. **Check first.** Check `74` (`772b60af..09f38f4d` plus part B, `jev-fix-r3-build@f4e8de85:423`) runs before any new keyed call. UNPROVEN D2 (a 400-digit `usage.cost` raising `OverflowError` in `_is_number`) is carried there (`:419`).
+1. **Check first.** Check `74` is dropped (R1580, card `593` superseded): the trial package is ported onto `main` by card 591 row P0 and checked inside that card's check. UNPROVEN D2 (a 400-digit `usage.cost` raising `OverflowError` in `_is_number`) is carried there as row D2.
 2. **New set `ROUTE`** (§2) beside S1–S3/T9/L20, in its own config file; the existing sets are untouched (L10: a wording change is a new set).
-3. **Speed on real card text (M-CARD):** `ROUTE` × every committed build card of 2026-10-06 → 2026-10-13 at the commit that launched its build (provenance `real:<path>@<sha>`), one call each, one `single` run. Report p50 / p95 / p99 latency (`trial.py@f4e8de85:158-187` already computes nearest-rank percentiles) bucketed by card size in tokens. The trial's B1 bar (`JEV-TRIAL-PLAN-2026-09-23.md:68`) was set on L20, not on cards; it is reported beside, never re-fitted.
+3. **Speed on real card text (M-CARD):** `ROUTE` × every committed build card of 2026-10-06 → 2026-10-13 at the commit that launched its build (provenance `real:<path>@<sha>`), one call each, one `single` run. Report p50 / p95 / p99 latency (`trial.py@f4e8de85:70-76` `percentile` already computes nearest-rank percentiles; its uses `:198-203`) bucketed by card size in tokens. The trial's B1 bar (`JEV-TRIAL-PLAN-2026-09-23.md:68`) was set on L20, not on cards; it is reported beside, never re-fitted.
 4. **Labels on real card text (M-LABEL):** for the 11 shadow-table cards, JEV's band beside the band the stage answer gave each card (`complexity-shadow-results-2026-10-11.md:53`). n=11 → "insufficient data" (L8); it is a smoke test of the question wording, not a grade.
-5. **Determinism on cards:** 10 cards × 5 identical repeats (the M5 shape, `JEV-TRIAL-PLAN-2026-09-23.md:54`); band flips and max per-option spread reported.
+5. **Determinism on cards:** 10 cards × 10 identical repeats (the M5 count, `JEV-TRIAL-PLAN-2026-09-23.md:54`); band flips and max per-option spread reported.
 6. **Results report** prints counts and percentiles computed by code from the results files, the trial plan's §4 table verbatim beside them.
 
-**Spend cap.** `ASK DESK` (DECISIONS 1). Arithmetic, computed, not a proposal: the two returned costs give ≈ $3.9e-08 per token (`1.3188e-05 / 335`); a 5,000-token card ≈ $0.0002 per call; steps 3–5 at ≈ 100 cards + 50 repeats ≈ $0.03 at that rate. The size of a card in tokens is ASSUMED until step 3 measures it. Default: the existing ruled cap stands — `spend_cap_usd: 5`, `source: "ruling: cto-2026-09-23.md R42"` (`configs/cobalt/classify/trial.yaml@f4e8de85:41-42`), TOTAL demand across the trial and the shadow (L53, `ledger.py@f4e8de85:66-80`). No new number is written by this design.
+**Spend cap.** `ASK DESK` (DECISIONS 1). Arithmetic, computed, not a proposal: the Noul call alone gives ≈ $3.9e-08 per token (`1.3188e-05 / 335`); a 5,000-token card ≈ $0.0002 per call; steps 3–5 at ≈ 100 cards + 50 repeats ≈ $0.03 at that rate. The size of a card in tokens is ASSUMED until step 3 measures it. Default: the existing ruled cap stands — `spend_cap_usd: 5`, `source: "ruling: cto-2026-09-23.md R42"` (`configs/cobalt/classify/trial.yaml@f4e8de85:41-42`), TOTAL demand across the trial and the shadow (L53, `ledger.py@f4e8de85:66-80`). No new number is written by this design.
 
 ## §2 (b) The router: card text → band + model
 
@@ -134,10 +134,11 @@ His rule (R1467, relayed): production on the averages, his ruling on when. This 
 | G2 | mean `fix_rounds` and mean `re_passes`, each apart, same cells | same | same |
 | G3 | mean builder `tokens`, same cells | same | same |
 | G4 | JEV band vs realised difficulty, rank agreement | all ledger rows of the current set | `score_band` and `rows_band` on the same cards (`[F-17]`) |
-| G5 | share of cards JEV routes off Opus | all rows | — (the size of the change he is ruling on) |
+| G5 | share of decision rows naming a model other than `claude-opus-5-5` | all rows | — (the size of the change he is ruling on) |
 | G6 | spend per card and total | all rows | the cap of DECISIONS 1 |
+| G7 | JEV band vs the drafter's `BAND:` (`card_band`), agreement per band | all decision rows with both, n per band | — (card 591 F11) |
 
-**What shadow can and cannot show.** Today every merged build is Opus (LAWS `:348`). G1–G3 for a Grok or Terra cell fill only from cards that model actually built — shadow builds under SHADOW-HUB, or builds after his word on the routing table. Until then those cells read n=0, and only G4–G6 move. This is stated, not worked around.
+**What shadow can and cannot show.** His R1532 supersedes "every merged build is Opus": LOW and MID cards build on Grok 4.7 with a Terra backup, HIGH on Opus. G1–G3 for a Grok or Terra cell fill from real LOW and MID builds once card `583` deploys; until then those cells read n=0, and only G4–G7 move. This is stated, not worked around.
 
 ## §7 The key path and the R1112 exception
 
@@ -165,11 +166,11 @@ His rule (R1467, relayed): production on the averages, his ruling on when. This 
 | S3 | `trial.yaml@f4e8de85:24`, `:28`, `:31` `door_url`, `model_id`, `door` | System One, `typesafe/jev-1.13` (R42) | a new JEV version or door is his ruling |
 | S4 | new `configs/cobalt/classify/route.yaml` | absent | the card: `ROUTE` set, `min_confidence`, gate cut, its own cap or a shared one |
 | S5 | new routing-table config | absent | his ruling on the round-2 table |
-| S6 | spend ledger `scratch/classify-spend.jsonl` (`ledger.py@f4e8de85:35`) | 2 lines, `$3.402e-05` | every keyed call; TOTAL demand check `:66`, running stop `:83`, overrun ×10 `:39`, the one write `:104` |
+| S6 | spend ledger `scratch/classify-spend.jsonl` (`ledger.py@f4e8de85:35`) | no ledger on disk; the two paid lines (`$3.402e-05`) are carried in `trial.yaml` `carried_spend` and the ledger is ONE host-wide file (card 591 F2) | every keyed call; TOTAL demand check `:66`, running stop `:83`, overrun ×10 `:39`, the one write `:104` |
 | S7 | `ops/run_classify_trial.sh@f4e8de85:13`, `:23`, `:25` | the trial's wrapper, worktree `jev-trial` (removed: `ls` finds no such directory) | the router's wrapper: a new file, its own path |
 | S8 | `src/cobalt/cli.py@f4e8de85:63`, `:511` | `classify` sub-command registered | a `route` sub-command |
 | S9 | the close hub's steps (`prompts/CLOSE-HUB.md`) | no JEV step | the default of DECISIONS 6 adds one |
-| S10 | an allow string for the wrapper on the runner's launch line | none (the trial's N3 never approved, `jev-trial-probe@f4e8de85:110`) | his approval of the string (K5 card) |
+| S10 | an allow string for the wrapper on the runner's launch line | none (the trial's N3 never approved, `jev-trial-probe@f4e8de85:110`) | his approval of the string (not K5; fold F12) |
 | S11 | the OpenRouter account's own credit limit on the key | NOT KNOWN | his hands, outside Cobalt (`JEV-TRIAL-PLAN-2026-09-23.md:86`) |
 | S12 | `prompts/BUILD-HUB.md:12` `--model`, `desk-launch.sh` | Opus 5.5 | NOT in shadow. Changes only at go-live, by his ruling |
 | S13 | `src/cobalt/modelaccess/config.py:43-44` | local lane only | NOT changed by this design (§7) |

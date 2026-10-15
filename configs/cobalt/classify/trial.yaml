@@ -40,6 +40,17 @@ classify:
   # TOTAL demand across every run, enforced by the spend ledger (L53).
   spend_cap_usd: 5
   spend_cap_source: "ruling: cto-2026-09-23.md R42"
+  # fold F2: ONE host-wide spend ledger outside every checkout and worktree;
+  # the trial, the refresh and the shadow book into it (TOTAL demand, R42).
+  # The same value sits in route.yaml (its loader refuses a difference).
+  spend_ledger: /Users/cobalt/.cobalt/classify/classify-spend.jsonl
+  # The two calls paid before that ledger existed: counted by the ledger's
+  # spent() and calls() before the file's lines, never written to the file.
+  carried_spend:
+    - cost_usd: 1.3188e-05
+      source: "reports/jev-trial-probe-2026-09-23.md:56 (jev/trial-0923 f4e8de85), the FLOOR probe"
+    - cost_usd: 2.0832e-05
+      source: "reports/jev-fix-r3-build-2026-09-23.md:179 (jev/trial-0923 f4e8de85), the S1 probe"
   results_dir: scratch
 
   sets:

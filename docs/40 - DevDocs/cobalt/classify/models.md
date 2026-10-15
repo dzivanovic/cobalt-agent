@@ -38,3 +38,6 @@ trial (plan `docs/30 - Design/JEV-TRIAL-PLAN-2026-09-23.md`).
 
 ## What it never does
 Holds a key, touches the network, a database or the vault. Pure data.
+
+## 2026-10-15 — jev-shadow-1015
+`CallStatus` widened to `ok`, `invalid`, `refused`, `http_error`, `transport_error`, `auth_error`, `cap_refused`, `ceiling_refused`, `overrun`, `timeout` (F9). New `RouteDecision`: the routing ledger's decision row (J2), no card text.

@@ -41,3 +41,6 @@ transport exception (nothing came back) writes none.
 
 ## What it never does
 Holds a key, touches the network, a database or the vault.
+
+## 2026-10-15 — jev-shadow-1015
+`Ledger(..., carried=())`: carried paid lines counted by `spent()` and `calls()` before the file's lines, never written (F2). The file is now the host-wide `spend_ledger` of trial.yaml / route.yaml, not `scratch/`.

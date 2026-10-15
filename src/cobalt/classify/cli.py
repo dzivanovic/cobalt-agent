@@ -26,7 +26,7 @@ import argparse
 import json
 from pathlib import Path
 
-from . import trial
+from . import route, trial
 from .collector import ClassifyError, OpenRouterClassifier
 from .config import REPO_ROOT, SET_NAMES, load_trial_config
 
@@ -155,6 +155,9 @@ def add_parser(sub) -> None:
     how.add_argument("--run", action="store_true")
     t.add_argument("--tag", default=None)
     t.set_defaults(func=cmd_trial)
+
+    # card 591: the JEV shadow router (`route`) and its weekly read (`route-read`)
+    route.add_route_parsers(csub)
 
 
 __all__ = ["add_parser"]

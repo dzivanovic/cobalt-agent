@@ -377,7 +377,7 @@ def test_f2_a_ledger_inside_a_checkout_is_refused(tmp_path, monkeypatch):
                   str(wt / "other" / "classify-spend.jsonl")):
         raw["classify"]["spend_ledger"] = value
         p = tmp_path / "trial.yaml"
-        p.write_text(yaml.safe_dump(raw))
+        p.write_text(yaml.safe_dump(raw, sort_keys=False))
         with pytest.raises(cfg_mod.ClassifyConfigError, match="outside every checkout"):
             cfg_mod.load_trial_config(p)
 
@@ -564,7 +564,7 @@ def test_f6_sonnet_or_an_unknown_id_refuses_the_load(tmp_path):
         raw = yaml.safe_load(ROUTE_YAML.read_text())
         raw["route"]["routing_table"]["low"]["builder"] = bad
         p = tmp_path / "route.yaml"
-        p.write_text(yaml.safe_dump(raw))
+        p.write_text(yaml.safe_dump(raw, sort_keys=False))
         with pytest.raises(ClassifyConfigError, match=bad):
             route.load_route_config(p, shadow_hub=hub)
 
@@ -682,7 +682,7 @@ def test_f8_a_routing_ledger_inside_a_checkout_is_refused(tmp_path, monkeypatch)
                   str(wt / "other" / "routing-ledger.jsonl")):
         raw["route"]["routing_ledger"] = value
         p = tmp_path / "route.yaml"
-        p.write_text(yaml.safe_dump(raw))
+        p.write_text(yaml.safe_dump(raw, sort_keys=False))
         with pytest.raises(cfg_mod.ClassifyConfigError, match="outside every checkout"):
             route.load_route_config(p)
 
@@ -812,7 +812,7 @@ def test_f10_route_yaml_without_retire_is_refused(tmp_path):
     raw = yaml.safe_load(ROUTE_YAML.read_text())
     del raw["route"]["retire"]
     p = tmp_path / "route.yaml"
-    p.write_text(yaml.safe_dump(raw))
+    p.write_text(yaml.safe_dump(raw, sort_keys=False))
     with pytest.raises(ClassifyConfigError, match="retire"):
         route.load_route_config(p)
 

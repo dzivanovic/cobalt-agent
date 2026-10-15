@@ -44,3 +44,6 @@ S3 3 / 60 · T9 5 / one per day-open report · L20 20 / 40.
 
 ## What it never does
 Holds or names a credential, touches the network, a database or the vault.
+
+## 2026-10-15 — jev-shadow-1015
+New keys `spend_ledger` (validated by `host_ledger_path`: absolute, outside `REPO_ROOT` and `WORKTREES_ROOT`) and `carried_spend` (`CarriedSpend`: `cost_usd`, `source`), both required (F2). `host_ledger_path` is also the routing ledger's check (route.py, F8).

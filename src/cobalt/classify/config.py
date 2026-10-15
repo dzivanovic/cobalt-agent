@@ -44,6 +44,9 @@ SET_NAMES = ("FLOOR", "S1", "S2", "S3", "T9", "L20")
 #: The one host this package talks to (plan §6).
 ALLOWED_HOST = "openrouter.ai"
 
+#: Every worktree lives under here; a host ledger never does (fold F2, F8).
+WORKTREES_ROOT = Path("/Users/cobalt/cobalt-wt")
+
 
 class ClassifyConfigError(RuntimeError):
     """Missing/invalid trial config — crash, never fall back."""
@@ -92,6 +95,15 @@ class Compose(_Strict):
     context_from: str
 
 
+class CarriedSpend(_Strict):
+    """A paid call made before the host ledger existed (fold F2): counted by
+    `Ledger.spent()` / `calls()` before the file's lines, never written to it.
+    `source` names the report line that records it."""
+
+    cost_usd: float = Field(ge=0)
+    source: str = Field(min_length=1)
+
+
 class TrialSet(_Strict):
     version: int = Field(ge=1)
     questions_from: list[str] = Field(default_factory=list)
@@ -119,8 +131,16 @@ class TrialConfig(_Strict):
     call_ceiling: int = Field(ge=1)
     spend_cap_usd: float = Field(gt=0)
     spend_cap_source: str
+    spend_ledger: str = Field(min_length=1)
+    carried_spend: list[CarriedSpend]
     results_dir: str = Field(min_length=1)
     sets: dict[str, TrialSet]
+
+    @field_validator("spend_ledger")
+    @classmethod
+    def _host_ledger(cls, v: str) -> str:
+        host_ledger_path(v, "spend_ledger")
+        return v
 
     @field_validator("models_url", "door_url")
     @classmethod
@@ -297,6 +317,23 @@ class TrialConfig(_Strict):
         return out
 
 
+def host_ledger_path(value: str, key: str) -> Path:
+    """A host-wide ledger path (fold F2, F8): absolute, and outside this
+    checkout (`REPO_ROOT`) and every worktree (`WORKTREES_ROOT`), so every
+    checkout and every keyed run reads and writes the same file."""
+    p = Path(value)
+    if not p.is_absolute():
+        raise ValueError(f"{key} {value!r} is relative — a host ledger is an absolute path "
+                         "outside every checkout and worktree (fold F2)")
+    p = p.resolve()
+    for root in (REPO_ROOT, WORKTREES_ROOT):
+        r = Path(root).resolve()
+        if p == r or r in p.parents:
+            raise ValueError(f"{key} {value!r} lies under {r} — a host ledger lives outside "
+                             "every checkout and worktree (fold F2)")
+    return p
+
+
 def _scratch_path(results_dir: str) -> Path:
     scratch = (REPO_ROOT / "scratch").resolve()
     p = (REPO_ROOT / results_dir).resolve()
@@ -355,10 +392,13 @@ def load_trial_config(path: Optional[Path] = None) -> TrialConfig:
 __all__ = [
     "ALLOWED_HOST",
     "CONFIG_PATH",
+    "CarriedSpend",
     "ClassifyConfigError",
     "REPO_ROOT",
     "SET_NAMES",
     "TrialConfig",
     "TrialSet",
+    "WORKTREES_ROOT",
+    "host_ledger_path",
     "load_trial_config",
 ]

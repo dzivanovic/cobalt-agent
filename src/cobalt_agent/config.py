@@ -494,7 +494,6 @@ class Config:
             'openai_api_key': 'api_key',
             'anthropic_api_key': 'api_key',
             'gemini_api_key': 'api_key',
-            'openrouter_api_key': 'api_key',
         }
         
         for vault_key, config_field in llm_key_mapping.items():
@@ -594,6 +593,9 @@ def _load_config(config_dir: Optional[Path | str] = None) -> CobaltSettings:
             if 'mattermost' not in master_data: master_data['mattermost'] = {}
 
             for key_name in vault.list_secrets():
+                # R1535: the OpenRouter key is JEV's alone; the old tree never holds it
+                if key_name.lower() == "openrouter_api_key":
+                    continue
                 secret_val = vault.get_secret(key_name)
                 
                 # Skip None values

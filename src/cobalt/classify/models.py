@@ -193,7 +193,12 @@ class ModelEntry(BaseModel):
     architecture: Optional[dict[str, Any]] = None
 
 
-CallStatus = Literal["ok", "invalid", "http_error", "auth_error"]
+#: Widened for the router's decision rows (fold F9): every ClassifyError of a
+#: routed card is a status, never a crash of the batch.
+CallStatus = Literal[
+    "ok", "invalid", "refused", "http_error", "transport_error", "auth_error",
+    "cap_refused", "ceiling_refused", "overrun", "timeout",
+]
 
 
 class CallRecord(_Strict):
@@ -227,6 +232,41 @@ class CallRecord(_Strict):
         return self
 
 
+class RouteDecision(_Strict):
+    """One DECISION row of the routing ledger (design §3 step 1; card 591 J2).
+
+    Written once per routed card and never rewritten; an outcome is a later
+    row keyed to it by `card_path` and `launch_sha`. JEV's answers are stored
+    as returned, never recomputed. It never holds the card text (L32,
+    decision 5): only its path, its shas and code-computed counts."""
+
+    kind: Literal["decision"] = "decision"
+    card_path: str
+    card_blob_sha: Optional[str] = None
+    launch_sha: Optional[str] = None
+    set_id: str
+    set_sha256: str = Field(min_length=64, max_length=64)
+    table_sha256: str = Field(min_length=64, max_length=64)
+    jev_model_returned: Optional[str] = None
+    band: Optional[str] = None
+    band_probabilities: Optional[dict[str, float]] = None
+    band_confidence: Optional[float] = None
+    gates: dict[str, Optional[float]] = Field(default_factory=dict)
+    card_band: Optional[str] = None
+    model: Optional[str] = None
+    backup: Optional[str] = None
+    rule_path: Optional[Literal["table", "unsure-higher"]] = None
+    score_band: str
+    score_components: dict[str, Union[int, str]]
+    rows_band: Optional[int] = None
+    latency_ms: float = Field(default=0.0, ge=0)
+    cost_usd: Optional[float] = None
+    cost_source: Optional[str] = None
+    status: CallStatus
+    error: Optional[str] = None
+    at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 __all__ = [
     "Answer",
     "CallRecord",
@@ -236,6 +276,7 @@ __all__ = [
     "Noul",
     "Question",
     "QuestionSet",
+    "RouteDecision",
     "Score",
     "TrialItem",
     "UNSURE",

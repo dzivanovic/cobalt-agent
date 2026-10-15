@@ -144,3 +144,6 @@ Holds a key between requests; talks to any host but `openrouter.ai`
 (config-validated; no redirect is followed, so no answer can send a
 request elsewhere); opens a database; writes the vault; imports LiteLLM,
 a vendor SDK or the old tree (L15).
+
+## 2026-10-15 — jev-shadow-1015
+`_is_number` returns False for an int too large for a float (D2: a 400-digit `usage.cost` no longer raises `OverflowError`; the cost is computed from tokens). The default `Ledger` is the ONE host-wide `cfg.spend_ledger` with `cfg.carried_spend` (F2), never `results_path()/classify-spend.jsonl`. `_send` checks the cap on `OVERRUN_FACTOR × projected` before the call (F3).
