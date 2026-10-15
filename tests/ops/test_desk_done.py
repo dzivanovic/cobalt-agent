@@ -25,6 +25,19 @@ AGENTS = [
 ]
 
 
+# the stubs' state (card 2026-10-15 580 C1, ASK DESK 12): `claude rm <id>` drops the row from the
+# agents file; `herdr tab close <tab>` drops that tab's panes unless the file `keep-panes` exists
+STATE = """import json, sys
+what, path, value = sys.argv[1:4]
+doc = json.load(open(path))
+if what == "rm":
+    doc = [a for a in doc if not (isinstance(a, dict) and a.get("id") == value)]
+else:
+    doc["result"]["panes"] = [p for p in doc["result"]["panes"] if p.get("tab_id") != value]
+json.dump(doc, open(path, "w"))
+"""
+
+
 @pytest.fixture
 def stubs(tmp_path):
     bin_ = tmp_path / "bin"
@@ -34,14 +47,26 @@ def stubs(tmp_path):
     agents.write_text(json.dumps(AGENTS))
     stop_exit = tmp_path / "stop-exit"
     stop_exit.write_text("0")
+    panes = tmp_path / "panes.json"
+    panes.write_text(json.dumps({"id": "cli:pane:list", "result": {"panes": []}}))
+    state = tmp_path / "state.py"
+    state.write_text(STATE)
     (bin_ / "claude").write_text(
         "#!/bin/sh\n"
         f'if [ "$1" = agents ]; then cat "{agents}"; exit 0; fi\n'
         f'printf "claude %s\\n" "$*" >> "{calls}"\n'
         f'if [ "$1" = stop ]; then exit "$(cat "{stop_exit}")"; fi\n'
+        f'if [ "$1" = rm ]; then python3 "{state}" rm "{agents}" "$2"; fi\n'
         "exit 0\n"
     )
-    (bin_ / "herdr").write_text(f'#!/bin/sh\nprintf "herdr %s\\n" "$*" >> "{calls}"\nexit 0\n')
+    (bin_ / "herdr").write_text(
+        "#!/bin/sh\n"
+        f'if [ "$1 $2" = "pane list" ]; then cat "{panes}"; exit 0; fi\n'
+        f'printf "herdr %s\\n" "$*" >> "{calls}"\n'
+        f'if [ "$1 $2" = "tab close" ] && [ ! -f "{tmp_path}/keep-panes" ]; then\n'
+        f'  python3 "{state}" tab "{panes}" "$3"\nfi\n'
+        "exit 0\n"
+    )
     (bin_ / "claude").chmod(0o755)
     (bin_ / "herdr").chmod(0o755)
     report = tmp_path / "report.md"
@@ -241,3 +266,95 @@ def test_a_bad_kind_is_refused(stubs):
     assert done.returncode == 1
     assert done.stderr.startswith("REFUSED: "), done.stderr
     assert recorded(calls) == []
+
+
+# ---- card 2026-10-15 580 C1: the tab by its title and the three-way proof -----------------------
+
+
+def live(agents: Path) -> None:
+    """The worker's row carries a pid, so desk-list.sh beside the script lists it."""
+    rows = json.loads(agents.read_text())
+    for row in rows:
+        if row["id"] == "aaaa1111":
+            row["pid"] = 4242
+    agents.write_text(json.dumps(rows))
+
+
+def panes(agents: Path, *rows: tuple[str, str, str]) -> Path:
+    """The stub `herdr pane list` answer: (pane_id, tab_id, terminal_title_stripped) rows."""
+    path = agents.parent / "panes.json"
+    path.write_text(json.dumps({"id": "cli:pane:list", "result": {"panes": [
+        {"pane_id": p, "tab_id": t, "terminal_title_stripped": title} for p, t, title in rows
+    ]}}))
+    return path
+
+
+def test_c1_a_closed_worker_is_proved_gone_and_prints_closed_last(stubs):
+    report, calls, stop_exit, agents, env = stubs
+    live(agents)
+    held = panes(agents, ("p1", "w9:t9", "x-job-build"), ("p2", "w9:t8", "other-seat"))
+    report.write_text("# x\n\nBUILT · job: x-job · tip: 1a2b3c4d\n\n")
+    done = done_("aaaa1111", str(report), "build", env=env)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[-1] == "CLOSED aaaa1111"
+    assert recorded(calls) == ["claude stop aaaa1111", "claude rm aaaa1111", "herdr tab close w9:t9"]
+    assert all(row["id"] != "aaaa1111" for row in json.loads(agents.read_text()))
+    assert [p["tab_id"] for p in json.loads(held.read_text())["result"]["panes"]] == ["w9:t8"]
+
+
+def test_c1_two_tabs_with_the_title_are_kept_before_any_stop(stubs):
+    report, calls, stop_exit, agents, env = stubs
+    panes(agents, ("p1", "w9:t9", "x-job-build"), ("p2", "w9:t7", "x-job-build"))
+    report.write_text("BUILT · job: x-job · tip: 1a2b3c4d\n")
+    done = done_("aaaa1111", str(report), "build", env=env)
+    assert done.returncode == 1
+    assert done.stdout.startswith("KEPT aaaa1111: 2 tabs titled x-job-build"), done.stdout
+    assert recorded(calls) == []
+
+
+def test_c1_a_tab_that_stays_is_kept(stubs, tmp_path):
+    report, calls, stop_exit, agents, env = stubs
+    panes(agents, ("p1", "w9:t9", "x-job-build"))
+    (tmp_path / "keep-panes").write_text("")
+    report.write_text("BUILT · job: x-job · tip: 1a2b3c4d\n")
+    done = done_("aaaa1111", str(report), "build", env=env)
+    assert done.returncode == 1
+    assert done.stdout.splitlines()[-1] == "KEPT aaaa1111: tab still present", done.stdout
+
+
+def test_c1_a_listed_row_that_stays_is_kept(stubs, tmp_path):
+    report, calls, stop_exit, agents, env = stubs
+    ops = tmp_path / "ops"
+    ops.mkdir()
+    (ops / "desk-done.sh").write_text(DONE.read_text())
+    (ops / "desk-list.sh").write_text(
+        "#!/bin/sh\nprintf '%s\\n' 'aaaa1111 · x-job-build · ~/cobalt-wt/x · idle · idle'\n"
+    )
+    report.write_text("BUILT · job: x-job · tip: 1a2b3c4d\n")
+    done = subprocess.run(
+        ["sh", str(ops / "desk-done.sh"), "aaaa1111", str(report), "build"],
+        env=env, capture_output=True, text=True, timeout=60,
+    )
+    assert done.returncode == 1
+    assert done.stdout.splitlines()[-1] == "KEPT aaaa1111: LIST row still present", done.stdout
+
+
+def test_c1_replaced_form_closes_without_a_report(stubs):
+    report, calls, stop_exit, agents, env = stubs
+    panes(agents, ("p1", "w9:t9", "x-job-build"))
+    done = done_("aaaa1111", "--replaced", env=env)
+    assert done.returncode == 0, done.stderr
+    assert recorded(calls) == ["claude stop aaaa1111", "claude rm aaaa1111", "herdr tab close w9:t9"]
+    assert done.stdout.splitlines()[-1] == "CLOSED aaaa1111"
+    for sid in ("bbbb2222", "dddd4444"):
+        refused = done_(sid, "--replaced", env=env)
+        assert refused.returncode == 1
+        assert refused.stderr.startswith("REFUSED: "), refused.stderr
+    assert recorded(calls) == ["claude stop aaaa1111", "claude rm aaaa1111", "herdr tab close w9:t9"]
+
+
+def test_c1_control_desk_list_stays_read_only():
+    text = (REPO / "ops" / "desk" / "desk-list.sh").read_text()
+    assert "claude stop" not in text
+    assert "claude rm" not in text
+    assert "herdr" not in text
