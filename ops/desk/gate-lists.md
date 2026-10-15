@@ -23,6 +23,9 @@ the words its reason must hold.
 ## OFFLINE
 `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy`
 
+## OFFLINE OPS
+`uv run pytest -q -rs -p no:cacheprovider tests/ops`
+
 ## PROOF ONLY
 `COBALT_ENV=dev uv run cobalt db migrate --proof-only`
 

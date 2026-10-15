@@ -1,5 +1,5 @@
 #!/bin/sh
-# gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration] [--deploy]
+# gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration] [--deploy] [--deploy-gate]
 # — BUILD-HUB.md `## W`, the three suites, in ONE call, run from $WT/<worktree name> (card 19
 # worker-steps S3).
 #
@@ -92,7 +92,7 @@ refuse() {
     exit 1
 }
 
-[ "$#" -ge 2 ] || refuse "usage: gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration] [--deploy]"
+[ "$#" -ge 2 ] || refuse "usage: gate.sh <worktree name> <probe|offline|withdb|livenote|all> [--deselect <test id>]… [--tickers <A,B,…>] [--migration] [--deploy] [--deploy-gate]"
 name=$1
 mode=$2
 shift 2
@@ -107,6 +107,7 @@ deselects=""
 tickers=""
 migration=""
 deploy=""
+deploy_gate=""
 copy_on=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -128,6 +129,7 @@ while [ "$#" -gt 0 ]; do
             ;;
         --migration) migration=1; shift ;;
         --deploy) deploy=1; shift ;;
+        --deploy-gate) deploy_gate=1; shift ;;
         --copy) copy_on=1; shift ;;
         *) refuse "unknown argument '$1'" ;;
     esac
@@ -135,6 +137,10 @@ done
 case "$mode" in
     withdb|all) ;;
     *) [ -z "$deselects$tickers$migration$deploy" ] || refuse "--deselect, --tickers, --migration and --deploy belong to withdb and all" ;;
+esac
+case "$mode" in
+    offline|all) ;;
+    *) [ -z "$deploy_gate" ] || refuse "--deploy-gate belongs to offline and all" ;;
 esac
 # the lock is taken by the two lock scripts beside this script and by nothing else (03c M2)
 case "$mode" in
@@ -178,7 +184,7 @@ def one(title):
 def put(key, value):
     open("%s/%s" % (out, key), "w", encoding="utf-8").write(value)
 
-for title, key in (("OFFLINE", "offline"), ("PROOF ONLY", "proof"), ("PASS 1", "pass1"), ("FORWARD", "forward"),
+for title, key in (("OFFLINE", "offline"), ("OFFLINE OPS", "offline_ops"), ("PROOF ONLY", "proof"), ("PASS 1", "pass1"), ("FORWARD", "forward"),
                    ("PASS 2", "pass2"), ("LIVE-NOTE", "livenote"), ("ROLLBACK", "rollback"),
                    ("FINGERPRINT", "fp"), ("ALLOWED SKIPS", "skips")):
     put(key, one(title))
@@ -205,6 +211,7 @@ put("pass1_deploy", whole if n == 1 else "")
 PY
 
 OFFLINE=$(cat "$tmp/offline")
+OFFLINE_OPS=$(cat "$tmp/offline_ops")
 PROOF=$(cat "$tmp/proof")
 PASS1=$(cat "$tmp/pass1")
 FORWARD=$(cat "$tmp/forward")
@@ -553,8 +560,33 @@ proof_clean() {
 }
 
 # ---- the modes --------------------------------------------------------------------------------
+# ops_reason (card 2026-10-13/521 T2): why `## OFFLINE OPS` runs, into OPS_WHY; empty when it does
+# not. With --deploy-gate always (`deploy gate`); otherwise only when the branch's diff from
+# `git merge-base main HEAD` touches ops/, tests/ops/, docs/40 - DevDocs/prompts/ or .claude/ (the
+# first such path); a merge-base or a diff that fails → run (`no base`). The paths are read
+# unquoted (core.quotePath=false): a quoted non-ASCII name would miss the prefixes (check O1)
+ops_reason() {
+    OPS_WHY=""
+    if [ -n "$deploy_gate" ]; then
+        OPS_WHY="deploy gate"
+        return
+    fi
+    base=$(git -C "$dir" merge-base main HEAD 2>/dev/null) && [ -n "$base" ] || { OPS_WHY="no base"; return; }
+    paths=$(git -C "$dir" -c core.quotePath=false diff --name-only --no-renames "$base" 2>/dev/null) || { OPS_WHY="no base"; return; }
+    OPS_WHY=$(printf '%s\n' "$paths" | grep -E '^(ops/|tests/ops/|docs/40 - DevDocs/prompts/|\.claude/)' | head -n 1)
+}
+
 do_offline() {
     suite "$OFFLINE" || exit 1
+    p0=$P
+    ops_reason
+    if [ -n "$OPS_WHY" ]; then
+        say "tests/ops: run ($OPS_WHY)"
+        suite "$OFFLINE_OPS" || exit 1
+        P=$((p0 + P))
+    else
+        say "tests/ops: skipped (no ops paths)"
+    fi
     say "offline $P/0"
 }
 
