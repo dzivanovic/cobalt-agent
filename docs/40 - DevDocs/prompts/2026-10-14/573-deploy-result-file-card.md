@@ -1,12 +1,12 @@
 JOB: result-file-1014
 LADDER: OFF-LADDER — reports/cto-2026-10-14.md R1471
-BRANCH: deploy/result-file-1014
-WORKTREE: deploy-result-file-1014
+BRANCH: deploy/result-file-1014-attempt2
+WORKTREE: deploy-result-file-1014-attempt2
 BASE: main
 TIP: 55198484
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-result-file-1014.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-result-file-1014-attempt2.md
 RULINGS: 2026-10-14 R1471
-TAG: deploy-2026-10-14-result-file
+TAG: deploy-2026-10-14-result-file-attempt2
 MIGRATIONS: none
 SET: none
 TICKERS: none
