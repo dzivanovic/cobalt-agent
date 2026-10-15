@@ -1,12 +1,12 @@
 JOB: card-template-1014-fr1
 LADDER: OFF-LADDER — reports/cto-2026-10-14.md R1471, R1472
-BRANCH: deploy/card-template-1014-fr1
-WORKTREE: deploy-card-template-1014-fr1
+BRANCH: deploy/card-template-1014-fr1-attempt2
+WORKTREE: deploy-card-template-1014-fr1-attempt2
 BASE: main
 TIP: 9e305776
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-card-template-1014-fr1.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-card-template-1014-fr1-attempt2.md
 RULINGS: 2026-10-14 R1471
-TAG: deploy-2026-10-15-card-template-fr1
+TAG: deploy-2026-10-15-card-template-fr1-attempt2
 MIGRATIONS: none
 SET: none
 TICKERS: none
