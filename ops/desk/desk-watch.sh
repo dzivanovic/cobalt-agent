@@ -23,8 +23,10 @@
 # `KEPT <session>: <n> listed sessions` / `no listed session`. A deploy's DEPLOYED line is clean
 # when the session is idle; its FAILED line prints `KEPT <session>: FAILED deploy, closed through
 # desk-done.sh by the desk`; prodwrite and close print `KEPT <session>: closed through desk-done.sh
-# by the desk`. Each non-FAILED close or KEPT of these appends `<ISO time ET> <id> <session>
-# <first word>` to /Users/cobalt/cobalt-wt/.job-state/FINISHED (stop-guard.py's record, C3).
+# by the desk`. Each non-FAILED close or KEPT of these, prodwrite and close included, appends
+# `<ISO time ET> <id> <session> <first word>` to /Users/cobalt/cobalt-wt/.job-state/FINISHED
+# (stop-guard.py's record, C3), one line per listed id (`-` when none is listed); the close-wait's
+# last sleep is cut to what is left of it (check 2026-10-15 A1-A3).
 # desk-done.sh not beside this script -> the line goes to stderr only, nothing waits or is written.
 # INSTALL-OPS (card 580 C4): a deploy's `DEPLOYED <TAG> <stack-final> …` line whose set (`git -C
 # <repo> diff --name-only pre-<JOB> <stack-final>`) holds an ops/desk/ path runs `sh desk-launch.sh
@@ -104,32 +106,42 @@ unclean() {
 }
 # close_worker <stop line>: its one line on stdout (see the header)
 close_worker() {
-  case "$kind" in
-    prodwrite|close) echo "KEPT $session: closed through desk-done.sh by the desk"; return ;;
-  esac
   case "$1" in
     FAILED*)
-      if [ "$kind" = deploy ]; then
-        echo "KEPT $session: FAILED deploy, closed through desk-done.sh by the desk"
-      else
-        echo "KEPT $session: FAILED, kept until CONTINUE or a replacement (W8)"
-      fi
+      case "$kind" in
+        prodwrite|close) echo "KEPT $session: closed through desk-done.sh by the desk" ;;
+        deploy) echo "KEPT $session: FAILED deploy, closed through desk-done.sh by the desk" ;;
+        *) echo "KEPT $session: FAILED, kept until CONTINUE or a replacement (W8)" ;;
+      esac
       return ;;
   esac
-  cw=${DESK_WATCH_CLOSE_WAIT:-120}
-  case "$cw" in ''|*[!0-9]*) cw=120 ;; esac
+  # check 2026-10-15 A2: a WRITTEN prodwrite or a CLOSE PUSHED close is KEPT for the desk and
+  # recorded like any other clean finish; it waits for nothing
+  why=""; cw=0
+  if [ "$kind" != prodwrite ] && [ "$kind" != close ]; then
+    cw=${DESK_WATCH_CLOSE_WAIT:-120}
+    case "$cw" in ''|*[!0-9]*) cw=120 ;; esac
+    why=$(unclean)
+  fi
   spent=0
-  why=$(unclean)
+  # check 2026-10-15 A1: the last sleep is cut to what is left of the close-wait
   while [ -n "$why" ] && [ "$spent" -lt "$cw" ]; do
-    sleep "$poll"
-    spent=$((spent + poll))
+    nap=$poll
+    [ $((cw - spent)) -ge "$nap" ] || nap=$((cw - spent))
+    sleep "$nap"
+    spent=$((spent + nap))
     why=$(unclean)
   done
   mine=$(listed) || mine=""
   n=$(printf '%s\n' "$mine" | awk 'NF { n++ } END { print n + 0 }')
   rid=-
   [ "$n" -ne 1 ] || rid=$(printf '%s\n' "$mine" | awk 'NF { print $1 }')
-  if [ -n "$why" ]; then
+  # check 2026-10-15 A3: two or more listed rows record each id, so stop-guard.py can name them
+  ids=$rid
+  [ "$n" -le 1 ] || ids=$(printf '%s\n' "$mine" | awk 'NF { print $1 }')
+  if [ "$kind" = prodwrite ] || [ "$kind" = close ]; then
+    said="KEPT $session: closed through desk-done.sh by the desk"
+  elif [ -n "$why" ]; then
     [ "$rid" != - ] && said="KEPT $rid: $why" || said="KEPT $session: $why"
   elif [ "$n" -eq 0 ]; then
     said="KEPT $session: no listed session"
@@ -141,8 +153,12 @@ close_worker() {
     said=$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n 1)
     [ -n "$said" ] || said="KEPT $rid: desk-done.sh exit $rc"
   fi
-  mkdir -p "$(dirname "$FINISHED")" \
-    && printf '%s %s %s %s\n' "$(TZ=America/New_York date +%Y-%m-%dT%H:%M:%S%z)" "$rid" "$session" "${1%% *}" >> "$FINISHED"
+  at=$(TZ=America/New_York date +%Y-%m-%dT%H:%M:%S%z)
+  if mkdir -p "$(dirname "$FINISHED")"; then
+    for fid in $ids; do
+      printf '%s %s %s %s\n' "$at" "$fid" "$session" "${1%% *}" >> "$FINISHED"
+    done
+  fi
   echo "$said"
 }
 # install_ops <stop line> (card 580 C4): a DEPLOYED set touching ops/desk/ -> install-ops

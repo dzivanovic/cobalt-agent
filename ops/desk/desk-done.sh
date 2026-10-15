@@ -23,6 +23,8 @@
 # split on blanks) whose terminal_title_stripped is the session's name: one gives its tab_id,
 # none gives no tab, two or more -> `KEPT <id>: <n> tabs titled <name>` on stdout, exit 1, before
 # any stop (an unreadable pane list: `KEPT <id>: pane list unreadable`). A passed <tab> wins.
+# A session with no name looks up no tab; a tab holding a pane titled cto-desk or brain* ->
+# `KEPT <id>: tab <tab> also holds a brain or the desk`, before any stop (check 2026-10-15 O1, O2).
 # THE PROOF (card 580 C1 (b)), after the last close: `CLOSED <id>` as the last stdout line only
 # when no row of `sh desk-list.sh` (beside this script) has an id starting <id>, no row of
 # `claude agents --json` has that id, and no pane of `herdr pane list` sits in the closed tab;
@@ -110,13 +112,22 @@ for row in walk(doc):
         print(row.get("tab_id") or "")
     elif by == "tab" and row.get("tab_id") == value:
         print(row["pane_id"])
+    elif by == "titles" and row.get("tab_id") == value:
+        print(row.get("terminal_title_stripped") or "")
 ' "$1" "$2"
 }
-if [ -z "$tab" ]; then
+# check 2026-10-15 O1: a session with no name finds no tab (an empty title matches untitled panes)
+if [ -z "$tab" ] && [ -n "$name" ]; then
   found=$(panes title "$name") || kept "pane list unreadable"
   n=$(printf '%s' "$found" | grep -c '')
   [ "$n" -le 1 ] || kept "$n tabs titled $name"
   tab=$found
+fi
+# check 2026-10-15 O2: a tab that also holds the desk's or a brain's pane is never closed
+if [ -n "$tab" ]; then
+  titles=$(panes titles "$tab") || kept "pane list unreadable"
+  ! printf '%s\n' "$titles" | grep -qE '^(cto-desk|brain.*)$' \
+    || kept "tab $tab also holds a brain or the desk"
 fi
 step() {
   echo "+ $*"

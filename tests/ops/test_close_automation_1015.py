@@ -188,7 +188,8 @@ def test_c2_deploy_prodwrite_and_close_kinds(tmp_path):
     done = w.run("prodwrite", DESK_WATCH_CLOSE_WAIT="0")
     assert done.stdout.splitlines() == [written, "KEPT prodwrite-x-job: closed through desk-done.sh by the desk"]
     assert w.logged() == [f"aaaa0005 {w.build} deploy"]
-    assert len(w.finished.read_text().splitlines()) == 1
+    # check 2026-10-15 A2: the DEPLOYED deploy and the WRITTEN prodwrite are each recorded
+    assert len(w.finished.read_text().splitlines()) == 2
 
 
 def test_c2_close_wait_stops_at_the_parameter_not_the_poll(tmp_path):
