@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/deploy-freeze-1014
 WORKTREE: deploy-freeze-1014
-BASE:
+BASE: de0792af
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/deploy-freeze-1014/docs/40 - DevDocs/reports/deploy-freeze-build-2026-10-14.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-freeze-check-2026-10-14.md
