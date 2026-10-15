@@ -534,3 +534,146 @@ def test_the_three_gates_agree(tmp_path, case, want):
         root.mkdir()
         got[name] = gate(root, case)
     assert got == dict.fromkeys(got, want), got
+
+
+# ---- check findings (result-file-1014 check) ------------------------------------------------------
+
+
+@pytest.mark.parametrize("line", ["FAILED: W — a constructed red", "(run in progress — next step under ## CONTINUE)"])
+def test_o1_the_three_gates_refuse_a_failed_or_running_check_beside_a_clean_result_file(tmp_path, line):
+    """Check O1: a FAILED or running last line beside an earlier run's committed clean result file
+    is refused by all three gates, as deploy-step0.sh P2 refuses it."""
+    got = {}
+    root = tmp_path / "step0"
+    root.mkdir()
+    d = s0.Desk(root)
+    d.check["alpha"].write_text(f"# check\n\n{line}\n")
+    result_of(d.check["alpha"]).write_text(check_result(d.tip["alpha"]))
+    d.commit("case")
+    got["deploy-step0.sh"] = "ok" if d.run().returncode == 0 else "refused"
+    root = tmp_path / "card"
+    root.mkdir()
+    d = dc.Desk(root)
+    d.check["alpha"].write_text(f"# check\n\n{line}\n")
+    result_of(d.check["alpha"]).write_text(check_result(d.tip["alpha"]))
+    dc_commit(d, "case")
+    got["deploy-card.sh"] = "ok" if d.run(cards=("alpha",)).returncode == 0 else "refused"
+    root = tmp_path / "launch"
+    root.mkdir()
+    d = dl.Desk(root)
+    d.ship(line, commit=False)
+    result_of(d.check_report).write_text(check_result(d.tip))
+    d.commit("case")
+    got["desk-launch.sh"] = "ok" if d.launch("deploy", str(d.deploy)).returncode == 0 else "refused"
+    assert got == dict.fromkeys(got, "refused"), got
+
+
+def test_o2_step0_refuses_a_fix_result_tip_that_is_not_hex(step0, monkeypatch):
+    """Check O2: the fix report's result tip is hex, as the check's is (RF3 "read the same way")."""
+    plain = built_result
+    monkeypatch.setitem(globals(), "built_result", lambda tip: plain(tip).replace(f"tip={tip}", f"tip={tip}zz"))
+    step0_fix_round(step0, fix_last="fix round done by hand", fix_result=True)
+    p2_failed(step0.run())
+
+
+def test_o2_launcher_refuses_a_fix_result_tip_that_is_not_hex(launch):
+    """Check O2: the launcher's copy of the same rule."""
+    d = launch
+    checked = d.tip
+    (d.job_wt / "src" / "x.py").write_text("X = 2\n")
+    d.commit_job("small fix after the check")
+    fixed = dl.short(d.job_wt)
+    copy = d.job_wt / dl.FIX_REL
+    copy.write_text("# x-job fix round\n\nfix round done by hand\n")
+    result_of(copy).write_text(built_result(fixed).replace(f"tip={fixed}", f"tip={fixed}zz"))
+    d.commit_job("fix report and its result file")
+    head = dl.short(d.job_wt)
+    d.write_deploy(code_tip=fixed, head=head, fix=str(d.repo / dl.FIX_REL))
+    d.ship(dl.check_line(checked))
+    done = d.launch("deploy", str(d.deploy))
+    assert done.returncode == 1, done.stderr
+
+
+def test_the_three_gates_agree_when_the_result_tip_repeats_the_code_tip(tmp_path):
+    """RF5 / X2: the same longer hex tip is not the code tip on every gate."""
+    got = {}
+    root = tmp_path / "step0"
+    root.mkdir()
+    d = s0.Desk(root)
+    result_of(d.check["alpha"]).write_text(check_result(d.tip["alpha"] + d.tip["alpha"]))
+    d.commit("alpha result tip repeats the code tip")
+    got["deploy-step0.sh"] = "ok" if d.run().returncode == 0 else "refused"
+    root = tmp_path / "card"
+    root.mkdir()
+    d = dc.Desk(root)
+    result_of(d.check["alpha"]).write_text(check_result(d.tip["alpha"] + d.tip["alpha"]))
+    dc_commit(d, "alpha result tip repeats the code tip")
+    got["deploy-card.sh"] = "ok" if d.run(cards=("alpha",)).returncode == 0 else "refused"
+    root = tmp_path / "launch"
+    root.mkdir()
+    d = dl.Desk(root)
+    d.ship(commit=False)
+    result_of(d.check_report).write_text(check_result(d.tip + d.tip))
+    d.commit("check result tip repeats the code tip")
+    got["desk-launch.sh"] = "ok" if d.launch("deploy", str(d.deploy)).returncode == 0 else "refused"
+    assert got == {
+        "deploy-step0.sh": "refused",
+        "deploy-card.sh": "refused",
+        "desk-launch.sh": "refused",
+    }, got
+
+
+def test_p2_fix_report_result_tip_must_be_the_code_tip(step0):
+    """RF3: a fix-report result tip that only mentions the code tip does not pass P2."""
+    d = step0
+    checked = d.tip["alpha"]
+    s0.git(d.repo, "checkout", "-q", "ops/alpha")
+    (d.repo / "src" / "alpha.py").write_text("alpha = 2\n")
+    d.commit("alpha small fix")
+    fixed = s0.git(d.repo, "rev-parse", "--short=8", "HEAD")
+    fix_report = d.reports / "alpha-fix-build.md"
+    fix_report.write_text("# alpha fix round\n\nfix round done by hand\n")
+    result_of(fix_report).write_text(built_result(f"zz tip: {fixed}"))
+    d.commit("alpha fix report")
+    head = s0.git(d.repo, "rev-parse", "--short=8", "HEAD")
+    s0.git(d.repo, "checkout", "-q", "main")
+    d.tip["alpha"], d.head["alpha"] = fixed, head
+    text = d.card_text()
+    text = text.replace(
+        "its stop line must carry |\n|---|---|---|---|---|---|\n",
+        "its stop line must carry | fix report |\n|---|---|---|---|---|---|---|\n",
+    )
+    text = text.replace(
+        f"`{head}` | `{d.check['alpha']}` | `held unfixed: 0` and `ready: YES` |\n",
+        f"`{head}` | `{d.check['alpha']}` | `held unfixed: 0` and `ready: YES` | `{fix_report}` |\n",
+    )
+    text = text.replace(
+        f"`{d.check['beta']}` | `held unfixed: 0` and `ready: YES` |\n",
+        f"`{d.check['beta']}` | `held unfixed: 0` and `ready: YES` | |\n",
+    )
+    d.card.write_text(text)
+    d.check["alpha"].write_text(f"# check alpha\n\n{s0.check_line(checked)}\n")
+    d.commit("fix round")
+    done = d.run()
+    assert done.returncode == 1, done.stdout
+
+
+def test_launcher_fix_result_tip_must_equal_the_code_tip(launch):
+    """RF5: the fix-report result tip is the code tip, not a longer hex string that starts with it."""
+    d = launch
+    checked = d.tip
+    (d.job_wt / "src" / "x.py").write_text("X = 2\n")
+    d.commit_job("small fix after the check")
+    fixed = dl.short(d.job_wt)
+    full = subprocess.run(["git", "-C", str(d.job_wt), "rev-parse", "HEAD"], capture_output=True, text=True,
+                          check=True).stdout.strip()
+    extra = "1" if full[8] == "0" else "0"  # check form repair: never a real longer prefix of the fix tip
+    copy = d.job_wt / dl.FIX_REL
+    copy.write_text("# x-job fix round\n\nfix round done by hand\n")
+    result_of(copy).write_text(built_result(fixed + extra))
+    d.commit_job("fix report and its result file")
+    head = dl.short(d.job_wt)
+    d.write_deploy(code_tip=fixed, head=head, fix=str(d.repo / dl.FIX_REL))
+    d.ship(dl.check_line(checked))
+    done = d.launch("deploy", str(d.deploy))
+    assert done.returncode == 1, done.stderr
