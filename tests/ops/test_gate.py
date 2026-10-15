@@ -58,6 +58,11 @@ def nth(kind):
     return sum(1 for a in calls if kind(a)) - 1
 is_fp = lambda a: "query" in a and any("pg_attribute" in x for x in a)
 is_pytest = lambda a: a[:2] == ["run", "pytest"]
+# card 2026-10-13/521 T2 (7): a tests/ops run fails while the planted test sits in the worktree it runs in
+if is_pytest(argv) and "tests/ops" in argv and os.path.exists("tests/ops/test_planted_t2.py"):
+    print("FAILED tests/ops/test_planted_t2.py::test_planted - assert False")
+    print("1 failed in 0.01s")
+    sys.exit(1)
 if is_pytest(argv):
     answers = script.get("pytest", [])
     k = nth(is_pytest)
@@ -97,7 +102,7 @@ sys.exit(97)
 
 #: gate-lists.md section → the key both readers use
 LIST_KEYS = {
-    "OFFLINE": "offline", "PROOF ONLY": "proof", "PASS 1": "pass1", "FORWARD": "forward",
+    "OFFLINE": "offline", "OFFLINE OPS": "offline_ops", "PROOF ONLY": "proof", "PASS 1": "pass1", "FORWARD": "forward",
     "PASS 2": "pass2", "STRAY ROWS": "tickers", "LIVE-NOTE": "livenote", "ROLLBACK": "rollback",
     "FINGERPRINT": "fp", "ALLOWED SKIPS": "skips", "LEVEL 0013": "level",
 }
@@ -193,6 +198,38 @@ def gate(tmp_path):
     env.pop("COBALT_ENV", None)
     env.pop("COBALT_LIVE_VAULT_ROOT", None)
     return wt, repo, job, env, calls, script
+
+
+def git(cwd: Path, *args: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["git", "-C", str(cwd), "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args],
+        check=True, capture_output=True, text=True, timeout=60,
+    )
+
+
+def commit(job: Path, path: str, text: str = "constructed\n") -> None:
+    (job / path).parent.mkdir(parents=True, exist_ok=True)
+    (job / path).write_text(text)
+    git(job, "add", "--", path)
+    git(job, "commit", "-q", "-m", f"constructed: {path}")
+
+
+@pytest.fixture
+def git_gate(gate):
+    """Card 2026-10-13/521 T2: the `gate` fixture's job worktree as a real git repo in tmp_path —
+    `git init -b main`, a local user, the copied gate-lists.md as ONE commit on `main`, then a
+    branch `job` cut from `main` holding one `src/` commit. `git merge-base main HEAD` is that
+    one commit and the diff from it holds no ops path (the bare `gate` worktree is no git repo,
+    so there the merge-base fails)."""
+    wt, repo, job, env, calls, script = gate
+    git(job, "init", "-q", "-b", "main")
+    git(job, "config", "user.name", "constructed")
+    git(job, "config", "user.email", "constructed@example.invalid")
+    git(job, "add", "--", "ops/desk/gate-lists.md")
+    git(job, "commit", "-q", "-m", "constructed: main")
+    git(job, "checkout", "-q", "-b", "job")
+    commit(job, "src/constructed.py")
+    return gate
 
 
 def set_script(script: Path, **kw) -> None:
@@ -438,18 +475,19 @@ def test_livenote_runs_the_hub_command_and_reads_its_skips(gate):
     assert done.returncode == 1, done.stdout + done.stderr
 
 
-def test_offline_makes_one_pytest_call_with_no_cobalt_env(gate):
-    wt, repo, job, env, calls, script = gate
+def test_offline_makes_one_pytest_call_with_no_cobalt_env(git_gate):
+    wt, repo, job, env, calls, script = git_gate
     done = run_gate(env, "offline")
     assert done.returncode == 0, done.stdout + done.stderr
     (call,) = read_calls(calls)
     assert call["argv"] == argv_of(list_commands()["offline"])[1]
     assert call["COBALT_ENV"] is None
     assert "offline 5/0" in done.stdout.splitlines()
+    assert "tests/ops: skipped (no ops paths)" in done.stdout.splitlines()
 
 
-def test_offline_reads_a_coloured_summary(gate):
-    wt, repo, job, env, calls, script = gate
+def test_offline_reads_a_coloured_summary(git_gate):
+    wt, repo, job, env, calls, script = git_gate
     set_script(script, pytest=[{"out": "\x1b[32m3784 passed\x1b[0m, \x1b[33m673 skipped\x1b[0m in 645.49s", "rc": 0}])
     done = run_gate(env, "offline")
     assert done.returncode == 0, done.stdout + done.stderr
@@ -509,8 +547,8 @@ def test_a_term_mid_pass_2_still_rolls_back_and_releases(gate, tmp_path):
     assert not (job / ".env").exists()
 
 
-def test_all_runs_offline_withdb_livenote_in_order(gate):
-    wt, repo, job, env, calls, script = gate
+def test_all_runs_offline_withdb_livenote_in_order(git_gate):
+    wt, repo, job, env, calls, script = git_gate
     done = run_gate(env, "all")
     assert done.returncode == 0, done.stdout + done.stderr
     log = read_calls(calls)
@@ -518,7 +556,8 @@ def test_all_runs_offline_withdb_livenote_in_order(gate):
     assert [c["COBALT_ENV"] for c in pytests] == [None, "dev", "dev", None]
     assert pytests[-1]["COBALT_LIVE_VAULT_ROOT"] is not None
     out = done.stdout.splitlines()
-    for line in ("offline 5/0", "with-DB 10/0", "live-note 5/0", "cobalt_dev: 0013 — F2 = F0", ".env: removed"):
+    for line in ("offline 5/0", "tests/ops: skipped (no ops paths)", "with-DB 10/0", "live-note 5/0",
+                 "cobalt_dev: 0013 — F2 = F0", ".env: removed"):
         assert line in out, (line, done.stdout)
 
 
@@ -642,8 +681,8 @@ def without_db_only(command: str) -> str:
     return command.replace(" --db-only", "", 1)
 
 
-def test_m3_deploy_runs_pass_1_without_db_only(gate):
-    wt, repo, job, env, calls, script = gate
+def test_m3_deploy_runs_pass_1_without_db_only(git_gate):
+    wt, repo, job, env, calls, script = git_gate
     done = run_gate(env, "all", "--deploy")
     assert done.returncode == 0, done.stdout + done.stderr
     pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
@@ -654,9 +693,9 @@ def test_m3_deploy_runs_pass_1_without_db_only(gate):
     assert "pass 1: whole (deploy)" in done.stdout.splitlines()
 
 
-def test_m3_without_deploy_pass_1_keeps_db_only(gate):
+def test_m3_without_deploy_pass_1_keeps_db_only(git_gate):
     """Negative control: a build's or a check's gate never loses the option."""
-    wt, repo, job, env, calls, script = gate
+    wt, repo, job, env, calls, script = git_gate
     done = run_gate(env, "all")
     assert done.returncode == 0, done.stdout + done.stderr
     pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
@@ -735,8 +774,8 @@ def test_check_o2_a_term_during_the_lock_take_still_releases(gate, tmp_path):
     assert rec.read_text().splitlines() == [f"take {NAME} 90", f"release {NAME}"]
 
 
-def test_check_o3_offline_runs_with_no_cobalt_env_even_when_the_caller_has_one(gate):
-    wt, repo, job, env, calls, script = gate
+def test_check_o3_offline_runs_with_no_cobalt_env_even_when_the_caller_has_one(git_gate):
+    wt, repo, job, env, calls, script = git_gate
     env = dict(env, COBALT_ENV="dev", COBALT_LIVE_VAULT_ROOT="/nowhere")
     done = run_gate(env, "offline")
     assert done.returncode == 0, done.stdout + done.stderr
@@ -767,3 +806,229 @@ def test_a_bad_call_is_refused(gate, args):
     assert done.returncode == 1, done.stdout + done.stderr
     assert done.stderr.startswith("REFUSED: ")
     assert read_calls(calls) == []
+
+
+# ---- card 2026-10-13/521 gate-tests-ops: the offline leg runs tests/ops -------------------------
+
+#: the commit the card's rows were built on; its gate.sh and gate-lists.md are the "before"
+BASE = "1526b50e"
+PLANTED = "tests/ops/test_planted_t2.py"
+
+
+def section_of(path: Path, title: str) -> str:
+    return path.read_text().split(f"\n## {title}", 1)[1].split("\n## ", 1)[0]
+
+
+def ops_calls(calls: Path) -> list[dict]:
+    return [c for c in read_calls(calls) if kind(c) == "pytest" and "tests/ops" in c["argv"]]
+
+
+def at_base(path: str) -> str:
+    return git(REPO, "show", f"{BASE}:{path}").stdout
+
+
+def test_t1_the_offline_ops_list_holds_the_tests_ops_command():
+    lists = list_commands()
+    assert lists["offline_ops"] == "uv run pytest -q -rs -p no:cacheprovider tests/ops"
+    assert lists["offline"] == "uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy"
+
+
+def test_t1_the_e0_baseline_line_holds_the_offline_command_byte_for_byte():
+    spans = re.findall(r"`([^`]*)`", section_of(HUB, "E0"))
+    assert list_commands()["offline"] in spans, spans
+    assert list_commands()["offline_ops"] not in spans
+
+
+def test_t2_a_deploy_gate_runs_tests_ops_always(git_gate):
+    wt, repo, job, env, calls, script = git_gate
+    done = run_gate(env, "all", "--deploy", "--deploy-gate")
+    assert done.returncode == 0, done.stdout + done.stderr
+    pytests = [c["argv"] for c in read_calls(calls) if kind(c) == "pytest"]
+    assert pytests[1] == argv_of(list_commands()["offline_ops"])[1]
+    assert len(pytests) == 5
+    out = done.stdout.splitlines()
+    assert "tests/ops: run (deploy gate)" in out
+    assert "offline 10/0" in out
+    assert "pass 1: whole (deploy)" in out
+
+
+def test_t2_a_src_only_build_with_all_deploy_skips_tests_ops(git_gate):
+    wt, repo, job, env, calls, script = git_gate
+    done = run_gate(env, "all", "--deploy")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert ops_calls(calls) == []
+    out = done.stdout.splitlines()
+    assert "tests/ops: skipped (no ops paths)" in out
+    assert "offline 5/0" in out
+
+
+@pytest.mark.parametrize("mode", ["withdb", "livenote", "probe"])
+def test_t2_deploy_gate_is_refused_outside_offline_and_all(gate, mode):
+    wt, repo, job, env, calls, script = gate
+    done = run_gate(env, mode, "--deploy-gate")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith("REFUSED: "), done.stderr
+    assert "offline and all" in done.stderr, done.stderr
+    assert read_calls(calls) == []
+
+
+def test_t2_the_deploy_hub_gate_call_alone_types_deploy_gate():
+    (call,) = [ln for ln in section_of(DEPLOY_HUB, "STEP-G").splitlines() if "ops/desk/gate.sh " in ln]
+    assert "ops/desk/gate.sh <WORKTREE> all --deploy --deploy-gate" in call
+    for path in (HUB, HUB.parent / "CARD.md"):
+        assert "--deploy-gate" not in path.read_text(), path
+
+
+def test_t2_a_src_only_branch_skips_tests_ops_and_says_so(git_gate):
+    wt, repo, job, env, calls, script = git_gate
+    assert git(job, "diff", "--name-only", "--no-renames", "main").stdout == "src/constructed.py\n"
+    done = run_gate(env, "offline")
+    assert done.returncode == 0, done.stdout + done.stderr
+    (call,) = read_calls(calls)
+    assert call["argv"] == argv_of(list_commands()["offline"])[1]
+    out = done.stdout.splitlines()
+    assert "tests/ops: skipped (no ops paths)" in out
+    assert out.index("tests/ops: skipped (no ops paths)") < out.index("offline 5/0")
+
+
+@pytest.mark.parametrize("path", [
+    "ops/desk/constructed.sh", "tests/ops/test_constructed.py",
+    "docs/40 - DevDocs/prompts/constructed.md", ".claude/constructed.json",
+])
+def test_t2_an_ops_path_runs_tests_ops_and_names_it(git_gate, path):
+    wt, repo, job, env, calls, script = git_gate
+    commit(job, path)
+    done = run_gate(env, "offline")
+    assert done.returncode == 0, done.stdout + done.stderr
+    pytests = [c["argv"] for c in read_calls(calls)]
+    assert pytests == [argv_of(list_commands()["offline"])[1], argv_of(list_commands()["offline_ops"])[1]]
+    out = done.stdout.splitlines()
+    assert f"tests/ops: run ({path})" in out
+    assert "offline 10/0" in out
+
+
+def test_t2_a_branch_with_no_merge_base_runs_tests_ops_as_no_base(gate):
+    """The bare `gate` worktree is no git repo: `git merge-base main HEAD` fails → run, `no base`."""
+    wt, repo, job, env, calls, script = gate
+    done = run_gate(env, "offline")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert len(ops_calls(calls)) == 1
+    assert "tests/ops: run (no base)" in done.stdout.splitlines()
+    assert "offline 10/0" in done.stdout.splitlines()
+
+
+def test_t2_a_lists_file_without_offline_ops_is_refused(git_gate):
+    wt, repo, job, env, calls, script = git_gate
+    path = job / "ops" / "desk" / "gate-lists.md"
+    block = f"## OFFLINE OPS\n`{list_commands()['offline_ops']}`\n"
+    assert block in path.read_text()
+    path.write_text(path.read_text().replace(block, ""))
+    done = run_gate(env, "offline")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.splitlines()[:2] == [
+        "no ## OFFLINE OPS", f"REFUSED: the lists file does not hold every command gate.sh runs: {path}"], done.stderr
+    assert read_calls(calls) == []
+
+
+def test_t2_the_planted_red_fails_the_gate_after_and_not_before(git_gate, tmp_path):
+    """The planted test lives in the tmp repo only, on a branch commit; the stub `uv` fails a
+    tests/ops run while it sits in the worktree."""
+    wt, repo, job, env, calls, script = git_gate
+    git(job, "checkout", "-q", "-b", "planted", "main")
+    commit(job, PLANTED, "def test_planted():\n    assert False\n")
+    lists = job / "ops" / "desk" / "gate-lists.md"
+
+    # (7a) BEFORE: BASE's gate.sh and gate-lists.md — the offline leg never sees the planted test
+    before = tmp_path / "base-ops"
+    before.mkdir()
+    (before / "gate.sh").write_text(at_base("ops/desk/gate.sh"))
+    lists.write_text(at_base("ops/desk/gate-lists.md"))
+    done = run_gate(env, "offline", gate=before / "gate.sh")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "tests/ops:" not in done.stdout
+    assert ops_calls(calls) == []
+
+    # (7b) AFTER: the worktree's gate.sh and gate-lists.md
+    shutil.copy(LISTS, lists)
+    assert git(job, "status", "--porcelain").stdout == ""
+    calls.unlink()
+    done = run_gate(env, "offline")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert f"tests/ops: run ({PLANTED})" in done.stdout.splitlines()
+    assert "FAILED tests/ops/test_planted_t2.py::test_planted - assert False" in done.stdout
+    assert len(ops_calls(calls)) == 1
+
+    # a branch whose only change is a src/ path: skipped, green
+    git(job, "checkout", "-q", "-b", "src-only", "main")
+    commit(job, "src/constructed_two.py")
+    assert not (job / PLANTED).exists()
+    calls.unlink()
+    done = run_gate(env, "offline")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "tests/ops: skipped (no ops paths)" in done.stdout.splitlines()
+    assert ops_calls(calls) == []
+
+    # the planted test on main, a src/-only branch: the deploy gate fails it, a build's all --deploy skips it
+    git(job, "checkout", "-q", "main")
+    commit(job, PLANTED, "def test_planted():\n    assert False\n")
+    git(job, "checkout", "-q", "-b", "src-after", "main")
+    commit(job, "src/constructed_three.py")
+    assert git(job, "diff", "--name-only", "--no-renames", "main").stdout == "src/constructed_three.py\n"
+    calls.unlink()
+    done = run_gate(env, "all", "--deploy", "--deploy-gate")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "tests/ops: run (deploy gate)" in done.stdout.splitlines()
+    assert [kind(c) for c in read_calls(calls)] == ["pytest", "pytest"]
+    calls.unlink()
+    done = run_gate(env, "all", "--deploy")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert "tests/ops: skipped (no ops paths)" in done.stdout.splitlines()
+    assert ops_calls(calls) == []
+
+
+def test_check_o1_a_non_ascii_ops_path_still_runs_tests_ops(git_gate):
+    wt, repo, job, env, calls, script = git_gate
+    path = "docs/40 - DevDocs/prompts/constructed-é.md"
+    commit(job, path)
+    done = run_gate(env, "offline")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert f"tests/ops: run ({path})" in done.stdout.splitlines(), done.stdout
+    assert len(ops_calls(calls)) == 1
+
+
+# ---- card 2026-10-13/521 fix round (FR-O2 check O2 = A1; FR-O3 check O3) ------------------------
+
+def test_t2_build_hub_a0_and_offline_quote_the_w_line():
+    text = HUB.read_text().splitlines()
+    a0 = next(ln for ln in text if ln.startswith("- (a0) "))
+    offline = next(ln for ln in text if ln.startswith("- (a) OFFLINE"))
+    sentence = "tests/ops: run (<reason>) or tests/ops: skipped (no ops paths)"
+    assert sentence in a0 and sentence in offline, (a0, offline)
+
+
+CHECK_HUB = HUB.parent / "CHECK-HUB.md"
+
+
+def test_fr_o3_the_check_hub_gate_calls_type_deploy_gate():
+    text = CHECK_HUB.read_text().splitlines()
+    (call,) = [ln for ln in text if "ops/desk/gate.sh <WORKTREE> " in ln]
+    assert "ops/desk/gate.sh <WORKTREE> all --deploy --deploy-gate " in call, call
+    db_none = call.split('A "DB: none" card', 1)[1]
+    assert "with `--deploy-gate` added to the (a0) `offline` call" in db_none, db_none
+    assert sum("deploy gate's pass (gate.sh with --deploy --deploy-gate)" in ln for ln in text) == 1
+    for path in (HUB, HUB.parent / "CARD.md"):
+        assert "--deploy-gate" not in path.read_text(), path
+
+
+def test_fr_o3_offline_with_deploy_gate_runs_tests_ops_on_a_src_only_diff(git_gate):
+    wt, repo, job, env, calls, script = git_gate
+    assert git(job, "diff", "--name-only", "--no-renames", "main").stdout == "src/constructed.py\n"
+    done = run_gate(env, "offline", "--deploy-gate")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert len(ops_calls(calls)) == 1
+    assert "tests/ops: run (deploy gate)" in done.stdout.splitlines()
+    calls.unlink()
+    done = run_gate(env, "offline")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert ops_calls(calls) == []
+    assert "tests/ops: skipped (no ops paths)" in done.stdout.splitlines()

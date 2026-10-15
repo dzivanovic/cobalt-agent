@@ -1,0 +1,15 @@
+job=gate-tests-ops-fr1
+tip=ec3fabc1
+on=f095fe7d
+migration=none
+offline=4328/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=3 of 3
+self_check=3 of 3
+decisions=5
+for_dejan=0
+tokens=246545
