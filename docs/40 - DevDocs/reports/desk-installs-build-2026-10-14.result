@@ -1,0 +1,15 @@
+job=desk-installs-1014
+tip=7c8db6e1
+on=6ee9b8d6
+migration=none
+offline=4328/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=4 of 5 (S1 dropped by FR-S1)
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=108276

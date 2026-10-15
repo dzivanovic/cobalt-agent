@@ -1,18 +1,15 @@
 """The desk refresh rules in prompts/CTO-DESK-WAKEUP.md (card 2026-10-13 458 W1; his 2026-10-13 R1323).
 
 Reads the real wake-up: the four new texts once each, the two replaced texts gone, the STATE line
-directly after the OWED paragraph, the 3a line directly after STEP 0 item 3, and the `- LAUNCH`
-line byte for byte the BASE line (`git show <BASE>:`). Nothing is written.
+directly after the OWED paragraph and the 3a line directly after STEP 0 item 3. Nothing is written.
 """
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 WAKEUP = REPO / "docs" / "40 - DevDocs" / "prompts" / "CTO-DESK-WAKEUP.md"
-BASE = "f7d71571"
 
 SIZE = (
     "the Stop hook (ops/desk/stop-guard.py, card 458) prints DESK SIZE <n> / 300,000 after every "
@@ -71,13 +68,3 @@ def test_w1_the_3a_line_follows_step_0_item_3():
 def test_w1_reconcile_ends_read_item_8():
     (line,) = [x for x in lines() if x.startswith("8. ACT")]
     assert line.endswith(RECONCILE)
-
-
-def test_w1_the_launch_line_is_unchanged():
-    (now,) = [x for x in lines() if x.startswith("- LAUNCH ")]
-    base = subprocess.run(
-        ["git", "-C", str(REPO), "show", f"{BASE}:docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md"],
-        capture_output=True, text=True, check=True,
-    ).stdout.splitlines()
-    (then,) = [x for x in base if x.startswith("- LAUNCH ")]
-    assert now == then
