@@ -27,6 +27,9 @@
 # and PGREP below (a line containing <path>). Every item settled, the first line under
 # `## §5 CURRENT` before the next `## ` line that starts with `|` and whose first cell starts
 # with QUEUE is unsettled: `start it: <its third cell>` (card 164 G7; his 2026-10-09 R724).
+# Then a finished worker still open (card 2026-10-15 580 C3): the first id of a line of
+# /Users/cobalt/cobalt-wt/.job-state/FINISHED that is a listed row's id (not cto-desk, not brain)
+# and kept by no OWED `live: <id>` -> `start it: close <id>`, through the same count and give-up.
 # Settled -> exit 0. Not settled (or no report, no section, no block) -> stderr ONE line
 # `start it: <what>`, exit 2. THE DESK PATH WRITES: the count of blocks in a row in
 # `<transcript_path>.desk-stop` (reset by a new message, removed when settled); at 3 blocks the
@@ -109,6 +112,8 @@ DESK_HUB = "CTO-DESK-WAKEUP.md"
 KIND = "sessionKind"
 BACKGROUND = "bg"
 DESK_STOP = WT_ROOT + "/.job-state/DESK-STOP"
+# desk-watch.sh's record of every clean-finished worker (card 2026-10-15 580 C2 (e), C3)
+FINISHED = WT_ROOT + "/.job-state/FINISHED"
 CURRENT = "## §5 CURRENT"
 ITEM = "OWED: "
 NONE = "owed: none"
@@ -338,15 +343,16 @@ def watched():
 
 
 def unsettled(items):
-    """The line's text after `start it: ` for the first item that is neither waiting on Dejan with
-    an `R<n>` in its <what> nor live, or None (G2, G3; card 164 G7 (b), (c)). desk-list.sh and
-    pgrep each run at most once, only when an item needs them."""
+    """(what, listing): the line's text after `start it: ` for the first item that is neither
+    waiting on Dejan with an `R<n>` in its <what> nor live, or None (G2, G3; card 164 G7 (b), (c));
+    and the rows listed() returned, or None when no item needed them (card 580 C3). desk-list.sh
+    and pgrep each run at most once, only when an item needs them."""
     seen = {}
     for what, marker in items:
         if marker == WAITING:
             if ASKED.search(what):
                 continue
-            return "ask him: %s" % what
+            return "ask him: %s" % what, seen.get("list")
         if marker is not None and marker.startswith(LIVE + WATCH):
             path = marker[len(LIVE + WATCH) :]
             if "watch" not in seen:
@@ -366,7 +372,35 @@ def unsettled(items):
                     for i, name in seen["list"]
                 ):
                     continue
-        return what
+        return what, seen.get("list")
+    return None, seen.get("list")
+
+
+def finished_open(items, listing):
+    """`close <id>` for the first id of a FINISHED line that is a listed row's id, not cto-desk or
+    the brain, and kept by no OWED item's `live: <id>` (card 580 C3); None otherwise. A missing or
+    unreadable FINISHED is no line and reads no LIST; `listing` is unsettled()'s, else listed() runs
+    once (its ListUnreadable reaches desk())."""
+    try:
+        with open(FINISHED, encoding="utf-8") as f:
+            ids = [w[1] for w in (line.split() for line in f) if len(w) > 1]
+    except (OSError, UnicodeDecodeError):
+        return None
+    if not ids:
+        return None
+    if listing is None:
+        listing = listed()
+    kept = [
+        marker[len(LIVE) :]
+        for _, marker in items
+        if marker is not None and marker.startswith(LIVE) and not marker.startswith(LIVE + WATCH)
+    ]
+    kept = [k for k in kept if SESSION_ID.fullmatch(k)]
+    for fid in ids:
+        if any(fid.startswith(k) for k in kept):
+            continue
+        if any(i == fid and name not in ("cto-desk", BRAIN) for i, name in listing):
+            return "close %s" % fid
     return None
 
 
@@ -389,12 +423,14 @@ def desk(event):
         line = "start it: the OWED block under %s of %s" % (CURRENT, report)
     else:
         try:
-            what = unsettled(items)
+            what, listing = unsettled(items)
+            if what is None:
+                what = queued(lines)
+            if what is None:
+                what = finished_open(items, listing)
         except ListUnreadable:
             line = UNREADABLE
         else:
-            if what is None:
-                what = queued(lines)
             line = None if what is None else "start it: %s" % what
     # after the OWED read: an unguarded stop never writes an order it does not show (check O1)
     turn = [] if event.get("stop_hook_active") else per_turn(event, lines)

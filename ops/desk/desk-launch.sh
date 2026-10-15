@@ -2293,6 +2293,41 @@ if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
     run_launch "$dir" "$line" "$note" "$watch"
 fi
 
+# ---- the replaced session (card 2026-10-15 580 C2; L79 THE ONE CLOSE RULE) -------------------
+# every live row of `claude agents --json` named as the line's --name is a session this launch
+# replaces: all idle -> `sh desk-done.sh <id> --replaced` (beside this script) for each, its last
+# stdout line on stderr as `RUN: …`; a busy row, a KEPT line or a non-zero exit -> REFUSED, nothing
+# launched; an unreadable listing -> REFUSED (fail closed). Never reached by the dry run.
+rname=$(printf '%s\n' "$line" | grep -o -e '--name[ =]*[^ ]*' | sed -e 's/^--[a-z-]*[ =]*//' | tr -d "\"'" | sed -n '1p')
+if [ -n "$rname" ]; then
+    agents=$(claude agents --json 2>/dev/null) || refuse "claude agents --json could not be read"
+    replaced=$(printf '%s\n' "$agents" | python3 -c '
+import json, sys
+try:
+    rows = json.load(sys.stdin)
+    assert isinstance(rows, list)
+except Exception:
+    sys.exit(3)
+for a in rows:
+    if isinstance(a, dict) and a.get("pid") and a.get("name") == sys.argv[1]:
+        if not a.get("id"):
+            sys.exit(3)
+        print(a["id"], a.get("status", "?"), a.get("state", "?"))
+' "$rname") || refuse "claude agents --json could not be read"
+    busy=$(printf '%s\n' "$replaced" | awk 'NF && !($2 == "idle" && $3 != "working") { print; exit }')
+    [ -z "$busy" ] || refuse "a session named $rname is still busy — $busy"
+    for rid in $(printf '%s\n' "$replaced" | awk 'NF { print $1 }'); do
+        closed=$(sh "$here/desk-done.sh" "$rid" --replaced)
+        rc=$?
+        closed=$(printf '%s\n' "$closed" | grep -v '^[[:space:]]*$' | tail -n 1)
+        printf 'RUN: %s\n' "$closed" >&2
+        case "$closed" in
+            KEPT*) refuse "a session named $rname is still kept — $closed" ;;
+        esac
+        [ "$rc" -eq 0 ] || refuse "a session named $rname is still kept — $closed"
+    done
+fi
+
 if [ -n "$add" ]; then
     printf 'RUN: %s\n' "$add" >&2
     if [ "$kind" = "build" ] || [ "$kind" = "shadow" ] || [ "$kind" = "devfix" ]; then

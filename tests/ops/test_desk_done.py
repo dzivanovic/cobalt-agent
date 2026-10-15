@@ -339,6 +339,22 @@ def test_c1_a_listed_row_that_stays_is_kept(stubs, tmp_path):
     assert done.stdout.splitlines()[-1] == "KEPT aaaa1111: LIST row still present", done.stdout
 
 
+def test_c1_an_agents_row_that_stays_is_kept(stubs, tmp_path):
+    """A `claude rm` that exits 0 and leaves the row (a stopped row included) is no close."""
+    report, calls, stop_exit, agents, env = stubs
+    keep = tmp_path / "keep-bin"
+    keep.mkdir()
+    (keep / "claude").write_text(
+        f'#!/bin/sh\nif [ "$1" = agents ]; then cat "{agents}"; exit 0; fi\n'
+        f'printf "claude %s\\n" "$*" >> "{calls}"\nexit 0\n'
+    )
+    (keep / "claude").chmod(0o755)
+    report.write_text("BUILT · job: x-job · tip: 1a2b3c4d\n")
+    done = done_("aaaa1111", str(report), "build", env=dict(env, PATH=f"{keep}:{env['PATH']}"))
+    assert done.returncode == 1
+    assert done.stdout.splitlines()[-1] == "KEPT aaaa1111: claude agents row still present", done.stdout
+
+
 def test_c1_replaced_form_closes_without_a_report(stubs):
     report, calls, stop_exit, agents, env = stubs
     panes(agents, ("p1", "w9:t9", "x-job-build"))
