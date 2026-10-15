@@ -490,7 +490,14 @@ for card in "$@"; do
     hn=""
     { [ -z "$frep" ] && [ ! -f "$resf" ]; } || hn=$(held_n "$last")
     [ -z "$hn" ] || [ -n "$frep" ] || refuse "$job: the check's last line lacks 'held unfixed: 0': $last"
-    if [ -z "$hn" ] && [ -f "$resf" ]; then
+    # check O1: a FAILED or running line keeps the stop-line read (no file is written on it), as
+    # deploy-step0.sh P2 refuses it before any file is read
+    resok=""
+    case "$last" in
+        FAILED*|"(run in progress"*) ;;
+        *) [ ! -f "$resf" ] || resok=1 ;;
+    esac
+    if [ -z "$hn" ] && [ -n "$resok" ]; then
         # committed and unchanged, exactly as the report above
         resrel=$(git -C "$REPO" ls-files --full-name --error-unmatch -- "$resf" 2>/dev/null) || refuse "$job: the check's result file is not committed or is modified since its commit: $resf"
         res_blob=$(git -C "$REPO" rev-parse --verify --quiet "HEAD:$resrel") || refuse "$job: the check's result file is not committed or is modified since its commit: $resf"

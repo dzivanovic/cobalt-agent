@@ -714,6 +714,12 @@ while IFS= read -r line; do
             elif ! printf '%s\n' "$t" | grep -q -x -E '[0-9a-f]{7,40}'; then
                 why="the result file $resf names no tip: tip=$t"
                 t=""
+            elif ! t8=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$t^{commit}"); then
+                # check H1: the tip is a commit, read as the 8-hex short form the other two gates compare
+                why="the result file $resf names a tip that is not a commit: tip=$t"
+                t=""
+            else
+                t=$t8
             fi
         fi
         if [ -z "$why" ] && [ -z "$resread" ]; then
@@ -755,7 +761,13 @@ EOF
                     frel=$(rel "$frep")
                     if fres=$(git -C "$REPO" show "$head:${frel%.md}.result" 2>/dev/null); then
                         if ftip=$(printf '%s\n' "$fres" | sh "$HERE/result-read.sh" tip 2>&1); then
-                            flast="BUILT · tip: $ftip (its result file)"
+                            # check O2/H2: hex of 8-40 and a commit, as deploy-card.sh reads it
+                            if printf '%s\n' "$ftip" | grep -q -x -E '[0-9a-f]{8,40}' \
+                                && f8=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$ftip^{commit}"); then
+                                flast="BUILT · tip: $f8 (its result file)"
+                            else
+                                flast="its result file names no commit: tip=$ftip"
+                            fi
                         else
                             flast="its result file: $ftip"
                         fi

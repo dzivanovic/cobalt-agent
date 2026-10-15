@@ -1455,7 +1455,13 @@ ships_checked() {
         # `ready` and `tip` from that file (committed and unchanged, as the report) in place of the
         # literal loop and the `tip:` read
         resf="${crep%.md}.result"
-        if [ -f "$resf" ] && [ -z "$(held_n "$clast")" ] \
+        # check O1: a FAILED or running line keeps the stop-line read, as deploy-step0.sh P2 refuses it
+        resok=""
+        case "$clast" in
+            FAILED*|"(run in progress"*) ;;
+            *) [ ! -f "$resf" ] || resok=1 ;;
+        esac
+        if [ -n "$resok" ] && [ -z "$(held_n "$clast")" ] \
             && [ -z "$(printf '%s\n' "$lits" | grep -v -x -F -e 'held unfixed: 0' -e 'ready: YES' | grep .)" ]; then
             resrel=$(git -C "$REPO" ls-files --full-name --error-unmatch -- "$resf" 2>/dev/null) \
                 && res_blob=$(git -C "$REPO" rev-parse --verify --quiet "HEAD:$resrel") \
@@ -1472,6 +1478,9 @@ ships_checked() {
             [ "$rready" = YES ] || refuse "deploy $sbranch: the check's result file says ready=$rready, not YES — the check is not clean: $resf"
             printf '%s\n' "$ltip" | grep -q -x -E '[0-9a-f]{7,40}' \
                 || refuse "deploy $sbranch: the check's result file names no tip (tip=$ltip) — the check is not clean: $resf"
+            # check H1: the tip is a commit, compared in its 8-hex short form as deploy-step0.sh reads it
+            ltip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$ltip^{commit}") \
+                || refuse "deploy $sbranch: the check's result file names a tip that is not a commit — the check is not clean: $resf"
         else
         while IFS= read -r lit; do
             case "$clast" in
@@ -1499,10 +1508,11 @@ LITS
             frel="${frep#"$REPO"/}"
             if fres=$(git -C "$REPO" show "$shead:${frel%.md}.result" 2>/dev/null); then
                 ftip=$(printf '%s\n' "$fres" | sh "$here/result-read.sh" tip 2>/dev/null) || return 1
-                case "$ftip" in
-                    "$ctip"*) return 0 ;;
-                esac
-                return 1
+                # check O2/H3: hex of 8-40 and the code tip's own commit, as deploy-card.sh reads it
+                printf '%s\n' "$ftip" | grep -q -x -E '[0-9a-f]{8,40}' || return 1
+                ftip=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$ftip^{commit}") || return 1
+                [ "$ftip" = "$ctip" ] || return 1
+                return 0
             fi
             case "$flast" in
                 "BUILT ·"*"tip: $ctip"*) return 0 ;;
