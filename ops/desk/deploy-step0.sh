@@ -675,6 +675,10 @@ while IFS= read -r line; do
     fi
 
     # P2: the check's stop line
+    # card 548 RF3 (his R1471): a clean row (no held literal, only the clean pair, no held line) whose
+    # check has a `.result` beside it reads `held_unfixed`, `ready` and `tip` from that file
+    # (committed and unchanged, as the report) in place of the literal loop and the `tip:` read
+    resf="${report%.md}.result"
     if [ -f "$report" ]; then
         last=$(grep -v '^[[:space:]]*$' "$report" | tail -n 1)
         why=""
@@ -682,7 +686,43 @@ while IFS= read -r line; do
             "(run in progress"*) why="the check is still running: $last" ;;
             FAILED*) why="the check FAILED: $last" ;;
         esac
-        if [ -z "$why" ]; then
+        t=""
+        resread=""
+        if [ -z "$why" ] && [ -f "$resf" ] && [ -z "$hrn" ] && [ -z "$(held_n "$last")" ] \
+            && [ -z "$(printf '%s\n' "$lits" | grep -v -x -F -e 'held unfixed: 0' -e 'ready: YES' | grep .)" ]; then
+            resread=1
+            # committed and unchanged: the file, its index entry and HEAD's blob are one object
+            # (deploy-card.sh's proof of the report; blob reads only, no index refresh)
+            rrel2=$(git -C "$REPO" ls-files --full-name --error-unmatch -- "$resf" 2>/dev/null) || rrel2=""
+            rcom=""
+            [ -z "$rrel2" ] || rcom=$(git -C "$REPO" rev-parse --verify --quiet "HEAD:$rrel2") || rcom=""
+            ridx=$(git -C "$REPO" ls-files -s -- "$resf" | awk '{print $2}')
+            rfile=$(git -C "$REPO" hash-object -- "$resf")
+            if [ -z "$rcom" ] || [ "$ridx" != "$rcom" ] || [ "$rfile" != "$rcom" ]; then
+                why="the result file is not committed or is modified since its commit: $resf"
+            elif ! rhu=$(sh "$HERE/result-read.sh" held_unfixed < "$resf" 2>&1); then
+                why="the result file $resf: $rhu"
+            elif ! rready=$(sh "$HERE/result-read.sh" ready < "$resf" 2>&1); then
+                why="the result file $resf: $rready"
+            elif ! t=$(sh "$HERE/result-read.sh" tip < "$resf" 2>&1); then
+                why="the result file $resf: $t"
+                t=""
+            elif [ "$rhu" != 0 ]; then
+                why="the result file $resf says held_unfixed=$rhu, not 0"
+            elif [ "$rready" != YES ]; then
+                why="the result file $resf says ready=$rready, not YES"
+            elif ! printf '%s\n' "$t" | grep -q -x -E '[0-9a-f]{7,40}'; then
+                why="the result file $resf names no tip: tip=$t"
+                t=""
+            elif ! t8=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$t^{commit}"); then
+                # check H1: the tip is a commit, read as the 8-hex short form the other two gates compare
+                why="the result file $resf names a tip that is not a commit: tip=$t"
+                t=""
+            else
+                t=$t8
+            fi
+        fi
+        if [ -z "$why" ] && [ -z "$resread" ]; then
             while IFS= read -r lit; do
                 [ -n "$lit" ] || continue
                 case "$last" in
@@ -703,7 +743,7 @@ EOF
             held_rule "$branch" "$report" "$last" "$ctip" "$head" "$frep" || why=$held_why
         fi
         if [ -z "$why" ]; then
-            t=$(printf '%s\n' "$last" | grep -o -E '(^| )tip: [0-9a-f]{7,40}' | sed -n '1p' | sed 's/.*tip: //')
+            [ -n "$resread" ] || t=$(printf '%s\n' "$last" | grep -o -E '(^| )tip: [0-9a-f]{7,40}' | sed -n '1p' | sed 's/.*tip: //')
             case "$t" in
                 "") why="the last line names no tip: $last" ;;
                 "$ctip"*) ;;
@@ -717,6 +757,21 @@ EOF
                 flast=""
                 if fblob=$(git -C "$REPO" show "$head:$(rel "$frep")" 2>/dev/null); then
                     flast=$(printf '%s\n' "$fblob" | grep -v '^[[:space:]]*$' | tail -n 1)
+                    # card 548 RF3: the fix report's `.result` at the same head, when there, answers its tip
+                    frel=$(rel "$frep")
+                    if fres=$(git -C "$REPO" show "$head:${frel%.md}.result" 2>/dev/null); then
+                        if ftip=$(printf '%s\n' "$fres" | sh "$HERE/result-read.sh" tip 2>&1); then
+                            # check O2/H2: hex of 8-40 and a commit, as deploy-card.sh reads it
+                            if printf '%s\n' "$ftip" | grep -q -x -E '[0-9a-f]{8,40}' \
+                                && f8=$(git -C "$REPO" rev-parse --verify --quiet --short=8 "$ftip^{commit}"); then
+                                flast="BUILT · tip: $f8 (its result file)"
+                            else
+                                flast="its result file names no commit: tip=$ftip"
+                            fi
+                        else
+                            flast="its result file: $ftip"
+                        fi
+                    fi
                     case "$flast" in
                         "BUILT ·"*"tip: $ctip"*)
                             if git -C "$REPO" merge-base --is-ancestor "$t" "$ctip" 2>/dev/null; then
