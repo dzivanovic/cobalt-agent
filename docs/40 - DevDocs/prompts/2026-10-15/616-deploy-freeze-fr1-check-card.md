@@ -9,7 +9,7 @@ TIP: 246d21e4
 REPORT: /Users/cobalt/cobalt-wt/deploy-freeze-fr1/docs/40 - DevDocs/reports/deploy-freeze-build-fr1-2026-10-15.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-freeze-fr1-check-2026-10-15.md
 HOUSE A: grok
-HOUSE B: none — scoped check, one house (brain 0e848919, 2026-10-15)
+HOUSE B: as needed
 DB: none
 RESTARTS: none
 RULINGS: 2026-10-14 R1471
