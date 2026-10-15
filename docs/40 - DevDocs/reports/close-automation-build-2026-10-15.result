@@ -1,0 +1,15 @@
+job=close-automation-1015
+tip=feecd979
+on=c7ba742c
+migration=none
+offline=8090/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=5 of 5
+self_check=3 of 3
+decisions=3
+for_dejan=0
+tokens=263011
