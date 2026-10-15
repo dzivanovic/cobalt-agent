@@ -114,8 +114,20 @@ def test_d1_moved_is_empty_when_only_an_unshipped_path_moved(deploy):
     assert done.stdout == ""
 
 
+def test_d1_a_build_card_of_the_same_job_is_not_the_deploy_card(deploy):
+    """Check ask X4: a build or check card (BASE is 8 hex) with the same JOB is not counted."""
+    repo, cut, env = deploy
+    head = git(repo, "rev-parse", "ops/x").strip()[:8]
+    build = card_text(repo, "x", head).replace("BASE: main", f"BASE: {head}")
+    commit_file(repo, f"{CARD_DIR}/89-x-build-card.md", build, "build card")
+    done = shipped("--job", "x", env=env)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [HUB_PATH, "docs/a.md"]
+
+
 @pytest.mark.parametrize(
-    "case", ["unknown job", "two cards", "bad head", "no TIP line", "card outside prompts", "bad rev"]
+    "case",
+    ["unknown job", "two cards", "bad head", "short head", "no TIP line", "card outside prompts", "bad rev"],
 )
 def test_d1_refuses_no_card_two_cards_and_a_bad_head(deploy, case, tmp_path):
     repo, cut, env = deploy
@@ -123,9 +135,15 @@ def test_d1_refuses_no_card_two_cards_and_a_bad_head(deploy, case, tmp_path):
     if case == "unknown job":
         args = ["--job", "nosuchjob"]
     elif case == "two cards":
-        commit_file(repo, f"{CARD_DIR}/91-x-card.md", card_text(repo, "x", "0" * 8), "recut")
+        # a recut naming the same, valid head: only the one-card rule can refuse it
+        head = git(repo, "rev-parse", "ops/x").strip()[:8]
+        commit_file(repo, f"{CARD_DIR}/91-x-card.md", card_text(repo, "x", head), "recut")
     elif case == "bad head":
         commit_file(repo, f"{CARD_DIR}/92-y-card.md", card_text(repo, "y", "zzzzzzzz"), "y")
+        args = ["--job", "y"]
+    elif case == "short head":
+        head = git(repo, "rev-parse", "ops/x").strip()[:7]
+        commit_file(repo, f"{CARD_DIR}/92-y-card.md", card_text(repo, "y", head), "y")
         args = ["--job", "y"]
     elif case == "no TIP line":
         commit_file(repo, f"{CARD_DIR}/93-z-card.md", "JOB: z\nBASE: main\n", "z")
@@ -240,6 +258,20 @@ def test_f1_an_unreadable_session_list_commits_with_the_note(guarded):
 def test_f1_a_card_that_cannot_be_found_refuses_all_paths(guarded, json_text):
     repo, env, live = guarded
     live(json_text)
+    done = commit_with_hook(repo, "docs/other.md", "other\n", env)
+    assert done.returncode == 1, done.stderr
+    assert "a deploy hub is live" in done.stderr, done.stderr
+
+
+@pytest.mark.parametrize("report", [None, "/elsewhere/deploy-x.md"], ids=["no REPORT", "REPORT outside docs"])
+def test_f1_a_card_report_that_cannot_be_read_refuses_all_paths(guarded, report):
+    """Arm (ii) fails closed: no REPORT: line, or one outside docs/, freezes every path."""
+    repo, env, live = guarded
+    card = repo / CARD_DIR / "90-x-card.md"
+    lines = [line for line in card.read_text().splitlines() if not line.startswith("REPORT: ")]
+    if report is not None:
+        lines.append(f"REPORT: {report}")
+    commit_file(repo, f"{CARD_DIR}/90-x-card.md", "\n".join(lines) + "\n", "card report")
     done = commit_with_hook(repo, "docs/other.md", "other\n", env)
     assert done.returncode == 1, done.stderr
     assert "a deploy hub is live" in done.stderr, done.stderr
