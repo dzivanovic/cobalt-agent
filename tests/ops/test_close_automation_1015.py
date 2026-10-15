@@ -191,6 +191,39 @@ def test_c2_deploy_prodwrite_and_close_kinds(tmp_path):
     assert len(w.finished.read_text().splitlines()) == 1
 
 
+def test_c2_close_wait_stops_at_the_parameter_not_the_poll(tmp_path):
+    w = Watch(tmp_path)
+    (w.wt / "stray.txt").write_text("x\n")
+    w.rows(IDLE_BUILD)
+    try:
+        subprocess.run(
+            ["sh", str(w.ops / "desk-watch.sh"), "build", str(w.card), "30"],
+            env=dict(w.env, DESK_WATCH_POLL="30", DESK_WATCH_CLOSE_WAIT="1"),
+            capture_output=True, text=True, timeout=5,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise AssertionError("DESK_WATCH_CLOSE_WAIT=1 slept a full DESK_WATCH_POLL") from exc
+
+
+def test_c2_a_written_prodwrite_is_recorded_for_the_guard(tmp_path):
+    w = Watch(tmp_path)
+    w.rows("aaaa0006 · prodwrite-x-job · ~/cobalt · idle · idle")
+    w.build.write_text("WRITTEN · job: x-job · rows: 3\n")
+    done = w.run("prodwrite", DESK_WATCH_CLOSE_WAIT="0")
+    assert done.returncode == 0, done.stderr
+    text = w.finished.read_text() if w.finished.exists() else ""
+    assert "aaaa0006 prodwrite-x-job WRITTEN" in text, text
+
+
+def test_c2_two_listed_rows_record_an_id_the_guard_can_name(tmp_path):
+    w = Watch(tmp_path)
+    w.rows(IDLE_BUILD, IDLE_BUILD.replace("aaaa0001", "aaaa0009"))
+    done = w.run(DESK_WATCH_CLOSE_WAIT="0")
+    assert done.returncode == 0, done.stderr
+    line = w.finished.read_text().splitlines()[0]
+    assert line.split()[1] in {"aaaa0001", "aaaa0009"}, line
+
+
 def test_c2_control_the_stop_line_alone_when_no_desk_done(tmp_path):
     w = Watch(tmp_path, done=False)
     w.rows(IDLE_BUILD)

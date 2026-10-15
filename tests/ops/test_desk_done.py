@@ -379,6 +379,28 @@ def test_c1_replaced_form_closes_without_a_report(stubs):
     assert recorded(calls) == ["claude stop aaaa1111", "claude rm aaaa1111", "herdr tab close w9:t9"]
 
 
+def test_check_o1_a_session_with_no_name_closes_no_untitled_tab(stubs):
+    report, calls, stop_exit, agents, env = stubs
+    rows = json.loads(agents.read_text())
+    rows.append({"id": "ffff6666", "state": "idle"})
+    agents.write_text(json.dumps(rows))
+    panes(agents, ("p1", "w1:t1", ""))
+    report.write_text("BUILT · job: x-job · tip: 1a2b3c4d\n")
+    done_("ffff6666", str(report), "build", env=env)
+    assert "herdr tab close w1:t1" not in recorded(calls)
+
+
+def test_check_o2_a_tab_that_also_holds_the_desk_or_a_brain_is_never_closed(stubs):
+    report, calls, stop_exit, agents, env = stubs
+    report.write_text("BUILT · job: x-job · tip: 1a2b3c4d\n")
+    for other in ("cto-desk", "brain-2"):
+        calls.unlink(missing_ok=True)
+        panes(agents, ("p1", "w1:t1", "x-job-build"), ("p2", "w1:t1", other))
+        done = done_("aaaa1111", str(report), "build", env=env)
+        assert done.returncode == 1, done.stdout
+        assert recorded(calls) == [], recorded(calls)
+
+
 def test_c1_control_desk_list_stays_read_only():
     text = (REPO / "ops" / "desk" / "desk-list.sh").read_text()
     assert "claude stop" not in text
