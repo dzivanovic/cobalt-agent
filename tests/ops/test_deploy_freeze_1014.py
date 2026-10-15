@@ -277,6 +277,19 @@ def test_f1_a_card_report_that_cannot_be_read_refuses_all_paths(guarded, report)
     assert "a deploy hub is live" in done.stderr, done.stderr
 
 
+def test_f1_a_staged_rename_of_a_shipped_path_is_refused(guarded):
+    """Check O1: renaming a shipped path moves it on main; git lists only the new name."""
+    repo, env, live = guarded
+    commit_file(repo, HUB_PATH, "hub\n", "the hub file on main")  # hooks off: the fixture's own write
+    subprocess.run(["git", "mv", "--", HUB_PATH, "docs/hub-moved.md"], cwd=repo, env=env, check=True)
+    done = subprocess.run(
+        ["git", "commit", "-q", "-m", "desk"],
+        cwd=repo, env=env, capture_output=True, text=True, timeout=120,
+    )
+    assert done.returncode == 1, done.stderr
+    assert HUB_PATH in done.stderr, done.stderr
+
+
 def test_f1_the_hook_is_one_deploy_guard_and_one_row_gate():
     """NEGATIVE CONTROL, green on BASE and after."""
     text = HOOK.read_text()
