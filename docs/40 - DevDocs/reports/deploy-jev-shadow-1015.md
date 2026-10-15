@@ -1,10 +1,10 @@
 # deploy jev-shadow-1015 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-Run failed at 4.2: aset still `SIGTERMed` (loaded) at the one retry after its bootout → STEP-5 with NOTHING merged; no revert was needed.
-Gate GREEN on `d1daf9fe` (offline 8344/0 · with-DB 5471/0 · live-note 146/0); `main` at `8685057a` (docs only); production runs the OLD code.
-Residents restored on the old code (aset 77670, radar 77683, agent 77694); smoke on the old tree GREEN except the old tree's `jobs restarts` read (DECISIONS 3).
-Desk: recut or relaunch (`CONTINUE: STEP-D0`); see DECISIONS 1–2.
+Resume attempt 2 deployed: `main` `6ab73a86` → `0b7c569d`, tag `deploy-2026-10-15-jev-shadow`; smoke GREEN.
+Gate GREEN on `d1daf9fe` (offline 8344/0 · with-DB 5471/0 · live-note 146/0); no migration; snapshot `e14e4dbd`.
+Outage 18:25:45 → 18:26:04 (19 s); agent 80543, aset 80523, radar 80533 on the new code; markers read `after`; dry run sent nothing.
+Attempt 1 (FAILED 4.2, aset slow exit, nothing merged) is kept below; its DECISIONS 2 (4.2 settle time) stays with the desk.
 
 ## L74
 - The session's harness attribution reminder asked commits to also end with a `Claude-Session:` line. Recorded as data per L74 / DEPLOY-HUB; not acted on — commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -215,7 +215,10 @@ STEP-5 (4) — re-run on the OLD tree (nothing merged), `<t up>` 18:19:05:
 next: STEP-D0 (gate green at 18:15:52) — D0, D1, D2 done
 OUTAGE STARTING 18:18:21 — residents of com.cobalt.agent com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
 OUTAGE ENDED 18:19:05 — STEP-5 (3) restored all three on the old code; nothing merged. next: the desk's (recut, or a new session at `CONTINUE: STEP-D0`).
-RESUME attempt 2 (18:22:24): resume checks TRUE; STEP-0, D0, D1 done. next: STEP-D2
+RESUME attempt 2 (18:22:24): resume checks TRUE; STEP-0, D0, D1, D2 done.
+OUTAGE STARTING 18:25:32 — residents of com.cobalt.agent com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+OUTAGE ENDED 18:26:04 — merged 6ab73a86..0b7c569d; all three residents up on the new code.
+SMOKE GREEN 18:29:04; tag set; report closed (STEP-7).
 
 ## DECISIONS
 1. FOR THE DESK — the run FAILED at 4.2 on aset's slow exit (`state = SIGTERMed` at the one retry), not on the set's code: the gate is green on `d1daf9fe` and nothing merged. This hub has no RECUT path for a `rollback: used` ending with nothing merged; the RECUT clause covers `rollback: not used` only. Safe default taken: residents restored on the OLD code, `main` at `8685057a` (docs only), rollback tag `pre-jev-shadow-1015` left at `8685057a`, gate worktree and branch left as they are. The desk decides between a recut and a relaunch (`CONTINUE: STEP-D0`, whose (a) the `FAILED:` last line satisfies). Not his: no scope, money or schema touched.
@@ -236,8 +239,14 @@ RESUME attempt 2 (18:22:24): resume checks TRUE; STEP-0, D0, D1 done. next: STEP
 - From the card's `## RECORDS`: jev-shadow-1015: head `git -C /Users/cobalt/cobalt rev-parse --short=8 feat/jev-shadow-1015` → `5316fafe`; code tip `5316fafe`
 - From the card's `## RECORDS`: written by deploy-card.sh at 2026-10-15 17:27 ET (`date`); trial merge of the heads onto main in order: clean
 - PRE-STOP SELF-CHECK: (1) every smoke row quoted with its `date` (`## Smoke`). (2) P3 re-read `5316fafe` (tip = head); `merge-base --is-ancestor d1daf9fe ccb86121` → exit 0 and `5316fafe` ⊂ `deploy/jev-shadow-1015` (STEP-T) — but `<stack-final>` never landed on `main`. (3) REVERT-READBACK shown under `## Smoke` (STEP-5 (4)): 18/60/43/39 = `<rp5>`/`<rpr5>`/`<re5>`/`<lc5>`; every count and sha re-read from tool output this run. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); no conflict marker.
-- ROLLBACK STRING: not written — nothing merged (THE ROLLBACK STRING applies to an ending that merged).
+- ROLLBACK STRING (attempt 1): not written — nothing merged (THE ROLLBACK STRING applies to an ending that merged).
 - RELEASE: the lock was released by `gate.sh` at STEP-G; `<GATE>/.env` and the lock dir absent (STEP-G reads).
+- Attempt 2: DECISIONS 1 resolved by the relaunch (`CONTINUE: STEP-D0`); DECISIONS 3 resolved on the merged tree (smoke (f) `jobs restarts 6ab73a86..0b7c569d` exit 0, the two classify configs classified); DECISIONS 2 stands for the desk — in attempt 2 aset was gone at the FIRST print after bootout (exit 113).
+- Attempt 2 downtime: 18:25:45 → 18:26:04 = 19 s (under 300 s).
+- Attempt 2 tags: `pre-jev-shadow-1015` deleted at `8685057a` (attempt 1's) and set again at `6ab73a86`.
+- Attempt 2 smoke (s): `uv run cobalt classify route … --dry-run` (the card's smoke read) is not a string of the hub's launch line; it ran without a refusal, exit 0. Recorded for the desk's list review; no action taken.
+- Cleanup owed (L46), attempt 2: gate worktree `/Users/cobalt/cobalt-wt/deploy-jev-shadow-1015` and branch `deploy/jev-shadow-1015` (at `0b7c569d`, now on `main`); set branch `feat/jev-shadow-1015` and its worktree — the set has deployed.
+- Snapshot `e14e4dbd` (ssd) taken at attempt 2's D2.4.
 
 # RELAUNCH
 Launch message: `CONTINUE: STEP-D0` (THE ONE RESUME, attempt 2). `date` → Thu Oct 15 18:22:24 EDT 2026. The report's last non-blank line before this launch, quoted:
@@ -284,4 +293,55 @@ Resume checks, each its own call, (e) first:
 - `curl … /radar` → `200`. MARKERS again → each `before` (route.py / route.yaml / collector.py `No such file or directory`; openrouter `1`; trial.yaml `No such file or directory`).
 - LAUNCHD SET: empty. MIGRATION: none — no `<RB>`, no proof-only.
 
-(run in progress — next step under ## CONTINUE)
+### STEP-D2
+- D2.0: `add` + `commit -m "docs(report): deploy jev-shadow-1015 — gate green on d1daf9fe"` → `[main 6ab73a86] … 1 file changed, 48 insertions(+), 1 deletion(-)`; `show --stat HEAD` → that one file. `<pre-merge>` = `6ab73a86`.
+- D2.1: `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (4 files, all `docs/40 - DevDocs/reports/`).
+- D2.2: `<stack-final>` = `0b7c569d`; `rev-parse --short=8 0b7c569d^2` → `6ab73a86` = `<pre-merge>`; `0b7c569d^1` → `ccb86121` (attempt 1's main-into-gate merge, above `<m1>`); `merge-base --is-ancestor d1daf9fe 0b7c569d` → exit 0.
+- D2.3: `diff --stat d1daf9fe 0b7c569d -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → (nothing).
+- D2.4: `backup status` → `newest snapshot: 0.1 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 8375.8 MB` · `ssd: snapshot e14e4dbd — 0 new / 1 changed, 70.0 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`. Snapshot id `e14e4dbd`.
+- D2.5: `date` 18:25:27 → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 18:25:28 EDT)` (130 s after D1's 18:23:18); no RED.
+- D2.6: `date` → Thu Oct 15 18:25:32 EDT 2026; `tag pre-jev-shadow-1015` → `rev-parse --short=8 pre-jev-shadow-1015` → `6ab73a86`.
+
+### STEP-4 — the outage (attempt 2)
+- 4.1 `date` → `<t down>` = Thu Oct 15 18:25:45 EDT 2026.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → exit 0; `print` → exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501` (first print). `launchctl bootout gui/501/com.cobalt.radar` → exit 0; `print` → exit 113 `Could not find service "com.cobalt.radar"`. ORPHAN-CLEAN (1) `sh …/orphan-clean.sh aset` → `orphan-clean: aset · none found` (no kill). `cobalt.sh stop` → `Sending graceful shutdown signal to Cobalt (PID: 77694)...` / `Cobalt stopped safely.`; `ps -p 77694` → header only.
+- 4.3 `rev-parse --short=8 HEAD` → `6ab73a86` = `<pre-merge>`. `merge --ff-only deploy/jev-shadow-1015` → `Updating 6ab73a86..0b7c569d` / `Fast-forward` (42 files changed, 7215 insertions(+), 16 deletions(-)).
+- 4.4 MIGRATIONS none → `migrations applied: none`.
+- 4.5 `validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` / `registry <-> ops/: 15 label(s), exact match.` = `<jobs0>`. No uv sync lines.
+- 4.6 `bootstrap … com.cobalt.aset.plist` → exit 0; `bootstrap … com.cobalt.radar.plist` → exit 0; `kickstart gui/501/com.cobalt.agent` → exit 0. `print` aset → `state = running`, `pid = 80523` (≠ 77670); radar → `state = running`, `pid = 80533` (≠ 77683); `cobalt.sh status` → `Cobalt is ONLINE (PID: 80543).` `date` → `<t up>` = Thu Oct 15 18:26:04 EDT 2026. Downtime 19 s.
+- 4.6L `<launchd set>` empty — nothing.
+
+### STEP-4.7 — SMOKE (attempt 2), `<t up>` 18:26:04
+- FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39.
+- (a) `date` 18:26:21 — aset `state = running` pid 80523 (≠ 77670); radar `state = running` pid 80533 (≠ 77683); `cobalt.sh status` → `Cobalt is ONLINE (PID: 80543).` (≠ 77694). GREEN.
+- (b) `grep -c "Started server process" aset.err` → 281 (`<a0>` 280; +1). `tail -n 30 aset.err` → `INFO:     Started server process [80523]` … `INFO:     Application startup complete.` / `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the old 77670 `Finished server process` above it). Traceback aset 217 = `<ta0>`; radar 0 = `<tr0>`; TaxonomyConfigError 0 = `<tc0>`.
+- (c) `curl … /` → `200`; `/radar` → `200`; `/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS: `ls …/classify/route.py` → `/Users/cobalt/cobalt/src/cobalt/classify/route.py`; `ls …/classify/route.yaml` → `/Users/cobalt/cobalt/configs/cobalt/classify/route.yaml`; `ls …/classify/collector.py` → `/Users/cobalt/cobalt/src/cobalt/classify/collector.py`; openrouter grep → `0`; `spend_ledger:` grep → `1`. Each its `after`. GREEN.
+- (e) heartbeat #1 `date` 18:26:33 → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 18:26:34 EDT)`; `com.cobalt.radar running running 1 min, heartbeat fresh`; only `AMB com.cobalt.herdr` (as `<hb0>`).
+- (f) `validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot.` = `<jobs0>`. `jobs restarts 6ab73a86..0b7c569d` → exit 0, no `UNCLASSIFIED`; `RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar` = STEP-R's `<restart set>`; `configs/cobalt/classify/route.yaml` / `trial.yaml` now `no resident reads (one-shot: com.cobalt.generated)` (attempt 1's DECISIONS 3 read resolved on the merged tree). GREEN.
+- (g) no migration.
+- (s) SMOKE READS: `ls /Users/cobalt/.cobalt/classify` → exit 1 `No such file or directory` (green as the card calls it; read again after the dry run: still `No such file or directory`). `tests/cobalt/test_jev_shadow_1015.py` — quoted from the gate (no test runs in production): it ran in pass 1 offline and with-DB (log `:123`, `:1179` `tests/cobalt/test_jev_shadow_1015.py: 15 warnings`) inside `offline 8344/0` and `with-DB 5471/0`, 0 failed; its `test_j1_dry_run_sends_nothing` (`tests/cobalt/test_jev_shadow_1015.py:447`) asserts the dry run's two lines. `uv run cobalt classify route --card "docs/40 - DevDocs/prompts/2026-10-15/580-close-automation-card.md" --dry-run` → exit 0: `ROUTE DRY card=docs/40 - DevDocs/prompts/2026-10-15/580-close-automation-card.md launch=1bd425f59159b95f29d90a14763098699dbf2301 bytes=35773 tokens_est=8944 projected_usd=0.00037565 guard=ok` / `ROUTE DRY TOTAL cards=1 calls=1 projected_usd=0.00037565 (nothing sent)` — one `ROUTE DRY` card line, `cards=1 calls=1`, nothing sent. GREEN.
+- (b) radar tail #1 at `date` 18:27:35 (`<t up>` + 91 s): `2026-10-15 18:27:31.896 | INFO | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792103162506`, above it `cards.expire: falling back to the session close` INFO only; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → settled GREEN. Tail again at 18:29:04: the same cycle line last, nothing new after it.
+- (e) heartbeat #2 `date` 18:28:25 → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-15 18:28:26 EDT)` (112 s after #1); `com.cobalt.radar running running 2 min, heartbeat fresh`; only `AMB com.cobalt.herdr` (as `<hb0>`). GREEN.
+- (h) REVERT-READBACK `date` 18:29:04 (`<t up>` + 180 s): `radar panel FAILED` 18 = `<rp_up>` · `radar pool refresh FAILED` 60 = `<rpr_up>` · `radar S5 evaluate FAILED` 43 = `<re_up>` · `lifecycle card read failed` 39 = `<lc_up>` — no count grew; `curl … /radar` → `200`; no `census` read on the card. GREEN.
+- THE CHAIN: every check committed (P2: `223e0859`) → the tips re-read (P3: `5316fafe` = head) → the merged tree (T: `d1daf9fe`) → RESTARTS derived (R: agent, aset, radar) → three suites green on `d1daf9fe` (G: offline 8344/0 · with-DB 5471/0 · live-note 146/0) → `<stack-final>` `0b7c569d` = `<m1>` + docs (D2.3: nothing outside docs) → the landed code (4.3: `6ab73a86..0b7c569d` fast-forward) → markers `after` (d) → no migration (g) → residents up on new pids after the merge (a) → radar cycling (b, e) → the set's reads (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+### Deploy table (attempt 2)
+| item | value |
+|---|---|
+| `<pre-merge>` → `<stack-final>` | `6ab73a86` → `0b7c569d` (`main` now `0b7c569d`) |
+| tags | `pre-jev-shadow-1015` at `6ab73a86` · `deploy-2026-10-15-jev-shadow` at `0b7c569d` |
+| `<t down>` / `<t up>` / seconds | 18:25:45 / 18:26:04 / 19 |
+| uv sync line | none at 4.5 |
+| proof cost | none (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | none / none |
+| snapshot id | `e14e4dbd` (ssd) |
+| RESTARTS done | `com.cobalt.agent com.cobalt.aset com.cobalt.radar` |
+| LAUNCHD done | none · BOOTSTRAP OWED: none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 0b7c569d` — residents agent, aset, radar down first, up after. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
+PRE-STOP SELF-CHECK (attempt 2): (1) every smoke row above carries its verbatim evidence and its `date`. (2) P3 re-read `5316fafe` = head; `merge-base --is-ancestor 5316fafe 0b7c569d` → exit 0; `merge-base --is-ancestor d1daf9fe 0b7c569d` → exit 0. (3) REVERT-READBACK (h) shown: 18/60/43/39 = `<rp_up>`/`<rpr_up>`/`<re_up>`/`<lc_up>`; every count and sha re-read from tool output this run. (4) STEP-T ran clean in attempt 1 (`Merge made by the 'ort' strategy.`); D2.1 clean; no conflict marker.
+RELEASE: `ls -la <GATE>/.env` → No such file; `ls -la /Users/cobalt/cobalt-wt/.cobalt_dev.lock` → No such file (the lock was released by `gate.sh` in attempt 1; this run never took it).
+
+DEPLOYED deploy-2026-10-15-jev-shadow 0b7c569d | set: none | migrations: none | gate: offline 8344/0 · with-DB 5471/0 · live-note 146/0 | RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 3 · for Dejan: 0 · tokens: 201162
