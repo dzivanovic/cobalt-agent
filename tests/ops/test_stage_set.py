@@ -512,3 +512,24 @@ def test_fr1_control_this_jobs_own_check_folder_shape(job):
     for gone in [check_copy, build, *others]:
         assert not gone.exists(), gone
     assert (dest / "files" / FR_CARD).read_bytes() == blob(repo, f"HEAD:{second.relative_to(repo)}")
+
+
+# Card 641 FR-2: a copy that is a version of a prompts card on main, so only the JOB test refuses it.
+def test_cs1_rewritten_job_line_is_refused_by_the_job_test_not_the_blob(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    other = card.parent / "03-y-job-card.md"
+    other.write_text(card.read_text().replace("JOB: x-job\n", "JOB: y-job\n"))
+    assert f"CHECK REPORT: {repo / CHECK_A}\n" in other.read_text() and "HOUSE A: grok\n" in other.read_text()
+    git(repo, "add", "--", str(other.relative_to(repo)))
+    git(repo, "commit", "-q", "-m", "a y-job card")
+    first_copy(dest, card).unlink()
+    (dest / "files" / other.name).write_bytes(other.read_bytes())
+    second = fr_card(job)
+    before = snapshot(dest)
+    done = stage(env, second, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
+    assert "the prior card copy's JOB is not x-job" in done.stderr, done.stderr
+    assert "cleared:" not in done.stdout
+    assert snapshot(dest) == before
