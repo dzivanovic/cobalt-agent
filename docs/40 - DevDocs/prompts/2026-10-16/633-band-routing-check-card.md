@@ -5,11 +5,11 @@ INSTALL: none
 BRANCH: ops/band-routing-1015
 WORKTREE: band-routing-1015
 BASE: f2ca3e1a
-TIP: «FILL: the 8-hex code tip the suites ran on (the desk; the build's stop line says bd9c24ac)»
+TIP: bd9c24ac
 REPORT: /Users/cobalt/cobalt-wt/band-routing-1015/docs/40 - DevDocs/reports/band-routing-build-2026-10-15.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/band-routing-check-2026-10-16.md
 HOUSE A: grok
-HOUSE B: «FILL: as needed, or mandatory — … (the desk)»
+HOUSE B: as needed
 DB: none
 RESTARTS: none
 RULINGS: 2026-10-15 R1532
