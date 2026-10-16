@@ -1,4 +1,4 @@
-JOB: band-routing-1015
+JOB: band-routing-1015-fr1
 LADDER: OFF-LADDER — reports/cto-2026-10-15.md R1532
 CLASS: K5
 INSTALL: none
@@ -7,7 +7,7 @@ WORKTREE: band-routing-1015
 BASE: f2ca3e1a
 TIP: c8c5ca90
 REPORT: /Users/cobalt/cobalt-wt/band-routing-1015/docs/40 - DevDocs/reports/band-routing-build-fr1-2026-10-16.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/band-routing-check-fr1-2026-10-16.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/band-routing-check-fr1-r2-2026-10-16.md
 HOUSE A: grok
 HOUSE B: as needed
 DB: none
