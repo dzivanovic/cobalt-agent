@@ -25,6 +25,15 @@ Notes on the rows:
 - Sonnet: `Edit(//…)` and `Write(//…)` are the absolute-path spelling of Claude Code's permission rules (`//` = from the filesystem root), the spelling of BUILD-HUB's own `Edit` string; the write target is `/Users/cobalt/cobalt-wt/<worktree>/**`. `Bash` is denied; `--output-format json` prints its token use.
 - Terra: `-s workspace-write` confines writes to `-C <worktree>`; its sandbox network stays off (codex's default; no `network_access` override on the command). X1 proves both before the Terra arm runs. Whether `workspace-write` lets codex run a shell command inside its sandbox is X3's question: "writes only" for Terra rests on the sign-off and X1. Reads are not confined by workspace-write; accepted by HIS word 2026-10-11 (R1107).
 
+BAND ROUTING (his 2026-10-15 R1532; the launcher reads these rows, `desk-launch.sh` `band_row`; until the card band-routing-1015 deploys every build stays Opus 5.5; a routed build is a real build: its branch is the card's `ops/` BRANCH and its stop line is BUILD-HUB's `BUILT · job: <JOB> · tip: <tip> …`, not `SHADOW BUILT`; the fix round goes to the same builder, the backup is the desk's hand launch only when Grok's probe is OUT or a Grok build ends FAILED on a harness cause, never on a 429):
+
+| band | builder | backup |
+|---|---|---|
+| LOW | `grok-4.7` | `gpt-5.6-terra` |
+| MID | `grok-4.7` | `gpt-5.6-terra` |
+| HIGH | Opus 5.5 (the `BUILD-HUB.md` line, unchanged) | none; Grok only on his word, per card |
+| routing, hubs, preflights | Sonnet 5.5 ("for now") | none |
+
 `<pass prompt>`, one double-quoted string with no `"`, `\`, `$` or backtick in it (the guard passes nothing else):
 `You are <GROK (xAI) | SONNET 5.5 (Anthropic) | TERRA (OpenAI)>, building a card. Read SHADOW-INSTRUCTIONS.md in this folder whole first and follow it exactly. Pass <T | S | S2>: <tests only under tests/ | the rows | fix the failing lines quoted under PASS S2>. Write only the rows' files. Run <no command (GROK, SONNET) or only commands that read files; no command that writes, deletes or uses the network (TERRA)>. Reply with the list of files you wrote.`
 
@@ -70,7 +79,7 @@ A shadow card whose header carries `ROLE: drafter|preflight|judge` runs ONE Grok
 You run AUTHORIZATION and PREFLIGHT, write SHADOW-INSTRUCTIONS.md (the task and the inputs copied in), the env check, the one pass, and a report quoting the file Grok wrote. Stop line: `SHADOW ROLE · <role> · builder: grok-4.7 · wall: <minutes>`.
 
 ## RESULTS TABLE
-The desk copies this shape into `reports/complexity-shadow-results-2026-10-<dd>.md` and fills it from the stop lines and the shadow checks. It is a routing table by band (R1008, R1014): per band, the models that build it, so a card of that band can go to a model other than Opus 5.5. Routing takes effect only on his word on the result (L29).
+The desk copies this shape into `reports/complexity-shadow-results-2026-10-<dd>.md` and fills it from the stop lines and the shadow checks. It is a routing table by band (R1008, R1014): per band, the models that build it, so a card of that band can go to a model other than Opus 5.5. Routing is ruled (his 2026-10-15 R1532, the table under ## BUILDERS); every finished non-Opus card adds one row to the results file: its band, builder and held findings. The table is re-graded when any band reaches n = 10 per model, or at once if two cards in a row by one model in one band grade BELOW (the routing answer, condition 4).
 
 - Bands, frozen (`[F-13]`): LOW 0-2 · MID 3-6 · HIGH ≥7.
 - Baseline: each card's original Opus build and its check (FINAL §2.1); Opus-own held 1 / 2 / 2, distinct defects 1 / 2 / 2 (`[F-04]`).

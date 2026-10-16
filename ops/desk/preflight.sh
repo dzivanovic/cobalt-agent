@@ -115,6 +115,22 @@ if [ "$kind" = check ]; then
             ;;
     esac
 fi
+# card 583 B5: a check of a routed card (BAND LOW or MID, the card's folder dated 2026-10-16 or
+# later) also accepts the one untracked SHADOW-INSTRUCTIONS.md; its report row stays BUILT's
+BAND_FROM=20261016
+routed=""
+if [ "$kind" = check ]; then
+    cday=$(basename "$(dirname "$card")" | tr -d '-')
+    case "$cday" in
+        [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9])
+            if [ "$cday" -ge "$BAND_FROM" ]; then
+                case "$(field BAND)" in
+                    LOW|MID) routed=1 ;;
+                esac
+            fi
+            ;;
+    esac
+fi
 shadow_expected=""
 [ "$rc" -eq 0 ] && [ "$out" = "## $branch" ] && ok=0
 # card 03c M1: the card's own report (a check's: REPORT or CHECK REPORT), untracked, as the ONE
@@ -140,13 +156,19 @@ $(field "CHECK REPORT")"
 $own
 OWN
     # card 386 L6: on a shadow card the ONE untracked SHADOW-INSTRUCTIONS.md at the worktree root
-    if [ "$ok" -ne 0 ] && [ -n "$shadow" ] && [ "$other" = "?? SHADOW-INSTRUCTIONS.md" ]; then
+    if [ "$ok" -ne 0 ] && { [ -n "$shadow" ] || [ -n "$routed" ]; } && [ "$other" = "?? SHADOW-INSTRUCTIONS.md" ]; then
         ok=0
         shadow_expected=1
     fi
 fi
 row status "git status --short --branch" "$rc" "$out" "$ok"
-[ -z "$shadow_expected" ] || printf 'status: clean but SHADOW-INSTRUCTIONS.md (untracked, expected on a shadow card)\n'
+if [ -n "$shadow_expected" ]; then
+    if [ -n "$shadow" ]; then
+        printf 'status: clean but SHADOW-INSTRUCTIONS.md (untracked, expected on a shadow card)\n'
+    else
+        printf 'status: clean but SHADOW-INSTRUCTIONS.md (untracked, expected on a routed card)\n'
+    fi
+fi
 [ -z "$expected" ] || printf 'status: clean but the report (untracked, expected)\n'
 
 head=$(git rev-parse --verify -q HEAD)

@@ -1274,6 +1274,11 @@ def g5(s, path):
             return None
         if s["card"]["report"] and path == s["card"]["report"]:
             return None
+        # card 583 B6: and the report's result file, its name with `.md` cut and `.result` added
+        # (the name result-read.sh and the deploy readers read)
+        report = s["card"]["report"]
+        if report and report.endswith(".md") and path == report[: -len(".md")] + ".result":
+            return None
         return ROUTE["G5 fence"]
     if kind == SPIKE:
         # card 324 P3: the spike seat writes only its scratch dir
