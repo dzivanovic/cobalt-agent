@@ -1,0 +1,20 @@
+# Card 583 band-routing-1015 — fix-round check decisions · brain · 2026-10-16
+
+On `reports/band-routing-check-fr1-r2-2026-10-16.md` (CHECK DONE, tip `7bf43c2b`, ready NO; FR-1 to FR-5 hold; 3 held in fenced `desk-launch.sh`; O2/G2 open). The rule is the same as this morning (`band-routing-check-decisions-2026-10-16.md`): any item that the first routed card would hit on its build, check or fix path is fixed before 583 deploys, because routing goes live at that deploy.
+
+Hold: (1) a second fix round on card 583, no deploy as is · (2) the 429 clause is re-cited honestly, as the brain's reading, not as his words · ASK DESK 3 and 4 KEEP.
+
+| # | item | ruling | reason |
+|---|---|---|---|
+| 1 | O1 / G1: a routed build's WATCH line is `desk-watch.sh shadow`, which waits on `SHADOW BUILT`, but the seat writes `BUILT ·` | FIX, row FR-6: for a `--routed` launch the launcher prints a WATCH that watches session `<job>-gate` and admits `^(BUILT ·\|FAILED)` (a `desk-watch.sh` kind of its own, or the build kind with the gate session name, whichever the builder can prove smaller). The two strict xfails go. | Every routed build would finish without the desk noticing. The interim (`desk-done.sh … build` by hand) is a desk habit, not a gate, and it fails the first time a desk misses it. My FR-5 caused this; the fix belongs on the same card. |
+| 2 | O3: a card outside a dated folder skips BAND | FIX, row FR-7: the card-path gate at `:991` admits only `"$PROMPTS"/<YYYY-MM-DD>/*-card.md`; any other card path is refused with its path named. The strict xfail goes. | It's the same bypass as the first check's O2 in another shape, the edit is in the same function, and it costs one line. It's safe-side today, but a gate a path spelling can skip isn't a gate. Every live card already sits in a dated folder (CARD.md's naming). |
+| 3 | O2 / G2: which ruling the 429 clause cites | FIX the citation, row FR-8: `SHADOW-HUB.md:28`'s clause reads "(brain 2026-10-16, reading R1532's 'Terra backup': a backup is for a probe OUT or a harness FAILED; a 429 is recorded and retried, never a backup, as the Grok-cap removal of 2026-10-14 R1471 (7) is recorded in the direction file)". Card 583's `:39` and `:61` take the same words. | The check is right. His words for R1471 (7) are only "remove Grok's limit of 3" (`cto-2026-10-14-words.md:9`). "A 429 is recorded and retried, never a stop" is the brain's direction text for that item, and "never a backup" was my own reading this morning. The rule stays, because it's a judge's reading of what "backup" means, inside my remit. The hub must not present it as his words. |
+| 4 | ASK DESK 3 (staged commit count excludes docs-only commits) | KEEP the default. | The house reads code, and the excluded commit is docs only. A count-rule wording change is a follow-up only if it confuses a desk again. |
+| 5 | ASK DESK 4 (strict xfail form) | KEEP, as this morning. | |
+
+ORDER, binding: card 641 (check-scratch-1016) deploys BEFORE 583's fix-round-2 check launches. The second check left `band-routing-1015-check` in place again, so a third pass on the same job hits the same copy refusal, and Dejan is not asked again. If 641 is not deployed when FR-6 to FR-8 are built, 583's check waits for it, and nothing else does.
+
+Round shape: a drafter writes FR-6, FR-7 and FR-8 on card 583 (narrow amend), then a Sonnet preflight, then `build` at `FIX ROUND row FR-6`, then a check scoped to FR-6 to FR-8 (and the strict xfails gone), then the deploy. Fix-round files: unchanged from round 1 (`desk-launch.sh`, `SHADOW-HUB.md`, the card's tests, plus the card itself). CLASS stays K5, RESTARTS stays `none`.
+
+## FOR THE CHECK
+583 brain 2026-10-16 (fix-round check decisions): FR-6 a routed launch's WATCH watches `<job>-gate` for `^(BUILT ·|FAILED)` (O1/G1, two xfails go); FR-7 the card-path gate admits only `$PROMPTS/<YYYY-MM-DD>/*-card.md` (O3, xfail goes); FR-8 the SHADOW-HUB :28 and card :39/:61 429 clause is cited as the brain's 2026-10-16 reading of R1532 and the direction's R1471 (7) text, not as his words (O2/G2); 641 deploys before this round's check.
