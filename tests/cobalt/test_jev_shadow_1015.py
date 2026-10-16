@@ -921,7 +921,8 @@ def test_o1_a_closed_card_with_no_launch_commit_is_a_status_row_not_a_crash(tmp_
                    report: f"# check c2\n\n{CHECK_DONE}\n"})
     stub = Stub((200, json.dumps(_answers()).encode()))
     rows, _ = _batch(tmp_path, monkeypatch, repo, stub)
-    assert sorted(r["card_path"] for r in rows) == sorted([good, path])
+    # FR-O2 (card 622): a card with no launch commit is not a build card — no row, no crash
+    assert [r["card_path"] for r in rows] == [good]
 
 
 def test_o3_a_check_and_a_deploy_outcome_of_one_card_count_once(tmp_path):
@@ -1015,3 +1016,67 @@ def test_f11_the_under_30_read_prints_no_median(tmp_path):
                  _out(card, builder="grok-4.7", held=i % 3)]
     text = route.weekly_read(rows, cfg, week=date(2026, 1, 5))
     assert "median" not in text
+
+
+# -- fix round FR-O2 (card 622): the day batch routes BUILD cards only ---------------------
+
+def _check_card(repo: Path, n: int, *, when: str = STAMP) -> str:
+    """A separate CHECK card of build card c<n>: the same `CHECK REPORT:`,
+    its `TIP:` filled from its first commit (the shape of cards 593, 603, 616)."""
+    path = f"{PROMPTS}/0{n}-c{n}-check-card.md"
+    _commit(repo, {path: _card(f"c{n}", tip=f"c{n}-tip", check_report=f"{REPORTS}/c{n}-check.md")},
+            when=when)
+    return path
+
+
+def test_fr_o2_a_build_and_its_check_card_route_once(tmp_path, monkeypatch, fake_vault):
+    repo = _repo(tmp_path)
+    build = _closed_card(repo, 1)
+    check = _check_card(repo, 1)
+    stub = Stub((200, json.dumps(_answers()).encode()))
+    rows, _ = _batch(tmp_path, monkeypatch, repo, stub)
+    assert [r["card_path"] for r in rows] == [build]
+    assert check not in json.dumps(rows)
+    assert len(stub.calls) == 1
+
+
+def test_fr_o2_a_build_launched_on_another_day_is_not_routed(tmp_path, monkeypatch, fake_vault):
+    repo = _repo(tmp_path)
+    path = f"{PROMPTS}/01-c1-card.md"
+    report = f"{REPORTS}/c1-check.md"
+    _commit(repo, {path: _card("c1")}, when="2026-01-04T12:00:00+00:00")
+    _commit(repo, {path: _card("c1", tip="c1-tip", check_report=report),
+                   report: f"# check c1\n\n{CHECK_DONE}\n"})
+    stub = Stub((200, json.dumps(_answers()).encode()))
+    rows, _ = _batch(tmp_path, monkeypatch, repo, stub)
+    assert rows == []
+    assert stub.calls == []
+
+
+def test_fr_o2_deploy_devfix_and_prompt_cards_are_not_routed(tmp_path, monkeypatch, fake_vault):
+    repo = _repo(tmp_path)
+    report = f"{REPORTS}/c1-check.md"
+    base = _card("c1", check_report=report)
+    deploy = f"{PROMPTS}/02-deploy-c1-card.md"
+    devfix = f"{PROMPTS}/03-c1-devfix-card.md"
+    prompt = f"{PROMPTS}/04-c1-prompt-card.md"
+    _commit(repo, {
+        deploy: base.replace("RESTARTS: none\n", "RESTARTS: none\nTAG: deploy-c1\n"),
+        devfix: base.replace("\nTIP:\n", "\nTABLE: system.t1\n"),
+        prompt: f"JOB: c1\nTIP:\nCHECK REPORT: {report}\n\n## TASK\n- read only, constructed\n",
+        report: f"# check c1\n\n{CHECK_DONE}\n",
+    })
+    stub = Stub((200, json.dumps(_answers()).encode()))
+    rows, _ = _batch(tmp_path, monkeypatch, repo, stub)
+    assert rows == []
+    assert stub.calls == []
+
+
+def test_fr_o2_control_the_build_card_still_gets_its_outcome_row(tmp_path):
+    from cobalt.classify import route
+
+    repo = _repo(tmp_path)
+    build = _closed_card(repo, 1)
+    _check_card(repo, 1)
+    out = route.write_outcome(repo, build, tmp_path / "routing-ledger.jsonl")
+    assert out is not None and out["held"] == 3 and out["card_path"] == build

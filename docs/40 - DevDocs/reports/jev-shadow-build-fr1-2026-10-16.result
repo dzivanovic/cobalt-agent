@@ -1,0 +1,15 @@
+job=jev-shadow-fr1
+tip=6a74fa0c
+on=f6ca1455
+migration=none
+offline=4572/0
+with_db=5475/0
+live_note=146/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.radar
+rows=1 of 1
+self_check=3 of 3
+decisions=3
+for_dejan=0
+tokens=187978
