@@ -4419,3 +4419,110 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-14*"` = `deploy-2026-10-14-db-copy` (R1506), `deploy-2026-10-14-hub-text-fr1` (R1488), `deploy-2026-10-14-smoke-string` (R1484).
 - STOP LINE (L35), `reports/close-2026-10-13.md`: `CLOSE PUSHED 348e3581 · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-14.md` `## 8`.
+
+### 2026-10-15 — 521, 549, 550, 580, JEV 591 shadow and 546 port deployed; 550 fix round, JEV check and tribunal done; routing B ruled; S5 opens
+
+- R1528 06:57 LAUNCHED: 521 re-head drafter (prompt 575).
+- R1529 06:58 LAUNCHED: 521 re-head DRAFTED; preflight prompt 576.
+- R1530 06:59 LAUNCHED: 521 preflight READY YES, BASE `f095fe7d`; builder `edd21303` at FR-P1.
+- R1531 07:00 HIS RULING (in the desk): R1315 settled; APPLIED LAWS L27, L79 at 07:02.
+- R1532 07:00 HIS RULING (words via brain): routing B; APPLIED LAWS L27, L29 at 07:02.
+- R1533 07:00 LAUNCHED: 521 FR-P1 builder `fa1048b1`.
+- R1534 07:02 DESK RECORD (brain): JEV X1 withdrawn; JEV card removes old-tree OpenRouter key injection.
+- R1535 07:03 HIS RULING (brain relay): OpenRouter key is JEV's alone; APPLIED LAWS L27 at 07:04.
+- R1536 07:08 DESK RECORD (brain): worker close made mechanical; K5 close card owed.
+- R1537 07:28 HIS RULING (in the desk): day-open standing order 07:00 ET; APPLIED CONTRACT, WAKEUP, DAY-OPEN-QWEN at 07:28.
+- R1538 07:38 LAUNCHED: 521 fr1 BUILT `ec3fabc1`; check launched.
+- R1539 08:12 RECORD: 521 fr1 CHECK DONE ready YES.
+- R1540 08:14 LAUNCHED: 521 deploy card 577.
+- R1541 08:16 FAILED: 521 deploy refused, `result-read.sh` not installed.
+- R1542 08:14 DESK RECORD (brain): `install-ops` run, 8 linked.
+- R1543 08:14 LAUNCHED: 521 deploy after install-ops.
+- R1544 09:30 RECORD: 521 DEPLOYED `174cb974`, smoke GREEN.
+- R1545 09:34 DESK RECORD (brain): 549 FR-S1 drops S1; 546 builds now.
+- R1546 09:35 LAUNCHED: 549 fix round FR-S1 builder `78c018dc`.
+- R1547 09:36 LAUNCHED: 546 build `baa4fdc2`.
+- R1548 09:34 DIRECTION (brain): 550 deploys as is; fix round card-template-1014-fr1 after.
+- R1549 09:35 LAUNCHED: K5 close-automation drafter `81cb5992`.
+- R1550 09:41 LAUNCHED: card 580 drafted; preflight `4a764ab0`.
+- R1551 09:42 LAUNCHED: band-routing drafter `fad8bf8e`.
+- R1552 09:43 DESK RECORD (brain): JEV design tribunal starts.
+- R1553 09:44 RECORD: card 580 preflight ready NO; notes to brain.
+- R1554 09:45 DESK RECORD (brain): 580 extends desk-done.sh; amend drafter `e506ff4a`.
+- R1555 09:47 RECORD: band card 583 drafted; waits for 580 DEPLOYED.
+- R1556 09:48 LAUNCHED: 580 preflight r2 `991ee34c`.
+- R1557 09:48 DESK RECORD (brain): 583 conditions 1, 3, 7; amend drafter `0516819b`.
+- R1558 09:49 RECORD: 583 amend DRAFTED, committed `1854d0e7`.
+- R1559 09:52 LAUNCHED: JEV design tribunal (prompts 585, 586), drafter `80d26d38` DRAFTED.
+- R1560 09:53 LAUNCHED: JEV tribunal hubs; 580 build `56c8653d`, BASE `c7ba742c`.
+- R1561 09:55 RECORD: desk `7f26d71d` took over from `e48f919a`.
+- R1562 09:56 ASKED: 549 FR-S1 BUILT `7c8db6e1`; deploy-card.sh refused twice.
+- R1563 09:59 ASKED: brain route cp; cp DENIED; watches re-armed.
+- R1564 09:57 DESK RECORD (brain): 549 scoped check on `7c8db6e1`, house A grok.
+- R1565 09:57 LAUNCHED: 549 fr1 scoped check hub `2557fb01`.
+- R1566 10:27 RECORD: 549 fr1 CHECK DONE ready YES; JEV tribunal DONE; deploy card 578.
+- R1567 10:28 LAUNCHED: 549 deploy hub `79f2278e`.
+- R1568 10:30 DESK RECORD (brain): JEV tribunal folded F1-F13; drafters in parallel.
+- R1569 10:48 RECORD: 546 BUILT `cbf856ac`, 4 of 4 rows.
+- R1570 11:21 RECORD: 549 DEPLOYED `fe5dadf9`, smoke GREEN, install-ops 0 linked.
+- R1571 11:22 LAUNCHED: JEV drafters `d0e2adcb`, `c32fd9ed`.
+- R1572 11:24 RECORD: 550 deploy card 594 written.
+- R1573 11:23 LAUNCHED: 550 deploy hub `07e46686`.
+- R1574 11:24 RECORD: 74 check card 593 DRAFTED.
+- R1575 11:33 ASKED: JEV card 591 DRAFTED; 18 items to the brain.
+- R1576 11:34 DESK RECORD (brain): JEV 591 16 items KEEP; item 1 CHANGED.
+- R1577 11:45 RECORD: 580 BUILT `feecd979`, 5 of 5 rows.
+- R1578 12:15 RECORD: 550 DEPLOYED `e4fa9e7b`, smoke GREEN.
+- R1579 12:16 LAUNCHED: 546 check `d104f909`, 580 check `d388e536`, JEV amend drafter `d281f8e9`; 74 check REFUSED.
+- R1580 12:17 DESK RECORD (brain): card 593 SUPERSEDED; trial package ports into 591.
+- R1581 12:18 LAUNCHED: 550 fix-round drafter (prompt 596).
+- R1582 12:19 LAUNCHED: 550 fr1 card 597 DRAFTED; fix-round builder.
+- R1583 12:20 LAUNCHED: 550 fr1 build hub `04cbfad5`; desk refresh planned.
+- R1584 12:20 RECORD: desk `9e382a6f` took over from `7f26d71d`.
+- R1585 12:21 DESK RECORD (brain): 591 amend defaults 1-5 KEEP.
+- R1586 12:24 LAUNCHED: 591 preflight `1752e065`.
+- R1587 12:26 ASKED: 591 preflight r1 NOT READY (4 fails); issues to brain.
+- R1588 12:28 DESK RECORD (brain): 591 preflight issue 1 = A; fix-round drafter.
+- R1589 12:30 LAUNCHED: 591 fix-round drafter `0091d2ff`.
+- R1590 12:28 RECORD: time note, R1588-R1589 times estimated.
+- R1591 12:28 LAUNCHED: 591 preflight r2; drafter DRAFTED.
+- R1592 12:31 RECORD: 591 preflight r2 ready NO, 1 fail; marker fixed by desk.
+- R1593 12:31 LAUNCHED: 591 JEV BUILD hub `23afab11`.
+- R1594 13:04 LAUNCHED: 546 CHECK DONE ready YES; deploy card 601.
+- R1595 13:05 LAUNCHED: 546 deploy hub `bf855376`.
+- R1596 13:30 RECORD: 550 fr1 BUILT `439ea472`; 580 CHECK DONE ready YES.
+- R1597 13:50 RECORD: 591 JEV BUILT `d0fdd674`; 9 ASK DESK to brain.
+- R1598 13:50 DESK RECORD (brain): 591 9 ASK DESKs KEEP.
+- R1599 14:14 RECORD: 546 DEPLOY FAILED at smoke, reverted `f24f4641`; recut card 604.
+- R1600 14:15 LAUNCHED: 546 deploy r2 hub `827f4967`; JEV check drafter `00a6dbde`.
+- R1601 14:17 DESK RECORD (brain): 546 re-ships as a PORT, job deploy-freeze-fr1.
+- R1602 14:18 RECORD: 580 deploy card 605 written.
+- R1603 14:19 LAUNCHED: 580 deploy hub `c723ab65`; 546 port drafter `e3cbff1a`.
+- R1604 14:19 RECORD: JEV check card 603 DRAFTED.
+- R1605 14:21 RECORD: 546 port card 607 DRAFTED.
+- R1606 15:10 RECORD: 580 DEPLOYED `6a82a4c4`, smoke GREEN.
+- R1607 15:11 LAUNCHED: JEV check preflight `bcda5c38`, 546 preflight `022d2d69`; 550 fr1 card 610.
+- R1608 15:13 LAUNCHED: 550 fr1 deploy hub `2046c4e3`; desk `f8f8324b` replaced `9e382a6f`.
+- R1609 15:15 RECORD: 550 fr1 deploy FAILED PREFLIGHT P6; markers fixed.
+- R1611 15:16 LAUNCHED: 550 fr1 deploy attempt 2, hub `9fcec7bd`.
+- R1612 16:11 RECORD: 550 fr1 DEPLOYED `7c2f29e6`, smoke GREEN.
+- R1613 16:11 LAUNCHED: fix-round drafters `4da7fdc7`, `811d8658`.
+- R1614 16:12 LAUNCHED: preflight r2 `036d7be8`, `de2e59aa`; cards 603, 607 committed.
+- R1615 16:15 LAUNCHED: 546 builder `be3b4f6c`, JEV check `f02b0455`.
+- R1616 16:58 LAUNCHED: 546 port BUILT `246d21e4`; check-card drafter `4e1e18bf`.
+- R1617 17:01 LAUNCHED: 546 check card 616 DRAFTED; preflight `6a7af3c7`.
+- R1618 17:04 LAUNCHED: 546 check `69332e91`.
+- R1619 17:30 RECORD: JEV check CHECK DONE ready YES `5316fafe`; O2 asked to brain.
+- R1620 17:36 DESK RECORD (brain): JEV O2 = B; 591 deploys at `5316fafe`; FR-O2 fresh job.
+- R1621 17:28 LAUNCHED: JEV 591 deploy hub `2e918862`.
+- R1622 18:22 RECORD: JEV 591 deploy FAILED 4.2, nothing merged.
+- R1623 18:23 RECORD: 546 port check DONE ready YES `733c6bca`.
+- R1624 18:23 LAUNCHED: JEV 591 deploy relaunch hub `53deef97`.
+- R1625 18:33 RECORD: JEV 591 DEPLOYED `0b7c569d`, smoke GREEN.
+- R1626 18:32 LAUNCHED: 546 port deploy hub `af25e576`.
+- R1627 19:26 RECORD: 546 port DEPLOYED `ab0edaf6`, smoke GREEN.
+- R1628 19:25 RECORD: desk `8e552225` took over from `f8f8324b`.
+- R1610 15:15 RECORD: 550 fr1 deploy attempt 2 recut, FAILED PREFLIGHT P6.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-15*"` = `deploy-2026-10-15-card-template` (R1578), `-card-template-fr1-attempt2` (R1612), `-close-automation` (R1606), `-deploy-freeze-fr1` (R1627), `-desk-installs` (R1570), `-gate-tests-ops` (R1544), `-jev-shadow` (R1625).
+- STOP LINE (L35), `reports/close-2026-10-14.md`: `CLOSE PUSHED 4e606f89 · days: 1 · … · push: verified`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-15.md` `## 8`.

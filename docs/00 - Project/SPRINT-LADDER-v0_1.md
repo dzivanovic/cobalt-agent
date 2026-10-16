@@ -1054,6 +1054,35 @@ OFF-LADDER work of 2026-10-14 (each with the ruling that ordered it):
 | Results sitting r2 (Grok row) | DONE | R1468, R1497. 5 of 5 cells closed; nothing routes (L29). Routing table A/B/C waits on him (R1504). |
 | K5 cards 546-550 | DRAFTED | His R1471. Preflight r2 READY YES for 546, 549, 550; 547, 548 built (R1474). |
 
+### Status 2026-10-15
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1015` for 10-15 alone from `reports/cto-2026-10-15.md` rows R1528–R1628 (06:57 → 19:26 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-15*"` = `-card-template`, `-card-template-fr1-attempt2`, `-close-automation`, `-deploy-freeze-fr1`, `-desk-installs`, `-gate-tests-ops`, `-jev-shadow`. The 10-14 close ran (`CLOSE PUSHED 4e606f89`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 | DONE-LIVE | Unchanged (see 10-08 to 10-14). |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | 304's recut is a K5 drafter owed (§5 of `cto-2026-10-15.md`, handover plan 3); no 304 tag. |
+| S5 F21 (cards `468`, `469`) | NOT STARTED (cards DRAFTED) | r3 and X8 probe owed behind the K5 drafters. No build. |
+| S5 F23 (card `503`) | NOT STARTED (card DRAFTED) | 503 preflight owed. |
+| S5 F5, F20 | NOT STARTED (FINALs APPROVED) | F20/F5 drafters owed. |
+| S5 F16 close | NOT STARTED | No row. |
+
+**Stop date: 2026-10-28 (S5, day 1 of 14). S5: ON TIME.** Reason: S5 opened 10-15 (`cto-2026-10-15.md` §0, §5 STATE AT 19:25); no S5 feature built or deployed today, all work was queue clearing and platform (below); every item queued for 10-15 is DEPLOYED. F4's deploy still waits on its 304 recut.
+
+OFF-LADDER work of 2026-10-15 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Gate `tests/ops` (card `521`, job `gate-tests-ops-fr1`) | DONE-LIVE | Brain R1478, R1503. `deploy-2026-10-15-gate-tests-ops` `174cb974`, smoke GREEN (R1544). |
+| Desk installs (card `549`) | DONE-LIVE | Brain R1545, R1564. `deploy-2026-10-15-desk-installs` `fe5dadf9`, smoke GREEN (R1570). |
+| Card template (card `550`) and fix round `card-template-1014-fr1` | DONE-LIVE | Brain R1548. `-card-template` `e4fa9e7b` (R1578), `-card-template-fr1-attempt2` `7c2f29e6` (R1612); first fr1 deploy FAILED PREFLIGHT P6 (R1609). |
+| Close automation (card `580`) | DONE-LIVE | Brain R1554. `deploy-2026-10-15-close-automation` `6a82a4c4`, smoke GREEN (R1606). |
+| Deploy freeze port (card `546`, job `deploy-freeze-fr1`) | DONE-LIVE | Brain R1601. `-deploy-freeze-fr1` `ab0edaf6`, smoke GREEN (R1627); the first 546 deploy FAILED at smoke and reverted `f24f4641` (R1599). |
+| JEV shadow router (card `591`) | DONE-DARK | His R1467, R1532, R1535; brain R1620. `deploy-2026-10-15-jev-shadow` `0b7c569d` (R1625); first deploy FAILED 4.2, nothing merged (R1622). Keyed runs wait for his yes on F12; FR-O2 (job `jev-shadow-fr1`) owed first. |
+| Result file (card `548`) | DONE-LIVE | Brain R1517-R1519 (in `cto-2026-10-14.md`, after the 10-14 close). DEPLOYED `c2e500d5`, smoke GREEN: `git log` `87b7e09d`, `8e2e2543`. Not a 10-15 row. |
+| Band routing (card `583`) | DRAFTED | Brain R1557. Amended; preflight prompt owed (handover plan 2). |
+| JEV design tribunal | DONE | Brain R1552, R1568. 3 houses ADOPT AFTER, floor MET (R1566). |
+| Routing B (L27, L29) | RULED | His R1532. LOW/MID Grok 4.7 + Terra backup, HIGH Opus; APPLIED LAWS at 07:02. |
+| Day-open standing order | RULED | His R1537. 07:00 ET, `/clear` first; APPLIED at 07:28. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
