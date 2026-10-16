@@ -1,4 +1,4 @@
-JOB: band-routing-1015-fr1
+JOB: band-routing-1015
 LADDER: OFF-LADDER — reports/cto-2026-10-15.md R1532
 CLASS: K5
 INSTALL: none
