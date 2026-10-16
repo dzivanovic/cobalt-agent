@@ -75,7 +75,7 @@ def job(tmp_path):
     write(card, (
         "JOB: x-job\nLADDER: OFF-LADDER\nBRANCH: ops/x-job\nWORKTREE: x-job\n"
         f"BASE: {base}\nTIP: {tip}\nREPORT: {job_wt / REPORT_REL}\n"
-        "TREE STATE: unchanged\nRULINGS: 2026-01-02 R1\n\n## ROWS\n| row | what |\n"
+        "HOUSE A: grok\nTREE STATE: unchanged\nRULINGS: 2026-01-02 R1\n\n## ROWS\n| row | what |\n"
     ))
     commit(repo, "card")
     # the working copy differs from TIP: git, not the files, is the source
@@ -438,3 +438,77 @@ def test_cs1_control_a_foreign_file_blocks_the_clear(job):
 
 def test_cs1_control_no_prior_card_copy_is_refused(job):
     refused_untouched(job, _no_card_copy)
+
+
+# Card 641 FR-1: a check stages READ copies of other cards into files/; the prior check card is the
+# one whose header carries CHECK REPORT: and HOUSE A: and whose JOB is this JOB.
+def build_card_copy(dest: Path, card: Path, name: str = "01-x-job-build-card.md") -> Path:
+    """A build card's READ copy: the card text without `HOUSE A:`, `CHECK REPORT:` kept."""
+    copy = dest / "files" / name
+    copy.write_text(card.read_text().replace("HOUSE A: grok\n", ""))
+    return copy
+
+
+def other_job_check_cards(job, dest: Path) -> list[Path]:
+    """Two check cards of `y-job` (CHECK REPORT: and HOUSE A:), committed under prompts, copied into files/."""
+    wt, repo, job_wt, base, tip, card, env, fixture_dest = job
+    copies = []
+    for name, check in (("03-y-job-check-card.md", CHECK_A), ("04-y-job-fr-check-card.md", CHECK_B)):
+        other = card.parent / name
+        other.write_text(card.read_text().replace("JOB: x-job\n", "JOB: y-job\n").replace(
+            f"CHECK REPORT: {repo / CHECK_A}", f"CHECK REPORT: {repo / check}"))
+        git(repo, "add", "--", str(other.relative_to(repo)))
+        git(repo, "commit", "-q", "-m", f"y-job card {name}")
+        copy = dest / "files" / name
+        copy.write_bytes(other.read_bytes())
+        copies.append(copy)
+    return copies
+
+
+def test_fr1_a_build_card_read_copy_does_not_block_the_clear(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    assert "HOUSE A: grok\n" in first_copy(dest, card).read_text()
+    build = build_card_copy(dest, card)
+    assert "HOUSE A:" not in build.read_text() and "CHECK REPORT:" in build.read_text()
+    second = fr_card(job)
+    done = stage(env, second, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.splitlines()
+    assert lines[0] == f"cleared: {dest} (prior check {repo / CHECK_A})"
+    assert lines[-1].startswith("STAGED ")
+    assert not build.exists()
+
+
+def test_fr1_control_two_same_job_check_cards_are_refused(job):
+    def two_check_cards(job, dest, card):
+        (dest / "files" / "03-x-job-second-check-card.md").write_bytes(first_copy(dest, card).read_bytes())
+    refused_untouched(job, two_check_cards)
+
+
+def test_fr1_control_this_jobs_own_check_folder_shape(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    check_copy = first_copy(dest, card)
+    build = build_card_copy(dest, card)
+    others = other_job_check_cards(job, dest)
+    second = fr_card(job)
+    # refuse half: without this JOB's check card copy, two check cards of another JOB clear nothing
+    kept = check_copy.read_bytes()
+    check_copy.unlink()
+    before = snapshot(dest)
+    done = stage(env, second, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
+    assert "cleared:" not in done.stdout
+    assert snapshot(dest) == before
+    # clear half: this JOB's check card copy back beside the build copy and the y-job cards
+    check_copy.write_bytes(kept)
+    done = stage(env, second, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.splitlines()
+    assert lines[0] == f"cleared: {dest} (prior check {repo / CHECK_A})"
+    assert lines[-1].startswith("STAGED ")
+    for gone in [check_copy, build, *others]:
+        assert not gone.exists(), gone
+    assert (dest / "files" / FR_CARD).read_bytes() == blob(repo, f"HEAD:{second.relative_to(repo)}")
