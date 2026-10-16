@@ -39,8 +39,13 @@ no launch line, hub or card is touched.
 - `run_batch(router, cards, *, wall_clock_s)` — fold F9: every failure a
   row; after an `auth_error` no further call; at the wall clock the cards
   left get `timeout` rows.
-- `closed_cards(repo, day)` — the cards whose `CHECK REPORT:` file ends in a
-  `CHECK DONE` line, that file last committed on `day` (ASK DESK 16).
+- `build_launch(repo, path)` — the commit that launched a card's BUILD, or
+  None for a file that is not a build card: at its `launch_sha` commit an
+  empty `TIP:` line, no `TAG:` / `TABLE:` header line, a `## ROWS` section
+  (FR-O2).
+- `closed_cards(repo, day)` — the build cards (`build_launch`) launched on
+  `day` whose `CHECK REPORT:` file ends in a `CHECK DONE` line, that file
+  last committed on `day` (ASK DESK 16, FR-O2).
 - `write_outcome(repo, path, ledger, *, stage="check")` — one outcome row
   from the `CHECK DONE` line (`held`, `fixed`, `held_unfixed`, `open`,
   `pass`, `ready`, `tokens`), `opus_own_held` from the check's `O<n>` rows
@@ -75,3 +80,6 @@ New module (card 591 rows J1, F4-F11, F1).
 
 ## 2026-10-15 — jev-shadow-1015 check
 `cmd_route`: a card `load_card` cannot read is an `invalid` row (`Router.unloaded_row`), never a crash of the batch (O1). `weekly_read`: one check-stage outcome per decision (O3); the G4 `rows_band` median only at n ≥ 30 (H1). `write_outcome`: a shadow line's `held: <n> (opus-own … · house …)` parses as `<n>` (O6).
+
+## 2026-10-16 — jev-shadow-fr1
+`closed_cards`: the day batch routes build cards only (`build_launch`, new), launched on the day; a check, deploy, devfix or prompt card gets no decision row (card 622 FR-O2, check O2). `--day` help names it.

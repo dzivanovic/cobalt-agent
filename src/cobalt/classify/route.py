@@ -535,12 +535,41 @@ def _check_report(repo: Path, path: str) -> Optional[tuple[str, str]]:
         return None
 
 
+#: Header keys of the card kinds that are not a build (CARD.md :24, :28):
+#: a deploy card's `TAG:`, a devfix card's `TABLE:`.
+NOT_BUILD_HEADERS = ("TAG:", "TABLE:")
+
+
+def build_launch(repo: Path, path: str) -> Optional[str]:
+    """FR-O2 (card 622): the commit that launched the card's BUILD, or None
+    when the file is not a build card. At its launch commit (`launch_sha`) a
+    build card holds an empty `TIP:` line, no `TAG:` (deploy) or `TABLE:`
+    (devfix) header line and a `## ROWS` section. A check card never had an
+    empty `TIP:` (cards 593, 603, 616); a prompt card has no `## ROWS`."""
+    try:
+        sha = launch_sha(repo, path)
+    except ClassifyError:
+        return None
+    header, body = _split(_git(repo, "show", f"{sha}:{path}"))
+    if _value(header, "TIP:") is None or any(ln.startswith(NOT_BUILD_HEADERS) for ln in header):
+        return None
+    if not any(ln.strip() == "## ROWS" for ln in body):
+        return None
+    return sha
+
+
 def closed_cards(repo: Path, day: str) -> list[str]:
-    """ASK DESK 16: the cards whose `CHECK REPORT:` file's last line starts
-    `CHECK DONE`, that file last committed on `day` (committer date)."""
+    """The day batch's cards. FR-O2 (card 622) first: BUILD cards only
+    (`build_launch`) whose build launched on `day`; a check, deploy, devfix
+    or prompt card is never routed. Then ASK DESK 16 (F9) as built: the
+    card's `CHECK REPORT:` file's last line starts `CHECK DONE`, that file
+    last committed on `day` (committer date)."""
     out = []
     for path in sorted(_git(repo, "ls-files", "--", PROMPTS_DIR).splitlines()):
         if not path.endswith("-card.md"):
+            continue
+        sha = build_launch(repo, path)
+        if sha is None or _git(repo, "log", "-1", "--format=%cs", sha).strip() != day:
             continue
         found = _check_report(repo, path)
         if found is None or not _last_line(found[1]).startswith("CHECK DONE"):
@@ -775,7 +804,7 @@ def add_route_parsers(csub) -> None:
     r = csub.add_parser("route", help="JEV shadow router: --dry-run (nothing sent) or --run (KEYED, METERED).")
     which = r.add_mutually_exclusive_group(required=True)
     which.add_argument("--card", nargs="+", help="repo-relative card path(s)")
-    which.add_argument("--day", help="YYYY-MM-DD: the cards whose check closed that day")
+    which.add_argument("--day", help="YYYY-MM-DD: the build cards launched that day whose check closed that day")
     how = r.add_mutually_exclusive_group(required=True)
     how.add_argument("--dry-run", dest="dry_run", action="store_true")
     how.add_argument("--run", action="store_true")
@@ -794,6 +823,7 @@ __all__ = [
     "RouteConfig",
     "Router",
     "add_route_parsers",
+    "build_launch",
     "closed_cards",
     "launch_sha",
     "load_card",
