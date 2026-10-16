@@ -423,7 +423,7 @@ def test_x5_routed_build_watch_does_not_wait_on_built(desk):
     done = desk.run("build", str(desk.card_for("LOW")))
     assert done.returncode == 0, done.stderr
     watch = [ln for ln in done.stderr.splitlines() if ln.startswith("WATCH:")]
-    assert watch == [ln for ln in watch if "desk-watch.sh build " in ln], watch
+    assert watch == [ln for ln in watch if "desk-watch.sh routed " in ln], watch
 
 
 # ---- FR-2 (check O4): CHECK-HUB excepts a routed card from the untracked instructions file ----
@@ -462,8 +462,8 @@ def test_fr3_card_md_requires_band_on_a_routed_builds_check_card():
 def test_fr4_the_routed_fix_round_is_a_fresh_high_card_and_the_backup_cites_its_rulings():
     ls = lines_of("SHADOW-HUB.md")
     line = ls[one_index(ls, "BAND ROUTING (")]
-    for part in ("its own fresh job card with BAND: HIGH", "R1532: Terra backup", "2026-10-14 item 7",
-                 "never on a 429"):
+    for part in ("its own fresh job card with BAND: HIGH", "brain 2026-10-16, reading R1532's 'Terra backup'",
+                 "R1471 (7) is recorded in the direction file", "never on a 429"):
         assert part in line, part
     assert "the fix round goes to the same builder" not in line
 
@@ -488,6 +488,165 @@ def test_fr5_the_procedure_excepts_a_routed_card_on_its_two_lines():
 def test_fr5_control_the_shadow_stop_line_stays():
     ls = lines_of("SHADOW-HUB.md")
     assert "SHADOW BUILT · job: <JOB> · tip: <tip>" in ls[one_index(ls, "`SHADOW BUILT · job: ")]
+
+
+# ---- FR-6 (check r2 O1/G1): a routed launch is watched as kind `routed` on <job>-gate ---------
+
+WATCH_SH = REPO / "ops" / "desk" / "desk-watch.sh"
+WAIT_SH = REPO / "ops" / "desk" / "wait-stop-line.sh"
+ROUTED_STOP = "BUILT · job: x · tip: 1a2b3c4d | on 0f0e0d0c | rows: 1 of 1"
+SHADOW_STOP = "SHADOW BUILT · job: x · tip: 1a2b3c4d | on 0f0e0d0c"
+IDLE_GATE = "aaaa0001 · x-job-gate · ~/cobalt-wt/x-job · idle · idle"
+IDLE_JOB_BUILD = "aaaa0001 · x-job-build · ~/cobalt-wt/x-job · idle · idle"
+
+
+class RWatch:
+    """desk-watch.sh and wait-stop-line.sh staged in <root>/ops with the worktree root re-pointed at
+    <root>/wt (test_close_automation_1015.Watch's shape, copied by content); a desk-list.sh stub
+    answering from <root>/list; a desk-done.sh stub that logs its arguments (when `done`); the
+    worktree repo <root>/wt/x-job holding the report; a card dated on BAND_FROM."""
+
+    def __init__(self, root: Path, done: bool, last: str, shadow: bool = False):
+        root.mkdir(parents=True, exist_ok=True)
+        self.ops = root / "ops"
+        self.ops.mkdir()
+        for src in (WATCH_SH, WAIT_SH):
+            (self.ops / src.name).write_text(src.read_text().replace("/Users/cobalt/cobalt-wt", str(root / "wt")))
+        (self.ops / "desk-context.sh").write_text("exit 0\n")
+        self.list = root / "list"
+        self.list.write_text("")
+        (self.ops / "desk-list.sh").write_text(f'#!/bin/sh\ncat "{self.list}"\n')
+        self.log = root / "done-log"
+        if done:
+            (self.ops / "desk-done.sh").write_text(f'printf "%s\\n" "$*" >> "{self.log}"\necho "CLOSED $1"\n')
+        self.wt = root / "wt" / "x-job"
+        self.wt.mkdir(parents=True)
+        git(self.wt, "init", "-q", "-b", "main")
+        self.report = self.wt / "docs" / "x-job-build.md"
+        self.report.parent.mkdir()
+        self.report.write_text(f"# x-job build\n\nbody\n\n{last}\n")
+        git(self.wt, "add", "-A")
+        git(self.wt, "commit", "-q", "-m", "report")
+        self.card = root / "prompts" / NEW_DAY / "01-x-job-card.md"
+        self.card.parent.mkdir(parents=True)
+        head = "SHADOW OF: constructed\nBRANCH: shadow/x-job\n" if shadow else "BAND: LOW\nBRANCH: ops/x-job\n"
+        self.card.write_text(
+            f"JOB: x-job\nLADDER: OFF-LADDER\n{head}WORKTREE: x-job\nBASE: 1a2b3c4d\nTIP: 5e6f7a8b\n"
+            f"REPORT: {self.report}\nRULINGS: 2026-01-02 R1\n\n## ROWS\n"
+        )
+        self.env = dict(os.environ, DESK_WATCH_POLL="1", DESK_WATCH_CLOSE_WAIT="2", **GIT_ENV)
+
+    def rows(self, *rows: str) -> None:
+        self.list.write_text("".join(r + "\n" for r in rows))
+
+    def run(self, kind: str) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            ["sh", str(self.ops / "desk-watch.sh"), kind, str(self.card), "30"],
+            env=self.env, capture_output=True, text=True, timeout=120,
+        )
+
+    def logged(self) -> list[str]:
+        return self.log.read_text().splitlines() if self.log.exists() else []
+
+
+def test_fr6_the_routed_watcher_admits_built_and_watches_the_gate_session(desk, tmp_path):
+    card = desk.card_for("LOW")
+    launched = desk.run("build", str(card))
+    assert launched.returncode == 0, launched.stderr
+    assert f'desk-watch.sh routed "{card}"' in launched.stderr, launched.stderr
+    w = RWatch(tmp_path / "w1", done=False, last=ROUTED_STOP)
+    done = w.run("routed")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == ROUTED_STOP, done.stdout
+    w = RWatch(tmp_path / "w2", done=False, last="(run in progress — next step under ## CONTINUE)")
+    w.rows(IDLE_GATE)
+    done = w.run("routed")
+    assert done.returncode == 3, done.stdout + done.stderr
+    assert done.stdout.startswith("IDLE: x-job-gate"), done.stdout
+    w = RWatch(tmp_path / "w3", done=False, last="(run in progress — next step under ## CONTINUE)")
+    w.rows(IDLE_JOB_BUILD)
+    done = w.run("routed")
+    assert done.returncode == 3, done.stdout + done.stderr
+    assert done.stdout.startswith("GONE: x-job-gate"), done.stdout
+
+
+def test_fr6_a_routed_closeout_hands_build_to_desk_done(tmp_path):
+    w = RWatch(tmp_path / "w", done=True, last=ROUTED_STOP)
+    w.rows(IDLE_GATE)
+    done = w.run("routed")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == ROUTED_STOP, done.stdout
+    assert w.logged() == [f"aaaa0001 {w.report} build"], w.logged()
+
+
+def test_fr6_control_a_shadow_card_closeout_still_passes_shadow(tmp_path):
+    w = RWatch(tmp_path / "w", done=True, last=SHADOW_STOP, shadow=True)
+    w.rows(IDLE_GATE)
+    done = w.run("shadow")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == SHADOW_STOP, done.stdout
+    assert w.logged() == [f"aaaa0001 {w.report} shadow"], w.logged()
+
+
+def test_fr6_control_a_high_card_and_a_real_shadow_keep_their_watch(desk):
+    high = desk.card_for("HIGH")
+    done = desk.run("build", str(high))
+    assert done.returncode == 0, done.stderr
+    assert [ln for ln in done.stderr.splitlines() if ln.startswith("WATCH:")] == [
+        f'WATCH: sh {desk.launch.parent}/desk-watch.sh build "{high}"']
+    shadow = desk.card_for(None, day=OLD_DAY, job="x-band-grok", BRANCH="shadow/x-band-grok",
+                           **{"SHADOW OF": str(high)})
+    done = desk.run("shadow", str(shadow), "--model", "grok-4.7")
+    assert done.returncode == 0, done.stderr
+    assert [ln for ln in done.stderr.splitlines() if ln.startswith("WATCH:")] == [
+        f'WATCH: sh {desk.launch.parent}/desk-watch.sh shadow "{shadow}"']
+
+
+# ---- FR-7 (check r2 O3): a card outside $PROMPTS/<YYYY-MM-DD>/ is refused, naming it ----------
+
+
+@pytest.mark.parametrize("where", ["01-x-band-card.md", "drafts/01-x-band-card.md",
+                                   f"{NEW_DAY}/sub/01-x-band-card.md"])
+def test_fr7_a_card_outside_a_date_folder_is_refused_naming_it(desk, where):
+    card = desk.card_for("LOW")
+    odd = desk.prompts / where
+    odd.parent.mkdir(parents=True, exist_ok=True)
+    odd.write_text(card.read_text())
+    desk.commit("odd card")
+    done = desk.run("build", str(odd), dry=False)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: the card must be" in done.stderr, done.stderr
+    assert str(odd) in done.stderr, done.stderr
+    assert not desk.calls.exists()
+
+
+def test_fr7_control_a_dated_card_still_launches(desk):
+    done = desk.run("build", str(desk.card_for("LOW")))
+    assert done.returncode == 0, done.stderr
+    assert "BAND: LOW → grok-4.7" in done.stderr, done.stderr
+
+
+# ---- FR-8 (check r2 O2/G2): the 429 clause is cited as the brain's reading -------------------
+
+
+def test_fr8_the_429_clause_is_cited_as_the_brains_reading():
+    ls = lines_of("SHADOW-HUB.md")
+    line = ls[one_index(ls, "BAND ROUTING (")]
+    for part in ("brain 2026-10-16, reading R1532's 'Terra backup'", "a 429 is recorded and retried, never a backup",
+                 "R1471 (7) is recorded in the direction file"):
+        assert part in line, part
+    assert "2026-10-14 item 7" not in line
+    assert "R1532: Terra backup" not in line
+
+
+def test_fr8_control_the_rest_of_the_line_and_the_table_stand():
+    ls = lines_of("SHADOW-HUB.md")
+    line = ls[one_index(ls, "BAND ROUTING (")]
+    assert "its own fresh job card with BAND: HIGH" in line
+    assert "never on a 429" in line
+    sect = section(ls, "BUILDERS")
+    for band in ("LOW", "MID", "HIGH"):
+        assert sum(ln.startswith(f"| {band} |") for ln in sect) == 1, band
 
 
 # ---- B5: a routed card's untracked SHADOW-INSTRUCTIONS.md is not dirt at its check -------------
