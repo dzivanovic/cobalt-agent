@@ -10,9 +10,11 @@ REPORT: /Users/cobalt/cobalt-wt/jev-shadow-fr1/docs/40 - DevDocs/reports/jev-sha
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/jev-shadow-check-2026-10-15.md
 HOUSE B: as needed
 RESTARTS: com.cobalt.agent com.cobalt.radar
-RULINGS: 2026-10-15 R1532, 2026-10-15 R1535, 2026-10-15 R1620
+RULINGS: 2026-10-15 R1532, 2026-10-15 R1535
 
 ## FIX ROUND
+
+Scope: this job builds ONLY row FR-O2 (the brain's order of 2026-10-15, desk row R1620, L79; no re-check, L75). Every row under `## ROWS` is DEPLOYED on main from card 591 (`0b7c569d`); the builder does not port, re-red or rebuild them: they are context, and 'RED on BASE' / 'reds on the P0 port' apply only to FR-O2's own test. Day key: keep row F9's CHECK DONE gate and the day of the check's close for outcome rows; apply FR-O2's filter before it: a card file is a build card when it is a `*-card.md` whose launch kind is build, never a check, deploy, devfix or prompt card, and its decision row is written on the day its build launched. RESTARTS is the builder's own `cobalt jobs restarts <BASE>..HEAD` result (L42); the header value is a prediction.
 
 FR-O2: the day batch routes BUILD cards only: a card file whose launch kind is build (not a check, deploy, devfix or prompt card) and whose build launched that day; a check card is never routed and gets no decision row. Outcome rows still read the check's CHECK DONE line for its build card. Red: a day with one build card and its check card writes two decision rows today, one after.
 
