@@ -1,0 +1,35 @@
+# Card 641 `check-scratch-1016` — preflight (read-only), 2026-10-16
+
+Nothing was run but reads. Every `file:line` below was read on `git show main:<file>`, and the working tree equals `main` for the four files (`git diff --stat main -- …` printed nothing).
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | Read `CARD.md` `## THE HEADER` against the card's header | JOB, LADDER, BRANCH, WORKTREE, REPORT, RULINGS present and valid (`[a-z0-9-]`, `OFF-LADDER — <report> <date> R<n>`, `/Users/cobalt/cobalt-wt/…`). `TIP` empty ✓. `DB: none` valid (all files under `ops/`, `tests/ops/`). `BASE` is `«FILL…»` (the desk's: named, not failed). `CLASS`, `INSTALL` and `BAND` are not CARD.md keys on `main`: NOTE. `CHECK REPORT` and `HOUSE B` are filled on a build card, where CARD.md says "empty": NOTE, same as precedent 583 | OK |
+| 2 | Read `## ROWS` CS-1 and ORDER | CS-1 has a RED on `BASE`, quoted whole (`1 failed`, on `assert done.returncode == 0`, with the stderr text). The edit is inside `clearable()` only. It has 5 controls. R2 is a RUN row. All tests build a tmp repo and a tmp `COBALT_WT_ROOT` (the `job` fixture, `test_stage_set.py:52`). No real scratch path, network or database | OK |
+| 3 | Read the cards' `files` columns, `## NOT IN THIS JOB` and `RESTARTS` | CS-1 files: `ops/desk/stage-set.sh`, `tests/ops/test_stage_set.py`. R2: none. `RESTARTS: none` | OK |
+| 4 | Read `## RECORDS` for K10 | Names `ops/desk/` → "operator script; no Cobalt reader" (`restarts.py:232` ✓), `tests/` (`restarts.py:246` ✓ `rule = "test/documentation; no resident"`), `docs/` (`restarts.py:225-228` ✓). `:38` is `OPS_DESK_PREFIX = "ops/desk/"` ✓ | OK |
+| 5 | Check that the fix never deletes a folder it did not create | The two `rm -rf` lines (`stage-set.sh:149`, `:156`) stay byte for byte. Every refusal before `:155` stays: dest = `<JOB>-check` (`:96`), foreign entries, links, `.git`/`.env`, JOB (`:113`), prior report on `main` and not this check's (`:114-121`). Controls: two copies, other JOB, non-prompts card, same report, foreign file. **No control for a `files/` that holds no `*-card.md` at all**, which is the exact "no prior card copy" guard | **FAIL** |
+| 6 | `scratch-clean.sh` and `agy-trial` rule | `scratch-clean.sh:96` `agy-trial is the check hubs' scratch tree, never cleaned here` ✓; `test_scratch_clean.py:315` `test_r6_agy_trial_is_refused_though_registered` ✓. Card puts both in `## NOT IN THIS JOB` and R2 diffs the script against `BASE` (empty output expected) | OK |
+| 7 | `git show main:ops/desk/stage-set.sh` against the card's `file:line` samples (8 proved) | `:108` `copied="$dest/files/$(basename "$card")"` ✓ · `:109` `no prior card copy: $copied` ✓ · `:111` `--find-object="$b" main -- "$card_rel"` ✓ · `:113` JOB test ✓ · `:114-121` prior-report tests ✓ · `:149` `rm -rf "$dest"` and `:156` `rm -rf -- "$dest"` ✓ · `:155` `cleared:` print ✓ · `:128-129` the refusal `the dest is not empty: $dest — not cleared: $miss` ✓ (card cites `:124-131`, ✓). Header comment `:8` "its files/<card name> a version of the card committed on main" ✓ (card says `:6-8`). Test file: `prior_staging` `:193`, `snapshot` `:225-237`, `test_c1_` `:240`, `test_c12_` `:330`, file ends `:336` ✓ | OK |
+| 8 | `RULINGS` rows | `2026-10-15 R1532` → `cto-2026-10-15.md:102` `HIS RULING · APPROVED`, file unmodified. It is the only row | OK |
+| 9 | `grep -n -F "«FILL" …/641-check-scratch-card.md` | One hit at `:7`, `BASE`, the desk's. The `:57` hit is prose naming it | OK |
+| 10 | `git log -- …/641-…-card.md` and `git diff --stat -- …/641-…-card.md` | Committed in `dc688b32`; diff empty (card is as committed) | OK |
+| 11 | `grep -c -F "more than one prior card copy" ops/desk/stage-set.sh` | `0` (matches the card's `before 0`) | OK |
+| 12 | `grep -c -F "test_cs1_a_fix_rounds_check_clears_the_first_passes_folder" tests/ops/test_stage_set.py` | `0` (matches the card's `before 0`) | OK |
+| 13 | Read the CS-1 edit against `test_c12_` (`:330`) | `test_c12_` counts lines holding `rm -r` and forbids `git clean` and `-delete`. The edit adds `find … -name '*-card.md'`, no `rm`. The amended header comment must not contain the text `rm -r` | OK |
+| 14 | Existing tests under the edit | `test_c1_…` (`:240`) stages the card with the same name, so a single `*-card.md` is found and is a version under `prompts`. `test_c8` (edited copy, hash not on `main`) stays refused. `test_c11` (other folder) is refused earlier at `:96` | OK |
+| 15 | Read the five controls against `BASE` | On `BASE`, a control that stages the second card (`02-…-fr-card.md`) is refused at `:109` by name. It passes on `BASE` for a different reason than the guard it names. A control that staged the first card on `BASE` would clear and go RED, so the card's "GREEN on `BASE`" only holds for the second card. The card does not say which card each control stages | NOTE |
+
+## ISSUES
+
+- FAIL (check 5): CS-1 has no control for `files/` holding no `*-card.md` (the `miss="no prior card copy: $dest/files/*-card.md"` branch), so "a folder with no prior card copy still refuses" is not pinned by any row. Add `test_cs1_control_no_prior_card_copy_is_refused`: `dest/files/` with no `*-card.md`, exit 1, stderr starts `REFUSED: the dest is not empty: <dest>`, `snapshot(dest)` equal before and after.
+- NOTE (check 1): `BASE` is `«FILL»`. `desk-launch.sh:994` refuses a card that holds one (`incomplete card: the «FILL tokens listed above still stand`). The desk fills it, commits it, and `authorize.sh` re-proves the card as unchanged since its commit.
+- NOTE (check 1): `BAND`, `CLASS` and `INSTALL` are not keys of `CARD.md` on `main`. They are harmless, and `CLASS`/`INSTALL` match precedent 583. `CHECK REPORT` and `HOUSE B` are filled on a build card (CARD.md says "empty"). 583 does the same.
+- NOTE (check 15): the card should say that the five controls stage the SECOND card (`02-x-job-fr-card.md`), so that a builder cannot stage the first card and get a RED control on `BASE`. They are GREEN on `BASE` by name mismatch, and the guards they name only bite after the edit.
+- NOTE (check 7): the card cites the header-comment sentence at `:6-8`; it is on `:8` (line `:7` holds the "exactly $SCRATCH/…" start of that sentence's paragraph). Not a blocker.
+- NOTE (design): the `-card.md` count is over the whole of `files/`. A `stage-copy.sh` copy of another card (`## READ` of a card that names a `-card.md`) would make the next clear refuse with "more than one prior card copy". It fails closed (refuses, deletes nothing), but the desk would be stuck again. Not a FAIL: the card's own option 1 accepts it.
+- BLOCKS `desk-launch.sh build "<card>"`: (1) `BASE` `«FILL»` (the desk); (2) worktree `/Users/cobalt/cobalt-wt/check-scratch-1016` and branch `ops/check-scratch-1016` do not exist yet (`ls -d` exit 1): the desk creates them from `BASE`; (3) the missing control above, if the desk wants the card fixed before the build.
+
+PREFLIGHT DONE · card: check-scratch-1016 · checks: 15 · fails: 1 · ready: NO
