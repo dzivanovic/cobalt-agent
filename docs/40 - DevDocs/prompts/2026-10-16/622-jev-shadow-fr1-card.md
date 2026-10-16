@@ -4,7 +4,7 @@ BAND: MID
 INSTALL: none
 BRANCH: feat/jev-shadow-fr1
 WORKTREE: jev-shadow-fr1
-BASE:
+BASE: f6ca1455
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/jev-shadow-fr1/docs/40 - DevDocs/reports/jev-shadow-build-fr1-2026-10-16.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/jev-shadow-check-2026-10-15.md
