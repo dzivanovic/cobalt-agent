@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/band-routing-1015
 WORKTREE: band-routing-1015
-BASE:
+BASE: f2ca3e1a
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/band-routing-1015/docs/40 - DevDocs/reports/band-routing-build-2026-10-15.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/band-routing-check-2026-10-15.md
