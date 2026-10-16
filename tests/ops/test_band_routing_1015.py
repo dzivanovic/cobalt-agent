@@ -400,6 +400,32 @@ def test_fr1_control_a_plain_card_path_still_launches(desk):
     assert "BAND: LOW → grok-4.7" in done.stderr, done.stderr
 
 
+@pytest.mark.xfail(strict=True, reason="check r2 O1: HELD, NOT FIXED — ops/desk/desk-launch.sh (fenced)")
+def test_o1_a_routed_builds_watch_line_waits_on_the_build_stop_line(desk):
+    done = desk.run("build", str(desk.card_for("LOW")))
+    assert done.returncode == 0, done.stderr
+    printed = done.stdout + done.stderr
+    assert "desk-watch.sh shadow " not in printed, printed
+
+
+@pytest.mark.xfail(strict=True, reason="check r2 O3: HELD, NOT FIXED — ops/desk/desk-launch.sh (fenced)")
+def test_o3_a_card_outside_a_date_folder_still_needs_its_band(desk):
+    card = desk.card_for(None)
+    flat = desk.prompts / card.name
+    flat.write_text(card.read_text())
+    desk.commit("flat card")
+    done = desk.run("build", str(flat))
+    assert done.returncode == 1, done.stdout + done.stderr
+
+
+@pytest.mark.xfail(strict=True, reason="check r2 G1: HELD, NOT FIXED — ops/desk/desk-launch.sh (fenced)")
+def test_x5_routed_build_watch_does_not_wait_on_built(desk):
+    done = desk.run("build", str(desk.card_for("LOW")))
+    assert done.returncode == 0, done.stderr
+    watch = [ln for ln in done.stderr.splitlines() if ln.startswith("WATCH:")]
+    assert watch == [ln for ln in watch if "desk-watch.sh build " in ln], watch
+
+
 # ---- FR-2 (check O4): CHECK-HUB excepts a routed card from the untracked instructions file ----
 
 FR2_HOLD = "is expected and recorded, not a finding"
