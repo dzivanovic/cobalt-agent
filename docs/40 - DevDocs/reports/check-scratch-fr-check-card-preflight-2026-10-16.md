@@ -1,0 +1,35 @@
+# Card 662 `check-scratch-1016` fix-round CHECK (K5) — preflight, 2026-10-16 14:40 EDT (`date`)
+
+Read only. Card `prompts/2026-10-16/662-check-scratch-fr-check-card.md`, committed in `764c097c`. Tip lines are read from the worktree's `ops/desk/stage-set.sh` and `tests/ops/test_stage_set.py`, which equal the tip (`git diff --stat dd4d968d a7fe4110 -- . ":(exclude)docs"` prints nothing).
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | `grep -n -E "^(JOB\|LADDER\|CLASS\|INSTALL\|BRANCH\|WORKTREE\|BASE\|TIP\|REPORT\|CHECK REPORT\|HOUSE A\|HOUSE B\|BAND\|DB\|RESTARTS\|RULINGS):"` on the card | all 16 lines, `:1-16`. `JOB: check-scratch-1016`, `TIP: dd4d968d`, `BASE: b84cca9a`, `HOUSE A: grok`, `HOUSE B: as needed`, `RESTARTS: none`, `DB: none` | OK |
+| 2 | `git -C … rev-parse --short=8 --verify b84cca9a` / `dd4d968d` | `b84cca9a` / `dd4d968d` both resolve; `ops/check-scratch-1016` head = `a7fe4110` | OK |
+| 3 | `ls "<CHECK REPORT>"` (`reports/check-scratch-fr-check-2026-10-16.md`) | `No such file or directory`: a new path, not yet existing | OK |
+| 4 | `grep -n -E "«FIL[L]\|«INSTAL[L]\|TBD\|TODO\|XXX"` on the card | no output | OK |
+| 5 | `git diff HEAD --stat -- <card>` | prints nothing; `git log --oneline -3 -- <card>` → `764c097c` (committed, diff against HEAD empty, as found) | OK |
+| 6 | `git diff --stat dd4d968d a7fe4110 -- . ":(exclude)docs"` | prints nothing (the head adds docs only) | OK |
+| 7 | scope of the card: `## ROWS` S0, GD, FR-1, FR-2, SC1, LIVE, H1, X4, R2, G1; `## NOT IN THIS JOB` | FR-1/FR-2 only; CS-1 and R2 of the first check stand and are not re-run row by row; each RUN row has its red-first cell (FR-1 red on `85eade55`, F1-F3, FR-2 M5 corrected, GD both sides), R2 and S0 "asserts nothing" | OK |
+| 8 | FOR THE CHECK wording in substance (WHY `:20`, rows GD, FR-1, FR-2, LIVE; the build report `### FOR THE CHECK (fix round)` `:265-267`) | HOUSE A beside CHECK REPORT (WHY, FR-1, X2); the fallback (FR-1 `:130`, X2 last sentence); the fixture line `HOUSE A: grok` (GD, X1); green before and after (GD a/b); the live proof that the staging into `check-scratch-1016-check` clears (LIVE, X5). The build report's own FOR THE CHECK is two bullets that point to its subsections; the card carries the brain's wording | OK |
+| 9 | the card tells the checker to quote a refusal as a finding (LIVE) | `If the staging refuses, THAT is a finding (quote the REFUSED: line), never a hand rm, never a retry by hand`; X5 repeats it | OK |
+| 10 | `grep -n` of `ops/desk/stage-set.sh` at the tip: `copied=""`, `all=""`, `-name '*-card.md'`, `^CHECK REPORT:`, `^HOUSE A:`, `mine=$others`, `no prior card copy`, `more than one`, `copied=${mine%?}`, `hash-object`, `--find-object`, `JOB is not` | `:108`, `:109`, `:110`, `:117`, `:118`, `:130`, `:131`, `:132`, `:133`, `:134`, `:135`, `:137`; `field JOB "$f"` `:119`, `sed '/^$/q'` `:116`. Every cite of FR-1 matches (7 more than the five required) | OK |
+| 11 | `grep -n -F "rm -r"`, `clearable`, dest gate, `WORKTREE` on the tip | `rm -rf "$dest"` `:173`, `rm -rf -- "$dest"` `:180`; `clearable()` `:92`, call `:152`; `name=$(field JOB)` `:95`, dest equality `:97`; `"$SCRATCH"/?*` `:52`; WORKTREE test `:78`; `fail()` `:171`. Matches SC1 | OK |
+| 12 | `grep -n` of `tests/ops/test_stage_set.py` at the tip | `HOUSE A: grok` fixture `:78`; `build_card_copy` `:445`; `other_job_check_cards` `:452`; `test_fr1_a_…` `:468`; `test_fr1_control_two_same_job_…` `:483`; `test_fr1_control_this_jobs_own_check_folder_shape` `:489`; `test_cs1_rewritten_job_line_…` `:518`; `snapshot` `:225`, `prior_staging` `:193`. Read `:440-535`: `returncode == 0` `:476`, `:508`; `git add`/`commit` `:524-525`; FR-2's asserts `:531-535`. All match | OK |
+| 13 | header sentence `:8` of `stage-set.sh` | `its one files/*-card.md whose header carries CHECK REPORT: and HOUSE A: and whose JOB is this JOB (else the lone such card of another JOB) …` present | OK |
+| 14 | the build report `git`-free read: `## PRE-STOP SELF-CHECK` `:150`, `## FIX ROUND` `:165`, `### FR-1 — red on the tip` `:195`, F1 row `:212`, `### FR-2` `:217`, `### FOR THE CHECK (fix round)` `:265`, `## DECISIONS` 1 `:273` | every section the card's `## READ` names exists; the `FAILED PREFLIGHT: status` ASK DESK is `## DECISIONS` 1 (H1 note) | OK |
+| 15 | the first check's `## OPEN`/`## DECISIONS` (committed, `git show main:…check-scratch-check-2026-10-16.md`) | G1 (HELD, NOT FIXED) and O1 (OUT OF SCOPE) present, as H1 says; the report is on `main` (`git log --oneline main -2 -- <it>` → `764c097c`), so the live clear's `:144` test passes | OK |
+| 16 | THE LIVE FOLDER: `ls …/check-scratch-1016-check/files`; `grep -n -E "^(JOB\|CHECK REPORT\|HOUSE A):"` on the four copies | `633-…`, `638-…`, `641-…`, `648-…`, `band-routing-check-fr1-2026-10-16.md`, `check-scratch-build-2026-10-16.md`, `wt`. `641` JOB this, CHECK REPORT, no HOUSE A (READ copy); `648` JOB this, CHECK REPORT, HOUSE A; `633`, `638` JOB `band-routing-1015`, CHECK REPORT, HOUSE A. So `mine` = `648` alone, as LIVE says | OK |
+| 17 | `git -C … diff --no-index --stat <staged 648 copy> <648 on disk>` | prints nothing: the copy equals the file on disk, which is the committed card (the first check report's `## Files copied` gives its 21921 bytes); version test `:135-136` passes, the JOB test `:137` passes, the prior report is on `main` (#15) and is not this check's own (`check-scratch-check-…` vs `check-scratch-fr-check-…`) | OK |
+| 18 | no `.env`, foreign entry or non-regular file in the folder (`ls` of the folder above shows only `files`, `diff.md`-class names; the `ls` of `files/` shows plain names and `wt`) | `clearable()` `:98-107` would pass; the folder's top level was not listed this run beyond `files/` (see NOTE 3) | OK |
+
+## ISSUES
+- NOTE 1: what blocks `desk-launch.sh check "<card>"`: nothing in the card (committed, diff against HEAD empty, no placeholder, `CHECK REPORT` absent, the prior report on `main`, the live folder clears by the tip's rule). Not mine to close: L15 (no other Grok hub runs) and the end of the `band-routing-1015` check; I ran no process list.
+- NOTE 2: the card has no launch-line sentence like card 648's "Before the launch, confirm the check on `band-routing-1015` has ended and that no other Grok hub runs (L15)"; the desk makes that check at the launch.
+- NOTE 3: check #18 is thin: I listed `files/` only, not the folder's top level. The first check's staging, run by the same script, left `diff.md`, `rulings.md`, `house-a.md`, `HOUSE-INSTRUCTIONS.md`, `files/`, which `:98-107` allows. If the top level holds anything else, the staging refuses and LIVE records it as a finding, by the card.
+- NOTE 4: `CARD.md` on `main` has no `BAND` row; `BAND: MID` is harmless until band-routing deploys (as in card 648).
+- NOTE 5: no test was run and no mutation tried; every red and green in the rows is the builder's, UNPROVEN until the check quotes it (L70). The `2 failed, 30 passed` of the FR-1 previous-tip run is the drafter's sum.
+
+PREFLIGHT DONE · card: check-scratch-1016-fr-check · checks: 18 · fails: 0 · ready: YES
