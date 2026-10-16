@@ -988,8 +988,10 @@ git -C "$REPO" diff --cached --quiet -- "$fixed" || refuse "the fixed file is st
 
 # ---- the card: where it lives, what its path may contain ------------------------------------
 case "$card" in
-    "$PROMPTS"/*-card.md) ;;
-    *) refuse "the card must be $PROMPTS/<date>/<nn>-<job>-card.md" ;;
+    */./*|*//*) ;;  # refused by name in the case below (card 583 FR-1)
+    "$PROMPTS"/*/*/*) refuse "the card must be $PROMPTS/<YYYY-MM-DD>/<nn>-<job>-card.md: $card" ;;
+    "$PROMPTS"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/*-card.md) ;;
+    *) refuse "the card must be $PROMPTS/<YYYY-MM-DD>/<nn>-<job>-card.md: $card" ;;
 esac
 case "$card" in
     *[!A-Za-z0-9\ ._/-]*) refuse "the card path holds a character outside [A-Za-z0-9 ._/-]" ;;
@@ -2351,7 +2353,7 @@ prodwrite)
     ;;
 esac
 
-watch=$(watch_line "$kind" "$card")
+if [ -n "$routed" ]; then watch=$(watch_line routed "$card"); else watch=$(watch_line "$kind" "$card"); fi
 if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
     [ -z "$add" ] || printf '%s\n' "$add"
     run_launch "$dir" "$line" "$note" "$watch"

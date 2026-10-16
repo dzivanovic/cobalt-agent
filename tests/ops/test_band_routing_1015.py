@@ -400,7 +400,6 @@ def test_fr1_control_a_plain_card_path_still_launches(desk):
     assert "BAND: LOW → grok-4.7" in done.stderr, done.stderr
 
 
-@pytest.mark.xfail(strict=True, reason="check r2 O1: HELD, NOT FIXED — ops/desk/desk-launch.sh (fenced)")
 def test_o1_a_routed_builds_watch_line_waits_on_the_build_stop_line(desk):
     done = desk.run("build", str(desk.card_for("LOW")))
     assert done.returncode == 0, done.stderr
@@ -408,7 +407,6 @@ def test_o1_a_routed_builds_watch_line_waits_on_the_build_stop_line(desk):
     assert "desk-watch.sh shadow " not in printed, printed
 
 
-@pytest.mark.xfail(strict=True, reason="check r2 O3: HELD, NOT FIXED — ops/desk/desk-launch.sh (fenced)")
 def test_o3_a_card_outside_a_date_folder_still_needs_its_band(desk):
     card = desk.card_for(None)
     flat = desk.prompts / card.name
@@ -418,7 +416,6 @@ def test_o3_a_card_outside_a_date_folder_still_needs_its_band(desk):
     assert done.returncode == 1, done.stdout + done.stderr
 
 
-@pytest.mark.xfail(strict=True, reason="check r2 G1: HELD, NOT FIXED — ops/desk/desk-launch.sh (fenced)")
 def test_x5_routed_build_watch_does_not_wait_on_built(desk):
     done = desk.run("build", str(desk.card_for("LOW")))
     assert done.returncode == 0, done.stderr
@@ -494,10 +491,10 @@ def test_fr5_control_the_shadow_stop_line_stays():
 
 WATCH_SH = REPO / "ops" / "desk" / "desk-watch.sh"
 WAIT_SH = REPO / "ops" / "desk" / "wait-stop-line.sh"
-ROUTED_STOP = "BUILT · job: x · tip: 1a2b3c4d | on 0f0e0d0c | rows: 1 of 1"
-SHADOW_STOP = "SHADOW BUILT · job: x · tip: 1a2b3c4d | on 0f0e0d0c"
-IDLE_GATE = "aaaa0001 · x-job-gate · ~/cobalt-wt/x-job · idle · idle"
-IDLE_JOB_BUILD = "aaaa0001 · x-job-build · ~/cobalt-wt/x-job · idle · idle"
+ROUTED_STOP = "BUILT · job: x · tip: tip-x | on base-x | rows: 1 of 1"
+SHADOW_STOP = "SHADOW BUILT · job: x · tip: tip-x | on base-x"
+IDLE_GATE = "sess-x01 · x-job-gate · ~/cobalt-wt/x-job · idle · idle"
+IDLE_JOB_BUILD = "sess-x01 · x-job-build · ~/cobalt-wt/x-job · idle · idle"
 
 
 class RWatch:
@@ -531,7 +528,7 @@ class RWatch:
         self.card.parent.mkdir(parents=True)
         head = "SHADOW OF: constructed\nBRANCH: shadow/x-job\n" if shadow else "BAND: LOW\nBRANCH: ops/x-job\n"
         self.card.write_text(
-            f"JOB: x-job\nLADDER: OFF-LADDER\n{head}WORKTREE: x-job\nBASE: 1a2b3c4d\nTIP: 5e6f7a8b\n"
+            f"JOB: x-job\nLADDER: OFF-LADDER\n{head}WORKTREE: x-job\nBASE: base-x\nTIP: tip-x\n"
             f"REPORT: {self.report}\nRULINGS: 2026-01-02 R1\n\n## ROWS\n"
         )
         self.env = dict(os.environ, DESK_WATCH_POLL="1", DESK_WATCH_CLOSE_WAIT="2", **GIT_ENV)
@@ -576,7 +573,7 @@ def test_fr6_a_routed_closeout_hands_build_to_desk_done(tmp_path):
     done = w.run("routed")
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines()[0] == ROUTED_STOP, done.stdout
-    assert w.logged() == [f"aaaa0001 {w.report} build"], w.logged()
+    assert w.logged() == [f"sess-x01 {w.report} build"], w.logged()
 
 
 def test_fr6_control_a_shadow_card_closeout_still_passes_shadow(tmp_path):
@@ -585,7 +582,7 @@ def test_fr6_control_a_shadow_card_closeout_still_passes_shadow(tmp_path):
     done = w.run("shadow")
     assert done.returncode == 0, done.stderr
     assert done.stdout.splitlines()[0] == SHADOW_STOP, done.stdout
-    assert w.logged() == [f"aaaa0001 {w.report} shadow"], w.logged()
+    assert w.logged() == [f"sess-x01 {w.report} shadow"], w.logged()
 
 
 def test_fr6_control_a_high_card_and_a_real_shadow_keep_their_watch(desk):

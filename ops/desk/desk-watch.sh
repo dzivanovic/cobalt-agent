@@ -62,6 +62,7 @@ case "$kind" in
   deploy) report=$(header REPORT) || exit 1; re='^(DEPLOYED|FAILED)' ;;
   devfix) report=$(header REPORT) || exit 1; re='^(REBUILT|FAILED)' ;;
   shadow) report=$(header REPORT) || exit 1; re='^(SHADOW BUILT|SHADOW ROLE|FAILED)' ;;
+  routed) report=$(header REPORT) || exit 1; re='^(BUILT ·|FAILED)' ;;
   prodwrite) report=$(header REPORT) || exit 1; re='^(WRITTEN|FAILED)' ;;
   close)  report="$src"; re='^(CLOSE PUSHED|FAILED)' ;;
   *) refuse "unknown kind: $kind" ;;
@@ -70,6 +71,7 @@ wt=-
 case "$kind" in
   build|check|devfix) job=$(header JOB) || exit 1; wt=$(header WORKTREE) || exit 1; session="$job-$kind" ;;
   shadow) job=$(header JOB) || exit 1; wt=$(header WORKTREE) || exit 1; session="$job-gate" ;;
+  routed) job=$(header JOB) || exit 1; wt=$(header WORKTREE) || exit 1; session="$job-gate" ;;
   deploy) job=$(header JOB) || exit 1; session="deploy-hub-$job" ;;
   prodwrite) job=$(header JOB) || exit 1; session="prodwrite-$job" ;;
   close)
@@ -148,7 +150,7 @@ close_worker() {
   elif [ "$n" -gt 1 ]; then
     said="KEPT $session: $n listed sessions"
   else
-    out=$(sh "$here/desk-done.sh" "$rid" "$report" "$kind")
+    out=$(sh "$here/desk-done.sh" "$rid" "$report" "$([ "$kind" = routed ] && echo build || echo "$kind")")
     rc=$?
     said=$(printf '%s\n' "$out" | grep -v '^[[:space:]]*$' | tail -n 1)
     [ -n "$said" ] || said="KEPT $rid: desk-done.sh exit $rc"
