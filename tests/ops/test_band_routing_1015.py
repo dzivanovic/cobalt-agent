@@ -385,6 +385,88 @@ def test_o2_a_new_card_named_through_a_dot_folder_still_needs_its_band(desk):
     assert BAND_REFUSAL in done.stderr, done.stderr
 
 
+# ---- FR-1 (check O2): a card path holding '/./' or '//' is refused, naming the path ----------
+
+
+def test_fr1_a_double_slash_card_path_is_refused_naming_it(desk):
+    card = desk.card_for(None)
+    odd = str(desk.prompts) + "//" + str(card.relative_to(desk.prompts))
+    done = desk.run("build", odd)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: the card path holds '/./' or '//'" in done.stderr, done.stderr
+    assert odd in done.stderr, done.stderr
+
+
+def test_fr1_control_a_plain_card_path_still_launches(desk):
+    done = desk.run("build", str(desk.card_for("LOW")))
+    assert done.returncode == 0, done.stderr
+    assert "BAND: LOW → grok-4.7" in done.stderr, done.stderr
+
+
+# ---- FR-2 (check O4): CHECK-HUB excepts a routed card from the untracked instructions file ----
+
+FR2_HOLD = "is expected and recorded, not a finding"
+FR2_CLAUSE = "on a shadow card or a routed card (BAND LOW or MID, dated on or after BAND_FROM)"
+
+
+def test_fr2_check_hub_excepts_a_routed_card_from_the_untracked_instructions_file():
+    hits = [ln for ln in lines_of("CHECK-HUB.md") if FR2_HOLD in ln]
+    assert len(hits) == 2, hits
+    assert sum(FR2_CLAUSE in ln for ln in hits) == 2
+
+
+def test_fr2_control_the_two_lines_stay_where_they_are():
+    ls = lines_of("CHECK-HUB.md")
+    hits = [i for i, ln in enumerate(ls) if FR2_HOLD in ln]
+    assert len(hits) == 2, hits
+    assert one_index(ls, "## PREFLIGHT") < hits[0] < one_index(ls, "## 1. ")
+    assert one_index(ls, "## 7. ") < hits[1] < one_index(ls, "## 8. ")
+
+
+# ---- FR-3 (check O1): CARD.md requires BAND on a routed build's check card --------------------
+
+
+def test_fr3_card_md_requires_band_on_a_routed_builds_check_card():
+    ls = lines_of("CARD.md")
+    cell = ls[one_index(ls, "| `BAND` |")].split("|")[3]
+    for word in ("required", "LOW or MID", "copied"):
+        assert word in cell, cell
+
+
+# ---- FR-4 (check O3/G3): a routed fix round is a fresh HIGH card; the backup cites its rulings -
+
+
+def test_fr4_the_routed_fix_round_is_a_fresh_high_card_and_the_backup_cites_its_rulings():
+    ls = lines_of("SHADOW-HUB.md")
+    line = ls[one_index(ls, "BAND ROUTING (")]
+    for part in ("its own fresh job card with BAND: HIGH", "R1532: Terra backup", "2026-10-14 item 7",
+                 "never on a 429"):
+        assert part in line, part
+    assert "the fix round goes to the same builder" not in line
+
+
+def test_fr4_control_the_band_table_stands():
+    sect = section(lines_of("SHADOW-HUB.md"), "BUILDERS")
+    for band in ("LOW", "MID", "HIGH"):
+        assert sum(ln.startswith(f"| {band} |") for ln in sect) == 1, band
+
+
+# ---- FR-5 (check G2): the shadow procedure excepts a routed card on its two lines --------------
+
+FR5_NOTE = "(a routed card: no `SHADOW OF`; stop line `BUILT ·` as `:28`)"
+
+
+def test_fr5_the_procedure_excepts_a_routed_card_on_its_two_lines():
+    ls = lines_of("SHADOW-HUB.md")
+    counts = [ls[one_index(ls, head)].count(FR5_NOTE) for head in ("2. PREFLIGHT:", "`SHADOW BUILT · job: ")]
+    assert counts == [1, 1]
+
+
+def test_fr5_control_the_shadow_stop_line_stays():
+    ls = lines_of("SHADOW-HUB.md")
+    assert "SHADOW BUILT · job: <JOB> · tip: <tip>" in ls[one_index(ls, "`SHADOW BUILT · job: ")]
+
+
 # ---- B5: a routed card's untracked SHADOW-INSTRUCTIONS.md is not dirt at its check -------------
 
 
@@ -491,6 +573,16 @@ def test_b5_control_a_tree_that_is_not_routed_still_fails_preflight_status(cdesk
     done = cdesk.preflight(cdesk.card(band, day))
     assert done.returncode == 1, done.stdout + done.stderr
     assert done.stdout.splitlines()[-1] == "FAILED PREFLIGHT: status"
+
+
+@pytest.mark.parametrize("day", [NEW_DAY, OLD_DAY])
+def test_fr3_control_an_opus_builds_check_card_without_band_still_launches(cdesk, day):
+    """FR-3 'optional otherwise': an Opus build's tree, no untracked file, a check card with no BAND."""
+    card = cdesk.card(None, day)
+    done = subprocess.run(["sh", str(LAUNCH), "check", str(card)], env=cdesk.env,
+                          capture_output=True, text=True, timeout=120)
+    assert "REFUSED" not in done.stderr, done.stderr
+    assert done.returncode == 0, done.stderr
 
 
 # ---- B6: G5's shadow branch admits the report's result file -----------------------------------
