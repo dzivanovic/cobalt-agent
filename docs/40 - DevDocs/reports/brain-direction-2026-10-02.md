@@ -247,6 +247,27 @@ On `reports/rules-map-2026-10-13.md` `## CUT LIST` (:567-603), with the brain's 
 - The three principles (build firewall, design standard, Cobalt's absolute boundaries) become laws L82–L84, with text as the map gives it. He reads them at DONE and may veto.
 - The work is done by cards (drafters), with the desk as the one memory and LAWS writer.
 
+## RULED 2026-10-14 morning — JEV router, and the routing table from the confirmed grades
+His words, brain session: "JEV will run through it's normal OpenRouter API key. There is no subscription-based program unless you can find me one. It needs an exception. Also, it needs to run in shadow mode, collect data, and then be put in production based on average results, but then it needs to be measured and continuously improved based on results. I said 80% but we will see how it goes and then rule on when it is live" · "I want you to build the table based on the results of the meeting and the confirmed grades so we can start the build". Earlier, the same morning: "looks like we can use Grok on low and medium tasks and terra on medium tasks, and sonnett only as router and hub here."
+- EXCEPTION to R1112: JEV alone uses Cobalt's pay-per-use OpenRouter API key. Every other seat stays on a subscription. The brain looks for a subscription route for JEV and reports one only if it exists.
+- JEV PATH: shadow first (JEV's routing choice recorded beside the seat that really routes, never acted on), collecting data. Production on HIS ruling from the average results; 80% agreement is a guide, not the bar. After go-live it is measured continuously and improved from the results (each finished card's band, builder, held findings and rework fed back).
+- THE TABLE: the results sitting's second round confirms the Grok grades, then the routing table per band is written from the confirmed grades. His stated reading pending that confirmation: Grok LOW and MID, Terra MID, Sonnet router and hub only (not a builder), Opus HIGH.
+- JEV is a new feature: an L67 design proposal and tribunal come before its card, starting now in parallel with the sitting.
+
+## RULED 2026-10-14 — remove the blockers (his "I want all, including 5, and I want to remove Grok's limit of 3")
+1. A deploy freezes only the paths it ships; other desk commits continue (the deploy re-verifies at its merge).
+2. Each build's with-DB step runs on its own throwaway copy of the dev database, so builds run with-DB in parallel.
+3. Every build and check also writes one structured result file; the deploy gate reads it, not report prose.
+4. The desk's recurring commands are installed under the classes (survey row 1 SendMessage and its siblings).
+5. HIS RULING: a brain message that quotes his words verbatim, marked "Dejan said", counts as his confirmation in the desk session, laws and settings included. No second confirmation is asked.
+6. Cards are written from a template: rulings cited by R number, no HEAD hashes, anchors by file:line.
+7. HIS RULING: the Grok limit of 3 at once (R908) is removed. Grok runs as many seats as the work needs; the vendor's own rate limit is the only ceiling, and a 429 is recorded and retried, never a stop.
+Items 1–4 and 6 are K5 cards, ahead of the rules-cut gap-fillers and behind no MVP card.
+
+## RULED 2026-10-15 — the routing table (his B)
+His words, brain session: "low grok, terra backup / medium grok, terra backup / High opus, grok when I say so / Sonnett routing for now / JEV paralel run and learning"
+- LOW and MID: Grok 4.7 builds, Terra backup. HIGH: Opus 5.5; Grok only on his word per card. Sonnet: routing, hubs, preflights, for now. JEV: shadow, in parallel, learning. Conditions 1–4 of `reports/routing-table-answer-2026-10-14.md` stand (Opus check on every non-Opus build; L29/L27 amended for LOW and MID only; `BAND:` by the drafter, higher when unsure; ledger and re-grade triggers). In force when the K5 routing card deploys.
+
 ## PLAN ROWS ADDED 2026-10-09 night (brain judge answers; follow-ups, not his rulings)
 - Launcher card (with the owed "accept held items the fix report names fixed" row): `deploy-card.sh --fix-report "<path>"` per job card emits the CARD.md :48 fix-round SHIPS row, instead of refusing "adds paths outside docs/" (card 156, R771).
 - Archiver defect card (drafter, R685): bounded 429 retry with `Retry-After` inside the L53 bucket, and retried targets named in the run report. First 429s in history, 10-09 20:35–20:41, radar paused, strike not yet deployed (R808).
@@ -261,6 +282,16 @@ On `reports/rules-map-2026-10-13.md` `## CUT LIST` (:567-603), with the brain's 
 - Terra arm: stopped, harness INCOMPLETE (367). codex `workspace-write` confines writes, not reads, so an X1 against a real secret would itself send it to OpenAI. 370/373 are not launched. For Dejan: a read-confined harness (new permission class) or `N/A` (brain rec. N/A). The 365 X1 re-run waits for his own line in `5b7147c4` (classifier denial, no relay).
 - SDK spike live (`reports/sdk-spike-live-decisions-2026-10-11.md`): D2 RULED by him (R1112, below). The F20 design and build are not held. F20 card rows from U6 (no subagents; parallel calls proven or off) and U7 (TTL ≤ 300 s, resume by `session_id`). D10 re-spike of U2b/U9 after the F20 design.
 - BUILD-HUB follow-up (386 FAILED: W): a RUN probe is staged outside the worktree, never under `docs/` or `src/`, and gone before W. Its removal after a classifier denial was his line in the desk session, never a relay or a salvage.
+
+## PLAN ROWS ADDED 2026-10-14 (brain `0e848919` judge answers; follow-ups, not his rulings)
+- A deploy never runs a command that only its own set adds to the deploy line; the next deploy runs it once as the owed DEPLOY PROOF (537 → 523 recut, R1483).
+- A rolled-back card is re-shipped as a fresh port from main by Edit/Write, proven per file against its checked tip; never by merging main in, never by reverting the revert (523 FR-P1, R1485).
+- K5 gap-filler: `deploy-card.sh` measures "paths past the code tip" from the branch's merge-base with main, or accepts a port job whose card carries a per-file PROOF row against a checked tip. Red: a fresh port of a checked tip on newer main is refused today, passes after (523 fr1 refusal, 10-14). Same card: `--fix-report` also accepts a report path inside the job's own worktree when committed at the branch tip (549 FR-S1, 10-15: the cp to main was denied; red: a worktree path is refused today). Also: refuse a tip that is already an ancestor of main (546 recut 604, 10-15), and fill the smoke read's job name from the card's JOB (546 deploy 601).
+- Defect card (not MVP): `tests/test_llm.py` has 9 reds on main (its tests patch `cobalt_agent.config.load_config`, which main does not define); in no gate pass. Found by 591's build (10-15).
+- Every close goes through `desk-done.sh`; `install-ops` runs after every DEPLOYED touching `ops/desk/` (card 580 C1–C4, R1536).
+
+## PLAN ROWS ADDED 2026-10-16 (brain, successor of `0e848919`; follow-ups, not his rulings)
+- K5 hub-text card: SHADOW-HUB gets a fix-round procedure for a routed (BAND LOW/MID) card. Until it deploys, a routed card's fix round is its own fresh job card with `BAND: HIGH` (Opus, BUILD-HUB path) (583 preflight note 7, `reports/band-routing-answer-2026-10-16.md`).
 
 ## HIS VETO LIST AT DONE — 2026-10-05 night (brain rulings while he was away)
 - D5 deploy: A3 (the event-day reconcile corrects an ENTRY price through `record_correction`, which rewrites the fill cache, a sizing figure) is KEEP as built under 09-22 R67 ("DAS is the reconcile truth") and R314. The brain did not hold the deploy for his ruling.
