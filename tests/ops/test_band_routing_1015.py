@@ -374,15 +374,12 @@ def test_b3_control_shadow_without_routed_still_demands_its_own_header(desk):
             "shadow: the card's header has no 'SHADOW OF:' line")
 
 
-# check O2 (band-routing-check-2026-10-16): HELD, NOT FIXED — the fix is in desk-launch.sh, fenced
-# from the check; the builder's fix round removes the xfail
-@pytest.mark.xfail(strict=True, reason="check O2: HELD, NOT FIXED — desk-launch.sh (a /./ card path is not dated)")
 def test_o2_a_new_card_named_through_a_dot_folder_still_needs_its_band(desk):
     card = desk.card_for(None)
     odd = str(desk.prompts) + "/./" + str(card.relative_to(desk.prompts))
     done = desk.run("build", odd)
     assert done.returncode == 1, done.stdout + done.stderr
-    assert BAND_REFUSAL in done.stderr, done.stderr
+    assert "REFUSED: the card path holds '/./' or '//'" in done.stderr, done.stderr
 
 
 # ---- FR-1 (check O2): a card path holding '/./' or '//' is refused, naming the path ----------

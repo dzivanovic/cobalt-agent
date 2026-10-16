@@ -25,7 +25,7 @@ Notes on the rows:
 - Sonnet: `Edit(//…)` and `Write(//…)` are the absolute-path spelling of Claude Code's permission rules (`//` = from the filesystem root), the spelling of BUILD-HUB's own `Edit` string; the write target is `/Users/cobalt/cobalt-wt/<worktree>/**`. `Bash` is denied; `--output-format json` prints its token use.
 - Terra: `-s workspace-write` confines writes to `-C <worktree>`; its sandbox network stays off (codex's default; no `network_access` override on the command). X1 proves both before the Terra arm runs. Whether `workspace-write` lets codex run a shell command inside its sandbox is X3's question: "writes only" for Terra rests on the sign-off and X1. Reads are not confined by workspace-write; accepted by HIS word 2026-10-11 (R1107).
 
-BAND ROUTING (his 2026-10-15 R1532; the launcher reads these rows, `desk-launch.sh` `band_row`; until the card band-routing-1015 deploys every build stays Opus 5.5; a routed build is a real build: its branch is the card's `ops/` BRANCH and its stop line is BUILD-HUB's `BUILT · job: <JOB> · tip: <tip> …`, not `SHADOW BUILT`; the fix round goes to the same builder, the backup is the desk's hand launch only when Grok's probe is OUT or a Grok build ends FAILED on a harness cause, never on a 429):
+BAND ROUTING (his 2026-10-15 R1532; the launcher reads these rows, `desk-launch.sh` `band_row`; until the card band-routing-1015 deploys every build stays Opus 5.5; a routed build is a real build: its branch is the card's `ops/` BRANCH and its stop line is BUILD-HUB's `BUILT · job: <JOB> · tip: <tip> …`, not `SHADOW BUILT`; a routed card's fix round is its own fresh job card with BAND: HIGH (brain 2026-10-16 note 7), the backup is the desk's hand launch only when Grok's probe is OUT or a Grok build ends FAILED on a harness cause, never on a 429 (R1532: Terra backup; 2026-10-14 item 7: a 429 is retried, never a backup)):
 
 | band | builder | backup |
 |---|---|---|
@@ -50,7 +50,7 @@ BAND ROUTING (his 2026-10-15 R1532; the launcher reads these rows, `desk-launch.
 
 ## THE PROCEDURE (BUILD-HUB's steps; only the differences are written here)
 1. AUTHORIZATION: `sh /Users/cobalt/cobalt/ops/desk/authorize.sh shadow "<card>"` → quoted whole; last line `AUTHORIZED`.
-2. PREFLIGHT: `sh /Users/cobalt/cobalt/ops/desk/preflight.sh shadow "<card>"` → quoted whole; last line `PREFLIGHT OK`. Then BUILD-HUB's other PREFLIGHT rows. The card's `SHADOW OF:` original, its RULINGS and the original build report's admitted docs and test exceptions are read here.
+2. PREFLIGHT: `sh /Users/cobalt/cobalt/ops/desk/preflight.sh shadow "<card>"` → quoted whole; last line `PREFLIGHT OK`. Then BUILD-HUB's other PREFLIGHT rows. The card's `SHADOW OF:` original, its RULINGS and the original build report's admitted docs and test exceptions are read here. (a routed card: no `SHADOW OF`; stop line `BUILT ·` as `:28`)
 3. E0 BASELINE on BASE, as BUILD-HUB `## E0`.
 4. THE INSTRUCTIONS (`[F-32]`): write `/Users/cobalt/cobalt-wt/<worktree>/SHADOW-INSTRUCTIONS.md`, never committed (X9 settles its ignored path; until then it is named in the report as the one untracked file): the WHOLE shadow card, its RULINGS rows quoted, the original build's exceptions, BUILD-HUB `## E2` and `## E3` verbatim, and the fence: the rows' files (every path a row's `files` names) plus those exceptions, nothing else. The builder's sandbox reads only its workspace, so everything it needs is copied in.
 
@@ -67,7 +67,7 @@ pass S2 — the row's command with `Pass S2: fix the failing lines quoted under 
 
 6. THE SCORED BUILD: the last commit before the check is frozen as the scored build (`[F-18]`): its hash is the report's `tip:`; any later Opus fix is the check's and is kept apart.
 7. REPORT: `<WT>/docs/40 - DevDocs/reports/<job>-build-<date>.md` (the card's REPORT) in BUILD-HUB's REPORT shape, plus `## PASSES` (per pass: the env check, the command as run, wall, tokens, the diff stat, the commit). Stop line, the last non-blank line:
-`SHADOW BUILT · job: <JOB> · tip: <tip> | on <BASE> | offline <p>/0 | with-DB <d>/0 | live-note <l>/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: <as derived> | decisions: <n> · builder: <id> · gate: <seat> · passes: <n> · suites at first run: <green|red> · builder tokens: <n|UNKNOWN> · wall: <minutes>`
+`SHADOW BUILT · job: <JOB> · tip: <tip> | on <BASE> | offline <p>/0 | with-DB <d>/0 | live-note <l>/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: <as derived> | decisions: <n> · builder: <id> · gate: <seat> · passes: <n> · suites at first run: <green|red> · builder tokens: <n|UNKNOWN> · wall: <minutes>` (a routed card: no `SHADOW OF`; stop line `BUILT ·` as `:28`)
 or `FAILED: <step> — <reason>` (a harness stop: INCOMPLETE named in it).
 A shadow of a "DB: none" card runs W as BUILD-HUB gives it for that card ((a0), (a), (e); no lock) and writes `with-DB 0/0` and `cobalt_dev: not taken` in those two fields.
 

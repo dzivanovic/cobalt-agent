@@ -994,6 +994,7 @@ esac
 case "$card" in
     *[!A-Za-z0-9\ ._/-]*) refuse "the card path holds a character outside [A-Za-z0-9 ._/-]" ;;
     *..*) refuse "the card path holds '..'" ;;
+    */./*|*//*) refuse "the card path holds '/./' or '//': $card" ;;
 esac
 [ -f "$card" ] || refuse "no such card: $card"
 if grep -n '«FILL' "$card" >&2; then
