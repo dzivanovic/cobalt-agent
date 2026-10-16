@@ -382,10 +382,11 @@ def _copy_of_another_job(job, dest, card):
 
 
 def _copy_no_prompts_card(job, dest, card):
-    # a card-shaped blob committed on main, but outside the prompts folder
+    # a card-shaped blob committed on main, but outside the prompts folder (one line more than the
+    # card, so its blob is no version of any prompts card)
     wt, repo = job[0], job[1]
     page = repo / "docs" / "page.md"
-    page.write_bytes(first_copy(dest, card).read_bytes())
+    page.write_text(first_copy(dest, card).read_text() + "a page, not a card\n")
     git(repo, "add", "--", "docs/page.md")
     git(repo, "commit", "-q", "-m", "a card-shaped page")
     first_copy(dest, card).unlink()
