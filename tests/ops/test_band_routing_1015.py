@@ -657,6 +657,51 @@ def test_check_o1_a_routed_closeout_on_a_gate_seat_tree_hands_build_to_desk_done
     assert w.logged() == [f"sess-x01 {w.report} build"], done.stdout
 
 
+# ---- FR-9 (check fr2 O1): unclean() excepts the one untracked SHADOW-INSTRUCTIONS.md for kinds
+# shadow and routed only ------------------------------------------------------------------------
+
+
+def test_fr9_a_shadow_card_tree_holding_only_the_instructions_file_closes(tmp_path):
+    w = RWatch(tmp_path / "w", done=True, last=SHADOW_STOP, shadow=True)
+    (w.wt / "SHADOW-INSTRUCTIONS.md").write_text("constructed\n")
+    w.rows(IDLE_GATE)
+    done = w.run("shadow")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == SHADOW_STOP, done.stdout
+    assert w.logged() == [f"sess-x01 {w.report} shadow"], done.stdout
+
+
+def test_fr9_control_a_build_kind_tree_holding_that_file_is_still_kept(tmp_path):
+    w = RWatch(tmp_path / "w", done=True, last=ROUTED_STOP)
+    w.card.write_text(w.card.read_text().replace("BAND: LOW\n", "BAND: HIGH\n"))
+    (w.wt / "SHADOW-INSTRUCTIONS.md").write_text("constructed\n")
+    w.rows(IDLE_JOB_BUILD)
+    done = w.run("build")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == ROUTED_STOP, done.stdout
+    assert done.stdout.splitlines()[-1] == "KEPT sess-x01: tree not clean", done.stdout
+    assert w.logged() == [], w.logged()
+
+
+@pytest.mark.parametrize("other", ["untracked", "modified"])
+def test_fr9_control_a_routed_tree_with_any_other_untracked_line_is_still_kept(tmp_path, other):
+    w = RWatch(tmp_path / "w", done=True, last=ROUTED_STOP)
+    (w.wt / "SHADOW-INSTRUCTIONS.md").write_text("constructed\n")
+    if other == "untracked":
+        (w.wt / "notes.txt").write_text("constructed\n")
+    else:
+        (w.wt / "tracked.txt").write_text("constructed\n")
+        git(w.wt, "add", "tracked.txt")
+        git(w.wt, "commit", "-q", "-m", "tracked")
+        (w.wt / "tracked.txt").write_text("changed\n")
+    w.rows(IDLE_GATE)
+    done = w.run("routed")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == ROUTED_STOP, done.stdout
+    assert done.stdout.splitlines()[-1] == "KEPT sess-x01: tree not clean", done.stdout
+    assert w.logged() == [], w.logged()
+
+
 # ---- B5: a routed card's untracked SHADOW-INSTRUCTIONS.md is not dirt at its check -------------
 
 
