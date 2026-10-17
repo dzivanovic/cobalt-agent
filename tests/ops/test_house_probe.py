@@ -250,7 +250,7 @@ def test_gemini_is_spelled_as_the_hub_launch_with_a_three_minute_print_timeout(h
     (call,) = calls_of(calls, "agy")
     assert Path(call["cwd"]).resolve() == (wt / "agy-trial").resolve()
     assert call["argv"] == [
-        "--model", "gemini-3.1-pro-high", "--mode", "accept-edits", "--sandbox",
+        "--model", "gemini-4-argon-high", "--mode", "accept-edits", "--sandbox",
         "--print-timeout", "3m", "--add-dir", f"{wt}/agy-trial",
         "--print=Reply with only the word OK.",
     ]
