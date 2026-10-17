@@ -98,7 +98,7 @@ unclean() {
   if [ "$wt" != - ]; then
     dirt=$(git -C "/Users/cobalt/cobalt-wt/$wt" status --short 2>&1)
     # card 583 FR-9: a shadow or routed seat's ONE untracked SHADOW-INSTRUCTIONS.md is not dirt
-    case "$kind" in shadow|routed) [ "$dirt" != "?? SHADOW-INSTRUCTIONS.md" ] || dirt="" ;; esac
+    case "$kind" in shadow|routed|check) [ "$dirt" != "?? SHADOW-INSTRUCTIONS.md" ] || dirt="" ;; esac
     [ -z "$dirt" ] || { echo "tree not clean"; return; }
     rdir=$(dirname "$report")
     { [ -z "$(git -C "$rdir" status --short -- "$report" 2>&1)" ] \

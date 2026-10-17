@@ -701,7 +701,6 @@ def test_fr9_control_a_routed_tree_with_any_other_untracked_line_is_still_kept(t
     assert w.logged() == [], w.logged()
 
 
-@pytest.mark.xfail(strict=True, reason="check fr3 O1: HELD, NOT FIXED — ops/desk/desk-watch.sh (fenced)")
 @pytest.mark.parametrize("shadow", [False, True], ids=["routed", "shadow"])
 def test_check_fr3_o1_a_routed_or_shadow_cards_check_closes_on_the_instructions_file(tmp_path, shadow):
     w = RWatch(tmp_path / "w", done=True, last="CHECK DONE · job: x · pass: 1", shadow=shadow)
