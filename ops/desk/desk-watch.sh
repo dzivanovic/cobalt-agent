@@ -96,7 +96,10 @@ listed() {
 # unclean: the first of tree not clean, report not committed, session busy; nothing when clean
 unclean() {
   if [ "$wt" != - ]; then
-    [ -z "$(git -C "/Users/cobalt/cobalt-wt/$wt" status --short 2>&1)" ] || { echo "tree not clean"; return; }
+    dirt=$(git -C "/Users/cobalt/cobalt-wt/$wt" status --short 2>&1)
+    # card 583 FR-9: a shadow or routed seat's ONE untracked SHADOW-INSTRUCTIONS.md is not dirt
+    case "$kind" in shadow|routed) [ "$dirt" != "?? SHADOW-INSTRUCTIONS.md" ] || dirt="" ;; esac
+    [ -z "$dirt" ] || { echo "tree not clean"; return; }
     rdir=$(dirname "$report")
     { [ -z "$(git -C "$rdir" status --short -- "$report" 2>&1)" ] \
       && [ -n "$(git -C "$rdir" log -1 --format=%h -- "$report" 2>/dev/null)" ]; } \

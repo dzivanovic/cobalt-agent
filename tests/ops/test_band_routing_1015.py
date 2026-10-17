@@ -646,7 +646,6 @@ def test_fr8_control_the_rest_of_the_line_and_the_table_stand():
         assert sum(ln.startswith(f"| {band} |") for ln in sect) == 1, band
 
 
-@pytest.mark.xfail(strict=True, reason="check fr2 O1: HELD, NOT FIXED — ops/desk/desk-watch.sh (fenced)")
 def test_check_o1_a_routed_closeout_on_a_gate_seat_tree_hands_build_to_desk_done(tmp_path):
     w = RWatch(tmp_path / "w", done=True, last=ROUTED_STOP)
     (w.wt / "SHADOW-INSTRUCTIONS.md").write_text("constructed\n")
