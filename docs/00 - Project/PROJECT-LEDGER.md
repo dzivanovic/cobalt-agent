@@ -4526,3 +4526,110 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-15*"` = `deploy-2026-10-15-card-template` (R1578), `-card-template-fr1-attempt2` (R1612), `-close-automation` (R1606), `-deploy-freeze-fr1` (R1627), `-desk-installs` (R1570), `-gate-tests-ops` (R1544), `-jev-shadow` (R1625).
 - STOP LINE (L35), `reports/close-2026-10-14.md`: `CLOSE PUSHED 4e606f89 · days: 1 · … · push: verified`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-15.md` `## 8`.
+
+### 2026-10-16 — FR-O2 JEV fix round deployed; card 583 band routing two fix rounds; card 641 check-scratch built, its fix round built; 641 deploy held for his ruling
+
+- R1629 06:46 RECORD: his word: close-1015 (`edac01ef`) stopped; `CLOSE PUSHED 0175a5b7` stands.
+- R1630 06:47 LAUNCHED: brain restarted on his word, new brain `bede3dc9`.
+- R1631 06:48 LAUNCHED: day-open 10-16 in the Qwen pane.
+- R1632 06:51 LAUNCHED: FR-O2 drafter `5a34a4cb` re-heads 591 to card 622.
+- R1633 06:52 LAUNCHED: card 622 DRAFTED, committed `ecc74af6`; preflight `cc6103d7`.
+- R1634 06:52 LAUNCHED: card 583 BAND preflight `c784e9ce`.
+- R1635 06:54 LAUNCHED: card 622 preflight NO; amend drafter `38bf67f4`.
+- R1636 06:56 LAUNCHED: card 622 amended (`30104dbd`); preflight r2 `24a20142`.
+- R1637 06:57 LAUNCHED: card 622 preflight r2 YES, BASE `f6ca1455`; FR-O2 build `a00c3d16` (Opus).
+- R1638 06:58 OPEN: card 583 preflight NO (4 fails); brain `bede3dc9` asked.
+- R1639 06:59 DIRECTION (brain): Q1 drop B3 (8); Q2 routed card shadow-shaped; 622 builds on Opus; drafter prompt 627.
+- R1640 07:02 LAUNCHED: day-open GREEN; card 583 amend2 DRAFTED; preflight r2 `694ce24b`.
+- R1641 07:04 LAUNCHED: card 583 preflight r2 NO (3 fails); amend3 drafter `4056f8c5`.
+- R1642 07:05 LAUNCHED: card 583 amend3 DRAFTED; preflight r3 `a139bcf6`.
+- R1643 07:07 LAUNCHED: card 583 preflight r3 YES, BASE `f2ca3e1a`, commit `8523214c`; build `fb6419b9` (Opus).
+- R1644 07:49 RECORD: FR-O2 BUILT `jev-shadow-fr1` tip `6a74fa0c`; deploy card 631.
+- R1645 07:51 LAUNCHED: FR-O2 deploy hub `d54d9ac6` on card 631 (`685c39ea`).
+- R1646 08:16 RECORD: card 583 BUILT tip `bd9c24ac` (offline 8409/0, 7 of 7 rows).
+- R1647 08:45 RECORD: FR-O2 DEPLOYED `c45e9730`, smoke GREEN; no keyed batch before his yes on F12.
+- R1648 08:45 LAUNCHED: card 583 check drafter `9cea1f09` (prompt 632).
+- R1649 08:48 RECORD: desk `f2f973cd` took over from `8e552225`.
+- R1650 08:48 LAUNCHED: check card 633 DRAFTED; preflight `66ac2613` (prompt 634).
+- R1651 08:50 RECORD: card 633 preflight YES; desk filled TIP `bd9c24ac`.
+- R1652 08:51 LAUNCHED: check `75fdf3ba` on card 633 (commit `b9858dad`).
+- R1653 10:00 ASKED: check `75fdf3ba` ready NO tip `ee21824d` (2 HELD: O2, O4); brain asked.
+- R1654 10:01 DESK RECORD (brain): card 583 fix round FR-1..FR-5; drafter prompt 635.
+- R1655 10:06 LAUNCHED: card 583 fix round DRAFTED; preflight prompt 636.
+- R1656 10:08 RECORD: preflight `de6c7c37` YES; branch tip `ee21824d`.
+- R1657 10:08 LAUNCHED: build `a1d10668` at FR-1 on card 583 (`f8e49f1c`).
+- R1658 11:01 LAUNCHED: fix-round BUILT tip `c8c5ca90` (rows 5 of 5, offline 8421/0).
+- R1659 11:03 LAUNCHED: fix-round check card 638 DRAFTED; preflight prompt 639.
+- R1660 11:05 RECORD: card 638 preflight `3cc260dc` YES.
+- R1661 11:05 LAUNCHED: check `d15608a4` on card 638 (`75434c6e`).
+- R1662 11:08 ASKED: check `d15608a4` FAILED at copy (prior staging dir); brain asked.
+- R1663 11:08 DESK RECORD (brain): relaunch with JOB `band-routing-1015-fr1`; stage-copy gap-filler follow-up.
+- R1664 11:10 BLOCKED: `desk-launch.sh check` refused the new JOB; his mv owed.
+- R1665 11:36 LAUNCHED: K5 gap-filler first in the drafter queue (check scratch keyed by job); prompt 640.
+- R1666 11:36 DEFECT: desk asked him for the mv three more times after R1664; no further ask.
+- R1667 11:39 DESK RECORD (brain, his words): he will say when the mv is run; queue continues.
+- R1668 11:41 LAUNCHED: K5 card 641 `check-scratch-1016` DRAFTED (`93fa4832`); preflight prompt 642.
+- R1669 11:44 LAUNCHED: card 641 preflight `dec8a807` NO (1 fail); amend prompt 643.
+- R1670 11:44 LAUNCHED: card 641 amend DRAFTED (`450fa4d9`); preflight r2 prompt 644.
+- R1671 11:45 ASKED: card 641 preflight r2 `cf586ceb` NO (FILL token in prose); brain asked.
+- R1672 11:45 DESK RECORD (brain): desk rewords the prose token, BASE `b84cca9a`; build launches.
+- R1673 11:44 LAUNCHED: build `2853bae6` (Opus, BAND MID) on card 641, worktree `check-scratch-1016`.
+- R1674 11:46 RECORD: desk `d0763215` took over from `f2f973cd`.
+- R1675 11:49 DESK RECORD (brain, his words "the remove is done"): card 638 check relaunched.
+- R1676 11:49 LAUNCHED: check `09348796` on card 638 (TIP `c8c5ca90`).
+- R1677 12:50 ASKED: check `09348796` ready NO tip `7bf43c2b` (3 HELD in `desk-launch.sh`); brain asked.
+- R1678 12:52 DESK RECORD (brain): card 583 second fix round FR-6..8; card 641 deploys before its check.
+- R1679 12:52 LAUNCHED: drafter for FR-6..8 (prompt 645).
+- R1680 12:57 ASKED: FR-6..8 DRAFTED (`16e92c87`); FR-6 needs `desk-watch.sh`; brain asked.
+- R1681 12:58 DESK RECORD (brain): `desk-watch.sh` joins files; shape A.
+- R1682 12:58 LAUNCHED: narrow amend drafter for shape A (prompt 646).
+- R1683 12:59 RECORD: card 641 BUILT tip `85eade55` (offline 8384/0, rows 2 of 2).
+- R1684 12:59 LAUNCHED: check-card drafter for card 648 (prompt 647).
+- R1685 13:00 RECORD: card 583 FR-6 shape A DRAFTED (`e9d9c622`).
+- R1686 13:00 LAUNCHED: card 583 FR-6..8 preflight (prompt 649).
+- R1687 13:01 RECORD: check card 648 DRAFTED (`6e9bd2ac`).
+- R1688 13:01 LAUNCHED: check card 648 preflight (prompt 650).
+- R1689 13:02 ASKED: preflight `dfa7dc93` YES with issue (routed kind refused by `desk-done.sh`); brain asked.
+- R1690 13:04 DESK RECORD (brain): option A, map routed closeout to build.
+- R1691 13:04 LAUNCHED: card 583 FR-6 closeout amend drafter (prompt 651).
+- R1692 13:05 RECORD: card 648 preflight `6219d929` NO (1 fail).
+- R1693 13:05 LAUNCHED: card 648 amend drafter (prompt 652).
+- R1694 13:06 RECORD: card 648 amend DRAFTED (`299cd8ab`).
+- R1695 13:06 LAUNCHED: card 648 preflight r2 (prompt 653).
+- R1696 13:07 RECORD: card 583 FR-6 closeout DRAFTED (`d53c95d4`).
+- R1697 13:07 LAUNCHED: card 583 preflight r2 (prompt 654).
+- R1698 13:08 RECORD: card 648 preflight `a3fa2991` r2 YES.
+- R1699 13:08 LAUNCHED: check on card 648 (Opus 5.5, TIP `85eade55`).
+- R1700 13:08 RECORD: card 583 preflight `899f90ef` r2 YES.
+- R1701 13:08 LAUNCHED: build at FR-6 on card 583 (Opus 5.5).
+- R1702 13:12 LAUNCHED: desk REFRESH at ~245,000 tokens.
+- R1703 13:13 RECORD: desk `3a31213b` took over from `d0763215`.
+- R1704 13:48 RECORD: card 583 FR-6..8 BUILT tip `fda2300b` (offline 8434/0, 3 of 3); scoped check waits for 641 deploy.
+- R1705 13:50 ASKED: card 641 check `04eb45d3` ready NO (G1 held); brain asked.
+- R1706 13:52 DESK RECORD (brain): card 641 fix round FR-1, FR-2; deploy 641 before the 583 check.
+- R1707 13:52 LAUNCHED: card 641 fix-round drafter (prompt 655).
+- R1708 13:55 ASKED: card 641 FR-1/FR-2 DRAFTED (`26128d46`, 5 decisions); D1, D2 asked.
+- R1709 13:57 DESK RECORD (brain): D1 keep :115 live; D2 check card header CHECK REPORT: and HOUSE A:.
+- R1710 13:57 LAUNCHED: card 641 fix-round preflight (prompt 656).
+- R1711 13:57 ASKED: preflight `c970473b` NO (HOUSE A: missing in fixture); brain asked.
+- R1712 13:59 DESK RECORD (brain): option A, fixture gains HOUSE A: grok.
+- R1713 13:59 LAUNCHED: card 641 option A amend drafter (prompt 657).
+- R1714 13:59 RECORD: card 641 option A amend DRAFTED (`feea3a9b`).
+- R1715 13:59 LAUNCHED: card 641 preflight r2 (prompt 658).
+- R1716 14:01 RECORD: preflight r2 `c2234743` NO (control (ii) RED: 2 failed).
+- R1717 14:01 LAUNCHED: two-sentence amend drafter (prompt 659).
+- R1718 14:02 RECORD: card 641 amend DRAFTED (`54c3d335`).
+- R1719 14:02 LAUNCHED: card 641 preflight r3 (prompt 660).
+- R1720 14:04 RECORD: preflight r3 `7bfe918f` YES (22 checks).
+- R1721 14:04 LAUNCHED: build at FR-1 on card 641 (Opus 5.5).
+- R1722 14:36 RECORD: card 641 FR-1/FR-2 BUILT tip `dd4d968d` (offline 8388/0, rows 2 of 2); report `a7fe4110`.
+- R1723 14:36 LAUNCHED: check-card drafter for card 662 (prompt 661).
+- R1724 14:41 RECORD: check card 662 DRAFTED (`54d741ed`); first check report committed to main.
+- R1725 14:41 LAUNCHED: card 662 preflight (prompt 663).
+- R1726 14:42 RECORD: preflight `88ed9ad6` on card 662 YES (18 checks).
+- R1727 14:42 LAUNCHED: check on card 662 (Opus 5.5, TIP `dd4d968d`).
+- R1728 14:43 ASKED: check `815b6911` FAILED at copy (main has old `stage-set.sh`); kept open; brain asked.
+- R1729 14:45 RECORD: brain's deploy-641-first direction blocked by the harness as a check bypass; question goes to Dejan; 641 deploy and 583 check HELD.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-16*"` = `deploy-2026-10-16-jev-shadow-fr1` (R1647).
+- STOP LINE (L35), `reports/close-2026-10-15.md`: `CLOSE PUSHED 0175a5b7` (R1629).
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-16.md` `## 8`.

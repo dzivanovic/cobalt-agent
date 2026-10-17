@@ -1083,6 +1083,27 @@ OFF-LADDER work of 2026-10-15 (each with the ruling that ordered it):
 | Routing B (L27, L29) | RULED | His R1532. LOW/MID Grok 4.7 + Terra backup, HIGH Opus; APPLIED LAWS at 07:02. |
 | Day-open standing order | RULED | His R1537. 07:00 ET, `/clear` first; APPLIED at 07:28. |
 
+### Status 2026-10-16
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1016` for 10-16 alone from `reports/cto-2026-10-16.md` rows R1629–R1729 (06:46 → 14:45 ET); tag re-verified (L35): `git tag --list "deploy-2026-10-16*"` = `deploy-2026-10-16-jev-shadow-fr1`. The 10-15 close ran (`CLOSE PUSHED 0175a5b7`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 | DONE-LIVE | Unchanged (see 10-08 to 10-15). |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | 304's recut still owed as a K5 drafter (§5 HANDOVER PLAN 2); no 304 tag. |
+| S5 F21 (cards `468`, `469`) | NOT STARTED (cards DRAFTED) | r3 and X8 probe owed behind the K5 drafters. |
+| S5 F23 (card `503`) | NOT STARTED (card DRAFTED) | 503 preflight owed. |
+| S5 F5, F20 | NOT STARTED (FINALs APPROVED) | F20/F5 drafters owed. |
+| S5 F16 close | NOT STARTED | No row. |
+
+**Stop date: 2026-10-28 (S5, day 2 of 14). S5: ON TIME.** Reason: no S5 feature was built or deployed on 10-16; the day went to the FR-O2 deploy and the K5 platform cards (583, 641) below. The S5 features have 12 days left and no ruling moved a date (`cto-2026-10-16.md` §0).
+
+OFF-LADDER work of 2026-10-16 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| JEV shadow fix round FR-O2 (card `622`/`631`, job `jev-shadow-fr1`) | DONE-DARK | Brain R1620, R1632. `deploy-2026-10-16-jev-shadow-fr1` `c45e9730`, smoke GREEN (R1647). Keyed runs wait for his yes on F12. |
+| Band routing (card `583`, job `band-routing-1015`) | BUILT-NOT-MERGED | Brain R1639, R1654, R1678–R1690. Tip `fda2300b` (FR-6..8 BUILT, R1704); check 1 NO (R1653), check 2 NO (R1677). Its scoped check waits for card 641 to deploy; no 583 tag. |
+| Check scratch keyed by job (card `641`, job `check-scratch-1016`) | BUILT-NOT-MERGED | Brain R1665, R1706, R1712. Tip `dd4d968d` (FR-1, FR-2 BUILT, R1722); check 1 NO (R1705); check `815b6911` FAILED at copy (R1728). Deploy HELD for his ruling (R1729); no 641 tag. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
