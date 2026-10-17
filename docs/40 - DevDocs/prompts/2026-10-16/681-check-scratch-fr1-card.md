@@ -7,7 +7,7 @@ WORKTREE: check-scratch-fr1
 BASE: 79f6f2f3
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/check-scratch-fr1/docs/40 - DevDocs/reports/check-scratch-fr1-build-2026-10-17.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/check-scratch-fr1-check-2026-10-17.md
 HOUSE B: as needed
 BAND: MID
 DB: none
