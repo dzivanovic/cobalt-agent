@@ -1181,8 +1181,8 @@ def builder_call(command, s):
     """S3 and S7 (card 2026-10-11 324): True when the whole command is the ## BUILDERS command of
     the seat's MODEL with `<worktree>` the card's WORKTREE and ONE plain double-quoted prompt, its
     write target that worktree and nothing wider (Claude: dontAsk, Bash denied; Grok: no
-    --always-approve), and no `.env` (a file or a link) in that worktree; the S7 route when all
-    holds but `.env`; else False (G7)."""
+    --always-approve; Gemini: --mode accept-edits once, --sandbox), and no `.env` (a file or a
+    link) in that worktree; the S7 route when all holds but `.env`; else False (G7)."""
     wt = s["card"]["worktree"]
     template = builder_command(s["hub"], s["model"]) if s["model"] else None
     if not wt or not template:
@@ -1198,13 +1198,20 @@ def builder_call(command, s):
         return False
     if not PLAIN_PROMPT.fullmatch(command[len(prefix):len(command) - len(suffix)]):
         return False
-    if write_targets(prefix + suffix) != {target + "/**"}:
-        return False
     head = verb(words(prefix))
+    targets = write_targets(prefix + suffix)
+    if head == "agy":
+        # card 671 G2/FR-1: agy --add-dir D or --add-dir=D (D/**), read for agy only
+        targets |= {d + "/**" for d in re.findall(r" --add-dir[ =](\S+)", prefix + suffix)}
+    if targets != {target + "/**"}:
+        return False
     if head == "claude" and (" --permission-mode dontAsk " not in prefix + suffix
                              or '--disallowedTools "Bash" ' not in prefix + suffix):
         return False
     if head == "grok" and "--always-approve" in command:
+        return False
+    if head == "agy" and ((prefix + suffix).count(" --mode ") != 1 or " --mode accept-edits " not in prefix + suffix
+                          or " --sandbox " not in prefix + suffix):
         return False
     if os.path.lexists(os.path.join(target, ".env")):
         return ROUTE["G7 env"]

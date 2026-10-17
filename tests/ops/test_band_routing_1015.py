@@ -109,11 +109,11 @@ def test_b2_results_table_carries_the_ruling_and_the_ledger_triggers():
     assert "Routing takes effect only on his word" not in text
 
 
-def test_b2_control_the_three_builder_rows_stand():
+def test_b2_control_the_four_builder_rows_stand():
     sect = section(lines_of("SHADOW-HUB.md"), "BUILDERS")
     rows = [ln for ln in sect if ln.startswith("| `")]
     ids = sorted(ln.split("|")[1].strip().strip("`") for ln in rows)
-    assert ids == sorted(["grok-4.7", "claude-sonnet-5-5", "gpt-5.6-terra"])
+    assert ids == sorted(["grok-4.7", "claude-sonnet-5-5", "gpt-5.6-terra", "gemini-4-argon-high"])
     assert "claude-opus-5-5" not in "\n".join(sect)
 
 

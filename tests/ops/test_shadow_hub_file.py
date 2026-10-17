@@ -2,7 +2,7 @@
 
 Every test reads the tree's own file. Its one launch line is BUILD-HUB.md line 12's with
 SHADOW-HUB.md read in its place, the gate seat's name and ONE more token, `<builder allow>`;
-its `## BUILDERS` table holds the three builder rows (R1019: no Opus and no Sol arm); its
+its `## BUILDERS` table holds the four builder rows (R1019: no Opus and no Sol arm); its
 `## RESULTS TABLE` is the routing table's shape (R1014). Nothing is launched.
 """
 
@@ -23,11 +23,12 @@ BUILD = PROMPTS / "BUILD-HUB.md"
 SIGN = "«" + "SIGN"  # built so this file never spells the mark whole
 TOKEN = "<builder allow>"
 WT_GLOB = "/Users/cobalt/cobalt-wt/<worktree>/**"
-IDS = ["grok-4.7", "claude-sonnet-5-5", "gpt-5.6-terra"]
+IDS = ["grok-4.7", "claude-sonnet-5-5", "gpt-5.6-terra", "gemini-4-argon-high"]
 ALLOW = {
     "grok-4.7": "Bash(grok -m grok-4.7 --sandbox cobalt-job *)",
     "claude-sonnet-5-5": "Bash(claude -p --model claude-sonnet-5-5 *)",
     "gpt-5.6-terra": "Bash(codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write *)",
+    "gemini-4-argon-high": "Bash(agy --model gemini-4-argon-high --mode accept-edits --sandbox *)",
 }
 
 
@@ -75,10 +76,12 @@ def command(cells: list[str]) -> str:
 
 def write_targets(cmd: str) -> set[str]:
     """Every path the command lets its model write: grok `--allow "Write(X)"`, claude
-    `Edit(//X)` / `Write(//X)` (the leading `/` of `//` marks an absolute path), codex `-C D` (D/**)."""
+    `Edit(//X)` / `Write(//X)` (the leading `/` of `//` marks an absolute path), codex `-C D` (D/**),
+    agy `--add-dir D` (D/**, card 671 G2)."""
     out = set(re.findall(r'--allow "Write\(([^)]*)\)"', cmd))
     out |= {p[1:] for p in re.findall(r'"(?:Edit|Write)\((//[^)]*)\)"', cmd)}
     out |= {d + "/**" for d in re.findall(r" -C (\S+)", cmd)}
+    out |= {d + "/**" for d in re.findall(r" --add-dir (\S+)", cmd)}
     return out
 
 
@@ -119,11 +122,11 @@ def test_s1_the_rest_of_the_line_is_build_hubs_with_the_gate_seat():
     assert line == want
 
 
-def test_s1_builders_holds_exactly_the_three_ids():
+def test_s1_builders_holds_exactly_the_four_ids():
     rows = builders(text())
     assert sorted(rows) == sorted(IDS)
     sect = section(text(), "BUILDERS")
-    for gone in ("claude-opus-5-5", "gpt-5.6-sol", "gemini"):
+    for gone in ("claude-opus-5-5", "gpt-5.6-sol", "gemini-4-argon-medium", "gemini-4-argon-low", "gemini-3.1-pro-high"):
         assert gone not in sect
 
 
@@ -149,7 +152,8 @@ def test_s1_no_wide_flag_on_the_line_or_in_builders(word):
 @pytest.mark.parametrize("model", IDS)
 def test_s1_every_sign_cell_holds_his_row(model):
     cell = builders(text())[model][4]
-    assert "2026-10-11 R1069 · HIS RULING · APPROVED" in cell
+    row = "2026-10-17 R1738" if model == "gemini-4-argon-high" else "2026-10-11 R1069"
+    assert f"{row} · HIS RULING · APPROVED" in cell
     assert SIGN not in cell
 
 
@@ -157,6 +161,37 @@ def test_s1_the_claude_builder_runs_no_command():
     cmd = command(builders(text())["claude-sonnet-5-5"])
     assert " --permission-mode dontAsk " in cmd
     assert '--disallowedTools "Bash" ' in cmd
+
+
+# ---- card 2026-10-16 671 H1, X2: the Gemini builder row (R1738) -------------------------------
+
+
+def test_k5_the_gemini_builder_runs_no_shell():
+    cmd = command(builders(text())["gemini-4-argon-high"])
+    assert cmd.count(" --mode ") == 1
+    for part in (" --mode accept-edits ", " --sandbox ", " --add-dir /Users/cobalt/cobalt-wt/<worktree> ",
+                 '--print="<pass prompt>"'):
+        assert part in cmd, part
+
+
+def test_k5_no_line_names_the_old_gemini_id():
+    assert [x for x in text().splitlines() if "gemini-3.1-pro-high" in x] == []
+
+
+def test_k5_the_launcher_sentence_names_the_one_gemini_id():
+    lines = [x for x in text().splitlines() if x.startswith("The launcher refuses")]
+    assert len(lines) == 1
+    assert "a Gemini id other than gemini-4-argon-high," in lines[0]
+
+
+def test_k5_the_gemini_x1_paragraph():
+    lines = [x for x in text().splitlines() if x.startswith("X1 for Gemini")]
+    assert len(lines) == 1
+    assert lines[0] in section(text(), "BUILDERS").splitlines()
+    for part in ("x1-canary/probe/.env", "x1-canary/CANARY.txt", "OUTSIDE.txt", "X1 WRITE OK",
+                 "INCOMPLETE", "## PASSES row 0 (X1)"):
+        assert part in lines[0], part
+    assert "x1-canary/.env" not in lines[0]
 
 
 # ---- S7: the .env precondition --------------------------------------------------------------

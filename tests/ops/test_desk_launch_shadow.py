@@ -3,7 +3,7 @@
 Every run copies ops/desk/desk-launch.sh into tmp_path/ops/ beside a passing desk-size guard
 (desk-context.sh). COBALT_REPO_ROOT points it at a tmp repo whose SHADOW-HUB.md is a constructed
 fixed file: one launch line carrying every token the kind fills, and a `## BUILDERS` table of the
-three builder rows, Grok's signed (a constructed row), the other two still holding the sign mark.
+four builder rows, Grok's signed (a constructed row), the other three still holding the sign mark.
 COBALT_WT_ROOT points it at a tmp worktree root. `claude` is a stub on PATH that records its cwd
 and arguments. One test runs the tree's own SHADOW-HUB.md through the same script. Nothing here
 launches a seat.
@@ -40,12 +40,14 @@ ALLOW = {
     "grok-4.7": "Bash(grok -m grok-4.7 --sandbox cobalt-job *)",
     "claude-sonnet-5-5": "Bash(claude -p --model claude-sonnet-5-5 *)",
     "gpt-5.6-terra": "Bash(codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write *)",
+    "gemini-4-argon-high": "Bash(agy --model gemini-4-argon-high --mode accept-edits --sandbox *)",
 }
-SLUG = {"grok-4.7": "grok", "claude-sonnet-5-5": "sonnet", "gpt-5.6-terra": "terra"}
+SLUG = {"grok-4.7": "grok", "claude-sonnet-5-5": "sonnet", "gpt-5.6-terra": "terra", "gemini-4-argon-high": "gemini"}
 COMMAND = {
     "grok-4.7": 'grok -m grok-4.7 --sandbox cobalt-job --allow "Write(/Users/cobalt/cobalt-wt/<worktree>/**)" -p "<pass prompt>"',
     "claude-sonnet-5-5": 'claude -p --model claude-sonnet-5-5 --permission-mode dontAsk "<pass prompt>"',
     "gpt-5.6-terra": 'codex exec --skip-git-repo-check -m gpt-5.6-terra -s workspace-write -C /Users/cobalt/cobalt-wt/<worktree> "<pass prompt>" < /dev/null',
+    "gemini-4-argon-high": 'agy --model gemini-4-argon-high --mode accept-edits --sandbox --print-timeout 40m --add-dir /Users/cobalt/cobalt-wt/<worktree> --print="<pass prompt>"',
 }
 
 
@@ -214,7 +216,27 @@ def test_an_unsigned_model_is_refused_beside_a_signed_one(desk):
 
 def test_a_gemini_id_is_refused_by_name(desk):
     refused(desk.run(str(desk.card), "--model", "gemini-3.1-pro-high"),
-            "shadow: model 'gemini-3.1-pro-high' is a Gemini id; Gemini is not in ## BUILDERS")
+            "shadow: model 'gemini-3.1-pro-high' is a Gemini id not admitted; gemini-4-argon-high is the one Gemini builder (R1738)")
+
+
+# ---- card 2026-10-16 671 L1: of the Gemini ids only gemini-4-argon-high (R1738) ---------------
+
+
+def test_k5_gemini_4_argon_high_is_admitted(desk):
+    desk.set_hub(hub_text(line_for(), signed=("grok-4.7", "gemini-4-argon-high")))
+    card = desk.card_for("gemini")
+    done = desk.run(str(card), "--model", "gemini-4-argon-high")
+    assert done.returncode == 0, done.stderr
+    line = done.stdout.splitlines()[-1]
+    assert "MODEL: gemini-4-argon-high" in line
+    assert '"Bash(agy --model gemini-4-argon-high --mode accept-edits --sandbox *)"' in line
+
+
+@pytest.mark.parametrize("model", ["gemini-4-argon-medium", "gemini-4-argon-low"])
+def test_k5_gemini_medium_and_low_are_refused(desk, model):
+    desk.set_hub(hub_text(line_for(), signed=("grok-4.7", "gemini-4-argon-high")))
+    refused(desk.run(str(desk.card_for("gemini")), "--model", model),
+            f"shadow: model '{model}' is a Gemini id not admitted; gemini-4-argon-high is the one Gemini builder (R1738)")
 
 
 def test_an_id_not_in_the_table_is_refused(desk):
@@ -290,6 +312,8 @@ def test_the_real_file_launches_a_signed_grok(desk):
     assert "MODEL: grok-4.7" in line and "<" not in line
     terra = desk.run(str(desk.card_for("terra")), "--model", "gpt-5.6-terra")
     assert terra.returncode == 0, terra.stderr  # card 355 S1: signed on his R1069
+    gemini = desk.run(str(desk.card_for("gemini")), "--model", "gemini-4-argon-high")
+    assert gemini.returncode == 0, gemini.stderr  # card 671 L1: the real row, signed on his R1738
 
 
 def test_the_real_file_holds_no_install_token_and_no_sign_mark():

@@ -374,6 +374,7 @@ fi
 # below, and the `build|shadow)` arm adds the shadow's: SHADOW OF:, a shadow/ BRANCH, the model's
 # ONE ## BUILDERS row, signed, and a JOB that ends in that row's slug. The line's mode is checked
 # after the fill: dontAsk, once.
+# card 671 L1: of the Gemini ids only gemini-4-argon-high (R1738); medium and low are refused by name
 model=""
 builder=""
 routed=""
@@ -400,7 +401,8 @@ if [ "$kind" = "shadow" ]; then
     [ "$mn" -eq 1 ] || refuse "shadow: --model <id> is required"
     case "$model" in
         ""|*[!A-Za-z0-9._-]*) refuse "shadow: model '$model' holds a character outside [A-Za-z0-9._-]" ;;
-        gemini-*) refuse "shadow: model '$model' is a Gemini id; Gemini is not in ## BUILDERS (N/A — id not found)" ;;
+        gemini-4-argon-high) ;;
+        gemini-*) refuse "shadow: model '$model' is a Gemini id not admitted; gemini-4-argon-high is the one Gemini builder (R1738)" ;;
     esac
     set -- shadow "$scard"
 fi

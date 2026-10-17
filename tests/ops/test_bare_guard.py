@@ -2454,3 +2454,100 @@ def test_s3_a_symlink_instructions_file_is_not_a_write_of_src(roots):
     link.symlink_to(roots.wt / JOB_WT / "src" / "x.py")
     done = write(link, seat, "code\n")
     assert_denied(done, G5_FENCE)
+
+
+# ---- card 2026-10-16 671: the Gemini builder call (brain R1752 bounds a-c) ----
+
+GEMINI = (
+    "gemini", "Bash(agy --model gemini-4-argon-high --mode accept-edits --sandbox *)",
+    'agy --model gemini-4-argon-high --mode accept-edits --sandbox --print-timeout 40m '
+    '--add-dir /Users/cobalt/cobalt-wt/<worktree> --print="<pass prompt>"',
+)
+
+
+def gemini_seat(roots, model: str, row: str = GEMINI[2]) -> dict:
+    """The gate seat of `shadow_seat`, its constructed hub rewritten with SHADOW_ROWS plus the
+    Gemini row whose builder command is `row`."""
+    seat = shadow_seat(roots, model)
+    table = dict(SHADOW_ROWS, **{"gemini-4-argon-high": (GEMINI[0], GEMINI[1], row)})
+    rows = "".join(f"| `{m}` | `{s}` | `{a}` | `{c}` | sign |\n" for m, (s, a, c) in table.items())
+    (prompts(roots) / "SHADOW-HUB.md").write_text(
+        "# SHADOW-HUB (constructed)\n\n## BUILDERS\n\n| id | slug | builder allow | builder command | SIGN |\n"
+        f"|---|---|---|---|---|\n{rows}\n## PROCEDURE\n"
+    )
+    return seat
+
+
+def gemini(roots, row: str = GEMINI[2], wt: str = JOB_WT) -> str:
+    cmd = row.replace("/Users/cobalt/cobalt-wt/<worktree>", str(roots.wt / wt))
+    return cmd.replace("<pass prompt>", PASS_PROMPT)
+
+
+def test_k5_a_gemini_gate_seat_runs_the_gemini_command(roots):
+    assert_allowed(run(gemini(roots), gemini_seat(roots, "gemini-4-argon-high")))
+
+
+@pytest.mark.parametrize(
+    "shape", ["NO SANDBOX", "YOLO", "TWO MODES", "OTHER ADD-DIR", "SECOND ADD-DIR", "GROK SEAT", "MEDIUM"],
+)
+def test_k5_any_other_gemini_shape_is_g7(roots, shape):
+    """TEMPLATE-MISMATCH denials: each alters the filled template, so builder_call returns False at
+    its startswith(prefix) / endswith(suffix) test before the agy rule is reached; they pin the
+    template, not the rule."""
+    good = gemini(roots)
+    shapes = {
+        "NO SANDBOX": good.replace(" --sandbox", "", 1),
+        "YOLO": good.replace("--mode accept-edits", "--mode yolo"),
+        "TWO MODES": good.replace(" --print=", " --mode yolo --print="),
+        "OTHER ADD-DIR": gemini(roots, wt="other-0101"),
+        "SECOND ADD-DIR": good.replace(" --print=", f" --add-dir {roots.wt} --print="),
+        "GROK SEAT": good,
+        "MEDIUM": good.replace("gemini-4-argon-high", "gemini-4-argon-medium"),
+    }
+    assert shapes[shape] != good or shape == "GROK SEAT"
+    seat = gemini_seat(roots, "grok-4.7" if shape == "GROK SEAT" else "gemini-4-argon-high")
+    assert_denied(run(shapes[shape], seat), G7_ROUTE)
+
+
+@pytest.mark.parametrize("shape", ["HUB YOLO", "HUB TWO MODES", "HUB NO SANDBOX"])
+def test_k5_the_no_shell_rule_bites_on_a_wrong_hub_row(roots, shape):
+    """The hub row itself is wrong and the call is that row filled: the template test, the plain
+    prompt and the write-target test all pass, and the agy rule alone decides."""
+    rows = {
+        "HUB YOLO": GEMINI[2].replace("--mode accept-edits", "--mode yolo"),
+        "HUB TWO MODES": GEMINI[2].replace(" --print-timeout", " --mode yolo --print-timeout"),
+        "HUB NO SANDBOX": GEMINI[2].replace(" --sandbox", ""),
+    }
+    assert rows[shape] != GEMINI[2]
+    seat = gemini_seat(roots, "gemini-4-argon-high", row=rows[shape])
+    assert_denied(run(gemini(roots, row=rows[shape]), seat), G7_ROUTE)
+
+
+def test_k5_s7_the_gemini_call_with_env_is_denied(roots):
+    seat = gemini_seat(roots, "gemini-4-argon-high")
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    assert_denied(run(gemini(roots), seat), ENV_ROUTE)
+
+
+@pytest.mark.parametrize("model", list(SHADOW_ROWS))
+def test_k5_add_dir_widens_no_other_builder(roots, model):
+    wide = builder(roots, model).replace(" ", f" --add-dir {roots.wt} ", 1)
+    assert_denied(run(wide, gemini_seat(roots, model)), G7_ROUTE)
+
+
+def test_k5_check_o1_an_add_dir_equals_form_in_the_hub_row_is_g7(roots):
+    row = GEMINI[2].replace(" --print=", " --add-dir=/Users/cobalt/cobalt --print=")
+    seat = gemini_seat(roots, "gemini-4-argon-high", row=row)
+    assert_denied(run(gemini(roots, row=row), seat), G7_ROUTE)
+
+
+def test_k5_check_o1_control_the_equals_form_on_the_worktree_is_admitted(roots):
+    row = GEMINI[2].replace("--add-dir /Users/cobalt/cobalt-wt/<worktree>", "--add-dir=/Users/cobalt/cobalt-wt/<worktree>")
+    assert row != GEMINI[2]
+    assert_allowed(run(gemini(roots, row=row), gemini_seat(roots, "gemini-4-argon-high", row=row)))
+
+
+def test_k5_check_o1_control_a_second_add_dir_space_form_is_g7(roots):
+    row = GEMINI[2].replace(" --print=", " --add-dir /Users/cobalt/cobalt --print=")
+    seat = gemini_seat(roots, "gemini-4-argon-high", row=row)
+    assert_denied(run(gemini(roots, row=row), seat), G7_ROUTE)
