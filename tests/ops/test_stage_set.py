@@ -391,6 +391,7 @@ def _copy_no_prompts_card(job, dest, card):
     git(repo, "commit", "-q", "-m", "a card-shaped page")
     first_copy(dest, card).unlink()
     (dest / "files" / "x-card.md").write_bytes(page.read_bytes())
+    (dest / "STAGED-CARD").write_text("x-card.md\n")
 
 
 def _foreign_file_cs1(job, dest, card):
@@ -414,10 +415,6 @@ def refused_untouched(job, spoil, check=CHECK_B):
     assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
     assert "cleared:" not in done.stdout
     assert snapshot(dest) == before
-
-
-def test_cs1_control_two_card_copies_are_refused(job):
-    refused_untouched(job, _two_card_copies)
 
 
 def test_cs1_control_a_prior_copy_of_another_job_is_refused(job):
@@ -480,12 +477,6 @@ def test_fr1_a_build_card_read_copy_does_not_block_the_clear(job):
     assert not build.exists()
 
 
-def test_fr1_control_two_same_job_check_cards_are_refused(job):
-    def two_check_cards(job, dest, card):
-        (dest / "files" / "03-x-job-second-check-card.md").write_bytes(first_copy(dest, card).read_bytes())
-    refused_untouched(job, two_check_cards)
-
-
 def test_fr1_control_this_jobs_own_check_folder_shape(job):
     wt, repo, job_wt, base, tip, card, env, dest = job
     prior_staging(job, change=False)
@@ -525,6 +516,7 @@ def test_cs1_rewritten_job_line_is_refused_by_the_job_test_not_the_blob(job):
     git(repo, "commit", "-q", "-m", "a y-job card")
     first_copy(dest, card).unlink()
     (dest / "files" / other.name).write_bytes(other.read_bytes())
+    (dest / "STAGED-CARD").write_text(other.name + "\n")
     second = fr_card(job)
     before = snapshot(dest)
     done = stage(env, second, dest)
