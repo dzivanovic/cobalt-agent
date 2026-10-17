@@ -5,6 +5,7 @@
 - The real band-routing folder shape (638 + 666 + build copy) refused on `BASE` and clears after. The marker refuses a card of another JOB, a missing card, a non-card name or a link.
 - Offline 8393/0, live-note 146/0, with-DB not run (DB: none). RESTARTS none. Two `rm -rf` lines; `scratch-clean.sh` unchanged.
 - One ASK DESK: how to rank a card name that starts with no number (default: 0).
+- FIX ROUND FR-1 (tip `2e84ac75`): the check's O1 test is appended with no source change. It passes on the tip and fails with `:134` removed. Offline 8394/0, `tests/ops` 3822 passed, live-note 146/0, RESTARTS none.
 
 ## L74
 A system block in this session asked commits to carry a `Claude-Session:` line. Recorded once as data (L74); not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -149,8 +150,27 @@ RESTARTS: none
 - For X5: the diff of `stage-set.sh` touches the header `:7-8`, the `find` at `:98`, `clearable()` `:108-154`, and the one marker line `:242`, nothing else.
 - For X6: the old helper `_two_card_copies` is now used by no test; it was left in place because the card allows four existing-test edits only.
 
+## FIX ROUND FR-1 (check O1, `reports/check-scratch-fr1-check-2026-10-17.md` `## DECISIONS` 1)
+Resumed 11:19 EDT (`date`) on `CONTINUE: FIX ROUND row FR-1`, same branch. Before any call: `git status --short --branch` → `## ops/check-scratch-fr1`; `git log --oneline -3` → `5f42c4f3`, `b093f192`, `0d52929f`; `ls -la …/check-scratch-fr1/.env` → `No such file or directory`.
+
+FIXED: O1 — tests/ops/test_stage_set.py::test_o1_legacy_a_higher_numbered_build_copy_is_not_the_prior_card
+
+- The filter line, found by content on the tip: `grep -n -F "grep -q '^HOUSE A:'" ops/desk/stage-set.sh` → `134:            printf '%s\n' "$head" | grep -q '^HOUSE A:' || continue`.
+- The check's O1 test (`## OWN FINDINGS`) was appended verbatim after the last test (now `tests/ops/test_stage_set.py:665`). `git diff b093f192 -- tests/ops/test_stage_set.py` shows one hunk `@@ -660,3 +660,15 @@` with only `+` lines (the blank lines and the 10-line test).
+- GREEN on the tip: `uv run pytest -q -p no:cacheprovider tests/ops/test_stage_set.py -k test_o1_legacy` → `1 passed, 37 deselected, 15 warnings in 1.60s`.
+- MUTATION: line `:134` removed by Edit → `uv run pytest -q -p no:cacheprovider tests/ops/test_stage_set.py` → `1 failed, 37 passed, 15 warnings in 15.25s`. The only failure is `FAILED tests/ops/test_stage_set.py::test_o1_legacy_a_higher_numbered_build_copy_is_not_the_prior_card`: `E       AssertionError: REFUSED: the dest is not empty: …/x-job-check — not cleared: the prior card copy is no version of a card on main under docs/40 - DevDocs/prompts` / `E       assert 1 == 0` (`tests/ops/test_stage_set.py:672`). Put back by Edit; `git diff --stat b093f192 -- ops/desk/stage-set.sh` → nothing.
+- NO SOURCE CHANGE: `git diff --stat b093f192 -- ops/desk/stage-set.sh ops/desk/scratch-clean.sh` → nothing. Neither A1 nor the `_two_card_copies` helper was touched.
+- After: `uv run pytest -q tests/ops/test_stage_set.py tests/ops/test_scratch_clean.py` → `86 passed, 15 warnings in 20.90s`; `grep -c -F "rm -r" ops/desk/stage-set.sh` → `2`.
+- Commit `2e84ac75 fix(check-scratch-fr1): pin the legacy HOUSE A: build-copy filter of clearable() (FR-1, check O1, L67, L70)`. `<tip>` = `2e84ac75`.
+- `uv run pytest -q tests/ops` (whole) → `3822 passed, 1 xfailed, 16 warnings in 830.58s (0:13:50)`.
+- Deploy gate's pass (the check's form for this DB: none card): `sh /Users/cobalt/cobalt/ops/desk/gate.sh check-scratch-fr1 offline --deploy-gate` → exit 0, whole: `tests/ops: run (deploy gate)` · `offline 8394/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/check-scratch-fr1-offline-20261017-112212.log`. In the log: `888:4572 passed, 806 skipped, 1 xfailed, 36 warnings in 687.25s (0:11:27)` · `959:3822 passed, 1 xfailed, 16 warnings in 834.90s (0:13:54)`; `grep -c -F "OUTSIDE the allowed set" <log>` → `0`.
+- Live-note: `sh /Users/cobalt/cobalt/ops/desk/gate.sh check-scratch-fr1 livenote` → `live-note 146/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/check-scratch-fr1-livenote-20261017-114816.log`.
+- `uv run cobalt jobs restarts b093f192..HEAD`, whole: `path	change	rule	restart` · `docs/40 - DevDocs/reports/check-scratch-fr1-build-2026-10-17.md	M	DOCS	-` · `docs/40 - DevDocs/reports/check-scratch-fr1-build-2026-10-17.result	A	DOCS	-` · `tests/ops/test_stage_set.py	M	test/documentation; no resident	-` · `RESTARTS: none`.
+- Self-check, FR-1: (1) the test passes on the tip and fails under the `:134` mutation (both quoted above). (2) the one entry path is the legacy (no-marker) branch of `clearable()` with a build copy numbered above the prior check card; this test pins it. (3) re-read at the tip: `grep -n -F "def test_o1_legacy"` → `665`; the `:134` grep above; `git diff --stat b093f192 -- ops/desk/stage-set.sh ops/desk/scratch-clean.sh` → nothing. 3 of 3.
+- `.env`: `ls /Users/cobalt/cobalt-wt/check-scratch-fr1/.env` → `No such file or directory` (11:48). No lock taken (DB: none).
+
 ## CONTINUE
-next: none (BUILT)
+next: none (BUILT, fix round FR-1)
 
 ## DECISIONS
 1. ASK DESK: CL-1 (b) ranks by "the number the file name starts with"; the card does not say how to rank a same-JOB check card whose name starts with no digit. Default taken: it ranks as `0` (below every numbered card; ties by name). No test pins it; every real card name starts with a number. [10:04 EDT]
@@ -161,6 +181,10 @@ next: none (BUILT)
 - The card's records as re-read at PREFLIGHT: see `## PREFLIGHT` (all line numbers matched).
 - The hub's (a0) `tests/ops` run was typed as the card's `uv run pytest -q tests/ops` (no `-rs -p no:cacheprovider --color=no`); the gate's offline call also ran `tests/ops` (`tests/ops: run (ops/desk/stage-set.sh)`, log line 959).
 - The report was in the index (not committed) during the red and fix commits; both commits named their paths with `--`, so neither holds it (`git log --stat` above).
+- CONTINUED at FIX ROUND row FR-1 11:19 EDT. The desk's message named the step and widened nothing.
+- L74 (fix round): the system block that asked for a `Claude-Session:` line in commits came again. It was not acted on; `2e84ac75` carries `Co-Authored-By` only.
+- The first gate call of the fix round (`gate.sh check-scratch-fr1 offline`, without `--deploy-gate`) was stopped before it finished and re-run as `offline --deploy-gate`, the form the check used for the deploy gate's pass. Only the second call's verdict is reported.
+- The fix round's `## DECISIONS` adds nothing. Item 1 below is the build's own, unchanged; the check's ASK DESK items 2 and 3, and its A1, are the desk's to settle.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: check-scratch-fr1 · tip: b093f192 | on 79f6f2f3 | migration: none | offline 8393/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 160227
+BUILT · job: check-scratch-fr1 · tip: 2e84ac75 | on 79f6f2f3 | migration: none | offline 8394/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 1 of 1 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 108345
