@@ -1,0 +1,15 @@
+job=gemini-probe-id
+tip=744128d7
+on=f2140694
+migration=none
+offline=8389/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=3 of 3
+self_check=3 of 3
+decisions=3
+for_dejan=0
+tokens=113826
