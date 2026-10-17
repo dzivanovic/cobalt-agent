@@ -376,6 +376,7 @@ fi
 # after the fill: dontAsk, once.
 model=""
 builder=""
+routed=""
 if [ "$kind" = "shadow" ]; then
     [ "$#" -ge 2 ] || refuse "usage: desk-launch.sh shadow <absolute card path> --model <id>"
     scard=$2
@@ -388,6 +389,10 @@ if [ "$kind" = "shadow" ]; then
                 mn=$((mn + 1))
                 model=$2
                 shift 2 ;;
+            # card 583 B3: a BAND-routed real build (checked against the card's BAND below)
+            --routed)
+                routed=1
+                shift ;;
             *) refuse "shadow: unknown argument '$1'" ;;
         esac
     done
@@ -983,12 +988,15 @@ git -C "$REPO" diff --cached --quiet -- "$fixed" || refuse "the fixed file is st
 
 # ---- the card: where it lives, what its path may contain ------------------------------------
 case "$card" in
-    "$PROMPTS"/*-card.md) ;;
-    *) refuse "the card must be $PROMPTS/<date>/<nn>-<job>-card.md" ;;
+    */./*|*//*) ;;  # refused by name in the case below (card 583 FR-1)
+    "$PROMPTS"/*/*/*) refuse "the card must be $PROMPTS/<YYYY-MM-DD>/<nn>-<job>-card.md: $card" ;;
+    "$PROMPTS"/[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]/*-card.md) ;;
+    *) refuse "the card must be $PROMPTS/<YYYY-MM-DD>/<nn>-<job>-card.md: $card" ;;
 esac
 case "$card" in
     *[!A-Za-z0-9\ ._/-]*) refuse "the card path holds a character outside [A-Za-z0-9 ._/-]" ;;
     *..*) refuse "the card path holds '..'" ;;
+    */./*|*//*) refuse "the card path holds '/./' or '//': $card" ;;
 esac
 [ -f "$card" ] || refuse "no such card: $card"
 if grep -n '«FILL' "$card" >&2; then
@@ -1627,6 +1635,57 @@ launchd_line() {
     [ -z "$d" ] || launchd="$launchd \"Bash($d)\""
 }
 
+# ---- BAND routing (card 2026-10-15 583 B3, his 2026-10-15 R1532) ----------------------------
+# A card dated BAND_FROM or later (its first folder under $PROMPTS, dashes cut) carries BAND: LOW,
+# MID or HIGH (CARD.md). Kind build: HIGH launches BUILD-HUB.md's line (Opus 5.5); LOW and MID
+# re-enter as `shadow <card> --model <builder> --routed`, the builder of the band's row in
+# SHADOW-HUB.md's ## BUILDERS. A card dated earlier builds as before. `--routed` is a real build:
+# the card's own BRANCH and REPORT; of the shadow refusals only SHADOW OF:, the shadow/ BRANCH and
+# the JOB slug are skipped. The backup id is the desk's hand launch, never automatic.
+BAND_FROM=20261016
+band=$(field BAND)
+cday=${card#"$PROMPTS"/}
+cday=$(printf '%s' "${cday%%/*}" | tr -d '-')
+band_dated=""
+case "$cday" in
+    [0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]) [ "$cday" -lt "$BAND_FROM" ] || band_dated=1 ;;
+esac
+# band_row <BAND> -> the one line of SHADOW-HUB.md's ## BUILDERS that starts `| <BAND> |`
+band_row() {
+    awk '/^## /{insec = ($0 ~ /^## BUILDERS/)} insec && /^\|/' "$PROMPTS/SHADOW-HUB.md" \
+        | awk -F'|' -v b="$1" '{c = $2; gsub(/[` \t]/, "", c); if (c == b) print}'
+}
+if [ "$kind" = "build" ] && [ -n "$band_dated" ]; then
+    case "$band" in
+        HIGH)
+            printf 'BAND: HIGH → Opus 5.5 (BUILD-HUB.md line)\n' >&2 ;;
+        LOW|MID)
+            [ -z "$step" ] || refuse "BAND routed builds start fresh; a resume step is not carried to the gate seat"
+            brow=$(band_row "$band")
+            [ "$(printf '%s' "$brow" | grep -c '')" -eq 1 ] \
+                || refuse "BAND $band: not one '| $band |' row in ## BUILDERS of $PROMPTS/SHADOW-HUB.md"
+            bid=$(ship_cell "$brow" 3)
+            printf 'BAND: %s → %s (backup %s)\n' "$band" "$bid" "$(ship_cell "$brow" 4)" >&2
+            exec sh "$0" shadow "$card" --model "$bid" --routed
+            ;;
+        *) refuse "incomplete card: BAND must be LOW, MID or HIGH" ;;
+    esac
+fi
+if [ "$kind" = "shadow" ] && [ -n "$routed" ]; then
+    rok=""
+    case "$band_dated$band" in
+        1LOW|1MID)
+            brow=$(band_row "$band")
+            if [ "$(printf '%s' "$brow" | grep -c '')" -eq 1 ]; then
+                [ "$model" != "$(ship_cell "$brow" 3)" ] || rok=1
+                [ "$model" != "$(ship_cell "$brow" 4)" ] || rok=1
+            fi
+            ;;
+    esac
+    [ -n "$rok" ] || refuse "shadow: --routed needs a card with BAND LOW or MID and its builder or backup id"
+    printf 'ROUTED: a real build — BRANCH %s · REPORT %s\n' "$branch" "$report" >&2
+fi
+
 merges=""
 launchd=""
 prod=""
@@ -1655,12 +1714,13 @@ build|shadow)
     [ -z "$step" ] || lock_free
     if [ "$kind" = "shadow" ]; then
         # card 324 S2: the shadow's own header, then the ONE ## BUILDERS row of --model, signed
-        [ -n "$(field "SHADOW OF")" ] || refuse "shadow: the card's header has no 'SHADOW OF:' line"
+        # card 583 B3: a --routed real build has none of SHADOW OF:, a shadow/ BRANCH, a JOB slug
+        [ -n "$routed" ] || [ -n "$(field "SHADOW OF")" ] || refuse "shadow: the card's header has no 'SHADOW OF:' line"
         # check A4: a role trial (a ROLE: header) is Grok's only (R1016)
         [ -z "$(field ROLE)" ] || [ "$model" = "grok-4.7" ] || refuse "shadow: ROLE trials run only grok-4.7"
         case "$branch" in
             shadow/?*) ;;
-            *) refuse "shadow: BRANCH '$branch' does not start 'shadow/'" ;;
+            *) [ -n "$routed" ] || refuse "shadow: BRANCH '$branch' does not start 'shadow/'" ;;
         esac
         brows=$(awk '/^## /{insec = ($0 ~ /^## BUILDERS/)} insec && /^\| `/' "$fixed" \
             | awk -F'|' -v m="$model" '{c = $2; gsub(/[` \t]/, "", c); if (c == m) print}')
@@ -1677,7 +1737,7 @@ build|shadow)
         esac
         case "$job" in
             *-"$slug") ;;
-            *) refuse "shadow: JOB '$job' does not end in '-$slug' (model $model)" ;;
+            *) [ -n "$routed" ] || refuse "shadow: JOB '$job' does not end in '-$slug' (model $model)" ;;
         esac
         case "$ballow" in
             Bash\(*\)) ;;
@@ -1728,6 +1788,12 @@ check)
                 || shadow=1
             ;;
     esac
+    # card 583 B5: a routed card (BAND LOW or MID, dated BAND_FROM or later) is shadow-shaped for
+    # the untracked instructions file only; its stop line stays BUILT
+    routed_tree=""
+    case "$band_dated$band" in
+        1LOW|1MID) routed_tree=1 ;;
+    esac
     # the build is built (card 21 L2): the build report's last non-blank line starts
     # `BUILT · job: <JOB> · tip: <TIP>`, or on a shadow card `SHADOW BUILT · job: <JOB> · tip: <TIP>`
     # (card 386 L1, SHADOW-HUB's stop line); a PASS-2 launch keeps the test it has (above)
@@ -1748,7 +1814,7 @@ check)
     [ "$head" = "$branch" ] || refuse "$WT/$wt is on '$head', the card says '$branch'"
     # card 386 L4: on a shadow card the ONE untracked SHADOW-INSTRUCTIONS.md at the root is not dirt
     dirt=$(git -C "$WT/$wt" status --porcelain)
-    [ -z "$shadow" ] || [ "$dirt" != "?? SHADOW-INSTRUCTIONS.md" ] || dirt=""
+    { [ -z "$shadow" ] && [ -z "$routed_tree" ]; } || [ "$dirt" != "?? SHADOW-INSTRUCTIONS.md" ] || dirt=""
     [ -z "$dirt" ] || refuse "$WT/$wt is not clean (the check session commits there)"
     # a first pass-1 launch: the branch head is TIP or adds docs only past it (CHECK-HUB.md
     # PREFLIGHT; check O2). A resume or a PASS-2 sits on the check's own commits and is not re-read
@@ -2287,7 +2353,7 @@ prodwrite)
     ;;
 esac
 
-watch=$(watch_line "$kind" "$card")
+if [ -n "$routed" ]; then watch=$(watch_line routed "$card"); else watch=$(watch_line "$kind" "$card"); fi
 if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
     [ -z "$add" ] || printf '%s\n' "$add"
     run_launch "$dir" "$line" "$note" "$watch"

@@ -1,0 +1,15 @@
+job=band-routing-1015
+tip=c8c5ca90
+on=f2ca3e1a
+migration=none
+offline=8421/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=5 of 5
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=187713

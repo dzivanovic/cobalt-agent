@@ -25,7 +25,8 @@ L2_LINE = (
     "original's Opus-own held count (SHADOW-HUB :76, [F-04])."
 )
 L6_LINE = (
-    "CHECK-HUB §7(v) and `## PREFLIGHT`: on a shadow card, `?? SHADOW-INSTRUCTIONS.md` at the "
+    "CHECK-HUB §7(v) and `## PREFLIGHT`: on a shadow card or a routed card (BAND LOW or MID, dated "
+    "on or after BAND_FROM), `?? SHADOW-INSTRUCTIONS.md` at the "
     "worktree root is expected and recorded, not a finding."
 )
 L8_LINE = (

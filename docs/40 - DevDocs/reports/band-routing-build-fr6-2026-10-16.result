@@ -1,0 +1,15 @@
+job=band-routing-1015
+tip=fda2300b
+on=f2ca3e1a
+migration=none
+offline=8434/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=3 of 3
+self_check=3 of 3
+decisions=3
+for_dejan=0
+tokens=271499

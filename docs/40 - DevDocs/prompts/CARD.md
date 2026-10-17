@@ -20,6 +20,7 @@ WHO FILLS IT: the desk (or a drafter it launches). A card that builds a check's 
 | `CHECK REPORT` | empty | required | — | — | absolute path under `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/` |
 | `HOUSE B` | empty | required | — | — | `as needed`, or `mandatory — vault notes` / `mandatory — sizing` for a build that writes his vault notes or changes sizing (his 2026-09-30 R38): the check then runs its second pass even when nothing is open. His per-case overrule of the wait is appended: ` · overruled <date> R<n>` |
 | `DB` | optional | optional | — | — | `none` when every file of every row sits under `ops/`, `tests/ops/` or `docs/`: the job takes no `cobalt_dev` lock (`BUILD-HUB.md` W (a0)); the key is left out otherwise. |
+| `BAND` | required on a card dated 2026-10-16 or later | required when the build card carries BAND: LOW or MID (copied from it); optional otherwise | — | — | `LOW`, `MID` or `HIGH`: the card's complexity band (`SHADOW-HUB.md` `## RESULTS TABLE`: LOW 0-2 · MID 3-6 · HIGH ≥7). It picks the builder: `SHADOW-HUB.md` `## BUILDERS`, `BAND ROUTING` (his 2026-10-15 R1532). Set by the card's drafter; when unsure, the higher band |
 | `RULINGS` | required | required | required | required | his rulings that bind the job: `<date> R<n>`, comma-separated (`2026-09-30 R3, 2026-09-30 R9`). Row numbers only; never his words. deploy: `none` when no held defect is carried and he has not overruled the window for this one deploy (L73; the deploy's approval is the standing rule, `DEPLOY-HUB.md` `## AUTHORIZATION`) |
 | `TAG` | — | — | required | — | the deploy tag; the rollback tag is `pre-<JOB>` |
 | `MIGRATIONS` | — | — | required | — | `none`, or the numbers in `FORWARD` order, then ` · production at <level> · creates: <objects> · old code on the new schema: <why a code revert alone is safe>` |
@@ -27,6 +28,8 @@ WHO FILLS IT: the desk (or a drafter it launches). A card that builds a check's 
 | `TICKERS` | — | — | optional | — | the build's `--tickers`, `A,B,…` of `[A-Z0-9.]`, or `none`; written by `deploy-card.sh`; the gate call takes it as `--tickers` (omitted when `none`) |
 | `TABLE` | — | — | — | required | the one table the devfix rebuilds: `system.<name>` or `user.<name>`, `<name>` in `[a-z0-9_]` |
 | `PROOF TEST` | — | — | — | required | the with-DB test that proves the table after the rebuild: `tests/cobalt/<file>.py`, optionally `::<name>` in `[A-Za-z0-9_:.]` |
+
+BAND is set by the drafter in the header, never by the builder; when unsure, the higher band (the routing answer, condition 3, his R1532). `desk-launch.sh build` refuses a card dated 2026-10-16 or later whose `BAND` is missing or not one of `LOW`, `MID`, `HIGH` (`REFUSED: incomplete card: BAND must be LOW, MID or HIGH`); a card dated earlier carries none and builds as it did (Opus).
 
 ## THE BODY — sections in this order; a section with nothing to say is left out
 
