@@ -714,6 +714,23 @@ def test_check_fr3_o1_a_routed_or_shadow_cards_check_closes_on_the_instructions_
     assert w.logged() == [f"sess-x01 {w.report} check"], done.stdout
 
 
+# ---- FR-10 (check fr3 O1): unclean() excepts the one untracked SHADOW-INSTRUCTIONS.md for kind
+# check too; a second line still keeps the tree ----------------------------------------------------
+
+
+def test_fr10_control_a_check_kind_tree_with_a_second_untracked_file_is_still_kept(tmp_path):
+    w = RWatch(tmp_path / "w", done=True, last="CHECK DONE · job: x · pass: 1")
+    w.card.write_text(w.card.read_text().replace("RULINGS:", f"CHECK REPORT: {w.report}\nRULINGS:"))
+    (w.wt / "SHADOW-INSTRUCTIONS.md").write_text("constructed\n")
+    (w.wt / "notes.txt").write_text("constructed\n")
+    w.rows("sess-x01 · x-job-check · ~/cobalt-wt/x-job · idle · idle")
+    done = w.run("check")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == "CHECK DONE · job: x · pass: 1", done.stdout
+    assert done.stdout.splitlines()[-1] == "KEPT sess-x01: tree not clean", done.stdout
+    assert w.logged() == [], w.logged()
+
+
 # ---- B5: a routed card's untracked SHADOW-INSTRUCTIONS.md is not dirt at its check -------------
 
 
