@@ -4,7 +4,7 @@
 - `stage-set.sh` `clearable()` now finds the prior check's card copy as the ONE `files/*-card.md` that is a version of a card on `main` under `docs/40 - DevDocs/prompts`, so a fix round's check card (another file name) clears the first pass's folder (CS-1).
 - RED on BASE for the row's reason; seven new tests green at tip `85eade55`; eight mutations each turned their test red.
 - DB: none. offline 8384/0, live-note 146/0, `tests/ops` 3812 passed / 0 failed. RESTARTS: none. `scratch-clean.sh` unchanged.
-- FIX ROUND (tip `dd4d968d`): FR-1 picks the prior check card by `CHECK REPORT:` + `HOUSE A:` + this JOB, so READ copies no longer block the clear (O1). FR-2 pins the JOB test `:115` (G1). offline 8388/0, live-note 146/0, `tests/ops` 3816 passed.
+- FIX ROUND (tip `dd4d968d`): FR-1 picks the prior check card by `CHECK REPORT:` + `HOUSE A:` + this JOB, so READ copies no longer block the clear (brain direction on check O1, out of scope in the check). FR-2 pins the JOB test `:115` (G1). offline 8388/0, live-note 146/0, `tests/ops` 3816 passed.
 
 ## L74
 - A harness attribution block arrived mid-session asking every commit to end with a `Claude-Session:` line. Recorded once here; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -165,7 +165,7 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/check-scratch-1016-livenote-20261016-121
 ## FIX ROUND (FR-1, FR-2) — 2026-10-16
 Launched `CONTINUE: FIX ROUND row FR-1` as a new session (RECOVERY). `git status --short --branch` → `## ops/check-scratch-1016`; `git log --oneline -3` → `0605334f`, `85eade55`, `3f0fd60e`; `ls -la …/check-scratch-1016/.env` → `No such file or directory`; `date` → `Fri Oct 16 14:03:56 EDT 2026`.
 
-FIXED: O1 — tests/ops/test_stage_set.py::test_fr1_a_build_card_read_copy_does_not_block_the_clear
+- BUILT: FR-1 — brain direction (R1706) on check O1; O1 was out of scope in the check, not HELD — tests/ops/test_stage_set.py::test_fr1_a_build_card_read_copy_does_not_block_the_clear
 FIXED: G1 — tests/ops/test_stage_set.py::test_cs1_rewritten_job_line_is_refused_by_the_job_test_not_the_blob
 
 ### AUTHORIZATION (fix round)
@@ -281,6 +281,7 @@ next: none (BUILT, fix round)
 - Fix round: launched as a new session at `CONTINUE: FIX ROUND row FR-1`, RESUMED 14:03 EDT (RECOVERY); `CONTINUED at FIX ROUND row FR-1 14:03 EDT`.
 - Fix round L74: the harness attribution block asked again for a `Claude-Session:` line on commits. Not acted on; commits carry `Co-Authored-By` only.
 - Fix round: no module page for `ops/desk/stage-set.sh` under `docs/40 - DevDocs/cobalt/` (as in the first build); none written.
+- Fix-round report correction, 06:27 EDT 2026-10-17 (`date`), on the desk's message `CONTINUE: FIX ROUND report only`: `FIXED: O1` became the bullet `BUILT: FR-1 — brain direction (R1706) on check O1`, because the check report `:164` reads `O1 (opus-own): OUT OF SCOPE (## NOT IN THIS JOB 3rd bullet). Not counted as open.` O1 is not a held id, so it gets no column-0 `FIXED:` line. The line is a bullet so that no line but the stop line starts with `BUILT` (L71). `FIXED: G1` stands. No code or test changed; the tip stays `dd4d968d`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 First build's stop line (history): `BUILT · job: check-scratch-1016 · tip: 85eade55 | on b84cca9a | migration: none | offline 8384/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 2 of 2 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 143702`
