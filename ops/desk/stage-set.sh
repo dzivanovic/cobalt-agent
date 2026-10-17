@@ -5,7 +5,7 @@
 # The dest must sit under $WT/agy-trial/scratch/ and be empty or absent, or be this JOB's own prior
 # staging (card 413 T1): exactly $SCRATCH/tribunal-bars-0920/<JOB>-check, holding only diff.md,
 # rulings.md, house-*.md, HOUSE-INSTRUCTIONS.md (regular files) and the folder files; no link,
-# fifo, .git or .env anywhere in it; its files/<card name> a version of the card committed on main,
+# fifo, .git or .env anywhere in it; its one files/*-card.md whose header carries CHECK REPORT: and HOUSE A: and whose JOB is this JOB (else the lone such card of another JOB) a version of a card on main under docs/40 - DevDocs/prompts,
 # whose JOB is this JOB and whose CHECK REPORT is committed on main and is not the card's current
 # CHECK REPORT. That dest is cleared, after every refusal below and before the first write, with
 # `cleared: <dest> (prior check <report>)` on stdout first. Any test missed: `REFUSED: the dest
@@ -105,11 +105,35 @@ clearable() {
     [ -z "$out" ] || { miss="an entry neither a file nor a folder: $out"; return; }
     out=$(find "$dest" \( -iname .git -o -iname .env -o -iname '.env.*' \)) || { miss="find failed"; return; }
     [ -z "$out" ] || { miss="a .git or .env entry: $out"; return; }
-    copied="$dest/files/$(basename "$card")"
-    [ -f "$copied" ] || { miss="no prior card copy: $copied"; return; }
+    copied=""
+    all=""
+    [ ! -d "$dest/files" ] || all=$(find "$dest/files" -mindepth 1 -maxdepth 1 -type f -name '*-card.md') || { miss="find failed"; return; }
+    # a check card's header carries CHECK REPORT: and HOUSE A:; a build card's READ copy has no HOUSE A:
+    mine=""
+    others=""
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        head=$(sed '/^$/q' "$f")
+        printf '%s\n' "$head" | grep -q '^CHECK REPORT:' || continue
+        printf '%s\n' "$head" | grep -q '^HOUSE A:' || continue
+        if [ "$(field JOB "$f")" = "$name" ]; then
+            mine="$mine$f
+"
+        else
+            others="$others$f
+"
+        fi
+    done <<EOF
+$all
+EOF
+    # none of this JOB: a lone check card of another JOB goes on, so the JOB test below refuses it
+    [ -n "$mine" ] || mine=$others
+    [ -n "$mine" ] || { miss="no prior card copy: $dest/files/*-card.md"; return; }
+    [ "$(printf '%s' "$mine" | wc -l | tr -d ' ')" = 1 ] || { miss="more than one prior card copy in $dest/files"; return; }
+    copied=${mine%?}
     b=$(git -C "$REPO" hash-object --no-filters "$copied") || { miss="git hash-object failed on $copied"; return; }
-    [ -n "$(git -C "$REPO" log --format=%h --find-object="$b" main -- "$card_rel")" ] \
-        || { miss="the prior card copy is no version of the card on main"; return; }
+    [ -n "$(git -C "$REPO" log --format=%h --find-object="$b" main -- "docs/40 - DevDocs/prompts")" ] \
+        || { miss="the prior card copy is no version of a card on main under docs/40 - DevDocs/prompts"; return; }
     [ "$(field JOB "$copied")" = "$name" ] || { miss="the prior card copy's JOB is not $name"; return; }
     prior=$(field "CHECK REPORT" "$copied")
     case "$prior" in

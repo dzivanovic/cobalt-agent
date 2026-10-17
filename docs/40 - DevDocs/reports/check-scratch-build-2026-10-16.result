@@ -1,0 +1,15 @@
+job=check-scratch-1016
+tip=dd4d968d
+on=b84cca9a
+migration=none
+offline=8388/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=2 of 2
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=152910
