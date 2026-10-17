@@ -5,9 +5,9 @@ INSTALL: none
 BRANCH: ops/gemini-builder-row-1017
 WORKTREE: gemini-builder-row-1017
 BASE: 7f415a4f
-TIP:
+TIP: 695f8bde
 REPORT: /Users/cobalt/cobalt-wt/gemini-builder-row-1017/docs/40 - DevDocs/reports/gemini-builder-row-build-2026-10-17.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gemini-builder-row-check-2026-10-17.md
 HOUSE B:
 BAND: HIGH
 DB: none
@@ -67,7 +67,7 @@ DEPLOY ORDER: card 583 (`ops/band-routing-1015`) deploys first, then this card. 
 ## DEPLOY PROOF
 - `grep -c -F "agy --model gemini-4-argon-high --mode accept-edits --sandbox --print-timeout 40m" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/SHADOW-HUB.md"` · before `0` · after `1`
 - `grep -c -F "gemini-4-argon-high) ;;" /Users/cobalt/cobalt/ops/desk/desk-launch.sh` · before `0` · after `1`
-- `grep -c -F "card 671 G2: agy --add-dir D (D/**), read for agy only" /Users/cobalt/cobalt/ops/desk/bare-guard.py` · before `0` · after `1`
+- `grep -c -F "card 671 G2/FR-1: agy --add-dir D or --add-dir=D (D/**), read for agy only" /Users/cobalt/cobalt/ops/desk/bare-guard.py` · before `0` · after `1`
 - shadow tests · `uv run pytest -q tests/ops/test_desk_launch_shadow.py tests/ops/test_shadow_hub_file.py tests/ops/test_bare_guard.py` · green: `0 failed`
 
 ## RECORDS
