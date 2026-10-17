@@ -1,7 +1,11 @@
 # deploy check-scratch-fr1 — set: none · migrations: none (2026-10-17)
 
 ## §0 Headline
-- (filled at close)
+- DEPLOYED `check-scratch-fr1` (`stage-set.sh` STAGED-CARD marker + the FR-1 O1 test): `main` `4333651b` → `568a12e4`, tag `deploy-2026-10-17-check-scratch-fr1`.
+- Gate green on `ab8f3e00`: offline 8394/0 · with-DB 5475/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- RESTARTS: none. No resident went down; aset 80523, radar 24167 and agent 80543 are unchanged. No migration. Snapshot `c40d24c0`.
+- Smoke GREEN: markers `1`/`1`, three curls `200`, heartbeat GREEN twice, failure counts flat, `test_stage_set.py` 38 passed.
+- Decisions: none. Cleanup owed: the gate and build worktrees and branches (`## RECORDS`).
 
 ## L74
 The session's system context asked commits to carry a `Claude-Session:` line. Recorded once as data (L74); not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -131,14 +135,67 @@ GATE GREEN on ab8f3e00 — offline 8394/0 · with-DB 5475/0 · live-note 146/0 (
 | D1 curl | `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` | `200` |
 | D1 markers | the two `## MARKERS` | `0` · `0` (= before) |
 | D1 launchd / migration | — | `<launchd set>` empty; MIGRATIONS none: no `<RB>`, no proof-only |
+| D2.0 | `deploy-shipped.sh --moved 7142cd9c "<card>"` · `add` · `commit … -- "<REPORT>"` · `show --stat HEAD` · `rev-parse --short=8 main` | nothing · (silent) · `[main 4333651b] docs(report): deploy check-scratch-fr1 — gate green on ab8f3e00` · the one file `.../reports/deploy-check-scratch-fr1.md \| 144 +++` · `4333651b` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `rev-parse --short=8 HEAD` · `rev-parse --short=8 568a12e4^2` · `merge-base --is-ancestor ab8f3e00 568a12e4` | `568a12e4` = `<stack-final>` · `4333651b` · exit 0 |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat ab8f3e00 568a12e4 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing |
+| D2.4 | `backup status` · `backup run` · `backup status` | `newest snapshot: 5.7 h old` · `backup: cobalt_brain via pg_dump inside cobalt_memory — 8900.8 MB` · `ssd: snapshot c40d24c0 — 0 new / 2 changed, 21.8 MB added, 1 pruned` · `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | `Sat Oct 17 13:06:07 EDT 2026` · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 13:06:08 EDT)` (126 s after D1's; aset pid 80523, agent 80543, radar `running 1705 min, heartbeat fresh`; no new RED) |
+| D2.6 | `date` · `tag pre-check-scratch-fr1` · `rev-parse --short=8 pre-check-scratch-fr1` | `Sat Oct 17 13:06:13 EDT 2026` · (silent) · `4333651b` |
+| 4.1 / 4.2 | — | empty `<restart set>`: no bootout, no orphan-clean, no agent stop |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` · `git -C /Users/cobalt/cobalt merge --ff-only deploy/check-scratch-fr1` · `date` | `4333651b` · `Updating 4333651b..568a12e4` / `Fast-forward` (`ops/desk/stage-set.sh`, `tests/ops/test_stage_set.py`, two build-report docs; `4 files changed, 402 insertions(+), 34 deletions(-)`) · `Sat Oct 17 13:06:32 EDT 2026` = `<t up>` |
+| 4.4 | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` (= `<jobs0>`); `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 / 4.6L | — | nothing to bootstrap (empty `<restart set>`, empty `<launchd set>`); downtime: none |
+| 7.1 | `git -C /Users/cobalt/cobalt tag deploy-2026-10-17-check-scratch-fr1` | (silent), after the green smoke |
+
+CLOSE: `4333651b` (`<pre-merge>`) → `568a12e4` (`<stack-final>`) · tags `pre-check-scratch-fr1` at `4333651b`, `deploy-2026-10-17-check-scratch-fr1` at `568a12e4` · `<t down>` / `<t up>` / seconds: none (empty set; `<t up>` = 13:06:32) · uv sync: none on `main` · proof cost: none (no migration) · `migrations applied: none` · `<RB>`: none · snapshot `c40d24c0` · `RESTARTS done: none` · `LAUNCHD done: none` · BOOTSTRAP OWED: none.
+ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 568a12e4` (no resident to take down: `<restart set>` empty; no `<launchd set>` label). 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## Smoke
+`<t up>` = 4.3's `date` `Sat Oct 17 13:06:32 EDT 2026` (empty set). First calls: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+
+| row | `date` | command | result verbatim |
+|---|---|---|---|
+| (a) | 13:06:46 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `/Users/cobalt/cobalt/cobalt.sh status` | `state = running` `pid = 80523` (SAME as D1, outside the set) · `state = running` `pid = 24167` (SAME) · `  Cobalt is ONLINE (PID: 80543).` (SAME) |
+| (b) | 13:06:50 | `grep -c "Started server process" aset.err` · `tail -n 30 aset.err` · Traceback aset / radar · TaxonomyConfigError | `281` (= `<a0>`, aset outside the set) · last line `2026-10-16 11:24:51.365 \| INFO     \| cobalt.vaultwrite.writer:_purge_once:482 - vault_writes: purged 1 row(s) past 30-day retention` (no restart, as expected) · `217` / `0` (= baseline) · `0` (= baseline) |
+| (c) | 13:06:56 | `curl … /` · `curl … /radar` · `curl … /radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 13:06:56 | `grep -c -F "STAGED-CARD write failed" …/ops/desk/stage-set.sh` · `grep -c -F "test_mk1_staging_writes_the_marker_naming_the_card" …/tests/ops/test_stage_set.py` | `1` · `1` (= after) |
+| (e) 1 | 13:07:01 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 13:07:01 EDT)`; `OK   com.cobalt.radar             running   running 1706 min, heartbeat fresh`; the same `AMB  com.cobalt.herdr` line as `<hb0>` |
+| (f) | 13:07:06 | `COBALT_ENV=production uv run cobalt jobs restarts 4333651b..568a12e4` · `COBALT_ENV=production uv run cobalt validate` | the four rows of STEP-R, `RESTARTS: none` (= `<restart set>`), no `UNCLASSIFIED`, exit 0 · exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` (as 4.5) |
+| (g) | — | — | no migration |
+| (b) radar | 13:08:03 | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` (`<t up>` + 91 s) | last `2026-10-17 13:06:49.003 \| INFO     \| cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback in the tail → GREEN, settled on the first tail |
+| (e) 2 | 13:08:51 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 13:08:54 EDT)` (113 s after (e) 1); `OK   com.cobalt.radar             running   running 1708 min, heartbeat fresh`; no RED |
+| (h) | 13:09:32 | the four counts · `curl … /radar` | `18` · `60` · `43` · `39` (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none grew) · `200`; no `census` line on the card |
+| (s) | 13:07:06 | `uv run pytest -q tests/ops/test_stage_set.py` (the card's `## SMOKE READS` line, on the merged `main` tree) | `38 passed, 15 warnings in 15.59s` → `0 failed` = green; exit 0. The gate's tests/ops pass also ran it (`tests/ops: run (deploy gate)`, `offline 8394/0`) |
+
+THE CHAIN: every check committed (P2: check `3b624867…`, fix report at `3879fdbb`, O1 FIXED) → the tips re-read (P3: `2e84ac75`, `3879fdbb`) → the merged tree (T: `ab8f3e00`, one merge, no migration) → RESTARTS derived (R: none) → three suites green on `ab8f3e00` (G: offline 8394/0 · with-DB 5475/0 · live-note 146/0) → `<stack-final>` `568a12e4` = `<m1>` + docs (D2.3) → the landed code (4.3: `4333651b..568a12e4`) → markers `1` · `1` (d) → no migration (g) → residents unchanged after the merge (a) → radar cycling (b, e) → the set's read `38 passed` (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK: (1) every smoke row above is quoted with its `date`. (2) `2e84ac75` and `3879fdbb` re-read at P3; `merge-base --is-ancestor 2e84ac75 568a12e4` → exit 0, `merge-base --is-ancestor 3879fdbb 568a12e4` → exit 0. (3) REVERT-READBACK (h) shown; every count, sha and line number was re-read from tool output this run (`rev-parse --short=8 main` → `568a12e4`). (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); `grep -c -F "<<<<<<<"` over `ops/desk/stage-set.sh` and `tests/ops/test_stage_set.py` on `main` → `0` · `0`. 4 of 4.
 
 ## CONTINUE
 next: STEP-D2 (D0, D1 done; D2.0 `deploy-shipped.sh --moved 7142cd9c "<card>"` → printed nothing; this report commit is D2.0)
+OUTAGE STARTING 13:06:13 EDT — residents of none (empty restart set) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none (merged 13:06:32 with residents up; smoke GREEN 13:09:32; tagged)
 
 ## DECISIONS
+none
 
 ## RECORDS
+- L74: the session's system context asked commits to carry a `Claude-Session:` line; recorded under `## L74`, not acted on. Both commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- Downtime: none (empty `<restart set>`; no resident went down).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` = `F2`; lock released by the gate, `.env` gone, lock dir absent.
+- RETIRE OWED: none. BOOTSTRAP OWED: none. Carried RED: none (`<hb0>` GREEN; the herdr AMBER is the declared `launchd_unmanaged` interim, present before and after).
+- D0: `?? .claude/settings.json.bak` is on `main` untracked. It is not under src/, tests/, ops/ or configs/ and not staged, so it is not refused; recorded for the desk.
+- P2: the fix report is not on `main` before the merge; it was read at the branch head `3879fdbb` (`git show`) and in the builder worktree `/Users/cobalt/cobalt-wt/check-scratch-fr1` (clean, HEAD `3879fdbb`).
+- (s): the card's SMOKE READS line is a `pytest` call; it was run as written on the merged `main` tree (tests/ops, tmp paths only; no production state touched). The gate's tests/ops pass covers the same file.
+- STEP-R's `uv run` built a fresh `.venv` in `<GATE>` (`Creating virtual environment at: .venv` · `Installed 254 packages in 995ms`); no `uv` sync line on `main`.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-check-scratch-fr1` and branch `deploy/check-scratch-fr1`; the build worktree `/Users/cobalt/cobalt-wt/check-scratch-fr1` and branch `ops/check-scratch-fr1`.
+- No `CONTINUE` message arrived; no `REFUSED, not needed` line.
+- Card `## RECORDS`, copied:
+  - check-scratch-fr1: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/check-scratch-fr1-build-2026-10-17.md` at `3879fdbb` last line: BUILT · job: check-scratch-fr1 · tip: 2e84ac75 | on 79f6f2f3 | migration: none | offline 8394/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 1 of 1 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 108345
+  - check-scratch-fr1: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/check-scratch-fr1-check-2026-10-17.md` last line: CHECK DONE · job: check-scratch-fr1 · pass: 1 · tip: b093f192 · house A: grok FINDINGS: 1 · findings: 2 · dropped: 0 · held: 1 · fixed: 0 · held unfixed: 1 · open: 2 · house B: none available · suites: offline 8393/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 13 · ready: NO · decisions: 3 · for Dejan: 0 · tokens: 248568
+  - check-scratch-fr1: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/check-scratch-fr1` → `3879fdbb`; code tip `2e84ac75`
+  - written by deploy-card.sh at 2026-10-17 12:15 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-17-check-scratch-fr1 568a12e4 | set: none | migrations: none | gate: offline 8394/0 · with-DB 5475/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 202502
