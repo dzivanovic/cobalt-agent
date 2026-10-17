@@ -660,3 +660,15 @@ def test_mk2_control_a_marker_that_is_a_link_is_refused(job):
     assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
     assert "cleared:" not in done.stdout
     assert snapshot(dest) == before
+
+
+def test_o1_legacy_a_higher_numbered_build_copy_is_not_the_prior_card(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    (dest / "STAGED-CARD").unlink(missing_ok=True)
+    build = build_card_copy(dest, card, name="05-x-job-build-card.md")
+    second = fr_card(job)
+    done = stage(env, second, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout.splitlines()[0] == f"cleared: {dest} (prior check {repo / CHECK_A})"
+    assert not build.exists()
