@@ -154,6 +154,7 @@ RESTARTS: none
 Resumed 11:19 EDT (`date`) on `CONTINUE: FIX ROUND row FR-1`, same branch. Before any call: `git status --short --branch` → `## ops/check-scratch-fr1`; `git log --oneline -3` → `5f42c4f3`, `b093f192`, `0d52929f`; `ls -la …/check-scratch-fr1/.env` → `No such file or directory`.
 
 FIXED: O1 — tests/ops/test_stage_set.py::test_o1_legacy_a_higher_numbered_build_copy_is_not_the_prior_card
+SETTLED: A1 — R1786
 
 - The filter line, found by content on the tip: `grep -n -F "grep -q '^HOUSE A:'" ops/desk/stage-set.sh` → `134:            printf '%s\n' "$head" | grep -q '^HOUSE A:' || continue`.
 - The check's O1 test (`## OWN FINDINGS`) was appended verbatim after the last test (now `tests/ops/test_stage_set.py:665`). `git diff b093f192 -- tests/ops/test_stage_set.py` shows one hunk `@@ -660,3 +660,15 @@` with only `+` lines (the blank lines and the 10-line test).
@@ -185,6 +186,7 @@ next: none (BUILT, fix round FR-1)
 - L74 (fix round): the system block that asked for a `Claude-Session:` line in commits came again. It was not acted on; `2e84ac75` carries `Co-Authored-By` only.
 - The first gate call of the fix round (`gate.sh check-scratch-fr1 offline`, without `--deploy-gate`) was stopped before it finished and re-run as `offline --deploy-gate`, the form the check used for the deploy gate's pass. Only the second call's verdict is reported.
 - The fix round's `## DECISIONS` adds nothing. Item 1 below is the build's own, unchanged; the check's ASK DESK items 2 and 3, and its A1, are the desk's to settle.
+- CONTINUED at SETTLE A1 R1786 11:50 EDT. The fact was checked first: `cto-2026-10-17.md:11` `| R1786 | 11:14 ET | DESK RECORD (brain, L79): A1 on check-scratch-fr1 SETTLED as rejected (fails closed); fix round O1 only.` and `:7` `| R1790 | … append only SETTLED: A1 — R1786 to its fix report, commit, stop; no code, no re-check.`. The check report lists A1 as `REJECTED` under `## RUNS` (`check-scratch-fr1-check-2026-10-17.md:217`). Only the `SETTLED: A1 — R1786` line was added, in the shape `deploy-card.sh:210` reads. No code, no test and no stop-line field changed; the tip stays `2e84ac75`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 BUILT · job: check-scratch-fr1 · tip: 2e84ac75 | on 79f6f2f3 | migration: none | offline 8394/0 | with-DB 0/0 | live-note 146/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 1 of 1 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 108345
