@@ -4,8 +4,8 @@
 #
 # The dest must sit under $WT/agy-trial/scratch/ and be empty or absent, or be this JOB's own prior
 # staging (card 413 T1): exactly $SCRATCH/tribunal-bars-0920/<JOB>-check, holding only diff.md,
-# rulings.md, house-*.md, HOUSE-INSTRUCTIONS.md (regular files) and the folder files; no link,
-# fifo, .git or .env anywhere in it; its one files/*-card.md whose header carries CHECK REPORT: and HOUSE A: and whose JOB is this JOB (else the lone such card of another JOB) a version of a card on main under docs/40 - DevDocs/prompts,
+# rulings.md, house-*.md, HOUSE-INSTRUCTIONS.md, STAGED-CARD (regular files) and the folder files; no link,
+# fifo, .git or .env anywhere in it. STAGED-CARD holds the basename of the card the staging copied. Its prior card is the files/ card that STAGED-CARD names (one line, a bare *-card.md name), else, in a folder staged before the marker, the highest-numbered files/*-card.md whose header carries CHECK REPORT: and HOUSE A: and whose JOB is this JOB, else the lone such card of another JOB; that card is a version of a card on main under docs/40 - DevDocs/prompts,
 # whose JOB is this JOB and whose CHECK REPORT is committed on main and is not the card's current
 # CHECK REPORT. That dest is cleared, after every refusal below and before the first write, with
 # `cleared: <dest> (prior check <report>)` on stdout first. Any test missed: `REFUSED: the dest
@@ -95,7 +95,7 @@ clearable() {
     name=$(field JOB)
     [ -n "$name" ] || { miss="the card's JOB is empty"; return; }
     [ "$dest" = "$SCRATCH/tribunal-bars-0920/$name-check" ] || { miss="not this job's check folder $SCRATCH/tribunal-bars-0920/$name-check"; return; }
-    out=$(find "$dest" -mindepth 1 -maxdepth 1 ! -name diff.md ! -name rulings.md ! -name files ! -name HOUSE-INSTRUCTIONS.md ! -name 'house-*.md') || { miss="find failed"; return; }
+    out=$(find "$dest" -mindepth 1 -maxdepth 1 ! -name diff.md ! -name rulings.md ! -name files ! -name HOUSE-INSTRUCTIONS.md ! -name 'house-*.md' ! -name STAGED-CARD) || { miss="find failed"; return; }
     [ -z "$out" ] || { miss="an entry the check did not write: $out"; return; }
     out=$(find "$dest" -mindepth 1 -maxdepth 1 -name files ! -type d) || { miss="find failed"; return; }
     [ -z "$out" ] || { miss="files is not a folder"; return; }
@@ -106,31 +106,52 @@ clearable() {
     out=$(find "$dest" \( -iname .git -o -iname .env -o -iname '.env.*' \)) || { miss="find failed"; return; }
     [ -z "$out" ] || { miss="a .git or .env entry: $out"; return; }
     copied=""
-    all=""
-    [ ! -d "$dest/files" ] || all=$(find "$dest/files" -mindepth 1 -maxdepth 1 -type f -name '*-card.md') || { miss="find failed"; return; }
-    # a check card's header carries CHECK REPORT: and HOUSE A:; a build card's READ copy has no HOUSE A:
-    mine=""
-    others=""
-    while IFS= read -r f; do
-        [ -n "$f" ] || continue
-        head=$(sed '/^$/q' "$f")
-        printf '%s\n' "$head" | grep -q '^CHECK REPORT:' || continue
-        printf '%s\n' "$head" | grep -q '^HOUSE A:' || continue
-        if [ "$(field JOB "$f")" = "$name" ]; then
-            mine="$mine$f
+    marker="$dest/STAGED-CARD"
+    if [ -e "$marker" ] || [ -L "$marker" ]; then
+        # the staging recorded the card it copied: that copy alone is the prior card
+        { [ -f "$marker" ] && [ ! -L "$marker" ] && [ "$(wc -l < "$marker" | tr -d ' ')" = 1 ] && [ "$(sed -n '$=' "$marker")" = 1 ]; } \
+            || { miss="the STAGED-CARD marker is not one card file name"; return; }
+        m=$(sed -n '1p' "$marker")
+        case "$m" in
+            */*|.|..) miss="the STAGED-CARD marker is not one card file name"; return ;;
+            *-card.md) ;;
+            *) miss="the STAGED-CARD marker is not one card file name"; return ;;
+        esac
+        { [ -f "$dest/files/$m" ] && [ ! -L "$dest/files/$m" ]; } || { miss="no prior card copy: $dest/files/$m"; return; }
+        copied="$dest/files/$m"
+    else
+        # no marker (staged before it): a check card's header carries CHECK REPORT: and HOUSE A:; a build
+        # card's READ copy has no HOUSE A:. This JOB's highest-numbered one, else the lone one of another JOB.
+        all=""
+        [ ! -d "$dest/files" ] || all=$(find "$dest/files" -mindepth 1 -maxdepth 1 -type f -name '*-card.md') || { miss="find failed"; return; }
+        tab=$(printf '\t')
+        mine=""
+        others=""
+        while IFS= read -r f; do
+            [ -n "$f" ] || continue
+            head=$(sed '/^$/q' "$f")
+            printf '%s\n' "$head" | grep -q '^CHECK REPORT:' || continue
+            printf '%s\n' "$head" | grep -q '^HOUSE A:' || continue
+            if [ "$(field JOB "$f")" = "$name" ]; then
+                n=$(basename "$f" | sed -n 's/^\([0-9][0-9]*\).*/\1/p')
+                mine="$mine${n:-0}$tab$f
 "
-        else
-            others="$others$f
+            else
+                others="$others$f
 "
-        fi
-    done <<EOF
+            fi
+        done <<EOF
 $all
 EOF
-    # none of this JOB: a lone check card of another JOB goes on, so the JOB test below refuses it
-    [ -n "$mine" ] || mine=$others
-    [ -n "$mine" ] || { miss="no prior card copy: $dest/files/*-card.md"; return; }
-    [ "$(printf '%s' "$mine" | wc -l | tr -d ' ')" = 1 ] || { miss="more than one prior card copy in $dest/files"; return; }
-    copied=${mine%?}
+        if [ -n "$mine" ]; then
+            copied=$(printf '%s' "$mine" | sort -t "$tab" -k1,1n -k2,2 | tail -n 1 | cut -f2-)
+        elif [ -n "$others" ] && [ "$(printf '%s' "$others" | wc -l | tr -d ' ')" = 1 ]; then
+            # a lone check card of another JOB goes on, so the JOB test below refuses it
+            copied=${others%?}
+        else
+            miss="no prior card copy: $dest/files/*-card.md"; return
+        fi
+    fi
     b=$(git -C "$REPO" hash-object --no-filters "$copied") || { miss="git hash-object failed on $copied"; return; }
     [ -n "$(git -C "$REPO" log --format=%h --find-object="$b" main -- "docs/40 - DevDocs/prompts")" ] \
         || { miss="the prior card copy is no version of a card on main under docs/40 - DevDocs/prompts"; return; }
@@ -218,6 +239,7 @@ copy() {
 
 copy "$REPO" "HEAD:$card_rel" "$dest/files/$(basename "$card")"
 copy "$job" "HEAD:$report_rel" "$dest/files/$(basename "$report")"
+printf '%s\n' "$(basename "$card")" > "$dest/STAGED-CARD" || fail "STAGED-CARD write failed"
 
 printf '%s\n' "$paths" | {
     while IFS= read -r p; do
