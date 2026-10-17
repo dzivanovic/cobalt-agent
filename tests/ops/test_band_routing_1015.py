@@ -701,6 +701,19 @@ def test_fr9_control_a_routed_tree_with_any_other_untracked_line_is_still_kept(t
     assert w.logged() == [], w.logged()
 
 
+@pytest.mark.xfail(strict=True, reason="check fr3 O1: HELD, NOT FIXED — ops/desk/desk-watch.sh (fenced)")
+@pytest.mark.parametrize("shadow", [False, True], ids=["routed", "shadow"])
+def test_check_fr3_o1_a_routed_or_shadow_cards_check_closes_on_the_instructions_file(tmp_path, shadow):
+    w = RWatch(tmp_path / "w", done=True, last="CHECK DONE · job: x · pass: 1", shadow=shadow)
+    w.card.write_text(w.card.read_text().replace("RULINGS:", f"CHECK REPORT: {w.report}\nRULINGS:"))
+    (w.wt / "SHADOW-INSTRUCTIONS.md").write_text("constructed\n")
+    w.rows("sess-x01 · x-job-check · ~/cobalt-wt/x-job · idle · idle")
+    done = w.run("check")
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[0] == "CHECK DONE · job: x · pass: 1", done.stdout
+    assert w.logged() == [f"sess-x01 {w.report} check"], done.stdout
+
+
 # ---- B5: a routed card's untracked SHADOW-INSTRUCTIONS.md is not dirt at its check -------------
 
 
