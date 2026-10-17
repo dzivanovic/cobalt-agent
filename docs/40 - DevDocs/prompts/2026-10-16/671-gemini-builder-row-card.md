@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/gemini-builder-row-fr1
 WORKTREE: gemini-builder-row-fr1
 BASE: 13bcd579
-TIP:
+TIP: 52a0600d
 REPORT: /Users/cobalt/cobalt-wt/gemini-builder-row-fr1/docs/40 - DevDocs/reports/gemini-builder-row-fr1-build-2026-10-17.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gemini-builder-row-fr1-check-2026-10-17.md
+HOUSE B: none
 BAND: HIGH
 DB: none
 RESTARTS: none
