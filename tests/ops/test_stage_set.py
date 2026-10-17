@@ -533,3 +533,138 @@ def test_cs1_rewritten_job_line_is_refused_by_the_job_test_not_the_blob(job):
     assert "the prior card copy's JOB is not x-job" in done.stderr, done.stderr
     assert "cleared:" not in done.stdout
     assert snapshot(dest) == before
+
+
+# Card 681 MK-1: the staging records the card it staged in <dest>/STAGED-CARD, its basename on one line.
+def test_mk1_staging_writes_the_marker_naming_the_card(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    done = stage(env, card, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    marker = dest / "STAGED-CARD"
+    assert marker.is_file() and not marker.is_symlink()
+    assert marker.read_text() == card.name + "\n"
+
+
+def test_mk1_a_restaging_rewrites_the_marker_with_the_new_card(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    second = fr_card(job)
+    done = stage(env, second, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout.splitlines()[0].startswith("cleared: ")
+    assert (dest / "STAGED-CARD").read_text() == FR_CARD + "\n"
+
+
+# Card 681 CL-1: clearable() takes the prior card from the marker; an unmarked folder (staged before
+# the marker) takes the highest-numbered same-JOB check card of files/.
+CHECK_C = "docs/40 - DevDocs/reports/x-job-check-c.md"
+CHECK_R2 = "docs/40 - DevDocs/reports/x-job-check-r2.md"
+
+
+def same_job_check_card(job, name: str, check: str) -> Path:
+    """A committed check card of x-job under prompts (CHECK REPORT: `check`, HOUSE A:), not copied anywhere."""
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    other = card.parent / name
+    other.write_text(card.read_text().replace(
+        f"CHECK REPORT: {repo / CHECK_A}", f"CHECK REPORT: {repo / check}"))
+    git(repo, "add", "--", str(other.relative_to(repo)))
+    git(repo, "commit", "-q", "-m", f"x-job card {name}")
+    return other
+
+
+def commit_report(job, rel: str) -> None:
+    repo = job[1]
+    write(repo / rel, f"# {rel}\n")
+    git(repo, "add", "--", rel)
+    git(repo, "commit", "-q", "-m", f"report {rel}")
+
+
+def test_mk2_legacy_real_shape_of_the_band_routing_folder_clears(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    (dest / "STAGED-CARD").unlink(missing_ok=True)
+    commit_report(job, CHECK_B)
+    build = build_card_copy(dest, card)
+    copies = [first_copy(dest, card), build]
+    for name, check in (("02-x-job-check-card.md", CHECK_R2), ("03-x-job-fr-check-card.md", CHECK_B)):
+        other = same_job_check_card(job, name, check)
+        copy = dest / "files" / name
+        copy.write_bytes(other.read_bytes())
+        copies.append(copy)
+    assert sorted(p.name for p in (dest / "files").glob("*-card.md")) == sorted(p.name for p in copies)
+    third = same_job_check_card(job, "04-x-job-fr2-check-card.md", CHECK_C)
+    done = stage(env, third, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.splitlines()
+    assert lines[0] == f"cleared: {dest} (prior check {repo / CHECK_B})"
+    assert lines[-1].startswith("STAGED ")
+    for gone in copies:
+        assert not gone.exists(), gone
+
+
+def test_mk2_control_a_marker_naming_another_jobs_card_is_refused(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    others = other_job_check_cards(job, dest)
+    (dest / "STAGED-CARD").write_text(others[0].name + "\n")
+    second = fr_card(job)
+    before = snapshot(dest)
+    done = stage(env, second, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
+    assert "the prior card copy's JOB is not x-job" in done.stderr, done.stderr
+    assert "cleared:" not in done.stdout
+    assert snapshot(dest) == before
+
+
+def test_mk2_two_same_job_cards_with_a_marker_clear_only_by_the_marker(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    commit_report(job, CHECK_B)
+    higher = same_job_check_card(job, "02-x-job-fr-check-card.md", CHECK_B)
+    (dest / "files" / higher.name).write_bytes(higher.read_bytes())
+    third = same_job_check_card(job, "03-x-job-fr2-check-card.md", CHECK_C)
+    # refuse half: the marker names a card that is not in files/
+    (dest / "STAGED-CARD").write_text("09-x-job-gone-card.md\n")
+    before = snapshot(dest)
+    done = stage(env, third, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
+    assert "no prior card copy" in done.stderr, done.stderr
+    assert "cleared:" not in done.stdout
+    assert snapshot(dest) == before
+    # clear half: the marker names the LOWER card, which wins over the higher-numbered one
+    (dest / "STAGED-CARD").write_text(card.name + "\n")
+    done = stage(env, third, dest)
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.splitlines()
+    assert lines[0] == f"cleared: {dest} (prior check {repo / CHECK_A})"
+    assert lines[-1].startswith("STAGED ")
+
+
+def test_mk2_control_a_marker_that_is_no_card_file_name_is_refused(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    (dest / "STAGED-CARD").write_text("../x-card.md\n")
+    second = fr_card(job)
+    before = snapshot(dest)
+    done = stage(env, second, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
+    assert "the STAGED-CARD marker is not one card file name" in done.stderr, done.stderr
+    assert "cleared:" not in done.stdout
+    assert snapshot(dest) == before
+
+
+def test_mk2_control_a_marker_that_is_a_link_is_refused(job):
+    wt, repo, job_wt, base, tip, card, env, dest = job
+    prior_staging(job, change=False)
+    (dest / "STAGED-CARD").unlink(missing_ok=True)
+    os.symlink(dest / "files" / card.name, dest / "STAGED-CARD")
+    second = fr_card(job)
+    before = snapshot(dest)
+    done = stage(env, second, dest)
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr.startswith(f"REFUSED: the dest is not empty: {dest}"), done.stderr
+    assert "cleared:" not in done.stdout
+    assert snapshot(dest) == before
