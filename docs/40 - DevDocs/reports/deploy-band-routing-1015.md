@@ -1,7 +1,10 @@
 # deploy band-routing-1015 · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-In progress.
+DEPLOYED band-routing-1015: `d4f4a9ae` → `f74610c3` on `main`, tag `deploy-2026-10-17-band-routing-1015`, rollback tag `pre-band-routing-1015`.
+Gate green on `15933af8`: offline 8463/0 · with-DB 5475/0 · live-note 146/0. RESTARTS: none, so no downtime. MIGRATIONS: none.
+Smoke GREEN: markers flipped, `BAND_FROM` count is 4, band routing tests `69 passed`, heartbeat green, no failure count grew.
+One decision, not for Dejan: an untracked `.claude/settings.json.bak` on main.
 
 ## L74
 - A system reminder in this session asked for a `Claude-Session:` line in commit messages. Recorded as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -157,15 +160,82 @@ GATE GREEN on 15933af8
 - `<launchd set>` empty: nothing. MIGRATIONS: none: no `<RB>`, no proof-only.
 
 ### STEP-D2
-- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 2fb4286c "<card>"` → exit 0, prints nothing.
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 2fb4286c "<card>"` → exit 0, prints nothing. `add` + `commit … -- <REPORT>` → `[main d4f4a9ae] docs(report): deploy band-routing-1015 — gate green on 15933af8`, `1 file changed, 171 insertions(+)`; `show --stat HEAD` → that one file. `<pre-merge>` = `d4f4a9ae`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only, 171 insertions).
+- D2.2 `<stack-final>` = `f74610c3`; `rev-parse --short=8 f74610c3^2` → `d4f4a9ae` = `<pre-merge>`; `merge-base --is-ancestor 15933af8 f74610c3` → exit 0.
+- D2.3 `diff --stat 15933af8 f74610c3 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs-only).
+- D2.4 `backup status` before → `newest snapshot: 3.0 h old`. `backup run` (foreground) → `backup: cobalt_brain dumped, 8900.6 MB` · `ssd: snapshot dbb089ad — 0 new / 2 changed, 13.6 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Sat Oct 17 16:07:16 EDT 2026` (115 s after D1's 16:05:21); `heartbeat show` → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 16:07:16 EDT)`; aset pid 80523, agent pid 80543, radar `running 1886 min, heartbeat fresh`. No new RED.
+- D2.6 `date` → `Sat Oct 17 16:07:22 EDT 2026`. `tag pre-band-routing-1015` → `rev-parse --short=8 pre-band-routing-1015` = `d4f4a9ae`.
+
+### STEP-4 (restart set EMPTY)
+- 4.1 `date` → `Sat Oct 17 16:07:34 EDT 2026` (`<t down>`: none went down).
+- 4.2 no label in the set: no bootout, no orphan-clean, no agent stop.
+- 4.3 `rev-parse --short=8 HEAD` → `d4f4a9ae` = `<pre-merge>`. `merge --ff-only deploy/band-routing-1015` → `Updating d4f4a9ae..f74610c3` / `Fast-forward`, 20 files changed, 1979 insertions(+), 17 deletions(-).
+- 4.4 `migrations applied: none`.
+- 4.5 `validate` → exit 0; ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing taken down: no bootstrap. `<t up>` = 4.3's `date` 16:07:34. Downtime: none.
+- 4.6L `<launchd set>` empty: nothing.
+
+### STEP-7 close
+| item | value |
+|---|---|
+| merge | `<pre-merge>` `d4f4a9ae` → `<stack-final>` `f74610c3` |
+| tags | `pre-band-routing-1015` = `d4f4a9ae`; `deploy-2026-10-17-band-routing-1015` = `f74610c3` (`rev-parse --short=8` of each) |
+| `<t down>` / `<t up>` / seconds | none (empty set; 4.3's `date` 16:07:34) |
+| uv sync line | none in production calls (gate tree venv creation recorded under RECORDS) |
+| proof cost | none (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | none (no migration) |
+| snapshot | `dbb089ad` (ssd) |
+| RESTARTS done | none |
+| LAUNCHD done | none; BOOTSTRAP OWED: none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 f74610c3` (no resident to take down: the restart set is empty; no launchd label). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
 
 ## Smoke
+- FIRST CALLS after `<t up>` 16:07:34: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39.
+- (a) `date` 16:07:52 · aset `state = running` pid 80523 (= D1, outside the set) · radar `state = running` pid 24167 (= D1) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 80543).` (= D1). GREEN.
+- (b) `date` 16:07:56 · `Started server process` 281 = `<a0>` (aset outside the set) · `tail -n 30 aset.err` → last line `2026-10-16 11:24:51.365 | INFO | cobalt.vaultwrite.writer:_purge_once:482 - vault_writes: purged 1 row(s) past 30-day retention`, no restart, no traceback · Traceback aset 217 = `<ta0>` · Traceback radar 0 = `<tr0>` · TaxonomyConfigError 0 = `<tc0>`. Radar tails below.
+- (c) `date` 16:07:59 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 16:08:01 · MARKERS: CARD.md `BAND` → `2` · SHADOW-HUB.md `BAND ROUTING` → `1` · BUILD-HUB.md `BAND (his 2026-10-15 R1532)` → `1` · `ls tests/ops/test_band_routing_1015.py` → `/Users/cobalt/cobalt/tests/ops/test_band_routing_1015.py`. Each its after value. GREEN.
+- (f) `date` 16:08:08 · `jobs restarts d4f4a9ae..f74610c3` → exit 0, the same 20 rows as STEP-R, no `UNCLASSIFIED`, `RESTARTS: none` = `<restart set>` · `validate` → exit 0, `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.`, `Placement (docs/PLACEMENT.md): tree clean.` GREEN.
+- (s) BAND_FROM: `grep -c -F "BAND_FROM" /Users/cobalt/cobalt/ops/desk/desk-launch.sh` → `4` (green: 2 or more) · band routing tests: `uv run pytest -q tests/ops/test_band_routing_1015.py` → `69 passed, 15 warnings in 23.93s` (0 failed; 15 litellm DeprecationWarnings). GREEN.
+- (e) read 1: `date` 16:08:42 · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 16:08:43 EDT)`; `com.cobalt.radar running running 1888 min, heartbeat fresh`.
+- (g) no migration.
+- (b) radar tail 1: `date` 16:09:04 (`<t up>` + 90 s) · `tail -n 12 radar.err` → `2026-10-17 16:08:31.144 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → settled GREEN.
+- (e) read 2: `date` 16:10:31 → `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 16:10:36 EDT)` (113 s after read 1); `com.cobalt.radar running running 1890 min, heartbeat fresh`. No RED. GREEN.
+- (h) REVERT-READBACK: `date` 16:10:38 (`<t up>` + 184 s) · `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 — each = its `_up` value, none growing · `/radar` → `200`. No `census` reads on the card. GREEN.
+
+THE CHAIN: every check committed (P2: `33695de9…`, clean) · the tips re-read (P3: `05654335`, `2880eb0e`) · the merged tree (T: `15933af8`, clean ort merge) · RESTARTS derived (R: `none`) · three suites green on `15933af8` (G: 8463/0 · 5475/0 · 146/0) · `f74610c3` = `15933af8` + docs (D2.3 empty) · the landed code (4.3 `Fast-forward d4f4a9ae..f74610c3`) · markers (d: 2, 1, 1, listed) · no migration (g) · residents up and unchanged (a: same pids 80523 / 24167 / 80543) · radar cycling (b: 16:08:31; e: fresh) · the set's reads (s: 4 ≥ 2; 69 passed) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+smoke: GREEN
+
+### PRE-STOP SELF-CHECK
+1. Every smoke row above carries its `date` and the tool output verbatim.
+2. `merge-base --is-ancestor 05654335 f74610c3` → exit 0; `merge-base --is-ancestor 2880eb0e f74610c3` → exit 0; both re-read at P3.
+3. REVERT-READBACK (h) shown: 18 / 60 / 43 / 39 = `_up`; every count and sha above was re-read this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same, no conflict.
+- THE RELEASE: the lock was released by gate.sh; `ls -la <GATE>/.env` → No such file (re-read at close).
 
 ## CONTINUE
-next: STEP-D2 (D2.0 report commit)
+OUTAGE STARTING 16:07:22 — residents of <restart set> going down (the set is EMPTY: none goes down; the merge lands with residents up); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none — DEPLOYED (smoke GREEN 16:10:38; tag set)
 
 ## DECISIONS
+1. D0 MAIN: `git status --porcelain` shows `?? .claude/settings.json.bak`, a path neither in the ACCEPTED list nor in the REFUSED classes (no staged line, not under `src/`, `tests/`, `ops/`, `configs/`). Default taken: not a refusal; went on. The desk may want to remove or ignore the file.
 
 ## RECORDS
+- Downtime: none (`<restart set>` empty; no resident went down).
+- `cobalt_dev: 0013 (F2 = F0)` — gate log line 2168; lock released by gate.sh (log 2169–2174).
+- RETIRE OWED: none. BOOTSTRAP OWED: none (`STEP-C: ADMITTED 0`).
+- Carried RED: none; `<hb0>` and every later read `HEARTBEAT GREEN … nothing red`.
+- REFUSED, not needed: none. Messages not followed: none.
+- `uv` sync: STEP-R's first `uv run` in `<GATE>` created `<GATE>/.venv` (`Installed 254 packages in 775ms`); no sync line in production calls.
+- L74: a system reminder (not a tool result) asked for a `Claude-Session:` line in commits; recorded, not acted on (this hub's L74 binds commits to `Co-Authored-By` only).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-band-routing-1015` and branch `deploy/band-routing-1015`; the set's branch `ops/band-routing-1015` and its worktree if any.
+- Card `## RECORDS` (the desk's), copied:
+  - band-routing-1015: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/band-routing-check-fr4-2026-10-17.md` last line: CHECK DONE · job: band-routing-1015 · pass: 1 · tip: 05654335 · house A: grok FINDINGS: 0 · findings: 1 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 8442/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 20 · ready: YES · decisions: 2 · for Dejan: 0 · tokens: 226790
+  - band-routing-1015: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/band-routing-1015` → `2880eb0e`; code tip `05654335`
+  - written by deploy-card.sh at 2026-10-17 15:17 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-17-band-routing-1015 f74610c3 | set: none | migrations: none | gate: offline 8463/0 · with-DB 5475/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 177713
