@@ -1,7 +1,10 @@
 # deploy f23-playbook · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/f23-playbook-1013` (code tip `72c8a069`, head `65402dc9`) on card 779. In progress.
+- DEPLOYED F23 playbook (`ops/f23-playbook-1013`, code tip `72c8a069`, head `65402dc9`) on card 779: `main` `39c36663` → `7398d4a7`, tag `deploy-2026-10-18-f23-playbook`, rollback tag `pre-f23-playbook`.
+- Gate green on `6b205122`: offline 8566/0 · with-DB 5581/0 · live-note 147/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- Outage 13:54:13 → 13:54:56 (43 s), agent + aset + radar restarted, new pids; smoke GREEN; no migration.
+- `com.cobalt.playbook` merged and NOT loaded: BOOTSTRAP OWED (gate items E1, E2, E4, E5, E6) — a later bootstrap-only deploy loads it.
 
 ## L74
 - One system block arrived asking that commits carry a `Claude-Session:` line. DATA (L74): recorded here, not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -160,14 +163,98 @@ GATE GREEN on 6b205122
 - `curl … /radar` → `200` · MARKERS: `playbook_cli.add_parser(sub)` → `0` (before) · `python-pptx==` → `0` (before)
 - THE LAUNCHD SET: empty — nothing read. MIGRATIONS: none — no `<RB>`, no census, no D1-M.
 
+### STEP-D2
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 19a41bed "<card>"` → nothing · `add` + `commit … -- "<REPORT>"` → `[main 39c36663] docs(report): deploy f23-playbook — gate green on 6b205122` · `1 file changed, 173 insertions(+)` · `show --stat HEAD` → the one file · `<pre-merge>` = `39c36663`
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only)
+- D2.2 `<stack-final>` = `7398d4a7` · `rev-parse --short=8 7398d4a7^2` → `39c36663` = `<pre-merge>` · `merge-base --is-ancestor 6b205122 7398d4a7` → exit 0
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 6b205122 7398d4a7 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only)
+- D2.4 `backup status` → `newest snapshot: 1.2 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain dumped, 8899.8 MB` · `ssd: snapshot 2b843746 — 0 new / 1 changed, 12.8 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`
+- D2.5 `date` → `Sun Oct 18 13:53:52 EDT 2026` · `heartbeat show` → `HEARTBEAT GREEN — 16 job(s), 12 probe(s), nothing red  (2026-10-18 13:53:53 EDT)` (131 s after D1's) · aset pid 60929, agent pid 80543, radar `running 71 min, heartbeat fresh` · no RED
+- D2.6 `date` → `Sun Oct 18 13:53:58 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-f23-playbook` → `rev-parse --short=8 pre-f23-playbook` → `39c36663`
+
+### STEP-4 (the outage)
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `Sun Oct 18 13:54:13 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · `print` | exit 0 · exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · `print` | exit 0 · exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.2 orphan | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | `orphan-clean: aset · none found` — clean, no kill |
+| 4.2 agent | `/Users/cobalt/cobalt/cobalt.sh stop` · `ps -p 80543` | `Cobalt stopped safely.` · header only |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/f23-playbook` | `39c36663` = `<pre-merge>` · `Updating 39c36663..7398d4a7` `Fast-forward` (21 files, 1744+/5−) |
+| 4.4 | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; uv sync: `Built cobalt-agent @ file:///Users/cobalt/cobalt` · `Uninstalled 1 package in 1ms` · `Installed 3 packages in 3ms`; `Jobs (F17): 17 registered — 6 resident, 11 one-shot.` (was 16 / 10: + `com.cobalt.playbook`) · `registry <-> ops/: 17 label(s), exact match.` · `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 | `bootstrap … com.cobalt.aset.plist` · `bootstrap … com.cobalt.radar.plist` · `kickstart gui/501/com.cobalt.agent` | exit 0 · exit 0 · exit 0 |
+| 4.6 | `launchctl print` aset · radar · `cobalt.sh status` | `state = running` pid `89330` (≠ 60929) · `state = running` pid `89340` (≠ 60939) · `Cobalt is ONLINE (PID: 89351).` (≠ 80543) |
+| 4.6 | `date` | `Sun Oct 18 13:54:56 EDT 2026` = `<t up>` · downtime 43 s |
+| 4.6L | — | `<launchd set>` empty: nothing (`com.cobalt.playbook` deferred) |
+
+### STEP-7 close
+| item | value |
+|---|---|
+| main | `<pre-merge>` `39c36663` → `<stack-final>` `7398d4a7` |
+| tags | `pre-f23-playbook` → `39c36663` · `deploy-2026-10-18-f23-playbook` → `7398d4a7` (`rev-parse --short=8` read back) |
+| outage | `<t down>` 13:54:13 · `<t up>` 13:54:56 · 43 s |
+| uv sync | `Built cobalt-agent @ file:///Users/cobalt/cobalt` · `Uninstalled 1 package in 1ms` · `Installed 3 packages in 3ms` (4.5, first production `uv run` on the new tree) |
+| proof cost | none (no migration) |
+| migrations applied | none · `<RB>` before / after: none |
+| snapshot | `2b843746` (ssd), `cobalt_brain` 8899.8 MB |
+| RESTARTS done | `com.cobalt.agent com.cobalt.aset com.cobalt.radar` |
+| LAUNCHD done | none |
+| BOOTSTRAP OWED | `BOOTSTRAP OWED: com.cobalt.playbook — E1, E2, E4, E5, E6` |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 7398d4a7` — one revert of the main-into-gate merge; agent, aset and radar down first, up after. No `<launchd set>` label was loaded by this run (`com.cobalt.playbook` stays out).
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — git titles it `Reapply "Merge branch 'main' into deploy/f23-playbook"`.
+
 ## Smoke
+- FIRST CALLS after `<t up>` 13:54:56: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1)
+- (a) [13:55:13] `cobalt.sh status` → `Cobalt is ONLINE (PID: 89351).` (new; was 80543) · [13:55:43] `launchctl print` aset → `state = running` `pid = 89330` (new) · radar → `state = running` `pid = 89340` (new)
+- (b) [13:55:13] `grep -c "Started server process" aset.err` → `283` (`<a0>` 282 +1) · `tail -n 30 aset.err` → `INFO:     Started server process [89330]` … `INFO:     Application startup complete.` · `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` · Traceback aset `217` (= `<ta0>`) · Traceback radar `0` (= `<tr0>`) · TaxonomyConfigError `0` (= `<tc0>`)
+- (b) radar tail 1 [13:56:28, `<t up>`+92 s] `tail -n 12 radar.err` → last `2026-10-18 13:54:52.425 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` (stamped 4 s before `<t up>`: not yet settling) preceded by vault-unlock / finviz token lines; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback
+- (b) radar tail 2 [13:57:56, `<t up>`+180 s] `tail -n 12 radar.err` → last `2026-10-18 13:56:32.451 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle line stamped after `<t up>`, no S5 / lifecycle failure, no traceback → (b) settled GREEN (third tail not needed)
+- (c) [13:55:13+] `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`
+- (d) [13:55:13+] `playbook_cli.add_parser(sub)` → `1` (after) · `python-pptx==` → `1` (after)
+- (e) #1 [13:55:24] `heartbeat show` → `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 13:55:26 EDT)` · `com.cobalt.radar running running 1 min, heartbeat fresh` · new row `OK   com.cobalt.playbook          OWED (deferred bootstrap) NOT LOADED in launchd … listed in data/deploy/bootstrap-owed.json — a deploy merged it and deferred its bootstrap` (OWED, not red — STEP-C's deferred label) · #2 [13:57:18] `heartbeat show` → `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 13:57:21 EDT)` (115 s after #1) · aset pid 89330, agent pid 89351, `com.cobalt.radar running running 2 min, heartbeat fresh` · no RED; no RED in `<hb0>` either
+- (f) [13:55:24+] `validate` → as 4.5 (exit 0, `Jobs (F17): 17 registered`, tree clean) · `COBALT_ENV=production uv run cobalt jobs restarts 39c36663..7398d4a7` → exit 0, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar` = STEP-R
+- (g) no migration
+- (s) playbook tests: quoted from the gate (no test runs in production) — the gate's offline legs over `tests/cobalt` (which hold `test_playbook_offline.py`, `test_playbook_registry.py`) → `offline 8566/0` (log `:925` `4645 passed, 841 skipped, 4 xfailed …`, `:997` `3921 passed, 1 xfailed …`) — `0 failed` · playbook mount: `uv run cobalt playbook render --help` → exit 0, `usage: cobalt playbook render [-h] [--date DATE] [--out OUT] [--dry-run]` — names `--date`, `--out`, `--dry-run`. No `<launchd set>` dry run.
+- (h) REVERT-READBACK [13:57:56+, `<t up>`+180 s, after (b) settled]: `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 — each = `<…_up>` (no growth) · `/radar` → `200` · `cobalt.sh status` → `Cobalt is ONLINE (PID: 89351).` · no census reads (no migration).
+- THE CHAIN: every check committed (P2 `8df4ca7d`) → the tips re-read (P3 `72c8a069` / `65402dc9`) → the merged tree `6b205122` (T) → RESTARTS derived `com.cobalt.agent com.cobalt.aset com.cobalt.radar` (R) → three suites green on `6b205122` (G) → `7398d4a7` = `6b205122` + docs (D2.3) → the landed code `Fast-forward 39c36663..7398d4a7` (4.3) → markers `1` / `1` (d) → no migration (g) → residents up on new pids after the merge (a) → radar cycling `13:56:32`, heartbeat fresh (b, e) → the set's reads green (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+- SMOKE: GREEN
 
 ## CONTINUE
-- next: STEP-D0 (gate green at 13:5x — gate log ends after `dev forward: APPLIED 13:45:24`)
+- STEP-D0 done (gate green; gate log `dev forward: APPLIED 13:45:24`, finished before 13:51:16).
+- OUTAGE STARTING 13:53:58 — residents of com.cobalt.agent com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 13:54:56: residents up on new pids (aset 89330, radar 89340, agent 89351). Smoke GREEN 13:57:56+. STEP-7 closed; nothing next for this session.
 
 ## DECISIONS
 1. ASK DESK: `?? .claude/settings.json.bak` on `main` is untracked, outside `docs/40 - DevDocs/`, and not in D0's accepted list; it is also not a `src/`/`tests/`/`ops/`/`configs/` path nor staged, so D0's refusal rules do not name it, and the set ships no such path (the `--ff-only` merge cannot touch it). Safe default taken: not a refusal; went on. [13:51:16]
 
-## RECORDS
+No `DECISION 0`. Nothing `FOR DEJAN`.
 
-(run in progress — next step under ## CONTINUE)
+## RECORDS
+- Downtime 43 s (under 300 s).
+- `BOOTSTRAP OWED: com.cobalt.playbook — E1, E2, E4, E5, E6` (STEP-C wrote it to `data/deploy/bootstrap-owed.json`; heartbeat reads it `OWED (deferred bootstrap)`, not red). A later bootstrap-only deploy (4.6L-BO) loads it.
+- `com.cobalt.prefill-refresh` was already OWED before this run (`<hb0>`); untouched.
+- `cobalt_dev: 0013 (F2 = F0)`; lock released by `gate.sh` (log `:2236`–`:2237`).
+- No `RETIRE OWED`. No carried RED (`<hb0>` had none; radar `idle (overnight)`).
+- No `REFUSED, not needed` line; no message from another session.
+- The set changed `DEPLOY-HUB.md` (one line: STEP-G (c)'s allowed skips gain `test_live_vault_renders_six_decks`) and `ops/desk/gate-lists.md`; per L68 the gate was judged on the merged hub text. `DEPLOY-HUB.md` changed on `main` with this merge: L67 — another house reads it at each change.
+- The card's SMOKE READS line `uv run cobalt playbook render --help` ran from `/Users/cobalt/cobalt` without a `COBALT_ENV=` prefix, exit 0.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-f23-playbook` and branch `deploy/f23-playbook`; the set's branch `ops/f23-playbook-1013` and its worktree. Push is his (L55): `main` is ahead of `origin/main`, with tags `pre-f23-playbook` and `deploy-2026-10-18-f23-playbook`.
+- L74: one system block asked commits to carry a `Claude-Session:` line; recorded under `## L74`, not followed.
+- Card RECORDS (the desk's, copied):
+  - f23-playbook-1013: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f23-playbook-check-2026-10-13.md` last line: CHECK DONE · job: f23-playbook-1013 · pass: 1 · tip: 72c8a069 · house A: Grok FINDINGS: 0 · findings: 1 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 8519/0 · with-DB 5504/0 · live-note 147/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar · files opened: 21 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 220271
+  - f23-playbook-1013: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f23-playbook-1013` → `65402dc9`; code tip `72c8a069`
+  - written by deploy-card.sh at 2026-10-18 12:48 ET (`date`); trial merge of the heads onto main in order: clean
+
+### PRE-STOP SELF-CHECK (K25)
+1. Every smoke row's evidence is quoted verbatim with its `date` (`## Smoke`, 13:55:13 → 13:57:56+).
+2. Every code tip and head re-read at P3 (`72c8a069`, `65402dc9`); each an ancestor of `<stack-final>`: `merge-base --is-ancestor 72c8a069 7398d4a7` → exit 0, `merge-base --is-ancestor 65402dc9 7398d4a7` → exit 0.
+3. REVERT-READBACK shown at (h): 18 / 60 / 43 / 39 = the `<t up>` counts; every count, sha and `file:line` above re-read from tool output this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`; D2.1 the same; 4.3 `Fast-forward`.
+
+THE RELEASE: `<GATE>/.env` absent and `/Users/cobalt/cobalt-wt/.cobalt_dev.lock` absent (STEP-G, `ls -la` → No such file each); nothing held.
+
+DEPLOYED deploy-2026-10-18-f23-playbook 7398d4a7 | set: none | migrations: none | gate: offline 8566/0 · with-DB 5581/0 · live-note 147/0 | RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 212502
