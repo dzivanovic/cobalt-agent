@@ -1,0 +1,15 @@
+job=cos-outage-1018
+tip=de3e15c8
+on=0bdb7089
+migration=none
+offline=8612/0
+with_db=0/0
+live_note=147/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=2 of 2
+self_check=2 of 3
+decisions=2
+for_dejan=0
+tokens=167789
