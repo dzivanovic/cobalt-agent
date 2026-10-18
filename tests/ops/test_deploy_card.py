@@ -1440,3 +1440,22 @@ def test_a_worktree_outside_the_pattern_is_refused(tmp_path, bad):
     assert done.returncode == 1
     assert "REFUSED" in done.stderr
     assert not desk.out.exists()
+
+
+# ---- card 721 D1: a code tip already on main is refused (brain R1601) ----
+
+def test_d1_a_tip_already_on_main_is_refused(tmp_path):
+    """RED on BASE: exit 0 and the card written (returncode == 0). CONTROL: the same run's
+    stderr holds main's `rev-parse --short=8 main`. CONTROL 2 is the unmerged two-job run
+    of the tests above, left as they are."""
+    desk = Desk(tmp_path)
+    git(desk.repo, "merge", "--no-edit", "ops/alpha")
+    main = git(desk.repo, "rev-parse", "--short=8", "main")
+    done = desk.run(cards=("alpha",))
+    assert done.returncode == 1, done.stdout + done.stderr
+    output = done.stdout + done.stderr
+    assert "alpha" in output, output
+    assert desk.tip["alpha"] in output, output
+    assert "already an ancestor of main" in output, output
+    assert not desk.out.exists()
+    assert main in done.stderr, done.stderr

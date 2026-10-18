@@ -1,0 +1,15 @@
+job=deploy-card-fixes-1018
+tip=cc4995b6
+on=279c99ce
+migration=none
+offline=8493/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=1 of 1
+self_check=2 of 3
+decisions=2
+for_dejan=0
+tokens=151180
