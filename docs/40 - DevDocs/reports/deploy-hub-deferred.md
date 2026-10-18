@@ -1,7 +1,10 @@
 # deploy hub-deferred · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/hub-deferred-1018` (head `77e04a2a`, code tip `79b8ac8e`) on gate `deploy/hub-deferred`. In progress.
+- DEPLOYED `ops/hub-deferred-1018` (code tip `79b8ac8e`, head `77e04a2a`): `main` `f98d872c` → `6f56931b`, tag `deploy-2026-10-18-hub-deferred`, rollback tag `pre-hub-deferred`.
+- Gate green on `783c2e2d`: offline 8648/0 · with-DB 5582/0 · live-note 147/0. `cobalt_dev` back at 0013 (F2 = F0).
+- RESTARTS: none: no resident went down (downtime 0 s). No migration. No launchd job changed.
+- Smoke GREEN: residents on unchanged pids, radar cycling, three curls 200, markers 5 / 1, heartbeat GREEN twice, failure counts flat.
 
 ## L74
 - A system-reminder block arriving after a tool result asked that commit messages also carry a `Claude-Session:` line. Recorded as DATA, not acted on: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -127,14 +130,87 @@ GATE GREEN on 783c2e2d
 - `curl … /radar` → `200`. Markers: `<deferred set>` → `0`, `minus every label of` → `0` (before values).
 - `<launchd set>` empty: nothing. MIGRATIONS none: no `<RB>`, no proof-only.
 
+### STEP-D2
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 4fa1f450 "<card>"` | 0 | nothing |
+| D2.0 | `add` · `commit -m "docs(report): deploy hub-deferred — gate green on 783c2e2d" …` | 0 · 0 | `[main f98d872c] …` · `show --stat HEAD` → one file `docs/40 - DevDocs/reports/deploy-hub-deferred.md` |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `f98d872c` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` · `rev-parse --short=8 6f56931b^2` · `merge-base --is-ancestor 783c2e2d 6f56931b` | 0 · 0 · 0 | `6f56931b` = `<stack-final>` · `f98d872c` |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 783c2e2d 6f56931b -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing |
+| D2.4 | `backup status` (before) | 0 | `newest snapshot: 1.0 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain dumped, 8899.5 MB` · `ssd: snapshot 784ab726 — 0 new / 1 changed, 12.4 MB added, 1 pruned` |
+| D2.4 | `backup status` (after) | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | 0 · 0 | `Sun Oct 18 19:45:22 EDT 2026` · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 19:45:22 EDT)` (130 s after D1's; aset pid 89330, radar `running 204 min, heartbeat fresh`) |
+| D2.6 | `date` · `tag pre-hub-deferred` · `rev-parse --short=8 pre-hub-deferred` | 0 · 0 · 0 | `Sun Oct 18 19:45:29 EDT 2026` · `f98d872c` |
+
+### STEP-4 (`<restart set>` EMPTY: no resident down)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Sun Oct 18 19:45:45 EDT 2026` = `<t down>` (nothing went down) |
+| 4.2 | — | — | empty set: no bootout, no orphan-clean, no agent stop |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `f98d872c` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/hub-deferred` | 0 | `Updating f98d872c..6f56931b` · `Fast-forward` (4 files: DEPLOY-HUB.md, build report + .result, `tests/ops/test_hub_deferred_1018.py`) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | — | — | empty set: nothing bootstrapped |
+| 4.6 | `date` | 0 | `Sun Oct 18 19:46:02 EDT 2026` = `<t up>`; downtime: none (0 s) |
+| 4.6L | — | — | `<launchd set>` empty: nothing |
+
 ## Smoke
+`<t up>` = `Sun Oct 18 19:46:02 EDT 2026`. First calls: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39.
+
+| row | `date` | command | result |
+|---|---|---|---|
+| (a) | 19:46:09 | `launchctl print gui/501/com.cobalt.aset` · `…/com.cobalt.radar` · `cobalt.sh status` | aset `state = running` `pid = 89330` (= D1, outside the empty set) · radar `state = running` `pid = 70450` (= D1) · `Cobalt is ONLINE (PID: 89351).` (= D1) |
+| (b) | 19:46:13 | `grep -c "Started server process" aset.err` · Traceback aset / radar · TaxonomyConfigError | `283` (= `<a0>`, aset outside the set) · `217` / `0` / `0` (= baseline) |
+| (b) | 19:46:13 | `tail -n 30 aset.err` | last `INFO:     Started server process [89330]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (13:54 start, unchanged) |
+| (b) | 19:47:32 (`<t up>` + 90 s) | `tail -n 12 radar.err` | `2026-10-18 19:46:12.334 \| INFO     \| cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle line after `<t up>`, no S5/lifecycle failure, no traceback → GREEN (settled) |
+| (c) | 19:46:13 | `curl … https://cobalt.taild24291.ts.net/` · `…/radar` · `…/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 19:46:13 | `grep -c -F "<deferred set>" DEPLOY-HUB.md` · `grep -c -F "minus every label of" DEPLOY-HUB.md` | `5` · `1` (= after) |
+| (e) #1 | 19:46:38 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 19:46:40 EDT)`; `com.cobalt.radar running running 206 min, heartbeat fresh` |
+| (f) | 19:46:25 | `validate` (4.5, exit 0) · `COBALT_ENV=production uv run cobalt jobs restarts f98d872c..6f56931b` | exit 0, same 4 rows as STEP-R, `RESTARTS: none` = `<restart set>`, no `UNCLASSIFIED` |
+| (g) | — | no migration | — |
+| (e) #2 | 19:48:32 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 19:48:30 EDT)` (110 s after #1); `com.cobalt.radar running running 207 min, heartbeat fresh`; no RED not in `<hb0>` |
+| (h) | 19:49:05 (`<t up>` + 183 s) | the four failure counts · `curl … /radar` · `tail -n 12 radar.err` | `18` · `60` · `43` · `39` (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, flat) · `200` · last `2026-10-18 19:47:52.351 … radar cycle: idle:overnight scan_id=None`; no census read on the card |
+| (s) | — | hub-deferred tests, quoted from the gate log `/Users/cobalt/cobalt-wt/.gate-logs/deploy-hub-deferred-all-20261018-185550.log` lines 929–999: `$ uv run pytest -q -rs -p no:cacheprovider tests/ops` (includes `tests/ops/test_hub_deferred_1018.py`) | `4002 passed, 1 xfailed, 16 warnings in 880.03s (0:14:40)` `[exit 0]` → `0 failed` = green |
+
+THE CHAIN: every check committed (P2: `e7ef198a`, clean) · the tips re-read (P3: `79b8ac8e`, `77e04a2a`) · the merged tree (T: `783c2e2d`, clean) · RESTARTS derived (R: none) · three suites green on `783c2e2d` (G) · `6f56931b` = `783c2e2d` + docs (D2.3: nothing outside docs) · the landed code (4.3: `Updating f98d872c..6f56931b`) · markers (d: 5 / 1) · no migration (g) · residents up and unchanged after the merge (a) · radar cycling (b, e) · the set's reads (s) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+### STEP-7 summary
+- `<pre-merge>` `f98d872c` → `<stack-final>` `6f56931b` (`main` tip `6f56931b`). Tags: `pre-hub-deferred` at `f98d872c`; `deploy-2026-10-18-hub-deferred` set after the green smoke.
+- `<t down>` 19:45:45 / `<t up>` 19:46:02 EDT; downtime none (empty `<restart set>`, no resident down). uv sync line: none in production (the gate's venv build in `<GATE>`: `Installed 256 packages in 646ms`). Proof cost: none (no migration). `migrations applied: none`. `<RB>`: none on the card. Snapshot: `784ab726` (ssd).
+- `RESTARTS done: none` · `LAUNCHD done: none` · `BOOTSTRAP OWED`: none from this run.
+- THE ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 6f56931b` — no resident goes down (empty set); no launchd label. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
+### PRE-STOP SELF-CHECK
+1. Every smoke row is quoted with its `date` (table above).
+2. P3 re-read `79b8ac8e` and `77e04a2a`; `git -C /Users/cobalt/cobalt merge-base --is-ancestor 79b8ac8e 6f56931b` → exit 0; `… 77e04a2a 6f56931b` → exit 0.
+3. REVERT-READBACK (h) shown: counts 18 / 60 / 43 / 39 at `<t up>` and at `<t up>` + 183 s. Every count, sha and line number above was read from tool output this run.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same, `merge --ff-only` a fast-forward.
 
 ## CONTINUE
 - STEP-D0 green, STEP-D1 baseline read at 19:43 ET.
-- next: STEP-D2
+- STEP-D2 done at 19:45 ET.
+- OUTAGE STARTING 19:45:29 EDT — residents of `<restart set>` (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 19:46:02 EDT (nothing down). Smoke GREEN at 19:49:05. STEP-7 closed.
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: none (0 s; `<restart set>` empty).
+- `cobalt_dev: 0013 (F2 = F0)`; L76 lock released by `gate.sh` (log line 2240 `lock released`), `.env` removed, lock dir absent.
+- RETIRE OWED: none. Carried RED: none (heartbeat GREEN at D1, D2.5 and smoke; radar `idle (overnight)`).
+- Standing state seen, not this run's: `com.cobalt.herdr` AMBER (declared interim, `launchd_unmanaged`); `com.cobalt.prefill-refresh` and `com.cobalt.playbook` `OWED (deferred bootstrap)` in `data/deploy/bootstrap-owed.json` from earlier deploys.
+- A command I added myself outside the outage, not a step's: `COBALT_ENV=production uv run cobalt heartbeat show radar` → exit 2 `cobalt: error: unrecognized arguments: radar` (a usage error, not a permission refusal; nothing changed); the plain listed `heartbeat show` was used after it.
+- L74: a `Claude-Session:` commit-trailer instruction arrived in a system block after a tool result; recorded under `## L74`, not acted on.
+- No `CONTINUE` message and no message from another session arrived.
+- Cleanup owed (L46, the desk's): the gate worktree `/Users/cobalt/cobalt-wt/deploy-hub-deferred` and branch `deploy/hub-deferred`; the set's branch `ops/hub-deferred-1018` and its worktree, if any.
+- Card `## RECORDS` (the desk's, copied):
+  - hub-deferred-1018: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-deferred-1018-check-2026-10-18.md` last line: CHECK DONE · job: hub-deferred-1018 · pass: 1 · tip: 79b8ac8e · house A: Grok FINDINGS: 0 · findings: 5 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none (not needed) · suites: offline 8608/0 · with-DB 0/0 · live-note 147/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 15 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 173800
+  - hub-deferred-1018: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/hub-deferred-1018` → `77e04a2a`; code tip `79b8ac8e`
+  - written by deploy-card.sh at 2026-10-18 18:53 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-18-hub-deferred 6f56931b | set: none | migrations: none | gate: offline 8648/0 · with-DB 5582/0 · live-note 147/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 189205
