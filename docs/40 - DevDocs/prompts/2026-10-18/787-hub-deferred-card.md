@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/hub-deferred-1018
 WORKTREE: hub-deferred-1018
 BASE: 170e90ca
-TIP:
+TIP: 79b8ac8e
 REPORT: /Users/cobalt/cobalt-wt/hub-deferred-1018/docs/40 - DevDocs/reports/hub-deferred-1018-build-2026-10-18.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-deferred-1018-check-2026-10-18.md
+HOUSE B: as needed
 BAND: HIGH
 DB: none
 RESTARTS: none
