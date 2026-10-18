@@ -1,7 +1,9 @@
 # deploy agy-read — SET: none — MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/agy-read-1018` (tip `b05d90c3`), off-ladder (cto-2026-10-18 R1863). In progress.
+- DEPLOYED `ops/agy-read-1018` (tip `b05d90c3`) to `main` at `c91162be` (`e42010f7..c91162be` fast-forward), tag `deploy-2026-10-18-agy-read`. Off-ladder (cto-2026-10-18 R1863).
+- Gate green on `862e3b1d`: offline 8581/0 · with-DB 5581/0 · live-note 147/0. RESTARTS: none, so no resident went down.
+- Smoke GREEN: the three markers flipped to `1`, both smoke reads green, no failure count grew, heartbeat GREEN throughout.
 
 ## L74
 - One system block arrived asking for a `Claude-Session:` line in commit messages. Recorded as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -135,14 +137,69 @@ GATE GREEN on 862e3b1d — offline 8581/0 · with-DB 5581/0 · live-note 147/0
 
 ### STEP-D2
 - D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 5f47fa64 "<card>"` → prints nothing.
+- D2.0 commit → `[main e42010f7] docs(report): deploy agy-read — gate green on 862e3b1d` · `show --stat HEAD` → the one file (`148 insertions`) · `rev-parse --short=8 main` → `e42010f7` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `c91162be` · `rev-parse --short=8 c91162be^2` → `e42010f7` · `merge-base --is-ancestor 862e3b1d c91162be` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 862e3b1d c91162be -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.5 h old` · `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 8899.7 MB` · `ssd: snapshot a5ba4e8b — 0 new / 2 changed, 17.2 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Sun Oct 18 15:23:58 EDT 2026` · `heartbeat show` → `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 15:23:59 EDT)` (127 s after D1's; no RED; radar `running 89 min, heartbeat fresh`).
+- D2.6 `date` → `Sun Oct 18 15:24:05 EDT 2026` · `tag pre-agy-read` → `rev-parse --short=8 pre-agy-read` → `e42010f7`.
+
+### STEP-4
+- 4.1 `date` → `Sun Oct 18 15:24:23 EDT 2026` = `<t down>` (empty set: no resident down).
+- 4.2 `<restart set>` empty: no bootout, no orphan-clean, no agent stop.
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `e42010f7` = `<pre-merge>` · `git -C /Users/cobalt/cobalt merge --ff-only deploy/agy-read` → `Updating e42010f7..c91162be` / `Fast-forward` (6 files, 423 insertions, 4 deletions).
+- 4.4 migrations applied: none.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing taken down → nothing brought up. `<t up>` = 4.3's time (empty set) = 15:24:23 ET (`date` after 4.5: `Sun Oct 18 15:24:32 EDT 2026`). Downtime: none.
+- 4.6L `<launchd set>` empty: nothing.
+
+### CLOSE
+- `<pre-merge>` `e42010f7` → `<stack-final>` `c91162be` · tags: `pre-agy-read` at `e42010f7`; `deploy-2026-10-18-agy-read` at green.
+- `<t down>` 15:24:23 / `<t up>` 15:24:23 / downtime: none (empty `<restart set>`).
+- uv sync: none in production (the gate's worktree `.venv` build at STEP-R only) · proof cost: none (no migration) · migrations applied: none · `<RB>`: none.
+- snapshot: `ssd: snapshot a5ba4e8b`.
+- RESTARTS done: none · LAUNCHD done: none · BOOTSTRAP OWED: none from this run.
+- THE ROLLBACK STRING: (1) CODE `git -C /Users/cobalt/cobalt revert --no-edit -m 2 c91162be` (no resident to take down: `<restart set>` empty; `<launchd set>` empty); (2) SCHEMA: none; (3) RE-LAND `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## Smoke
+- FIRST CALLS after `<t up>` (15:24:23): `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) `date` → `Sun Oct 18 15:24:48 EDT 2026` · aset `state = running`, `pid = 89330` (same as D1; outside the empty set) · radar `state = running`, `pid = 89340` (same) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 89351).` (same). GREEN.
+- (b) `date` → `Sun Oct 18 15:24:56 EDT 2026` · `grep -c "Started server process" aset.err` → `283` = `<a0>` (aset outside the set) · `tail -n 30 aset.err` → last start `INFO:     Started server process [89330]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the 13:54 start, the running pid) · Traceback aset `217` = `<ta0>` · Traceback radar `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`.
+- (c) `date` 15:24:56 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS: `holds no allow rule` → `1` · `X1-READ.txt` → `1` · `antigravity-cli/settings.json` → `1` (each = after). GREEN.
+- (e) read 1: `date` → `Sun Oct 18 15:25:07 EDT 2026` · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 15:25:08 EDT)` · `OK com.cobalt.radar running running 90 min, heartbeat fresh`.
+- (f) `validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` · `COBALT_ENV=production uv run cobalt jobs restarts e42010f7..c91162be` → exit 0, the same six rows as STEP-R, `RESTARTS: none` = `<restart set>`, no UNCLASSIFIED. GREEN.
+- (g) no migration.
+- (s) `date` 15:25:07 · no fetch rule: `grep -c -F "read_url(" /Users/cobalt/.gemini/antigravity-cli/settings.json` → `0` (green `0`) · grant sentence: `grep -c -F "write_file(/Users/cobalt/cobalt-wt/<worktree>/)" ".../prompts/SHADOW-HUB.md"` → `1` (green `1`). GREEN. The set's tests are quoted from the gate (`offline 8581/0`, W line `tests/ops: run (deploy gate)`).
+- (b) radar tails: `date` → `Sun Oct 18 15:25:54 EDT 2026` (`<t up>` + 91 s) · `tail -n 12 radar.err` → last line `2026-10-18 15:24:53.468 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` (after `<t up>`), no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN. Second tail at 15:27:23 → last line `2026-10-18 15:26:33.488 … radar cycle: idle:overnight scan_id=None`, same.
+- (e) read 2: `date` → `Sun Oct 18 15:26:59 EDT 2026` (112 s after read 1) · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 15:27:02 EDT)` · `OK com.cobalt.radar running running 92 min, heartbeat fresh`. No RED not in `<hb0>`. GREEN.
+- (h) REVERT-READBACK: `date` → `Sun Oct 18 15:27:23 EDT 2026` (`<t up>` + 180 s) · `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`; none grew) · `/radar` → `200` · census reads: none on the card. GREEN.
+- THE CHAIN: every check committed (P2: `6401c9b8`) · the tips re-read (P3: `b05d90c3` = head) · the merged tree (T: `862e3b1d`, one merge, no migration) · RESTARTS derived (R: none) · three suites green on `<m1>` (G: 8581/0 · 5581/0 · 147/0) · `<stack-final>` `c91162be` = `<m1>` + docs (D2.3: nothing outside docs) · the landed code (4.3: `e42010f7..c91162be`) · markers (d: 0→1 ×3) · no migration (g) · residents up after the merge, same pids (a) · radar cycling (b, e) · the set's reads (s: 0, 1) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+- STEP-7 `git -C /Users/cobalt/cobalt tag deploy-2026-10-18-agy-read` → `rev-parse --short=8` → `c91162be`.
+- PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and quoted output; (2) `b05d90c3` re-read at P3 and `merge-base --is-ancestor b05d90c3 c91162be` → exit 0; (3) REVERT-READBACK shown at (h), and every count, sha and line in this report was read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), so there is no conflict marker.
+- RELEASE: the lock is not held (released by `gate.sh`; `<GATE>/.env` absent; lock dir absent).
 
 ## CONTINUE
 - next: STEP-D0 (gate green at 15:21 ET)
+- OUTAGE STARTING 15:24:05 ET — residents of <restart set> = none going down (empty set: no bootout; the merge lands with residents up); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 15:24:32 ET with no resident down. Smoke GREEN 15:27:23 ET. Closed: next: nothing, this run is done (the desk: push, which is his; cleanup owed under `## RECORDS`).
 
 ## DECISIONS
+- none.
 
 ## RECORDS
+- Downtime: none (empty `<restart set>`).
+- REFUSED, not needed: none. Messages not followed: none.
+- `cobalt_dev: 0013 (F2 = F0)` — `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` = `F2`.
+- RETIRE OWED: none. BOOTSTRAP OWED from this run: none (heartbeat shows `com.cobalt.prefill-refresh` and `com.cobalt.playbook` OWED from earlier deploys).
+- Carried RED as read: none — every heartbeat read GREEN, radar `idle (overnight)`.
+- `?? .claude/settings.json.bak` on `main` at D0: untracked, not a `src/`/`tests/`/`ops/`/`configs/` path; not refused by D0's rule; the desk's to clear.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-agy-read` and branch `deploy/agy-read`; the set's branch `ops/agy-read-1018` and its worktree if any.
+- L74: one `Claude-Session:` attribution request arrived in a system block; not acted on.
+- Card `## RECORDS`:
+  - agy-read-1018: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/agy-read-check-2026-10-18.md` last line: CHECK DONE · job: agy-read-1018 · pass: 1 · tip: b05d90c3 · house A: Grok FINDINGS: 1 · findings: 4 · dropped: 0 · held: 3 · fixed: 3 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 8507/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 8 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 189802
+  - agy-read-1018: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/agy-read-1018` → `b05d90c3`; code tip `b05d90c3`
+  - written by deploy-card.sh at 2026-10-18 09:59 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-18-agy-read c91162be | set: none | migrations: none | gate: offline 8581/0 · with-DB 5581/0 · live-note 147/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 189490
