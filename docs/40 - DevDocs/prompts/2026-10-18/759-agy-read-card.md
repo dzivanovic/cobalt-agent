@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/agy-read-1018
 WORKTREE: agy-read-1018
 BASE: c116722a
-TIP:
+TIP: 2b27c4e6
 REPORT: /Users/cobalt/cobalt-wt/agy-read-1018/docs/40 - DevDocs/reports/agy-read-1018-build-2026-10-18.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/agy-read-check-2026-10-18.md
-HOUSE B: none
+HOUSE B: as needed
 BAND: MID
 DB: none
 RESTARTS: none
