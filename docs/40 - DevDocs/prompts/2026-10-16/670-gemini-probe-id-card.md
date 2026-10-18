@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/gemini-probe-id-1017
 WORKTREE: gemini-probe-id-1017
 BASE: f2140694
-TIP:
+TIP: 744128d7
 REPORT: /Users/cobalt/cobalt-wt/gemini-probe-id-1017/docs/40 - DevDocs/reports/gemini-probe-id-build-2026-10-17.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gemini-probe-id-check-2026-10-17.md
+HOUSE B: none
 BAND: MID
 DB: none
 RESTARTS: none
