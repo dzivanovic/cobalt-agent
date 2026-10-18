@@ -1045,6 +1045,22 @@ def test_w4_only_the_last_handover_line_counts(tmp_path):
     assert r.stderr.splitlines()[-1] == block_line(FIRST_1017).rstrip("\n")
 
 
+def test_o1_finished_and_next_read_the_list_once(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    calls = tmp_path / "list.log"
+    (d.hook.parent / "desk-list.sh").write_text(
+        f"#!/bin/sh\necho x >> '{calls}'\nprintf '%s\\n' '{DESK_ROW_LINE}'\n"
+    )
+    state = tmp_path / "wt" / ".job-state"
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "FINISHED").write_text("2026-01-02T03:04:05 99990000-0000 x\n")
+    d.owed("owed: none", "NEXT: rebuild x")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: rebuild x\n")
+    assert calls.read_text().splitlines() == ["x"]
+
+
 # ---- card 458 — the desk's size every turn and the refresh at 300k (his 2026-10-13 R1323) --------
 
 SID = "5f91403d-3f67-445e-a654-8eedc3cc8a0b"
