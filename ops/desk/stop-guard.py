@@ -30,6 +30,16 @@
 # Then a finished worker still open (card 2026-10-15 580 C3): the first id of a line of
 # /Users/cobalt/cobalt-wt/.job-state/FINISHED that is a listed row's id (not cto-desk, not brain)
 # and kept by no OWED `live: <id>` -> `start it: close <id>`, through the same count and give-up.
+# Then the NEXT line under `## §5 CURRENT` (his 2026-10-18 R1841): the first line that is
+# `NEXT` followed by a space, `(` or `:`. Strip that word, one leading parenthesis group and
+# a following `:`, and split the rest at a `;` outside parentheses. The first piece that does
+# not hold `waiting on ` followed by a non-space character, cut to 160 characters, is
+# `start it: <item>` unless both a live worker (a listed row not named cto-desk or brain) and
+# an armed watch are up. No such line, or every piece waiting, reads neither the list nor a
+# watch. A refresh is exempt (R1844): the last line of the whole report that starts
+# `HANDOVER: predecessor ` names this session, and its successor id starts a listed row's id
+# of any name that is not this session — else a dead, missing or unparseable successor blocks
+# as before. The OWED rules, the count and the give-up are unchanged.
 # Settled -> exit 0. Not settled (or no report, no section, no block) -> stderr ONE line
 # `start it: <what>`, exit 2. THE DESK PATH WRITES: the count of blocks in a row in
 # `<transcript_path>.desk-stop` (reset by a new message, removed when settled); at 3 blocks the
@@ -121,6 +131,8 @@ QUEUE = "QUEUE"
 # a table cell boundary: a pipe not escaped as `\|`
 CELL = re.compile(r"(?<!\\)\|")
 WAITING = "waiting on Dejan"
+NEXT = "NEXT"
+WAITING_ON = "waiting on "
 # a waiting item settles only with the row it was asked in (card 164 G7 (b))
 ASKED = re.compile(r"\bR\d+\b")
 # the brain seat's session name (prompts/BRAIN-HUB.md `--name brain`; card 164 G7 (c))
@@ -145,6 +157,7 @@ REFRESH_NOW = (
 WRITE_HANDOVER = "WRITE HANDOVER NOW"
 HANDOVER = "HANDOVER:"
 PREDECESSOR = re.compile(r"HANDOVER: predecessor ([0-9a-f-]{8,}) ")
+SUCCESSOR = re.compile(r"HANDOVER: predecessor \S+ → successor ([0-9a-f-]{8,}) ")
 DESK_REFRESH = WT_ROOT + "/.job-state/DESK-REFRESH"
 TURN_WAIT = ("DESK_REFRESH_TURN_WAIT", 600)
 LINE_WAIT = ("DESK_REFRESH_LINE_WAIT", 300)
@@ -317,6 +330,56 @@ def queued(lines):
     return None
 
 
+def next_items(lines):
+    """The pieces of the first NEXT line under `## §5 CURRENT` (R1841): that word, one leading
+    parenthesis group and a following `:`, then split at `;` outside parentheses. [] when there
+    is no such line or no piece."""
+    if not lines or CURRENT not in lines:
+        return []
+    for line in lines[lines.index(CURRENT) + 1 :]:
+        if line.startswith("## "):
+            break
+        if len(line) <= len(NEXT) or not line.startswith(NEXT) or line[len(NEXT)] not in " (:":
+            continue
+        rest = line[len(NEXT) :].lstrip()
+        if rest.startswith("("):
+            depth = 0
+            end = None
+            for i, ch in enumerate(rest):
+                if ch == "(":
+                    depth += 1
+                elif ch == ")" and depth > 0:
+                    depth -= 1
+                    if depth == 0:
+                        end = i + 1
+                        break
+            if end is not None:
+                rest = rest[end:].lstrip()
+        if rest.startswith(":"):
+            rest = rest[1:]
+        pieces = []
+        buf = []
+        depth = 0
+        for ch in rest:
+            if ch == "(":
+                depth += 1
+            elif ch == ")":
+                if depth > 0:
+                    depth -= 1
+            elif ch == ";" and depth == 0:
+                piece = "".join(buf).strip()
+                if piece:
+                    pieces.append(piece)
+                buf = []
+                continue
+            buf.append(ch)
+        piece = "".join(buf).strip()
+        if piece:
+            pieces.append(piece)
+        return pieces
+    return []
+
+
 def listed():
     """The (id, name) of every row desk-list.sh beside this file prints (G3). A non-zero exit (a
     missing desk-list.sh included) or a timeout raises ListUnreadable (card 106 G2)."""
@@ -404,6 +467,62 @@ def finished_open(items, listing):
     return None
 
 
+def _waiting_on(text):
+    """True when `waiting on ` is followed by a non-space character."""
+    start = 0
+    n = len(WAITING_ON)
+    while True:
+        i = text.find(WAITING_ON, start)
+        if i < 0:
+            return False
+        j = i + n
+        if j < len(text) and not text[j].isspace():
+            return True
+        start = i + 1
+
+
+def refreshing(lines, sid, listing):
+    """The desk handed this session to a live successor (R1844). The last `HANDOVER: predecessor `
+    line of the whole report must name this session, and its successor id must start a listed
+    row's id of any name other than this session. A dead, missing or unparseable successor is
+    not a refresh."""
+    last = None
+    for line in lines or []:
+        if line.startswith("HANDOVER: predecessor "):
+            last = line
+    if last is None or not handed_over(last, sid):
+        return False
+    found = SUCCESSOR.match(last)
+    if not found:
+        return False
+    succ = found.group(1)
+    if sid and (sid.startswith(succ) or succ.startswith(sid)):
+        return False
+    rows = listing if listing is not None else listed()
+    return any(i.startswith(succ) for i, _name in rows)
+
+
+def next_unlaunched(lines, sid, listing):
+    """The first NEXT piece that is not waiting, cut to 160, when a live worker and an armed
+    watch are not both up (R1841); None when none, when both are up, or when `refreshing`.
+    `listed()` and `watched()` run only after such a piece exists, and `listed()` at most once."""
+    item = None
+    for piece in next_items(lines):
+        if not _waiting_on(piece):
+            item = piece
+            break
+    if item is None:
+        return None
+    if listing is None:
+        listing = listed()
+    if refreshing(lines, sid, listing):
+        return None
+    worker = any(name not in ("cto-desk", BRAIN) for _i, name in listing)
+    if worker and watched():
+        return None
+    return item if len(item) <= 160 else item[:160] + "…"
+
+
 def desk(event):
     """The desk's stop (G2-G4): 0 settled or given up, 2 blocked. Raises on anything it cannot read."""
     count_file = Path(str(event.get("transcript_path")) + ".desk-stop")
@@ -428,6 +547,8 @@ def desk(event):
                 what = queued(lines)
             if what is None:
                 what = finished_open(items, listing)
+            if what is None:
+                what = next_unlaunched(lines, event.get("session_id"), listing)
         except ListUnreadable:
             line = UNREADABLE
         else:
