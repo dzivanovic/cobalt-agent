@@ -22,7 +22,7 @@ SECTION = "## NEEDS HIS HAND"
 # his item 3, byte for byte
 SHAPE = "what was blocked · by which rule or tool · why no seat could do it · the exact line he types · what it unblocks"
 RULES = ["`none`", "never around a permission check", "by day only", "at night it waits in this section and the rest runs"]
-LINE_COUNT = {"CLOSE-HUB.md": 66, "DAY-OPEN-QWEN.md": 30}
+LINE_COUNT = {"CLOSE-HUB.md": 69, "DAY-OPEN-QWEN.md": 30}
 
 
 def read(name: str) -> str:
@@ -86,7 +86,7 @@ def test_nothing_else_changed():
 
     launch = [ln for ln in read("CLOSE-HUB.md").splitlines() if ln.startswith("claude --bg ")]
     assert len(launch) == 1
-    assert len(tools(launch[0], "--allowedTools")) == 21
+    assert len(tools(launch[0], "--allowedTools")) == 22
     assert len(tools(launch[0], "--disallowedTools")) == 11
     assert "--permission-mode dontAsk" in launch[0]
     assert "NEEDS" not in launch[0]
