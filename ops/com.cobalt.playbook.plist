@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.playbook</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter §8.4: every plist carries COBALT_ENV. The
+             render reads cobalt_brain's radar cards (one SELECT) and stamps
+             its own jobs row. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <!-- The render READS the strategy notes from the live vault and
+             writes no note (F23 FINAL [F-16], L28): its decks go to
+             data/playbook/<date>/ under the repo. test_no_vault_write is
+             what proves the read does not write. -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ABSOLUTE PATH: launchd does not search PATH (root-caused
+             2026-09-03, see com.cobalt.cards-expire.plist). -->
+        <string>/Users/cobalt/.local/bin/uv</string>
+        <string>run</string>
+        <string>cobalt</string>
+        <string>playbook</string>
+        <string>render</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <!-- Sunday 17:30 ET (system TZ = ET): the decks exist before the 18:00
+         weekly review (F23 FINAL C7). Mirrors jobs.yaml; `cobalt validate`
+         CROSS-CHECK 2 compares the two. -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>0</integer><key>Hour</key><integer>17</integer><key>Minute</key><integer>30</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/playbook.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/playbook.err</string>
+</dict>
+</plist>

@@ -33,6 +33,9 @@ dependencies = [
     # DRC D2 (E5, v2 `:109`): the `/drc` upload's multipart parse. Was
     # transitive (via `mcp`); pinned direct at the version the lock carried.
     "python-multipart==0.0.22",
+    # F23 P0 (card 503): the playbook decks. The version the lock resolved on
+    # the first `uv run` after this line was added, pinned exact (FINAL C5).
+    "python-pptx==1.0.2",
     "uvicorn>=0.20.0",
     "redis>=5.0.0",
     "asyncpg>=0.29.0",

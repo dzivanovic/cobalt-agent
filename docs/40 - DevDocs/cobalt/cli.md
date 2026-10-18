@@ -131,3 +131,6 @@ through `ops/run_classify_trial.sh`. `trial … --dry-run | --run` is the
 trial runner. See `classify/cli.md`. Branch `jev/trial-0923`, not merged.
 The registration puts `src/cobalt/classify/*` in
 `com.cobalt.radar`'s static import reach (`cobalt jobs restarts`).
+
+## 2026-10-18 — f23-playbook-1013
+`from cobalt.playbook import cli as playbook_cli` after the strike import and `playbook_cli.add_parser(sub)` after `strike_cli.add_parser(sub)` mount `cobalt playbook render [--date] [--out] [--dry-run]` (`playbook/README.md`). python-pptx loads inside the command only, so `import cobalt.cli` leaves `pptx` unloaded (`test_import_cobalt_cli_leaves_pptx_unloaded`).

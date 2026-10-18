@@ -1,0 +1,16 @@
+# F23 — the Sunday playbook decks (`uv run cobalt playbook render`).
+# Read by src/cobalt/playbook/config.py (extra keys and bad types refused,
+# no defaults). Read only by the com.cobalt.playbook one-shot.
+
+# Cards per family deck, newest by formed_at first. null = every card
+# (FINAL [F-03]: a numeric cap is unmeasured; the job row's per-family
+# counts are the measurement a later card may set it from).
+latest_per_family: null
+
+# Card rows per table slide and the `why` cut. Both UNVERIFIED layout:
+# his viewer check (E2) may move them to the measured fit.
+rows_per_slide: 8
+why_max_chars: 120
+
+# Under gitignored data/; one folder per run date (the C11 swap).
+out_dir: data/playbook
