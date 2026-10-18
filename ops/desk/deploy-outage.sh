@@ -1,16 +1,16 @@
 #!/bin/sh
 # deploy-outage.sh [--dry-run] "<deploy card>" <restart set> <MERGED|NOT MERGED>
 # The outage of DEPLOY-HUB.md STEP-4 as ONE script (card 20 deploy-steps, row D2), on the labels
-# of <restart set> only (comma-separated: com.cobalt.aset, com.cobalt.radar, com.cobalt.agent).
+# of <restart set> only (comma-separated: com.cobalt.aset, com.cobalt.radar, com.cobalt.agent, com.cobalt.cos).
 # The merge is NOT here: the hub merged before it calls this script and gives the state as the
 # third argument; `NOT MERGED` is refused with no call made.
 #
 # Before anything goes down (each failure: `REFUSED: <reason>` on stderr, exit 1, nothing down):
 #   the arguments (a label outside the three, an empty or repeated label, any other state);
 #   the window again: `deploy-step0.sh --window "<card>"` (P1, one implementation);
-#   every label proven restorable (rule E): aset and radar `launchctl print gui/501/<label>` →
+#   every label proven restorable (rule E): aset, radar and cos `launchctl print gui/501/<label>` →
 #   `state = running` and `path = ` EXACTLY the plist this script bootstraps
-#   ($REPO/ops/com.cobalt.aset.plist, $LAUNCHAGENTS/com.cobalt.radar.plist), the plist present;
+#   ($REPO/ops/com.cobalt.aset.plist, $REPO/ops/com.cobalt.cos.plist, $LAUNCHAGENTS/com.cobalt.radar.plist), the plist present;
 #   the agent `cobalt.sh status` → ONLINE. The pid of each is recorded as `pid before`.
 # Then, in order (STEP-4 4.2, 4.6):
 #   1. each label down: aset / radar `launchctl bootout gui/501/<label>`, then `launchctl print`
@@ -87,8 +87,8 @@ esac
 labels=""
 for l in $(printf '%s' "$set_arg" | tr ',' ' '); do
     case "$l" in
-        com.cobalt.aset|com.cobalt.radar|com.cobalt.agent) ;;
-        *) refuse "'$l' is not a resident this script restores (com.cobalt.aset, com.cobalt.radar, com.cobalt.agent)" ;;
+        com.cobalt.aset|com.cobalt.radar|com.cobalt.agent|com.cobalt.cos) ;;
+        *) refuse "'$l' is not a resident this script restores (com.cobalt.aset, com.cobalt.radar, com.cobalt.agent, com.cobalt.cos)" ;;
     esac
     case " $labels " in
         *" $l "*) refuse "'$l' is named twice in the restart set" ;;
@@ -106,6 +106,7 @@ plist_of() {
     case "$1" in
         com.cobalt.aset) printf '%s' "$REPO/ops/com.cobalt.aset.plist" ;;
         com.cobalt.radar) printf '%s' "$LAUNCHAGENTS/com.cobalt.radar.plist" ;;
+        com.cobalt.cos) printf '%s' "$REPO/ops/com.cobalt.cos.plist" ;;
     esac
 }
 
