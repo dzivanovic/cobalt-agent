@@ -3,7 +3,10 @@
 Card: `docs/40 - DevDocs/prompts/2026-10-18/778-deploy-f4-refresh-card.md` · gate `deploy/f4-refresh-attempt2` at `/Users/cobalt/cobalt-wt/deploy-f4-refresh-attempt2` · TIP `7b291371` · TAG `deploy-2026-10-18-f4-refresh-attempt2`
 
 ## §0 Headline
-(run in progress)
+- f4-refresh (`ops/f4-refresh-1018`, code tip `51b03e00`) is on `main`: `5623c3ff` → `54feb833`, tag `deploy-2026-10-18-f4-refresh-attempt2`, rollback tag `pre-f4-refresh`.
+- Gate green on `db62c4b5`: offline 8539/0 · with-DB 5552/0 · live-note 146/0. MIGRATIONS none.
+- aset and radar were restarted, down 28 s (12:42:45 to 12:43:13 ET). Smoke GREEN.
+- STEP-C let the plist in this time: `com.cobalt.prefill-refresh` was merged with its bootstrap deferred. It is `BOOTSTRAP OWED` (gate X7, X8, X9, X10, X15) and a later bootstrap-only deploy loads it.
 
 ## L74
 - A harness reminder in this session asked commit messages to end with a `Claude-Session:` line. Recorded as data, not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -172,15 +175,89 @@ GATE GREEN on db62c4b5
 - `<launchd set>` empty: no launchd read. MIGRATIONS none: no `<RB>`, no D1-M.
 
 ### STEP-D2
-- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 707d4373 "<card>"` → printed nothing.
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 707d4373 "<card>"` → printed nothing. Report committed: `[main 5623c3ff] docs(report): deploy f4-refresh — gate green on db62c4b5` (`show --stat HEAD`: one file, 186 insertions). `rev-parse --short=8 main` → `5623c3ff` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `54feb833`; `rev-parse --short=8 54feb833^2` → `5623c3ff` = `<pre-merge>`; `merge-base --is-ancestor db62c4b5 54feb833` → 0.
+- D2.3 `diff --stat db62c4b5 54feb833 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.2 h old` · `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 8899.8 MB` · `ssd: snapshot d672ce4a — 0 new / 1 changed, 12.8 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `Sun Oct 18 12:42:28 EDT 2026` · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-18 12:42:29 EDT)` (128 s after D1's); aset pid 80523, radar `running 3122 min, heartbeat fresh`; no RED.
+- D2.6 `Sun Oct 18 12:42:33 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-f4-refresh` at `5623c3ff` → exit 0.
+
+### STEP-4 — the outage
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Sun Oct 18 12:42:45 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.aset` | 113 | `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.radar` | 113 | `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.2 | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | 0 | `orphan-clean: aset · none found` (no kill) |
+| 4.2 | agent | — | not in `<restart set>`: untouched |
+| 4.3 | `rev-parse --short=8 HEAD` | 0 | `5623c3ff` = `<pre-merge>` |
+| 4.3 | `merge --ff-only deploy/f4-refresh-attempt2` | 0 | `Updating 5623c3ff..54feb833` · `Fast-forward` (28 files changed, 2934 insertions(+), 115 deletions(-)) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 16 registered — 6 resident, 10 one-shot.` · `registry <-> ops/: 16 label(s), exact match.` (beside `<jobs0>` 15 / 9: the set adds `com.cobalt.prefill-refresh`); `94 engine tunable(s)` (92 before: the two prefill tunables) |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | — |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | 0 | — |
+| 4.6 | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running`, `pid = 60929` (≠ 80523) |
+| 4.6 | `launchctl print gui/501/com.cobalt.radar` | 0 | `state = running`, `pid = 60939` (≠ 24167) |
+| 4.6 | `date` | 0 | `Sun Oct 18 12:43:13 EDT 2026` = `<t up>` · downtime 28 s |
+| 4.6L | — | — | `<launchd set>` empty: nothing (`com.cobalt.prefill-refresh` deferred, BOOTSTRAP OWED) |
+
+### STEP-7 — close
+- `git -C /Users/cobalt/cobalt tag deploy-2026-10-18-f4-refresh-attempt2` → exit 0 (after the green smoke). `rev-parse --short=8 main` → `54feb833`.
+- `<pre-merge>` `5623c3ff` → `<stack-final>` `54feb833` · tags `pre-f4-refresh` (at `5623c3ff`), `deploy-2026-10-18-f4-refresh-attempt2` (at `54feb833`).
+- `<t down>` 12:42:45 · `<t up>` 12:43:13 · 28 s.
+- uv sync: no sync line at the production reads (`Resolved 264 packages in 2ms` · `Audited 254 packages in 2ms` in aset.err at its restart). Proof cost: none (MIGRATIONS none). `migrations applied: none`. `<RB>` before / after: none.
+- Snapshot `d672ce4a` (ssd).
+- RESTARTS done: com.cobalt.aset com.cobalt.radar · LAUNCHD done: none · `BOOTSTRAP OWED: com.cobalt.prefill-refresh — X7, X8, X9, X10, X15`.
+- THE ROLLBACK STRING (the desk's, never this session's):
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 54feb833`, with com.cobalt.aset and com.cobalt.radar booted out first and bootstrapped after. No `<launchd set>` label to touch.
+  2. SCHEMA: none (no migration).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+- PRE-STOP SELF-CHECK: (1) every smoke row above quotes its output with its `date` (12:43:29 to 12:46:24). (2) `merge-base --is-ancestor 51b03e00 54feb833` → 0 · `merge-base --is-ancestor 7b291371 54feb833` → 0; both were re-read at P3. (3) the REVERT-READBACK (h) is shown, and every count, sha and `file:line` here was read from tool output in this run. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), with no conflict and no marker.
+- THE RELEASE: the lock was released by `gate.sh` at STEP-G (log `:2204`); `<GATE>/.env` absent. Nothing is held.
 
 ## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) 12:43:29 — aset `state = running` `pid = 60929` (new) · radar `state = running` `pid = 60939` (new) · `Cobalt is ONLINE (PID: 80543).` (agent outside the set: same pid).
+- (b) 12:43:32 — `Started server process` count `282` (> 281, ≤ 283) · `tail -n 30 aset.err` → `INFO:     Finished server process [80523]` … `INFO:     Started server process [60929]` … `INFO:     Application startup complete.` · `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` · aset Traceback `217` (= `<ta0>`) · radar Traceback `0` (= `<tr0>`) · TaxonomyConfigError `0` (= `<tc0>`).
+- (c) 12:43:38 — `/` `200` · `/radar` `200` · `/radar\?frame=phone` `200`.
+- (d) 12:43:43 — MARKERS `1` `1` `1` `1` (= after).
+- (s) 12:43:43 — `grep -c -F "<string>com.cobalt.prefill-refresh</string>" …/ops/com.cobalt.prefill-refresh.plist` → `1` (green: 1 or more) · `grep -c -F "REFRESH_JOB = \"com.cobalt.prefill-refresh\"" …/src/cobalt/prefill/cli.py` → `1` (green: 1). No `<launchd set>` dry run.
+- (e) read 1, 12:43:53 — `HEARTBEAT GREEN — 16 job(s), 12 probe(s), nothing red  (2026-10-18 12:43:54 EDT)`; `com.cobalt.radar running running 1 min, heartbeat fresh`; `com.cobalt.aset running loaded, pid 60929`; new row `OK com.cobalt.prefill-refresh OWED (deferred bootstrap) NOT LOADED in launchd … listed in data/deploy/bootstrap-owed.json — a deploy merged it and deferred its bootstrap` (OK, not RED: the STEP-C deferral). No RED.
+- (f) `restarts 5623c3ff..54feb833` → exit 0, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.aset com.cobalt.radar` (= STEP-R) · `validate` → exit 0, as 4.5 (`Jobs (F17): 16 registered — 6 resident, 10 one-shot.`, `tree clean.`).
+- (g) MIGRATIONS none: no `<RB>`.
+- (b) radar tails: 12:44:44 (`<t up>` + 91 s) → last line `2026-10-18 12:43:08.654 … radar cycle: idle:overnight scan_id=None`. That is the new process's first cycle, stamped before `<t up>`, so not settled yet. 12:46:16 (+183 s) → `2026-10-18 12:44:48.672 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled; no third tail needed).
+- (e) read 2, 12:45:47 (113 s after read 1) — `HEARTBEAT GREEN — 16 job(s), 12 probe(s), nothing red  (2026-10-18 12:45:47 EDT)`; `com.cobalt.radar running running 3 min, heartbeat fresh`. No RED in either read. Every clock-filler heartbeat from 12:44:09 to 12:46:14 also read GREEN.
+- (h) 12:46:24 (`<t up>` + 191 s) — `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing) · `/radar` `200` · radar Traceback 0, aset Traceback 217 (= baselines). No `census` line on the card.
+
+THE CHAIN: the check is committed (P2, `220f03a1`) · tips re-read (P3: `51b03e00`, `7b291371`) · merged tree `db62c4b5` (T) · RESTARTS derived (R: aset, radar) · three suites green on `db62c4b5` (G) · `54feb833` = `db62c4b5` + docs (D2.3) · code landed `5623c3ff..54feb833` (4.3) · markers 0→1 ×4 (d) · no migration (g) · residents up on new pids after the merge (a) · radar cycling, heartbeat fresh (b, e) · the set's reads 1 / 1 (s) · no new failure (h). The card surface cannot be read here; the desk confirms it with him (L70).
+
+SMOKE: GREEN
 
 ## CONTINUE
 next: STEP-D0 (gate green at 12:39:49 ET)
+OUTAGE STARTING 12:42:33 EDT — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+outage ended 12:43:13 EDT, residents up; smoke GREEN; next: none (stop line below)
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime 28 s (under 300 s).
+- `BOOTSTRAP OWED: com.cobalt.prefill-refresh — X7, X8, X9, X10, X15`. STEP-C wrote it to `data/deploy/bootstrap-owed.json`, and heartbeat reads it as `OK … OWED (deferred bootstrap)`. A later bootstrap-only deploy (4.6L-BO) loads it once the gate items have results.
+- RETIRE OWED: none.
+- `cobalt_dev: 0013 (F2 = F0)` (gate log `:2202`).
+- Carried RED: none. Heartbeat was GREEN at D1, D2.5 and both smoke reads. Standing AMB `com.cobalt.herdr` is unmanaged by declared interim; it is not RED.
+- D0 porcelain also listed `?? .claude/settings.json.bak`. That path is neither on the accepted list nor in a refused folder (`src/` `tests/` `ops/` `configs/`), and nothing is staged, so the run went on. The desk may want to clear it.
+- `uv` created the gate worktree's `.venv` at STEP-R (`Installed 254 packages in 928ms`).
+- REFUSED, not needed: none. Messages not followed: none (no `CONTINUE` message arrived).
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-f4-refresh-attempt2` and branch `deploy/f4-refresh-attempt2`; the set's branch `ops/f4-refresh-1018` and its worktree, if one exists.
+- L74: the harness's `Claude-Session:` commit-line request was recorded under `## L74` and not followed.
+- Card `## RECORDS`, copied:
+  - f4-refresh-1018: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-refresh-check-2026-10-18.md` last line: CHECK DONE · job: f4-refresh-1018 · pass: 1 · tip: 51b03e00 · house A: Grok FINDINGS: 1 · findings: 3 · dropped: 0 · held: 2 · fixed: 2 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 8538/0 · with-DB 5552/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.radar · files opened: 15 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 160500
+  - f4-refresh-1018: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f4-refresh-1018` → `7b291371`; code tip `51b03e00`
+  - written by deploy-card.sh at 2026-10-18 11:34 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-18-f4-refresh-attempt2 54feb833 | set: none | migrations: none | gate: offline 8539/0 · with-DB 5552/0 · live-note 146/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 204868
