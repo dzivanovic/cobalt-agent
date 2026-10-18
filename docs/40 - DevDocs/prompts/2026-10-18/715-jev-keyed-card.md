@@ -59,8 +59,9 @@ ORDER: W1, W2, W3 in that order, each row's reds quoted on `BASE` before its edi
 - `ls /Users/cobalt/cobalt/ops/jev-route.sh` · before `No such file or directory` · after `/Users/cobalt/cobalt/ops/jev-route.sh`
 - `grep -c -F "Bash(sh /Users/cobalt/cobalt/ops/jev-route.sh --day *)" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CLOSE-HUB.md"` · before `0` · after `1`
 - `grep -c -F "## 7b. JEV SHADOW BATCH" "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CLOSE-HUB.md"` · before `0` · after `1`
-- `grep -c -F "\"ops/jev-route.sh\"" /Users/cobalt/cobalt/src/cobalt/jobs/restarts.py` · before `0` · after `1`
-- jev wrapper tests · `uv run pytest -q tests/ops/test_jev_route_1018.py tests/ops/test_needs_his_hand.py tests/ops/test_hub_lines.py tests/cobalt/test_jobs_restarts.py` · green: `0 failed`
+- `grep -c -F "ops/jev-route.sh" /Users/cobalt/cobalt/src/cobalt/jobs/restarts.py` · before `0` · after `1`
+- wrapper installed · `ls /Users/cobalt/cobalt/ops/jev-route.sh` · exit 0, listed
+- restarts DevDoc section · `grep -c -F "jev-keyed-1018" "/Users/cobalt/cobalt/docs/40 - DevDocs/cobalt/jobs/restarts.md"` · exit 0, a count of 1 or more
 
 ## RECORDS
 - Drafter `draft-jev-keyed` (prompt 714, session 5be450fc), 2026-10-18 06:17-06:26 EDT (`date`). `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `b95e5d8c` (BASE). `git -C /Users/cobalt/cobalt status --short` over `CLOSE-HUB.md`, `ops`, `src/cobalt/jobs/restarts.py`, `src/cobalt/classify`, `tests/ops`, `tests/cobalt/test_jobs_restarts.py`, `configs/cobalt/classify` printed nothing: every `file:line` above is `main`'s. `ls` of `ops/jev-route.sh`, `tests/ops/test_jev_route_1018.py` and this card's path: `No such file or directory` each (card number 715 free; 716 is the Gemini drafter's).
