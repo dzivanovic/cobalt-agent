@@ -381,6 +381,18 @@ def test_f1_a_failed_close_refuses_and_launches_nothing(box):
     assert box.calls_made() == [f"done {STALE} --replaced"]
 
 
+def test_o1_a_refused_close_names_its_reason(box):
+    box.rows.write_text(CTO + "\n" + ping_row(STALE) + "\n")
+    box.agents([agent(STALE, ago(360))])
+    stub = box.repo.parent / "desk-done.sh"
+    stub.write_text('#!/bin/sh\necho "REFUSED: session $1 is not in claude agents --json" >&2\nexit 1\n')
+    done = box.run()
+    assert done.returncode == 1, done.stderr
+    assert box.calls_made() == []
+    assert box.notes() == ["checkin-timer: " + refused_line(done)]
+    assert "is not in claude agents --json" in refused_line(done)
+
+
 # ---- T2: the plist and the derivation ------------------------------------------------------
 
 
