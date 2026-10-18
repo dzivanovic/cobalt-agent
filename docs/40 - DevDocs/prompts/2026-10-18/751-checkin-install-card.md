@@ -8,7 +8,7 @@ BASE: 8033d70e
 TIP: d5acbada
 REPORT: /Users/cobalt/cobalt-wt/checkin-install-1018/docs/40 - DevDocs/reports/checkin-install-build-2026-10-18.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/checkin-install-check-2026-10-18.md
-HOUSE B: none
+HOUSE B: as needed
 BAND: MID
 DB: none
 RESTARTS: none
