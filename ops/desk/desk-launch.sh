@@ -213,7 +213,7 @@
 export LC_ALL=C
 set -u
 
-# COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for these two in tests/ops/test_devdb_lock.py only
+# COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for these two in tests/ops/test_devdb_lock.py only; COBALT_AGY_SETTINGS stands in for the agy settings file beside them, tests only
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
 WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}
 PROMPTS="$REPO/docs/40 - DevDocs/prompts"
@@ -1749,6 +1749,36 @@ build|shadow)
             *[\"\'\\\$\`\|\&\;]*) refuse "shadow: the builder allow of $model holds a character the line cannot carry: '$ballow'" ;;
         esac
         builder="\"$ballow\""
+        # card 759 L1 (R1863): gemini-4-argon-high only, routed or not. grep and sed read the
+        # settings file; it is never written, and only an offending write rule is printed.
+        if [ "$model" = "gemini-4-argon-high" ]; then
+            AGY=${COBALT_AGY_SETTINGS:-/Users/cobalt/.gemini/antigravity-cli/settings.json}
+            [ -f "$AGY" ] && [ -r "$AGY" ] || refuse "shadow: gemini: no agy settings file at $AGY"
+            grant="$WT/$wt/"
+            ngrant=$(grep -c -F "\"write_file(${grant})\"" "$AGY" || true)
+            [ "$ngrant" -eq 1 ] || refuse "shadow: gemini: ${AGY} holds no allow rule \"write_file(${grant})\" (SHADOW-HUB GRANT)"
+            if grep -F -e "read_url(" -e "execute_url(" -- "$AGY" >/dev/null 2>&1; then
+                refuse "shadow: gemini: ${AGY} holds a read_url or execute_url rule; X1's fetch must stay refused"
+            fi
+            targets=$(sed -n 's/.*write_file(\([^)]*\)).*/\1/p' "$AGY")
+            while IFS= read -r T; do
+                [ -n "$T" ] || continue
+                [ "$T" = "$grant" ] && continue
+                reach=0
+                [ "$T" = "*" ] && reach=1
+                case "$T" in
+                    regex:*) reach=1 ;;
+                esac
+                [ "${grant#"$T"}" != "$grant" ] && reach=1
+                case "$T" in
+                    "$WT"/agy-trial/*) ;;
+                    "$WT"/*) reach=1 ;;
+                esac
+                [ "$reach" -eq 0 ] || refuse "shadow: gemini: ${AGY} holds a write rule that reaches past ${grant}: write_file(${T})"
+            done <<AGY_WRITE_TARGETS
+$targets
+AGY_WRITE_TARGETS
+        fi
     fi
     ;;
 check)
