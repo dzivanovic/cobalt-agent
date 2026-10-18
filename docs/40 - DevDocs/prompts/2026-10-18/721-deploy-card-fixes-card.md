@@ -5,9 +5,9 @@ INSTALL: none
 BRANCH: ops/deploy-card-fixes-1018
 WORKTREE: deploy-card-fixes-1018
 BASE: 279c99ce
-TIP:
+TIP: cc4995b6
 REPORT: /Users/cobalt/cobalt-wt/deploy-card-fixes-1018/docs/40 - DevDocs/reports/deploy-card-fixes-1018-build-2026-10-18.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-card-fixes-1018-check-2026-10-18.md
 HOUSE B: as needed
 BAND: LOW
 DB: none
