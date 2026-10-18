@@ -167,7 +167,8 @@ $id young
                 [ -n "$young" ] || young=$id
                 continue ;;
         esac
-        closed=$(sh "$DESK_DONE" "$id" --replaced)
+        # 2>&1: desk-done.sh writes its REFUSED reason on stderr only (check r2 O1)
+        closed=$(sh "$DESK_DONE" "$id" --replaced 2>&1)
         rc=$?
         closed=$(printf '%s\n' "$closed" | grep -v '^[[:space:]]*$' | tail -n 1)
         case "$closed" in
