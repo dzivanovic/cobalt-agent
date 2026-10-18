@@ -1,12 +1,12 @@
 JOB: f4-refresh
 LADDER: S5 · F4
-BRANCH: deploy/f4-refresh
-WORKTREE: deploy-f4-refresh
+BRANCH: deploy/f4-refresh-attempt2
+WORKTREE: deploy-f4-refresh-attempt2
 BASE: main
 TIP: 7b291371
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-f4-refresh.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-f4-refresh-attempt2.md
 RULINGS: 2026-10-18 R1833
-TAG: deploy-2026-10-18-f4-refresh
+TAG: deploy-2026-10-18-f4-refresh-attempt2
 MIGRATIONS: none
 SET: none
 TICKERS: none
