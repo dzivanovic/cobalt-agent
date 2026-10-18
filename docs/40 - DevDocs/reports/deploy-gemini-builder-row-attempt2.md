@@ -1,7 +1,11 @@
 # deploy gemini-builder-row-attempt2 — set: none · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/gemini-builder-row-fr1` (code tip `52a0600d`, head `5fea0cc4`) through gate `deploy/gemini-builder-row-attempt2`. In progress.
+- DEPLOYED `ops/gemini-builder-row-fr1` (code tip `52a0600d`, head `5fea0cc4`): `main` `224f320b` → `453af0bd` by fast-forward; tag `deploy-2026-10-17-gemini-builder-row`, rollback tag `pre-gemini-builder-row-attempt2`.
+- Gate GREEN on `d2b04fb9`: offline 8491/0 · with-DB 5475/0 · live-note 146/0; `cobalt_dev: 0013 — F2 = F0`.
+- RESTARTS: none (desk scripts, SHADOW-HUB, tests only): no resident went down; migrations: none; launchd: none.
+- Smoke GREEN: the three markers 0 → 1, residents on unchanged pids, radar cycling, no failure count grew.
+- Decisions: 1 (ASK DESK, an untracked `.claude/settings.json.bak`); for Dejan: 0.
 
 ## L74
 - The session's system reminder asked that commits carry a `Claude-Session:` line. Recorded as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -155,15 +159,98 @@ GATE GREEN on d2b04fb9
 | LAUNCHD set | empty — nothing |
 | migration reads | `MIGRATIONS: none` — `<RB>`, census and D1-M not run |
 
+### STEP-D2
+| step | command | result |
+|---|---|---|
+| D2.0 shipped | `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 96ab9832 "<card>"` | nothing printed |
+| D2.0 commit | `git -C /Users/cobalt/cobalt commit -m "docs(report): deploy gemini-builder-row-attempt2 — gate green on d2b04fb9" …` | `[main 224f320b] …` · `show --stat HEAD` → the report alone, `1 file changed, 169 insertions(+)` |
+| `<pre-merge>` | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | `224f320b` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report alone) |
+| D2.2 `<stack-final>` | `git -C <GATE> rev-parse --short=8 HEAD` | `453af0bd` |
+| D2.2 `^2` | `git -C /Users/cobalt/cobalt rev-parse --short=8 453af0bd^2` | `224f320b` = `<pre-merge>` |
+| D2.2 ancestor | `merge-base --is-ancestor d2b04fb9 453af0bd` | exit 0 |
+| D2.3 docs-only | `git -C /Users/cobalt/cobalt diff --stat d2b04fb9 453af0bd -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing |
+| D2.4 before | `backup status` | `newest snapshot: 3.9 h old` |
+| D2.4 run | `COBALT_ENV=production uv run cobalt backup run` | `backup: cobalt_brain via pg_dump inside cobalt_memory — 8900.4 MB` · `ssd: snapshot e61e99f8 — 0 new / 2 changed, 13.4 MB added, 1 pruned` |
+| D2.4 after | `backup status` | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | `Sat Oct 17 20:04:17 EDT 2026` · `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 20:04:20 EDT)` (114 s after D1's 20:02:26); aset pid 80523, agent 80543, radar `running 2123 min, heartbeat fresh` — no new RED |
+| D2.6 | `date` · `git -C /Users/cobalt/cobalt tag pre-gemini-builder-row-attempt2` | `Sat Oct 17 20:04:24 EDT 2026` · tag set at `224f320b` |
+
+### STEP-4 (`<restart set>` = none)
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `Sat Oct 17 20:04:39 EDT 2026` = `<t down>` (no resident goes down) |
+| 4.2 | — | empty set: no bootout, no orphan-clean, no agent stop |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | `224f320b` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/gemini-builder-row-attempt2` | `Updating 224f320b..453af0bd` / `Fast-forward` (9 files, 360 insertions, 20 deletions) |
+| 4.4 | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 15 registered — 6 resident, 9 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | — | empty set: no bootstrap; `date` → `Sat Oct 17 20:04:44 EDT 2026` = `<t up>`; downtime: none |
+| 4.6L | — | `<launchd set>` empty: nothing |
+
+### STEP-7
+| item | value |
+|---|---|
+| merge | `<pre-merge>` `224f320b` → `<stack-final>` `453af0bd` (`git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `453af0bd`) |
+| tags | `pre-gemini-builder-row-attempt2` at `224f320b` · `deploy-2026-10-17-gemini-builder-row` at `453af0bd` (set after the green smoke) |
+| `<t down>` / `<t up>` / seconds | none (empty `<restart set>`) — 4.1 `20:04:39`, `<t up>` `20:04:44` |
+| uv sync | none in production; the gate's `.venv` was created at STEP-R (`Installed 254 packages in 896ms`) |
+| proof cost | none in production (MIGRATIONS: none); cobalt_dev proof `total 5.7 s` (gate log 2161) |
+| migrations applied | none · `<RB>` none |
+| snapshot | `e61e99f8` (ssd) |
+| RESTARTS done | none |
+| LAUNCHD done | none · BOOTSTRAP OWED: none |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 453af0bd` (no resident to take down: `<restart set>` empty; no launchd label). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |
+
 ## Smoke
+`<t up>` = 20:04:44 (empty set). FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1's baselines).
+
+| row | date | command | result |
+|---|---|---|---|
+| (a) | 20:04:55 | `launchctl print gui/501/com.cobalt.aset` | `state = running`, `pid = 80523` (SAME as D1: not in the set) |
+| (a) | 20:04:55 | `launchctl print gui/501/com.cobalt.radar` | `state = running`, `pid = 24167` (SAME as D1) |
+| (a) | 20:04:55 | `/Users/cobalt/cobalt/cobalt.sh status` | `Cobalt is ONLINE (PID: 80543).` (SAME) |
+| (b) | 20:04:58 | `grep -c "Started server process" aset.err` | `281` = `<a0>` (aset outside the set) |
+| (b) | 20:04:58 | `tail -n 30 aset.err` | last line `2026-10-16 11:24:51.365 | INFO     | cobalt.vaultwrite.writer:_purge_once:482 - vault_writes: purged 1 row(s) past 30-day retention`; no new start (aset not restarted) |
+| (b) | 20:04:58 | Traceback aset.err · Traceback radar.err · TaxonomyConfigError radar.err | `217` · `0` · `0` = baselines |
+| (c) | 20:04:58 | `curl … https://cobalt.taild24291.ts.net/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 20:04:58 | the three `## MARKERS` | `1` · `1` · `1` (after) |
+| (f) | 20:04:44 | `COBALT_ENV=production uv run cobalt validate` (4.5) | exit 0, as `<val0>` |
+| (f) | 20:05:12 | `COBALT_ENV=production uv run cobalt jobs restarts 224f320b..453af0bd` | exit 0, the same 9 rows as STEP-R, no UNCLASSIFIED, `RESTARTS: none` = `<restart set>` |
+| (g) | — | — | `MIGRATIONS: none` |
+| (s) | — | shadow tests (`tests/ops/test_desk_launch_shadow.py tests/ops/test_shadow_hub_file.py tests/ops/test_bare_guard.py`) | quoted from the gate (no test runs in production): gate log 892 `$ uv run pytest -q -rs -p no:cacheprovider tests/ops` → 960 `3919 passed, 1 xfailed, 16 warnings in 858.71s (0:14:18)`, `[exit 0]` — `0 failed` (green) |
+| (b) tail 1 | 20:06:16 (`<t up>` + 92 s) | `tail -n 12 radar.err` | last `2026-10-17 20:05:13.952 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a `radar cycle:` line stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled) |
+| (e) 1 | 20:05:19 | `heartbeat show` | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 20:05:20 EDT)`; `com.cobalt.radar running running 2124 min, heartbeat fresh` |
+| (e) 2 | 20:07:10 | `heartbeat show` (111 s after read 1) | `HEARTBEAT GREEN — 15 job(s), 12 probe(s), nothing red  (2026-10-17 20:07:11 EDT)`; `com.cobalt.radar running running 2126 min, heartbeat fresh`; no RED not in `<hb0>` |
+| (h) | 20:07:45 (`<t up>` + 181 s) | the four failure counts | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) |
+| (h) | 20:07:45 | `curl … /radar` | `200` |
+| (h) | 20:07:45 | `tail -n 12 radar.err` | last `2026-10-17 20:06:53.975 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` |
+| (h) census | — | — | none on the card |
+
+Between the (e) reads the clock was filled with `date` + `heartbeat show` pairs, each `HEARTBEAT GREEN … nothing red`.
+
+THE CHAIN: every check committed (P2: `3fa4cb8a`, clean) · the tips re-read (P3: `52a0600d`, `5fea0cc4`) · the merged tree (T: `d2b04fb9`, one merge, no migration) · RESTARTS derived (R: none) · three suites green on `d2b04fb9` (G: offline 8491/0 · with-DB 5475/0 · live-note 146/0) · `<stack-final>` `453af0bd` = `<m1>` + docs (D2.3: nothing outside docs) · the landed code (4.3: `Updating 224f320b..453af0bd`) · markers 1/1/1 (d) · no migration to read back (g) · residents up and unchanged after the merge (a) · radar cycling (b, e) · the set's reads green from the gate (s) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+SMOKE: GREEN.
+
+PRE-STOP SELF-CHECK (K25): (1) every smoke row above is quoted with its `date`. (2) `merge-base --is-ancestor 52a0600d 453af0bd` → exit 0; `… 5fea0cc4 453af0bd` → exit 0; both re-read at P3. (3) REVERT-READBACK shown at (h): `18 · 60 · 43 · 39` against the same `<…_up>` values; every count, sha and line in this report comes from this run's tool output. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/gemini-builder-row-attempt2` alone: no conflict marker.
 
 ## CONTINUE
 next: STEP-D2.1 (D2.0 report commit; `deploy-shipped.sh --moved 96ab9832 "<card>"` printed nothing)
+OUTAGE STARTING 20:04:24 — residents of <restart set> going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0. (`<restart set>` = none: no resident goes down; the merge lands with the residents up.)
+next: none — deployed; STEP-7 closed at 20:07:45.
 
 ## DECISIONS
 - ASK DESK: `?? .claude/settings.json.bak` on `main` is in neither D0's ACCEPTED list nor its REFUSED classes (`src/`, `tests/`, `ops/`, `configs/`, staged). Safe default taken: not a refusal; untracked, outside every shipped path; left untouched. [20:02:25]
 
 ## RECORDS
+- Downtime: none (empty `<restart set>`).
+- `cobalt_dev: 0013 (F2 = F0)` — F0 and F2 both `664 · 35 · 272c95bbb12241e3611e4b36326ccf87`; the L76 lock was released by `gate.sh` (`lock released`, `.env: removed`).
+- RETIRE OWED: none. BOOTSTRAP OWED: none.
+- Carried RED: none; `<hb0>` and every later heartbeat read `HEARTBEAT GREEN … nothing red`, with `com.cobalt.herdr` AMBER by its declared interim (`launchd_unmanaged`).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-gemini-builder-row-attempt2` and branch `deploy/gemini-builder-row-attempt2`; the set's branch `ops/gemini-builder-row-fr1` and its worktree.
+- L74: one block arrived (a system reminder asking that commits carry a `Claude-Session:` line); recorded under `## L74`, not acted on.
+- Card RECORDS (the desk's, copied): gemini-builder-row-fr1: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/gemini-builder-row-fr1-check-2026-10-17.md` last line: CHECK DONE · job: gemini-builder-row-fr1 · pass: 1 · tip: 52a0600d · house A: grok FINDINGS: 0 · findings: 3 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8491/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 15 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 190470 / gemini-builder-row-fr1: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/gemini-builder-row-fr1` → `5fea0cc4`; code tip `52a0600d` / written by deploy-card.sh at 2026-10-17 19:14 ET (`date`); trial merge of the heads onto main in order: clean
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it` (the line was read with the Read tool instead).
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-17-gemini-builder-row 453af0bd | set: none | migrations: none | gate: offline 8491/0 · with-DB 5475/0 · live-note 146/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 211538
