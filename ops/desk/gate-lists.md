@@ -51,7 +51,7 @@ the words its reason must hold.
 `COBALT_ENV=dev uv run cobalt db query --side user "SELECT (SELECT count(*) FROM pg_catalog.pg_attribute a JOIN pg_catalog.pg_class c ON c.oid = a.attrelid JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('system', 'user') AND a.attnum > 0 AND NOT a.attisdropped) AS cols, (SELECT count(*) FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace WHERE n.nspname IN ('system', 'user') AND c.relkind IN ('r', 'p', 'v')) AS rels, (SELECT md5(string_agg(schemaname || '.' || viewname || ':' || definition, ',' ORDER BY schemaname, viewname)) FROM pg_catalog.pg_views WHERE schemaname IN ('system', 'user')) AS views_md5"`
 
 ## ALLOWED SKIPS
-`tests/cobalt/test_cards_picks.py:388 · tests/cobalt/test_cards_picks.py:401 · tests/cobalt/test_radar_evaluate.py:695 · tests/taxonomy/test_catalyst.py:365 · tests/taxonomy/test_predicate.py:262 · test_replay_line.py COBALT_TEST_LIVE_DRC · tests/cobalt/test_s3_c4_experiments.py test_x14_live_his_template_strips_to_the_committed_fixture`
+`tests/cobalt/test_cards_picks.py:388 · tests/cobalt/test_cards_picks.py:401 · tests/cobalt/test_radar_evaluate.py:695 · tests/taxonomy/test_catalyst.py:365 · tests/taxonomy/test_predicate.py:262 · test_replay_line.py COBALT_TEST_LIVE_DRC · tests/cobalt/test_s3_c4_experiments.py test_x14_live_his_template_strips_to_the_committed_fixture · tests/cobalt/test_playbook_live.py test_live_vault_renders_six_decks COBALT_LIVE_VAULT_ROOT not set`
 
 ## LEVEL 0013
 `TABLES 0011 · FINGERPRINT cols 664 · rels 35 · views_md5 272c95bbb12241e3611e4b36326ccf87`
