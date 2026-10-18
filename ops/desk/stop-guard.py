@@ -380,9 +380,17 @@ def next_items(lines):
     return []
 
 
+# the rows of the one desk-list.sh read of this process: finished_open() keeps its own listing,
+# so next_unlaunched() would read the list a second time in one stop (card 739 check O1)
+_LISTED = []
+
+
 def listed():
     """The (id, name) of every row desk-list.sh beside this file prints (G3). A non-zero exit (a
-    missing desk-list.sh included) or a timeout raises ListUnreadable (card 106 G2)."""
+    missing desk-list.sh included) or a timeout raises ListUnreadable (card 106 G2). Read once
+    per process; a later call returns the same rows."""
+    if _LISTED:
+        return _LISTED[0]
     script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "desk-list.sh")
     try:
         out = subprocess.run(["sh", script], capture_output=True, encoding="utf-8", timeout=20)
@@ -391,7 +399,8 @@ def listed():
     if out.returncode != 0:
         raise ListUnreadable("desk-list.sh exit %d" % out.returncode)
     rows = [row.split(" · ") for row in out.stdout.splitlines()]
-    return [(f[0], f[1]) for f in rows if len(f) > 1]
+    _LISTED.append([(f[0], f[1]) for f in rows if len(f) > 1])
+    return _LISTED[0]
 
 
 def watched():
