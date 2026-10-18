@@ -26,7 +26,6 @@ from test_desk_launch_prechecks import (  # noqa: F401 — desk is the fixture, 
     Desk,
     desk,
     dry_prompt,
-    staged_launcher,
 )
 
 REPO = Path(__file__).resolve().parents[2]
@@ -228,49 +227,37 @@ def test_t1_no_cto_desk_row_sends_one_notify_and_launches_nothing(box):
 
 def test_t1_a_live_ping_defers(box):
     box.rows.write_text(CTO + "\n" + PING_ROW + "\n")
+    ping_id = PING_ROW.split(" · ", 1)[0]
+    # F1: a row with no age counts stale; five minutes old, it is live
+    box.agents([agent(ping_id, ago(5))])
     done = box.run()
     assert done.returncode == 0, done.stderr
-    ping_id = PING_ROW.split(" · ", 1)[0]
     assert f"DEFERRED: ping live — {ping_id}" in done.stdout
     assert box.calls_made() == []
     assert not box.notify.exists()
 
 
-@pytest.mark.xfail(strict=True, reason="check O1 OPEN: T1 (4) defers on a finished ping; the fix round's")
 def test_x3_a_finished_ping_row_does_not_defer_the_next_fire(box):
-    # a ping whose one turn ended: status `idle`, state not `working` (wait-stop-line.sh:25-28)
+    # check O1, settled by L79 (a): a ping whose one turn ended, six hours old, is closed, not deferred on
     finished = "dddd4444-0000-4000-8000-000000000004 · checkin-ping · ~/cobalt · idle · done"
+    ping_id = finished.split(" · ", 1)[0]
     box.rows.write_text(CTO + "\n" + finished + "\n")
+    box.agents([agent(ping_id, ago(360))])
     done = box.run()
     assert done.returncode == 0, done.stderr
     assert "DEFERRED" not in done.stdout
-    prompt = box.repo / "docs" / "40 - DevDocs" / "prompts" / "CHECKIN-PING.md"
-    assert box.calls_made() == [f"prompt {prompt}"]
+    assert box.calls_made() == [f"done {ping_id} --replaced", f"prompt {box.prompt}"]
 
 
-@pytest.mark.xfail(strict=True, reason="check A1 HELD, NOT FIXED: desk-launch.sh kind prompt; the fix round's")
-def test_x3_a_finished_ping_is_not_left_as_a_named_session(desk, tmp_path):
-    """The prompt launch must remove the checkin-ping session it starts; a later fire would defer on that row."""
-    text = PING.read_text(encoding="utf-8").replace("/Users/cobalt/cobalt", str(desk.repo))
-    pfile = desk.prompts / "CHECKIN-PING.md"
-    pfile.write_text(text)
-    desk.commit("ping")
-    stub = Path(desk.env["PATH"].split(":")[0]) / "claude"
-    stub.write_text(
-        "#!/bin/sh\n"
-        f'printf "%s\\n" "$*" >> "{desk.calls}"\n'
-        "exit 0\n"
-    )
-    done = subprocess.run(
-        ["sh", str(staged_launcher(tmp_path)), "prompt", str(pfile)],
-        env=desk.env, capture_output=True, text=True, timeout=120,
-    )
+def test_x3_a_finished_ping_is_not_left_as_a_named_session(box):
+    """Check A1, settled by L79 (a) as restated: the timer closes a 6-hour-old checkin-ping session
+    (desk-done.sh <id> --replaced) before it launches the next ping, once each."""
+    box.rows.write_text(CTO + "\n" + PING_ROW + "\n")
+    ping_id = PING_ROW.split(" · ", 1)[0]
+    box.agents([agent(ping_id, ago(360))])
+    done = box.run()
     assert done.returncode == 0, done.stderr
-    recorded = desk.calls.read_text().splitlines() if desk.calls.exists() else []
-    assert any(
-        line.split()[:1] == ["stop"] or line.split()[:1] == ["rm"] or "desk-done" in line
-        for line in recorded
-    ), recorded
+    assert box.calls_made() == [f"done {ping_id} --replaced", f"prompt {box.prompt}"]
 
 
 def test_t1_a_missing_launcher_is_refused(box):
