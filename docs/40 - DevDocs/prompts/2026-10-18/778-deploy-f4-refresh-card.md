@@ -17,6 +17,9 @@ TICKERS: none
 |---|---|---|---|---|---|---|
 | 1 | `ops/f4-refresh-1018` | `51b03e00` | `7b291371` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-refresh-check-2026-10-18.md` | `held unfixed: 0` and `ready: YES` | |
 
+## LAUNCHD
+com.cobalt.prefill-refresh · deferred · prompts/2026-10-18/726-f4-304-recut-card.md:C2 · dry run: none · gate: X7, X8, X9, X10, X15
+
 ## MARKERS
 - `grep -c -F "label: com.cobalt.prefill-refresh" /Users/cobalt/cobalt/configs/cobalt/jobs.yaml` · before `0` · after `1`
 - `grep -c -F "key: prefill.refresh_interval_min" /Users/cobalt/cobalt/configs/cobalt/taxonomy/tunables.yaml` · before `0` · after `1`
