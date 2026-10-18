@@ -11,6 +11,7 @@ launches a seat.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -113,8 +114,14 @@ class Desk:
         write_exe(tmp_path / "bin" / "claude",
                   'if [ "$1" = "agents" ]; then echo "[]"; exit 0; fi\n'
                   f'printf "%s | %s\\n" "$PWD" "$*" >> "{self.calls}"\nexit 0\n')
+        self.agy = tmp_path / "agy-settings.json"
+        self.agy.write_text(json.dumps(
+            {"permissions": {"allow": [f"write_file({self.wt}/x-job-gemini/)"]}},
+            indent=2,
+        ) + "\n")
         self.env = dict(
             os.environ, COBALT_WT_ROOT=str(self.wt), COBALT_REPO_ROOT=str(self.repo),
+            COBALT_AGY_SETTINGS=str(self.agy),
             PATH=f"{tmp_path / 'bin'}:{os.environ['PATH']}", **GIT_ENV,
         )
 
@@ -337,3 +344,90 @@ def test_s2_a_role_trial_refuses_a_non_grok_model(desk):
         desk.run(str(card), "--model", "claude-sonnet-5-5"),
         "shadow: ROLE trials run only grok-4.7",
     )
+
+
+# ---- card 2026-10-18 759 L1: the launcher confines Gemini (R1863) ----------------------------
+
+
+def write_agy(desk: Desk, rules: list[str]) -> None:
+    Path(desk.env["COBALT_AGY_SETTINGS"]).write_text(
+        json.dumps({"permissions": {"allow": rules}}, indent=2) + "\n")
+
+
+def signed_gemini(desk: Desk) -> Path:
+    desk.set_hub(hub_text(line_for(), signed=("grok-4.7", "gemini-4-argon-high")))
+    return desk.card_for("gemini")
+
+
+def test_k5_gemini_without_its_worktree_grant_is_refused(desk):
+    card = signed_gemini(desk)
+    grant = f"{desk.wt}/x-job-gemini/"
+    write_agy(desk, [f"read_file({grant})"])
+    agy = desk.env["COBALT_AGY_SETTINGS"]
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high"),
+        f'shadow: gemini: {agy} holds no allow rule "write_file({grant})" (SHADOW-HUB GRANT)',
+    )
+
+
+def test_k5_gemini_without_a_settings_file_is_refused(desk):
+    card = signed_gemini(desk)
+    agy = Path(desk.env["COBALT_AGY_SETTINGS"])
+    agy.unlink()
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high"),
+        f"shadow: gemini: no agy settings file at {agy}",
+    )
+
+
+def test_k5_gemini_with_a_read_url_rule_is_refused(desk):
+    card = signed_gemini(desk)
+    grant = f"{desk.wt}/x-job-gemini/"
+    write_agy(desk, [f"write_file({grant})", "read_url(*)"])
+    agy = desk.env["COBALT_AGY_SETTINGS"]
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high"),
+        f"shadow: gemini: {agy} holds a read_url or execute_url rule; X1's fetch must stay refused",
+    )
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["{wt}/", "*", "regex:.*", "{wt}/x-job-other/"],
+    ids=[
+        "write_file(<tmp wt>/)",
+        "write_file(*)",
+        "write_file(regex:.*)",
+        "write_file(<tmp wt>/x-job-other/)",
+    ],
+)
+def test_k5_gemini_with_a_wider_write_rule_is_refused(desk, target):
+    card = signed_gemini(desk)
+    grant = f"{desk.wt}/x-job-gemini/"
+    rule = f"write_file({target.format(wt=desk.wt)})"
+    write_agy(desk, [f"write_file({grant})", rule])
+    agy = desk.env["COBALT_AGY_SETTINGS"]
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high"),
+        f"shadow: gemini: {agy} holds a write rule that reaches past {grant}: {rule}",
+    )
+
+
+def test_k5_gemini_with_its_grant_and_the_house_rules_is_admitted(desk):
+    card = signed_gemini(desk)
+    grant = f"{desk.wt}/x-job-gemini/"
+    write_agy(desk, [
+        f"write_file({grant})",
+        "read_file(/Users/cobalt/cobalt/docs/)",
+        "command(cat *)",
+        f"write_file({desk.wt}/agy-trial/scratch/toy-check-agy/)",
+    ])
+    done = desk.run(str(card), "--model", "gemini-4-argon-high")
+    assert done.returncode == 0, done.stderr
+    assert "MODEL: gemini-4-argon-high" in done.stdout.splitlines()[-1]
+
+
+def test_k5_grok_reads_no_agy_settings(desk):
+    desk.env["COBALT_AGY_SETTINGS"] = str(desk.tmp / "missing-agy-settings.json")
+    done = desk.run(str(desk.card), "--model", "grok-4.7")
+    assert done.returncode == 0, done.stderr

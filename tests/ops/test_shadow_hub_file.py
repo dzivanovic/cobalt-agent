@@ -371,3 +371,43 @@ def test_f1_the_real_title_passes_the_authorize_line_one_gate(tmp_path):
     assert "STANDING LIST 2026-10-11 R1069 row · " in done.stdout, done.stdout + done.stderr
     assert "the title names no INSTALL" not in done.stdout
     assert done.returncode == 0, done.stdout + done.stderr
+
+
+# ---- card 2026-10-18 759 H1: the Gemini GRANT and the X1 read (R1863) ------------------------
+
+
+def test_k5_the_gemini_grant_sentence():
+    lines = [x for x in text().splitlines() if x.startswith("- Gemini:")]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "write_file(/Users/cobalt/cobalt-wt/<worktree>/)" in line
+    assert "/Users/cobalt/.gemini/antigravity-cli/settings.json" in line
+    assert "read_url" in line
+    assert "removes it when the job closes" in line
+    refuses = [x for x in text().splitlines() if x.startswith("The launcher refuses")]
+    assert len(refuses) == 1
+    assert "agy settings break the GRANT" in refuses[0]
+
+
+def test_k5_the_gemini_grant_bounds():
+    """The brain's bounds, R1872: one assert each on the same `- Gemini:` line."""
+    lines = [x for x in text().splitlines() if x.startswith("- Gemini:")]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "on every outcome (BUILT, FAILED, killed)" in line
+    assert "an orphaned rule found at the next launch is removed first and recorded" in line
+    assert "no other line of that file changes" in line
+    assert "one Gemini worktree at a time" in line
+    assert line.count("write_file(/Users/cobalt/cobalt-wt/<worktree>/)") == 1
+    assert "write_file(*)" not in line
+    assert "regex:" not in line
+
+
+def test_k5_the_gemini_x1_read_step():
+    lines = [x for x in text().splitlines() if x.startswith("X1 for Gemini")]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "X1-READ.txt" in line
+    assert "X1_READ_<job>" in line
+    assert "READ OK" in line
+    assert "read inside the worktree refused" in line
