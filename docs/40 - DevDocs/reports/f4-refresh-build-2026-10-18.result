@@ -1,0 +1,15 @@
+job=f4-refresh-1018
+tip=51b03e00
+on=75dcdb5f
+migration=none
+offline=8538/0
+with_db=5552/0
+live_note=146/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset com.cobalt.radar
+rows=2 of 2 (PORT 26 PROOF of 26, CR3)
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=317898
