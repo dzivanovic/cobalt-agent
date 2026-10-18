@@ -250,7 +250,7 @@ def test_gemini_is_spelled_as_the_hub_launch_with_a_three_minute_print_timeout(h
     (call,) = calls_of(calls, "agy")
     assert Path(call["cwd"]).resolve() == (wt / "agy-trial").resolve()
     assert call["argv"] == [
-        "--model", "gemini-3.1-pro-high", "--mode", "accept-edits", "--sandbox",
+        "--model", "gemini-4-argon-high", "--mode", "accept-edits", "--sandbox",
         "--print-timeout", "3m", "--add-dir", f"{wt}/agy-trial",
         "--print=Reply with only the word OK.",
     ]
@@ -278,3 +278,17 @@ def test_a_bad_call_is_refused(houses, args):
     assert done.returncode == 1
     assert done.stderr.startswith("REFUSED: ")
     assert list(calls.iterdir()) == []
+
+
+def test_k5_gemini_id_is_gemini_4_argon_high():
+    """His 2026-10-17 R1736 (card 670 G1): the Gemini house runs gemini-4-argon-high, in the
+    probe's two spellings and in the hub's GEMINI launch; the old id is gone from both."""
+    probe_lines = [ln for ln in PROBE.read_text().splitlines() if "agy --model" in ln]
+    assert len(probe_lines) == 2, probe_lines
+    for line in probe_lines:
+        assert "agy --model gemini-4-argon-high " in line, line
+    hub_lines = CHECK_HUB.read_text().splitlines()
+    (gemini_line,) = [ln for ln in hub_lines if ln.startswith("- **GEMINI:**")]
+    assert "agy --model gemini-4-argon-high " in gemini_line
+    for path in (PROBE, CHECK_HUB):
+        assert not any("gemini-3.1-pro-high" in ln for ln in path.read_text().splitlines()), path

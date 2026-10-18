@@ -21,7 +21,7 @@
 #           grok -m grok-4.7 --sandbox cobalt-job --allow "Write($WT/agy-trial/scratch/tribunal-bars-0920/**)" -p "Reply with only the word OK."
 #   gemini  CHECK-HUB.md `## 1` (5)'s Gemini launch with the probe prompt and a 3-minute print
 #           timeout, run from $WT/agy-trial:
-#           agy --model gemini-3.1-pro-high --mode accept-edits --sandbox --print-timeout 3m --add-dir $WT/agy-trial --print="Reply with only the word OK."
+#           agy --model gemini-4-argon-high --mode accept-edits --sandbox --print-timeout 3m --add-dir $WT/agy-trial --print="Reply with only the word OK."
 # A trailing `[exited with code <n>]` line is dropped before the answer is read.
 #
 # COBALT_WT_ROOT stands in for /Users/cobalt/cobalt-wt, and HOUSE_PROBE_LIMIT (whole seconds) for
@@ -101,7 +101,7 @@ start() {
                 < /dev/null > "$tmp/grok.out" 2> "$tmp/grok.err" &
             ;;
         gemini)
-            (cd "$WT/agy-trial" && exec agy --model gemini-3.1-pro-high --mode accept-edits --sandbox --print-timeout 3m --add-dir "$WT/agy-trial" --print="$PROMPT") \
+            (cd "$WT/agy-trial" && exec agy --model gemini-4-argon-high --mode accept-edits --sandbox --print-timeout 3m --add-dir "$WT/agy-trial" --print="$PROMPT") \
                 < /dev/null > "$tmp/gemini.out" 2> "$tmp/gemini.err" &
             ;;
     esac
