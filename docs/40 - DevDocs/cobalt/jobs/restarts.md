@@ -54,3 +54,7 @@ Every path under `ops/desk/` (`OPS_DESK_PREFIX`) classifies as `operator script;
 ## 2026-10-08 — stt-model-fix-1008
 
 `OPS_TOOLS` adds `ops/fetch-voice-models.sh` and `ops/fetch_voice_models.py`, the one model-fetch command, run by hand. No plist names them and no resident imports them, so they are classified `operator script; no Cobalt reader` and derive no restart (`test_the_voice_model_fetch_scripts_derive_no_restart`).
+
+## 2026-10-18 — jev-keyed-1018
+
+`OPS_TOOLS` adds `ops/jev-route.sh`, the JEV keyed router wrapper, run by the nightly close seat at a shell (CLOSE-HUB STEP 7b). No plist names it and no resident imports it, so it is classified `operator script; no Cobalt reader` and derives no restart (`test_the_jev_route_wrapper_derives_no_restart`).

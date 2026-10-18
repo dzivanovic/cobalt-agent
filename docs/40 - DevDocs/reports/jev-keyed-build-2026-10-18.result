@@ -1,0 +1,15 @@
+job=jev-keyed-1018
+tip=9780e4eb
+on=b95e5d8c
+migration=none
+offline=8514/0
+with_db=5476/0
+live_note=146/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.radar
+rows=5 of 5
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=264537

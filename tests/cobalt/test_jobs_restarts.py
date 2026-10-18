@@ -120,6 +120,16 @@ def test_the_voice_model_fetch_scripts_derive_no_restart(monkeypatch):
         assert "no Cobalt reader" in by_path[path].rule
 
 
+def test_the_jev_route_wrapper_derives_no_restart(monkeypatch):
+    # jev-keyed-1018 W1 (b): the JEV wrapper is run by the close seat at a shell.
+    # No plist names it and no resident imports it, so it derives no restart.
+    monkeypatch.setattr(restarts, "changes", lambda _range: [Change("ops/jev-route.sh", "A")])
+    (row,) = classify("HEAD...HEAD")
+    assert row.restarts == ()
+    assert row.escalate is False
+    assert "no Cobalt reader" in row.rule
+
+
 def test_every_path_under_ops_desk_is_an_operator_script(monkeypatch):
     # 2026-10-02 ops-glob G1: `ops/desk/` holds the desk's and the hubs' shell
     # tools and a git hook; no plist executes a file in it. Every path under
