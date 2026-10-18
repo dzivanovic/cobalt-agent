@@ -1,0 +1,15 @@
+job=checkin-install-1018
+tip=d5acbada
+on=8033d70e
+migration=none
+offline=8507/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=com.cobalt.agent com.cobalt.aset com.cobalt.herdr com.cobalt.mainframe com.cobalt.obsidian com.cobalt.radar
+rows=7 of 7
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=180293
