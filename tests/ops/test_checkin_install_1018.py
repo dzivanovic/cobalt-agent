@@ -272,10 +272,13 @@ def test_p1_the_real_launcher_accepts_the_ping_line_dry(desk: Desk, tmp_path):
     assert line[0].count("--remote-control checkin-ping") == 1
     assert line[0].count("--name checkin-ping") == 1
     assert line[0].count("--permission-mode auto") == 1
-    # negative control: acceptEdits is not auto or plan (desk-launch.sh refuses the mode)
+    # negative control: acceptEdits is not auto or plan (desk-launch.sh refuses the mode).
+    # staged_launcher mkdir's <root>/ops and cannot run twice on one root.
     pfile.write_text(text.replace("--permission-mode auto", "--permission-mode acceptEdits"))
     desk.commit("ping refused")
-    refused = dl.dry_prompt(desk, tmp_path, pfile)
+    neg = tmp_path / "neg"
+    neg.mkdir()
+    refused = dl.dry_prompt(desk, neg, pfile)
     assert refused.returncode == 1, refused.stdout + refused.stderr
     assert "permission mode 'acceptEdits'" in refused.stderr
 
