@@ -4633,3 +4633,104 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-16*"` = `deploy-2026-10-16-jev-shadow-fr1` (R1647).
 - STOP LINE (L35), `reports/close-2026-10-15.md`: `CLOSE PUSHED 0175a5b7` (R1629).
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-16.md` `## 8`.
+
+### 2026-10-17 — Cards 641, 583, check-scratch-fr1, 671 port job and 670 probe-id deployed; Gemini arm ruled (gemini-4-argon-high); nightly close launched
+- R1730 06:20 RECORD: brain relayed "Dejan said A"; held as unverified, pointed to L79 + R1471.
+- R1731 06:24 HIS RULING APPROVED: deploy card 641 before its fix-round check (A); relaunch check 662 once after.
+- R1732 06:30 ASKED: deploy-card.sh refused the 641 deploy card twice; brain asked for a route.
+- R1733 06:33 DESK RECORD: route (a), O1 report line reworded to BUILT: FR-1; no code change.
+- R1734 06:33 LAUNCHED: build continues FIX ROUND report on card 641, report reword only.
+- R1735 06:30 RECORD: desk `80e82f59` seated, `3a31213b` removed; builder report reworded.
+- R1736 06:32 HIS RULING APPROVED: Gemini top model = gemini-4-argon-high (was gemini-3.1-pro-high).
+- R1737 06:31 LAUNCHED: deploy hub `25bf1a56` for card 664 (card 641, TIP `949cb071`).
+- R1738 06:33 HIS RULING APPROVED: Gemini bake-off arm run separately; probe-id and builder cards drafted now.
+- R1739 06:45 DEPLOYED: card 641 `9c36df59` (gate 8388/0, with-DB 5475/0, smoke GREEN).
+- R1740 06:50 LAUNCHED: check 662 relaunched as `f0b7ee8c`; failed check `815b6911` removed.
+- R1741 07:38 LAUNCHED: day-open 10-17 via Qwen pane after it was missing.
+- R1742 07:40 ASKED: check 662 FAILED 3 (Grok no findings, Gemini rejected old id); brain asked route.
+- R1743 07:39 DESK RECORD: check 662 CONTINUE at step 3; Gemini house N/A, Grok once.
+- R1744 07:50 LAUNCHED: drafter `fbd6339b` for check card 666 (card 583 FR-6..8).
+- R1745 07:43 LAUNCHED: drafter DRAFTED card 666; preflight `1fda3b47` launched.
+- R1746 07:50 LAUNCHED: preflight 23 checks 1 FAIL, CHECK-HUB :51 stands; check `1d41c7a3` on card 666.
+- R1747 07:59 RECORD: day-open 10-17 GREEN (C1-C6 PASS).
+- R1748 07:59 LAUNCHED: Gemini arm drafters, prompts 668 (card 670) and 669 (card 671).
+- R1749 08:06 RECORD: probe-id card 670 DRAFTED; agy models lists gemini-4-argon-high.
+- R1750 08:07 LAUNCHED: preflight 18/0 on card 670; K5 build gemini-probe-id.
+- R1751 08:07 ASKED: card 671 DRAFTED (7 asks); brain asked two scope points.
+- R1752 08:08 DESK RECORD: card 671 YES on both; bare-guard.py bounds pinned; decoys named.
+- R1753 08:10 RECORD: card 671 amended to brain bounds; BASE `7f415a4f`.
+- R1754 08:13 RECORD: preflight card 671 13 checks 2 FAIL; amend drafter prompt 674.
+- R1755 08:16 LAUNCHED: amend drafter `452a04b9` DRAFTED card 671; preflight r2 prompt 675.
+- R1756 08:18 LAUNCHED: preflight r2 19/0 YES; K5 build gemini-builder-row.
+- R1757 08:53 LAUNCHED: probe-id BUILT `744128d7`; worktree probe gemini: UP; check-card drafter prompt 676.
+- R1758 08:53 ASKED: checks 662 and `1d41c7a3` both ready NO, one held defect each; brain asked.
+- R1759 08:55 DESK RECORD: 641 A2 and A1 SETTLED; fresh job check-scratch-fr1; 583 FIX ROUND 3.
+- R1760 08:56 LAUNCHED: desk `d40639cf` took over; card 677 preflight prompt 678.
+- R1761 08:57 APPLIED: SETTLED A2 and A1 written (`55699430`); worker `f0b7ee8c` removed.
+- R1762 08:58 LAUNCHED: drafters prompts 679 (card 681) and 680 (583 FR-9).
+- R1764 08:58 LAUNCHED: check of card 670 `f24f86c2`; fr2 report committed.
+- R1765 08:59 LAUNCHED: card 583 FR-9 DRAFTED; preflight prompt 682.
+- R1766 09:00 LAUNCHED: card 681 DRAFTED, BASE `79f6f2f3`; preflight prompt 683.
+- R1767 09:01 LAUNCHED: 583 FR-9 preflight 20/0; build `ea4e2cfc` FIX ROUND 3.
+- R1768 09:05 LAUNCHED: card 681 preflight ready NO (3 fails); amend prompt 684.
+- R1769 09:06 LAUNCHED: card 681 amended; preflight r2 prompt 685.
+- R1770 09:08 LAUNCHED: card 681 preflight r2 13/0; build check-scratch-fr1 `55d2f6c3`.
+- R1771 09:20 LAUNCHED: builder-row BUILT `7b986738`; check-card drafter prompt 686.
+- R1772 09:23 LAUNCHED: check card 687 DRAFTED; preflight prompt 688.
+- R1773 09:24 LAUNCHED: card 687 preflight YES; check `183b5cd2` on card 671.
+- R1774 09:38 RECORD: card 583 FR-9 BUILT `4b62c2fa` (8439/0); report `6c0ba560`.
+- R1775 09:41 RECORD: card 670 check ready YES, 2 follow-ups; report committed.
+- R1776 09:43 RECORD: desk `fb65676d` took over; watches re-armed on `55d2f6c3` and `183b5cd2`.
+- R1777 10:06 LAUNCHED: check-scratch-fr1 BUILT `b093f192`; drafter prompt 689 (card 690).
+- R1778 10:07 LAUNCHED: drafter prompt 691 (card 692) for 583 FR-9.
+- R1779 10:09 RECORD: card 671 check `183b5cd2` ready NO, O1 held; fix-round drafter prompt 693.
+- R1780 10:10 LAUNCHED: cards 690 and 692 DRAFTED; preflights prompts 694, 695.
+- R1781 10:11 LAUNCHED: card 671 FR-1 DRAFTED; preflights `37808b82`, `b39cea56`, prompt 696.
+- R1782 10:13 RECORD: card 692 preflight YES; only block is order (fr1 not DEPLOYED).
+- R1783 10:14 LAUNCHED: card 690 preflight YES; check `1eeacab5` check-scratch-fr1-check.
+- R1784 10:15 LAUNCHED: card 671 FR-1 preflight YES; fix build `d062faa4`.
+- R1785 10:44 RECORD: card 671 FR-1 BUILT `695f8bde` (report `8ba22eaf`, 2 decisions).
+- R1786 11:14 DESK RECORD: A1 SETTLED as rejected; fix round O1 only; drafter prompt 697.
+- R1787 11:17 LAUNCHED: FR-1 on card 681 DRAFTED; preflight prompt 698.
+- R1788 11:19 LAUNCHED: card 681 FR-1 preflight YES; fix build `cee83625`.
+- R1789 11:50 ASKED: card 681 FR-1 BUILT `2e84ac75`; deploy-card.sh refused, no SETTLED A1; brain asked.
+- R1790 11:52 DESK RECORD: relaunch builder at step SETTLE A1 R1786, no code.
+- R1791 12:15 LAUNCHED: builder `385a15a4` SETTLED A1 (`3879fdbb`); deploy hub for check-scratch-fr1 (card 699).
+- R1792 13:10 DEPLOYED: check-scratch-fr1 `568a12e4` (smoke GREEN); card 583 round-3 check `2c99f33c`.
+- R1793 13:55 RECORD: card 583 round-3 check ready NO, O1 held (strict xfail `3f399b60`); brain asked.
+- R1794 13:55 DESK RECORD: FR-10 on card 583, same builder; then scoped check, then deploy.
+- R1795 13:58 LAUNCHED: desk `df9f840e` took over; drafter `093c7b32` (prompt 700) for FR-10.
+- R1796 14:00 LAUNCHED: FR-10 DRAFTED (`c6e0d7e2`); preflight `a6ca7ef5` prompt 701.
+- R1797 14:01 LAUNCHED: preflight YES 21/0; build `feecf16f` FIX ROUND FR-10.
+- R1798 14:34 LAUNCHED: card 583 FR-10 BUILT `05654335` (report `2880eb0e`); drafter `dbea9c3f` prompt 702.
+- R1799 14:37 LAUNCHED: card 703 DRAFTED (`91f90808`); preflight `3cbb73ff` prompt 704.
+- R1800 14:38 LAUNCHED: preflight YES 25/0 (`a14cbf58`); check `d2d26ad9` scoped to FR-10.
+- R1801 15:19 LAUNCHED: check `d2d26ad9` ready YES; deploy card 705 (TIP `2880eb0e`); 583 deploy launched.
+- R1802 16:12 RECORD: card 583 DEPLOYED `f74610c3` (tag deploy-2026-10-17-band-routing-1015, smoke GREEN).
+- R1803 16:13 ASKED: deploy-card.sh refused card 671, check O2 has no SETTLED line; brain asked.
+- R1804 16:14 DESK RECORD: 671 O2 SETTLED, deploy as is; no Gemini shadow build before X1 cwd result.
+- R1805 16:15 LAUNCHED: relaunched 671 builder `780a4480` at SETTLE O2 R1804.
+- R1806 16:28 LAUNCHED: SETTLED O2 (`06d31180`); card 706 written; 671 deploy hub launched.
+- R1807 16:58 RECORD: 671 deploy FAILED gate G(a), nothing merged; hub `9d183e3f` removed; brain asked.
+- R1808 16:59 DESK RECORD: 671 redeploy = fresh port job gemini-builder-row-fr1, no rebase.
+- R1809 17:00 LAUNCHED: drafter `861a59dd` (prompt 707) re-heads card 671 as port job.
+- R1810 17:01 RECORD: desk `5cf91de3` took over from `df9f840e`.
+- R1811 17:02 DESK RECORD: port drafter DRAFTED, 3 ASK DESK by defaults.
+- R1812 17:02 LAUNCHED: preflight prompt 708 on 671 port job.
+- R1813 17:04 RECORD: preflight `f46e3554` YES 16/0.
+- R1814 17:05 LAUNCHED: build `4a5c1ba5` gemini-builder-row-fr1-build (Opus 5.5 HIGH).
+- R1815 18:18 RECORD: build `4a5c1ba5` BUILT `52a0600d` (offline 8491/0, PORT 6 of 6, FR-2).
+- R1816 18:18 LAUNCHED: check-card drafter `20a25df5` (prompt 709, card 710).
+- R1817 18:21 DESK RECORD: card 710 DRAFTED, 2 ASK DESK by defaults.
+- R1818 18:21 LAUNCHED: preflight prompt 711 on card 710.
+- R1819 18:22 RECORD: preflight `589d1cae` YES 30/0.
+- R1820 18:23 LAUNCHED: check `9ead9383` gemini-builder-row-fr1-check (tip `52a0600d`).
+- R1821 19:13 RECORD: check `9ead9383` ready YES, open 0, offline 8491/0.
+- R1822 19:15 LAUNCHED: deploy of port job from card 712 (job gemini-builder-row-attempt2).
+- R1823 20:10 DEPLOYED: 671 port job `453af0bd` (tag deploy-2026-10-17-gemini-builder-row, smoke GREEN).
+- R1824 20:10 LAUNCHED: deploy of card 670 from card 713 (TIP `9f281a6a`).
+- R1825 21:02 DEPLOYED: card 670 gemini-probe-id `10fb97c3` (tag deploy-2026-10-17-gemini-probe-id, smoke GREEN).
+- R1826 21:03 LAUNCHED: nightly close `2c3825ba` close-1017.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-17*"` = `deploy-2026-10-17-band-routing-1015`, `deploy-2026-10-17-check-scratch-1016`, `deploy-2026-10-17-check-scratch-fr1`, `deploy-2026-10-17-gemini-builder-row`, `deploy-2026-10-17-gemini-probe-id`.
+- STOP LINE (L35), `reports/close-2026-10-16.md`: `CLOSE PUSHED 369f5496`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-17.md` `## 8`.

@@ -1104,6 +1104,30 @@ OFF-LADDER work of 2026-10-16 (each with the ruling that ordered it):
 | Band routing (card `583`, job `band-routing-1015`) | BUILT-NOT-MERGED | Brain R1639, R1654, R1678–R1690. Tip `fda2300b` (FR-6..8 BUILT, R1704); check 1 NO (R1653), check 2 NO (R1677). Its scoped check waits for card 641 to deploy; no 583 tag. |
 | Check scratch keyed by job (card `641`, job `check-scratch-1016`) | BUILT-NOT-MERGED | Brain R1665, R1706, R1712. Tip `dd4d968d` (FR-1, FR-2 BUILT, R1722); check 1 NO (R1705); check `815b6911` FAILED at copy (R1728). Deploy HELD for his ruling (R1729); no 641 tag. |
 
+### Status 2026-10-17
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1017` for 10-17 alone from `reports/cto-2026-10-17.md` rows R1730–R1826 (06:20 → 21:03 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-17*"` = `deploy-2026-10-17-band-routing-1015`, `-check-scratch-1016`, `-check-scratch-fr1`, `-gemini-builder-row`, `-gemini-probe-id`. The 10-16 close ran (`CLOSE PUSHED 369f5496`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 | DONE-LIVE | Unchanged (see 10-08 to 10-16). |
+| S5 F4 prefill ownership flags (card `304`) | BUILT-NOT-MERGED | 304's recut still owed as a K5 drafter; no 304 tag. |
+| S5 F21 (cards `468`, `469`) | NOT STARTED (cards DRAFTED) | r3 and X8 probe owed behind the K5 drafters. |
+| S5 F23 (card `503`) | NOT STARTED (card DRAFTED) | 503 preflight owed. |
+| S5 F5, F20 | NOT STARTED (FINALs APPROVED) | F20/F5 drafters owed. |
+| S5 F16 close | NOT STARTED | No row. |
+
+**Stop date: 2026-10-28 (S5, day 3 of 14). S5: ON TIME.** Reason: no S5 feature was built or deployed on 10-17 either; the day went to the K5 platform and Gemini-arm cards below, all five deployed. The S5 features have 11 days left and no ruling moved a date (`cto-2026-10-17.md` §0, S5 · stop 10-28 · ON TIME).
+
+OFF-LADDER work of 2026-10-17 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Check scratch keyed by job (card `641`, job `check-scratch-1016`) | DONE-LIVE | His A (R1731, via L79 + R1471). `deploy-2026-10-17-check-scratch-1016` `9c36df59`, smoke GREEN (R1739). |
+| Check scratch fr1 (card `681`, job `check-scratch-fr1`) | DONE-LIVE | Brain R1759, R1786, R1790. `deploy-2026-10-17-check-scratch-fr1` `568a12e4`, smoke GREEN (R1792). |
+| Band routing (card `583`, job `band-routing-1015`) | DONE-LIVE | Brain R1654, R1794. `deploy-2026-10-17-band-routing-1015` `f74610c3`, smoke GREEN (R1802); FR-9, FR-10 built, check ready YES (R1801). |
+| Gemini builder row (card `671`, port job `gemini-builder-row-fr1`) | DONE-LIVE | Brain R1752, R1808; HIS RULING R1736, R1738. `deploy-2026-10-17-gemini-builder-row` `453af0bd`, smoke GREEN (R1823). |
+| Gemini probe id (card `670`) | DONE-LIVE | HIS RULING R1736, R1738. `deploy-2026-10-17-gemini-probe-id` `10fb97c3`, smoke GREEN (R1825). |
+| Gemini arm shadow builds LOW/MID/HIGH | NOT STARTED | HIS RULING R1738; barred until the X1 cwd result is a row (R1804). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
