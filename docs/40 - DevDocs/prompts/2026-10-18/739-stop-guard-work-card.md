@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/stop-guard-work-1018
 WORKTREE: stop-guard-work-1018
 BASE: 7317d540
-TIP:
+TIP: 9b9177ea
 REPORT: /Users/cobalt/cobalt-wt/stop-guard-work-1018/docs/40 - DevDocs/reports/stop-guard-work-build-2026-10-18.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/stop-guard-work-check-2026-10-18.md
-HOUSE B: none
+HOUSE B: as needed
 BAND: MID
 DB: none
 RESTARTS: none
