@@ -1,0 +1,15 @@
+job=stop-guard-work-1018
+tip=9b9177ea
+on=7317d540
+migration=none
+offline=8507/0
+with_db=0/0
+live_note=146/0
+cobalt_dev=not taken
+env=removed
+restarts=none (committed range; the tool's line names only the untracked SHADOW-INSTRUCTIONS.md)
+rows=4 of 4
+self_check=2 of 3
+decisions=4
+for_dejan=0
+tokens=168001

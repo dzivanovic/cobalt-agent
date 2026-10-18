@@ -303,6 +303,7 @@ DESK_LINE = "Read 'docs/40 - DevDocs/prompts/CTO-DESK-WAKEUP.md' and follow it e
 UNGUARDED = "stop-guard: desk not guarded — "
 GAVE_UP = re.compile(r"^\S+ s-1 GAVE UP after 3 blocks — start it: ")
 ROW = "b43daef9-0000 · x-job-build · ~/cobalt-wt/x · busy · working"
+DESK_ROW_LINE = "6e861cb4-0000 · cto-desk · ~/cobalt · busy · working"
 
 
 def today() -> str:
@@ -810,6 +811,254 @@ def test_g7a_an_empty_third_cell_is_the_prompt_cell(tmp_path):
     d.owed("owed: none", rows=("| QUEUE | — ||",))
     r = d.run()
     assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: \n")
+
+
+# ---- the NEXT line (card 739 W1, W2, W4; his 2026-10-18 R1841, R1844) ---------------------------
+
+# Copied from docs/40 - DevDocs/reports/cto-2026-10-17.md lines 108, 109 and 122.
+STATE_1017 = (
+    "STATE AT 21:07 (ET; desk 8ea7dcd3 seated in pane w2:pV1, 5cf91de3 stopped and removed, "
+    "wake-up 63,378 tokens; reconciled 0; no worker, hub or watch live; brain bede3dc9 w2:pV7 "
+    "idle; desk pane w2:pV1; MAIN e5594895+ with the close commit 24c00696; today DEPLOYED: "
+    "check-scratch-1016 9c36df59, check-scratch-fr1 568a12e4, band-routing-1015 f74610c3, "
+    "gemini-builder-row port job 453af0bd (R1823), gemini-probe-id 10fb97c3 (R1825); nightly "
+    "close CLOSE PUSHED 24c00696 (R1826), hub removed; S5 · stop 10-28 · ON TIME (day 3); "
+    "wake-up 68,645 tokens at 17:03)."
+)
+NEXT_1017 = (
+    "NEXT (not launched, so not OWED, R590): the Gemini arm's three shadow builds LOW/MID/HIGH "
+    "(strike-fallback-env LOW, radar-display-fix MID, s4-p1 HIGH; slug gemini, high only; "
+    "shadow cards by drafters + Sonnet preflight; X1 first against x1-canary/probe/.env + "
+    "CANARY.txt, a read = INCOMPLETE). BINDING R1804: no Gemini build before the X1 cwd result "
+    "is a row; put it on the arm's LOW card as a precondition. Also K5 gap-fillers (ancestor "
+    "refusal, smoke job name, test_llm.py 9 reds, drafters 503, 304, 468/469, F20/F5), old "
+    "worktrees via job-clean.sh (deploy-gemini-builder-row, deploy-gemini-probe-id, "
+    "gemini-builder-row-1017, gemini-builder-row-fr1, gemini-probe-id-1017 and older). "
+    "deploy-card.sh lesson: a held deploy branch of the same name needs an -attempt2 job name; "
+    "a check's open ids that are REJECTED follow-ups need no fix report. Day-open runs 07:00 ET "
+    "(STANDING ORDER). Untracked .claude/settings.json.bak is his. Rows start at R1827."
+)
+HANDOVER_REAL = "HANDOVER: predecessor 5cf91de3 → successor 8ea7dcd3 at 21:06 · pane w2:pV1"
+# The first `;` outside parentheses on NEXT_1017. Cut to 160 when it is the block line.
+FIRST_1017 = (
+    "the Gemini arm's three shadow builds LOW/MID/HIGH (strike-fallback-env LOW, "
+    "radar-display-fix MID, s4-p1 HIGH; slug gemini, high only; shadow cards by drafters + "
+    "Sonnet preflight; X1 first against x1-canary/probe/.env + CANARY.txt, a read = INCOMPLETE). "
+    "BINDING R1804: no Gemini build before the X1 cwd result is a row"
+)
+SUCCESSOR_ROW = "8ea7dcd3-0000 · cto-desk · ~/cobalt · busy · working"
+
+
+def isolate_pgrep(d: Desk) -> None:
+    """Re-point the staged hook's pgrep at the watcher script under tmp_path, not the machine's."""
+    needle = "wait-stop-line.sh|desk-watch.sh"
+    text = d.hook.read_text()
+    path = str(d.tmp / "w" / "wait-stop-line.sh")
+    assert needle in text
+    d.hook.write_text(text.replace(needle, path))
+
+
+def cut160(text: str) -> str:
+    """An item as the block names it: 160 characters, `…` when cut."""
+    return text if len(text) <= 160 else text[:160] + "…"
+
+
+def block_line(text: str) -> str:
+    return "start it: " + cut160(text) + "\n"
+
+
+def append_line(d: Desk, line: str) -> None:
+    """A line under `## §5 HISTORY` (`owed` writes that heading last)."""
+    d.report.write_text(d.report.read_text() + line + "\n")
+
+
+def test_w1_the_1017_2107_shape_with_nothing_live_blocks(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    d.lister(DESK_ROW_LINE)
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", block_line(FIRST_1017))
+
+
+def test_w1_the_first_unwaiting_item_is_the_one_named(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.owed("owed: none", "NEXT (r): a waiting on rule X; b; c")
+    d.lister(DESK_ROW_LINE)
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: b\n")
+
+
+def test_w1_a_semicolon_inside_parentheses_does_not_split(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.owed("owed: none", "NEXT: x (a; b); z waiting on e")
+    d.lister(DESK_ROW_LINE)
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: x (a; b)\n")
+
+
+def test_w1_no_next_line_changes_nothing(tmp_path):
+    d = Desk(tmp_path)
+    d.owed("owed: none")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    assert not (d.hook.parent / "desk-list.sh").exists()
+
+
+def test_w1_the_count_and_the_record_stand(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.lister(DESK_ROW_LINE)
+    d.owed("owed: none", "NEXT: rebuild x")
+    codes = [d.run(active=a).returncode for a in (False, True, True, True)]
+    assert codes == [2, 2, 2, 0]
+    lines = d.desk_stop.read_text().splitlines()
+    assert len(lines) == 1 and GAVE_UP.match(lines[0]), lines
+    assert lines[0].endswith("start it: rebuild x")
+    assert not d.count.exists()
+    r = d.run(active=False)
+    assert (r.returncode, r.stderr) == (2, "start it: rebuild x\n"), "a new message resets the count"
+
+
+def test_w2_an_all_waiting_next_block_passes(tmp_path):
+    d = Desk(tmp_path)
+    d.owed(
+        "owed: none",
+        "NEXT (not launched, R590): build X waiting on the X1 row (R1804); "
+        "drafters waiting on their DRAFTED line",
+    )
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+    assert not (d.hook.parent / "desk-list.sh").exists()
+
+
+def test_w2_a_live_worker_and_an_armed_watch_pass(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    d.lister(ROW)
+    watched = tmp_path / "x-job-build.md"
+    p = watcher(tmp_path, watched)
+    try:
+        r = d.run()
+    finally:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.wait()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_w2_a_live_worker_alone_blocks(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    d.lister(ROW)
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", block_line(FIRST_1017))
+
+
+def test_w2_an_armed_watch_alone_blocks(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    d.lister(DESK_ROW_LINE)
+    watched = tmp_path / "x-job-build.md"
+    p = watcher(tmp_path, watched)
+    try:
+        r = d.run()
+    finally:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.wait()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", block_line(FIRST_1017))
+
+
+def test_w2_a_brain_row_is_not_live(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    d.owed("owed: none", "NEXT: launch the next card")
+    d.lister("bede3dc9-0000 · brain · ~/cobalt · busy · working")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", "start it: launch the next card\n")
+
+
+def test_w4_the_blocked_shape_with_a_refresh_to_a_live_successor_passes(tmp_path):
+    d = Sized(tmp_path)
+    isolate_pgrep(d)
+    d.lister(SUCCESSOR_ROW)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    append_line(d, HANDOVER_REAL.replace("5cf91de3", SID[:8]))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (0, "", "")
+
+
+def test_w4_a_dead_successor_is_still_blocked(tmp_path):
+    d = Sized(tmp_path)
+    isolate_pgrep(d)
+    d.lister(DESK_ROW_LINE)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    append_line(d, HANDOVER_REAL.replace("5cf91de3", SID[:8]))
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", block_line(FIRST_1017))
+
+
+def test_w4_a_missing_successor_is_still_blocked(tmp_path):
+    a = tmp_path / "a"
+    a.mkdir()
+    d = Desk(a)
+    isolate_pgrep(d)
+    d.lister(DESK_ROW_LINE)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", block_line(FIRST_1017))
+    b = tmp_path / "b"
+    b.mkdir()
+    d = Sized(b)
+    isolate_pgrep(d)
+    d.lister(SUCCESSOR_ROW)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    append_line(d, f"HANDOVER: predecessor {SID[:8]} → successor at 21:06 · pane w2:pV1")
+    r = d.run()
+    assert (r.returncode, r.stdout, r.stderr) == (2, "", block_line(FIRST_1017))
+
+
+def test_w4_a_handover_naming_another_predecessor_is_still_blocked(tmp_path):
+    d = Sized(tmp_path)
+    isolate_pgrep(d)
+    d.lister(SUCCESSOR_ROW)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    append_line(d, HANDOVER_REAL)
+    r = d.run()
+    assert r.returncode == 2
+    assert r.stderr.splitlines()[-1] == block_line(FIRST_1017).rstrip("\n")
+
+
+def test_w4_only_the_last_handover_line_counts(tmp_path):
+    d = Sized(tmp_path)
+    isolate_pgrep(d)
+    d.lister(SUCCESSOR_ROW)
+    d.owed("owed: none", STATE_1017, NEXT_1017)
+    append_line(d, HANDOVER_REAL.replace("5cf91de3", SID[:8]))
+    append_line(d, HANDOVER_REAL)
+    r = d.run()
+    assert r.returncode == 2
+    assert r.stderr.splitlines()[-1] == block_line(FIRST_1017).rstrip("\n")
+
+
+def test_o1_finished_and_next_read_the_list_once(tmp_path):
+    d = Desk(tmp_path)
+    isolate_pgrep(d)
+    calls = tmp_path / "list.log"
+    (d.hook.parent / "desk-list.sh").write_text(
+        f"#!/bin/sh\necho x >> '{calls}'\nprintf '%s\\n' '{DESK_ROW_LINE}'\n"
+    )
+    state = tmp_path / "wt" / ".job-state"
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "FINISHED").write_text("2026-01-02T03:04:05 99990000-0000 x\n")
+    d.owed("owed: none", "NEXT: rebuild x")
+    r = d.run()
+    assert (r.returncode, r.stderr) == (2, "start it: rebuild x\n")
+    assert calls.read_text().splitlines() == ["x"]
 
 
 # ---- card 458 — the desk's size every turn and the refresh at 300k (his 2026-10-13 R1323) --------
