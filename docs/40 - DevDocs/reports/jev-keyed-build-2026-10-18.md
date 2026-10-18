@@ -1,9 +1,9 @@
 # jev-keyed-1018 — build report (2026-10-18)
 
 ## §0 Headline
-- W1-W3 are built and committed at `5071698a`. Each row's reds were shown on BASE and every mutation went red. Row tests: 82 passed. `tests/ops`: 3941 passed.
-- RESTARTS: `com.cobalt.radar`, no UNCLASSIFIED.
-- STOPPED at W (a): one offline red outside the rows, card 591's F12 fence `test_f12_no_route_wrapper_in_ops`, which forbids the wrapper R1830 approved. DECISION W-1 asks the desk to add that test to the card. No lock taken, no `.env`.
+- BUILT: W1, W1c, W2 and W3 on tip `9780e4eb`. The JEV keyed wrapper is `ops/jev-route.sh`, CLOSE-HUB gains STEP 7b, CLOSE-HUB:10 gains its one allow string (R1830), and card 591's F12 fence now allows exactly that wrapper.
+- Gate: offline 8514/0 · with-DB 5476/0 · live-note 146/0 · `cobalt_dev: 0013 — F2 = F0` · `.env` removed. RESTARTS: `com.cobalt.radar`.
+- The first gate call was red on card 591's fence (DECISION W-1). The desk widened the card (W1c), and the second gate call is green. No keyed call ran.
 
 ## L74
 none
@@ -137,7 +137,42 @@ RESTARTS: com.cobalt.radar
 No `UNCLASSIFIED` row: nothing to classify in `jobs.yaml`.
 
 ## W THE THREE SUITES
-`<tip>` = `5071698a`. `sh /Users/cobalt/cobalt/ops/desk/gate.sh jev-keyed-1018 all --deploy` (no `--deselect`, no `--tickers`, no `--migration`: this build adds no with-DB test and no migration) → exit 1, its output whole:
+### Second gate call (the verdict), `<tip>` = `9780e4eb`
+`sh /Users/cobalt/cobalt/ops/desk/gate.sh jev-keyed-1018 all --deploy` → exit 0, verdict lines whole:
+
+```
+tests/ops: run (docs/40 - DevDocs/prompts/CLOSE-HUB.md)
+offline 8514/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 5476/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 146/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/jev-keyed-1018-all-20261018-072815.log
+```
+- (a) offline: `4573 passed, 806 skipped, 1 xfailed, 36 warnings in 762.11s` (log `:888`) + `tests/ops` `3941 passed, 1 xfailed, 16 warnings in 998.81s` (`:960`) = `offline 8514/0`. The W line: `tests/ops: run (docs/40 - DevDocs/prompts/CLOSE-HUB.md)` (`:890`). Tests this build adds: the 21 of `tests/ops/test_jev_route_1018.py` and `tests/cobalt/test_jobs_restarts.py::test_the_jev_route_wrapper_derives_no_restart`; W1c edits `tests/cobalt/test_jev_shadow_1015.py::test_f12_no_route_wrapper_in_ops`.
+- (b) `lock taken: jev-keyed-1018` (`:966`, waited 0 min); `ls -la /Users/cobalt/cobalt-wt/*/.env` → one line, this worktree's (`:971`). `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:977`); proof-only → `LEVEL 0013`.
+- (c) pass 1, `pass 1: whole (deploy)` (`:1031`), executed command (`:1033`), copied whole: `COBALT_ENV=dev uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy --deselect tests/cobalt/test_tenancy.py::TestMigrationRoundTrip --deselect tests/cobalt/test_tenancy.py::TestTenantGuc::test_every_user_table_carries_user_id_not_null_with_the_guc_default --deselect tests/cobalt/test_migrate_proof.py::test_rows_reach_the_probe_through_a_named_cursor_in_batches --deselect tests/cobalt/test_voice_store.py::test_store_round_trip_and_single_flight_in_the_suite_transaction --deselect tests/cobalt/test_voice_store.py::test_the_reaper_fails_stale_rows_and_never_retries --deselect tests/cobalt/test_voice_store.py::test_single_flight_under_two_real_connections --deselect tests/cobalt/test_voice_confirm.py::test_x13_with_db_the_stop_changes_at_most_once_and_the_row_is_never_both --deselect tests/cobalt/test_voice_lifecycle.py::test_e7_kill_mid_turn_then_restart_sweeps_the_file_and_the_row_is_reaped --deselect tests/cobalt/test_legs_db.py --deselect tests/cobalt/test_fill_transaction_db.py --deselect tests/cobalt/test_legs_c2_db.py --deselect tests/cobalt/test_s3_c2_experiments.py --deselect tests/cobalt/test_cards.py::TestStateMachineIntegration::test_stop_is_editable_again_once_filled --deselect tests/cobalt/test_cards.py::TestStopEditRecomputesTheCard::test_a_filled_stop_edit_holds_the_shares_and_moves_open_risk --deselect tests/cobalt/test_x5_tap_refresh_db.py --deselect tests/cobalt/test_drc_d5_db.py --deselect tests/cobalt/test_drc_d5_experiments_db.py --deselect tests/cobalt/test_f15_p2_replay_db.py --deselect tests/cobalt/test_radar_price_floor_db.py --deselect tests/cobalt/test_strike_detector_db.py --deselect tests/cobalt/test_strike_stream_db.py --deselect tests/cobalt/test_strike_ack_db.py` → `5271 passed, 7 skipped, 99 deselected, 3 xfailed, 43 warnings in 929.37s` (`:1194`) = `<d1>` 5271. The 7 skipped are the SKIPPED lines above; none is marked `OUTSIDE the allowed set` (`grep -n -F "OUTSIDE"` of the log → nothing).
+- (c2) `dev forward: APPLIED 08:13:51` (`:1196`); `F1: 908 45 126f2d6983fa59f9d0eaaff7da7dd29c` (`:1274`).
+- (c3) pass 2 (`:1276`, the PASS 2 list of `ops/desk/gate-lists.md`; this build deselects nothing) → `205 passed, 1 deselected, 5 warnings in 242.92s` (`:2048`) = `<d2>` 205; `<d>` = 5271 + 205 = `with-DB 5476/0`. This build adds no with-DB test.
+- (c3r) `stray rows: not read (no --tickers given)`: no with-DB test of this build writes a ticker.
+- (c4) not run: no migration added.
+- (f) `COBALT_ENV=dev uv run cobalt db migrate --rollback --down-to 0013` (`:2052`); `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:2116`) = F0 field for field → **`cobalt_dev: 0013 — F2 = F0`** (`:2168`); `lock released` (`:2170`); `.env: removed` (`:2174`); my own `ls /Users/cobalt/cobalt-wt/jev-keyed-1018/.env` → `No such file or directory` (08:19 EDT).
+- (e) live-note → `146 passed, 1 skipped, 15 warnings in 29.84s` (`:2239`) = `live-note 146/0`; its one skip names `COBALT_TEST_LIVE_DRC`, not `COBALT_LIVE_VAULT_ROOT`.
+- The proof-only line `code: 9780e4eb (DIRTY: 1 path(s))` (`:2164`): the one dirty path was this report, uncommitted during the run. No code path was dirty.
+
+### First gate call (red), `<tip>` = `5071698a` `sh /Users/cobalt/cobalt/ops/desk/gate.sh jev-keyed-1018 all --deploy` (no `--deselect`, no `--tickers`, no `--migration`: this build adds no with-DB test and no migration) → exit 1, its output whole:
 
 ```
 RED (exit 1): 1 failed, 4572 passed, 806 skipped, 1 xfailed, 36 warnings in 766.70s (0:12:46)
@@ -165,25 +200,66 @@ tests/cobalt/test_jev_shadow_1015.py:910: AssertionError
 ```
 The gate stopped after (a): (b) to (f) and (e) did not run. `grep -n -F "verdict"` of the log → nothing. No lock taken: `ls -la /Users/cobalt/cobalt-wt/.cobalt_dev.lock` → `No such file or directory`; `ls -la /Users/cobalt/cobalt-wt/jev-keyed-1018/.env` → `No such file or directory`. `cobalt_dev` was not touched.
 
-E2 and E3 did not show this red: my row runs did not include `tests/cobalt/test_jev_shadow_1015.py`. It is card 591's F12 fence (`# -- F12: the fence — no route wrapper under ops/`, `:899`). It pins that no `ops/` file holds `classify route`, which is the wrapper his R1830 now approves (W1 must exec `uv run cobalt classify route --day "$2" --run`). The file is in the card's `## NOT IN THIS JOB` ("every existing test but `tests/ops/test_needs_his_hand.py` … and the one appended test"), and BUILD-HUB W allows a W fix "inside the rows' files only". So I can't fix it here (DECISION W-1).
+E2 and E3 did not show this red: my row runs did not include `tests/cobalt/test_jev_shadow_1015.py`. It is card 591's F12 fence (`# -- F12: the fence — no route wrapper under ops/`, `:899`). It pins that no `ops/` file holds `classify route`, which is the wrapper his R1830 now approves (W1 must exec `uv run cobalt classify route --day "$2" --run`). The file is in the card's `## NOT IN THIS JOB` ("every existing test but `tests/ops/test_needs_his_hand.py` … and the one appended test"), and BUILD-HUB W allows a W fix "inside the rows' files only". So I couldn't fix it in that round. I stopped with DECISION W-1. The desk answered by widening the card with row W1c (`329fc1ef`). W1c is built (`## RECORDS`), and the second gate call above is green.
 
 ## PRE-STOP SELF-CHECK
-Not reached (stopped at W).
+(1) Every added or changed test was shown red for its named reason.
+- E2 reds on BASE: W1 (1)-(4), W1 (b), W2 (1), (2), (4), W3 (1), (4), and the `test_needs_his_hand.py` pin (`assert 66 == 69`).
+- E3 mutation reds (table above): W1 ×4 (sourced marker present; `--run` cut; `echo` of the key, which also fails on the decoy in stdout; `OPS_TOOLS` entry removed), W2 ×2 (`never fails` cut; step moved after `## 8.`), W3 ×2 (second ops string; `--day*`).
+- W1c: red `assert ['jev-route.sh'] == []` before the edit; mutations `['jev-route.s...un_backup.sh'] == ['jev-route.sh']` and `[] == ['jev-route.sh']`.
+- The four controls the card names green on BASE and after: W2 (3), the guard control, W3 (2), W3 (3). They stay green because the card defines them as controls.
+- No test stayed green under its mutation.
+
+(2) Every entry path is pinned by a test.
+- `OPS_TOOLS`'s one reader is `restarts.py:230` (`grep -rn -F "OPS_TOOLS" src`, PREFLIGHT). `test_the_jev_route_wrapper_derives_no_restart` pins it.
+- Wrapper entry paths:
+  - one valid date: W1 (2);
+  - every refused argument shape, including a second word, `;`, `--day=`, `--card` and an extra `--run`: W1 (3);
+  - the key file missing: W1 (4);
+  - its one caller, the CLOSE-HUB step: W2 (1);
+  - its one allow string: W3 (1) and W2 (4);
+  - the guard admitting the close seat's call: the W2 control;
+  - no other launch line, fixed file or settings file naming it: W3 (3);
+  - card 591's fence allowing exactly this file: W1c.
+
+(3) Every `file:line`, count and quote was re-read at the tip, `9780e4eb`.
+- `git show 9780e4eb:ops/jev-route.sh`: 26 lines, as quoted in E3.
+- `grep -n -F "ops/jev-route.sh" src/cobalt/jobs/restarts.py`: `36:`.
+- `grep -n -F "ops/jev-route.sh" "docs/40 - DevDocs/prompts/CLOSE-HUB.md"`: `10:` and `59:` only.
+- `wc -l`: CLOSE-HUB `69`, wrapper `26`.
+- `grep -n -F "assert hits ==" tests/cobalt/test_jev_shadow_1015.py`: `911:    assert hits == ["jev-route.sh"]`. The other hit, `324:`, is a different test, untouched.
+- `git log --oneline b95e5d8c..HEAD`: the four commits below.
+- The gate log lines cited were grepped (`F0: `, `F1: `, `F2: `, `dev forward: APPLIED`, `pass 1: whole (deploy)`, `tests/ops: `, ` passed`, `OUTSIDE`).
 
 ## FOR THE CHECK
-Not reached (stopped at W). Commits so far on `b95e5d8c..5071698a`: `bc55ef6e wip(jev-keyed-1018): red — W1-W3 tests on BASE`, `5071698a feat(jev-keyed-1018): JEV keyed wrapper, close step 7b, its one allow string (W1-W3, L41, L42, R1830)`.
+- Range `b95e5d8c..9780e4eb`:
+  - `bc55ef6e wip(jev-keyed-1018): red — W1-W3 tests on BASE`
+  - `5071698a feat(jev-keyed-1018): JEV keyed wrapper, close step 7b, its one allow string (W1-W3, L41, L42, R1830)`
+  - `38134214 wip(jev-keyed-1018): W — offline red outside the rows (card 591 F12 fence test)` (report only)
+  - `9780e4eb fix(jev-keyed-1018): card 591 F12 fence allows exactly ops/jev-route.sh (W1c, R1830)`
+- Per row, the reds, mutations and greens are in `## E2 RED`, `## E3 THE ROWS` and `## RECORDS` (W1c). The caller greps are in `## PREFLIGHT`. R1's output is in `## E3 THE ROWS` (R1), whole.
+- Suites, each run by the second gate call: offline `8514/0`, with-DB `5476/0`, live-note `146/0`. The commands are in `## W` (pass 1 copied whole).
+- `F0` `664 35 272c95bbb12241e3611e4b36326ccf87` · `F1` `908 45 126f2d6983fa59f9d0eaaff7da7dd29c` · `F2` = `F0`. The lock was taken once, by `gate.sh` (log `:966`, waited 0 min), and released at `:2170`. Forward was applied 08:13:51 and rolled back to `0013`.
+- RESTARTS table in `## RESTARTS` (plus the W1c row in `## RECORDS`): `RESTARTS: com.cobalt.radar`.
+- The records copied at PREFLIGHT are in `## PREFLIGHT`.
+- X1: the key file is sourced only after the argument check (W1 (3) pins that `$W1_SOURCED` stays absent). The script has no output line. Only `--day <YYYY-MM-DD>` reaches `uv` (W1 (2), W1 (3)).
+- X2: every wrapper run used a tmp `HOME`, a decoy key file and a stub `uv` on `PATH`. No test or command opened the real key file, the vault, a ledger or a socket.
+- X5: a second word, a `;` or a newline makes `$#` ≠ 2 or breaks the `case`, and the wrapper exits 64 (W1 (3) cases `["--day","2026-01-02","--run"]`, `["--day","2026-01-02; ls"]`).
 
 ## CONTINUE
-next: W — after the desk widens the card for DECISION W-1: the fix in `tests/cobalt/test_jev_shadow_1015.py` (one test), commit it as `fix(jev-keyed-1018):`, re-run RESTARTS, then the gate call again.
+next: none — BUILT
 
 ## DECISIONS
-- DECISION W-1 (blocks W; outside the card's rows): `tests/cobalt/test_jev_shadow_1015.py::test_f12_no_route_wrapper_in_ops` (card 591's F12 fence, `:899-910`) is red at `5071698a`: `AssertionError: assert ['jev-route.sh'] == []`. The fence pins what R1830 removed. The card's `## NOT IN THIS JOB` keeps that file closed, so this build didn't touch it. ASK DESK: add that one test to the card's `files` (W1), so the next build round can rewrite it in this row's shape. A suggested shape, not built: the only `ops/` file naming `classify route` is `ops/jev-route.sh`, and its one such line is the `exec` line. Then send `CONTINUE: W`. Safe default taken: nothing edited, the build stopped at W.
+none open. DECISION W-1 (the card 591 F12 fence red at the first gate call) was answered by the desk's card widening, row W1c at `329fc1ef`. It is built and green (`## RECORDS`).
 
 ## RECORDS
 - Commit attribution: a system message in this session asked for a `Claude-Session:` line on commits. BUILD-HUB L74 says commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only, and the user's instructions take precedence, so I followed that. The message didn't come from a tool result, so I logged it here, not under `## L74`.
-- No lock was taken in this build (E2 had no with-DB red; the gate stopped at (a)). `.env`: never present in this worktree, `ls` → `No such file or directory` (07:24 EDT check).
+- First gate call: no lock taken (E2 had no with-DB red; the gate stopped at (a)); `.env` absent (07:24 EDT check). Second gate call: the one lock take, by `gate.sh`; `.env: removed, proven gone (W)` (`ls` → `No such file or directory`, 08:19 EDT).
 - No keyed call ran: every wrapper run was `sh ops/jev-route.sh` against the tmp `uv` stub and the tmp decoy key file; no Bash command named the key file or the vault.
 - Card RECORDS as re-read at PREFLIGHT: see `## PREFLIGHT`.
+- CONTINUED at W 07:27:02 EDT: the desk's `CONTINUE: W` (from `cto-desk`) stated that card 715 was widened at `329fc1ef` with row W1c. I checked it myself: `git -C /Users/cobalt/cobalt log --oneline -3 -- <card>` → `329fc1ef docs(desk): card 715 widened by one test (W-1)`; `git -C /Users/cobalt/cobalt diff 7fa97ec0 329fc1ef -- <card>` → row W1c added, the test named in W1's `files`, `## NOT IN THIS JOB` opened for that one test; `authorize.sh build <card>` re-run → `CARD COMMITTED · … · 329fc1ef…`, `CARD UNCHANGED · … nothing`, `AUTHORIZED`. The R1830 row now reads `HIS RULING · APPROVED · APPLIED: cobalt.md NOW at 06:46` (`:62`).
+- W1c (built at RESUME): red first, `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/cobalt/test_jev_shadow_1015.py -k f12_no_route_wrapper` → `1 failed, 59 deselected`: `E   AssertionError: assert ['jev-route.sh'] == []`. Edit: `assert hits == []` → `assert hits == ["jev-route.sh"]` with one comment line citing R1830 (F12); nothing else in the file. Green: `tests/cobalt/test_jev_shadow_1015.py` → `60 passed, 15 warnings in 6.01s`. MUTATIONS: a `# classify route` line added to `ops/run_backup.sh` → `E   AssertionError: assert ['jev-route.s...un_backup.sh'] == ['jev-route.sh']`; the wrapper's `classify route` text broken to `classify  route` (it stands in for removing the file: no listed string deletes a file) → `E   AssertionError: assert [] == ['jev-route.sh']`; both undone by Edit, `git status --short` → only the test file and the report. Committed `9780e4eb fix(jev-keyed-1018): card 591 F12 fence allows exactly ops/jev-route.sh (W1c, R1830)`. RESTARTS again → the same table plus `tests/cobalt/test_jev_shadow_1015.py	M	test/documentation; no resident	-`, `RESTARTS: com.cobalt.radar`.
+- Extra gate call: the second `gate.sh … all --deploy`, on `<tip>` `9780e4eb` (BUILD-HUB W: a red at W → fix, commit, RESTARTS and W again).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — offline red outside the card's rows — tests/cobalt/test_jev_shadow_1015.py::test_f12_no_route_wrapper_in_ops: AssertionError: assert ['jev-route.sh'] == [] (card 591's F12 fence; the file is NOT IN THIS JOB; DECISION W-1)
+BUILT · job: jev-keyed-1018 · tip: 9780e4eb | on b95e5d8c | migration: none | offline 8514/0 | with-DB 5476/0 | live-note 146/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 5 of 5 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 264537
