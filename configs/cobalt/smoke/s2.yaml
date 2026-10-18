@@ -578,6 +578,17 @@ checks:
     not_missed: true
     expect_text: "state done, exit_code 0, not missed against its cadence"
 
+  # K12.3, not K12.2: K12.2 was the retired prefill-drc row and stays unused
+  # (tests/cobalt/test_drc_build.py test_the_prefill_drc_smoke_row_is_gone).
+  - id: K12.3
+    title: prefill-refresh last run
+    kind: job_row
+    label: com.cobalt.prefill-refresh
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its windowed cadence"
+
   - id: K13
     title: archiver freshness (cadence-aware)
     kind: job_row

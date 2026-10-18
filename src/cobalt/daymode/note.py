@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import date
+from datetime import date, datetime
 from pathlib import Path
 from typing import Any, Optional
 
@@ -87,11 +87,23 @@ def render_body(
     stage: str,
     attested: Optional[str] = None,
     row: Optional[dict[str, Any]] = None,
+    when: Optional[datetime] = None,
 ) -> str:
-    """The unit body. Deterministic, no LLM in the write path (L28)."""
+    """The unit body. Deterministic, no LLM in the write path (L28).
+
+    F4 [F-30]: the first line is `as of HH:MM ET` from an aware instant —
+    `when`, else the session clock's now (UTC, aware); a naive `when` is
+    refused by `SessionClock.to_et`. Every write replaces the unit, so the
+    stamp is there once, never twice.
+    """
+    from cobalt.prefill.daily import format_stamp
+    from cobalt.session import clock as session_clock_mod
+
     sheet = cfg.sheet_for(mode)
     keys = ", ".join(g.value for g in cfg.enabled_grades_for(mode))
     lines = [
+        format_stamp(when if when is not None else session_clock_mod.now_utc()),
+        "",
         f"**Day mode: {mode.upper()}** — {stage} · sizes from the "
         f"{sheet.upper()} sheet · keys {keys}",
         "",

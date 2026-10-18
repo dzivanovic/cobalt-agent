@@ -1,4 +1,4 @@
-"""CLI entrypoint: `uv run prefill daily`.
+"""CLI entrypoints: `uv run prefill daily` and (F4) `uv run prefill refresh`.
 
 `prefill drc` is RETIRED (DRC D3, v2 §8 `[F-22]`, F39): the DRC note is
 built by the input-driven build, `cobalt drc build` (K1's `drc` group) —
@@ -22,9 +22,19 @@ from loguru import logger  # noqa: E402
 
 from cobalt.jobs.entrypoint import JobStopped, as_job  # noqa: E402
 
-from .daily import run_daily_prefill  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
+
+from .daily import run_daily_prefill, run_daily_refresh  # noqa: E402
 
 DAILY_JOB = "com.cobalt.prefill-daily"
+#: F4 (FINAL §4.1): the scheduled refresh AND the manual trigger.
+REFRESH_JOB = "com.cobalt.prefill-refresh"
+
+
+class RefreshNotClean(RuntimeError):
+    """A refresh that degraded a field or wrote nothing it should have.
+    Raised INSIDE the `as_job` block: an exception leaving it is the only
+    way `job_run` records `exit_code=1` (jobs/wrapper.py:177-198, [F-28])."""
 
 
 def _run_daily(dry_run: bool) -> None:
@@ -45,6 +55,25 @@ def _run_daily(dry_run: bool) -> None:
     print(report)
 
 
+def _run_refresh(dry_run: bool) -> None:
+    with as_job(REFRESH_JOB, skip=dry_run) as job:
+        result = run_daily_refresh(datetime.now(timezone.utc), dry_run=dry_run)
+        job.result = {
+            "action": result.action,
+            "path": str(result.path),
+            "flags": result.flags,
+            "degraded": result.degraded,
+            "failures": result.failures,
+        }
+        # L28.4: every report and run log shows the unified diff — printed
+        # before the nonzero exit, so a degraded run still shows its diff.
+        report = result.report()
+        logger.info(report)
+        print(report)
+        if result.exit_code != 0:
+            raise RefreshNotClean(result.summary())
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(prog="prefill", description="Cobalt Daily prefill engine")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -56,10 +85,20 @@ def main() -> None:
         "--dry-run", action="store_true", help="Show the unified diff; write nothing."
     )
 
+    refresh_parser = sub.add_parser(
+        "refresh", help="Re-render today's trading and calendar units (scheduled and manual)."
+    )
+    refresh_parser.add_argument(
+        "--dry-run", action="store_true", help="Show the unified diff; write nothing."
+    )
+
     args = parser.parse_args()
 
     try:
-        _run_daily(args.dry_run)
+        if args.command == "refresh":
+            _run_refresh(args.dry_run)
+        else:
+            _run_daily(args.dry_run)
     except JobStopped as e:
         # Exit 0 — see cobalt/cli.py's note. A deliberate stop is not a
         # failure and must not turn the heartbeat red.

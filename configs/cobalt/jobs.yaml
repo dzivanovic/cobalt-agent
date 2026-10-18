@@ -211,6 +211,22 @@ jobs:
     schedule: {at: "05:15", weekdays: [1, 2, 3, 4, 5]}
     what: "the morning daily-note prefill (uv run prefill daily)"
 
+  - label: com.cobalt.prefill-refresh
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    # F4 (FINAL §4.2): an INTERVAL inside a WINDOW, both from tunables rows,
+    # the seat-usage shape; the plist carries the window expanded into one
+    # StartCalendarInterval entry per firing (Schedule.calendar_entries()).
+    # It reads configs/cobalt/prefill.yaml (daily_refresh), tunables.yaml and
+    # templates/daily.md.j2 on every run — written here, not as `reads:`,
+    # which the schema refuses on a one-shot (a one-shot re-reads every run).
+    schedule:
+      every_min_tunable: prefill.refresh_interval_min
+      window_tunable: prefill.refresh_window
+      weekdays: [1, 2, 3, 4, 5]
+    what: "the daily-note refresh, trading + calendar units all day (uv run prefill refresh)"
+
   - label: com.cobalt.archiver
     kind: one-shot
     supervisor: self
@@ -328,7 +344,7 @@ no_resident_reads:
   # configs/cobalt/notify.yaml LEFT this list in S4-P2 S4: the sheet's phone-fallback
   # thread sends a DM inside com.cobalt.aset — it is now in that job's `reads:`.
   - path: configs/cobalt/templates/daily.md.j2
-    readers: [com.cobalt.prefill-daily]
+    readers: [com.cobalt.prefill-daily, com.cobalt.prefill-refresh]
     because: >
       Loaded only by prefill/daily.py:239 (env.get_template("daily.md.j2"),
       FileSystemLoader(TEMPLATES_DIR) at :238), the com.cobalt.prefill-daily

@@ -6,9 +6,11 @@ confirmed direct multi-ticker override.
 
 VIX and BTC are NOT servable by this endpoint — neither is a Finviz
 stock/screener ticker — and were never in `MARKET_TICKERS`. SLICE 2.1
-(2026-08-31, ruled by Dejan): those two rows are Dejan's, always, left
-blank in the same table Cobalt fills SPY/QQQ/IWM into — no "n/a
-(manual)" annotation, no second table.
+(2026-08-31) left those two rows blank with no "n/a (manual)" annotation;
+the Charter (F4, ratified 2026-09-04) SUPERSEDES that: they render a loud
+`n/a (manual)` until a source owns them, a value he types stays his, and
+`daily_refresh.fields` refuses `cobalt` for them (F4 FINAL §4.6, [F-05]).
+Still one table, no second one.
 
 Fail-loud, secret-safe: reuses aset.prefill's token resolution + auth-
 token scrubbing (one-path rule — no second Finviz-auth implementation).

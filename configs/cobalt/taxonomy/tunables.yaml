@@ -1073,3 +1073,36 @@ tunables:
     # reads at the end of the day is wrong.
     consumers:
       - "cobalt.heartbeat.probes.seat_usage (last run age, asked only inside the window)"
+
+  # --- daily-note refresh (F4 FINAL §4.2, 2026-10-10) ------------------
+  # `prefill refresh` re-renders the trading and calendar units of the
+  # daily note every interval inside the window, weekdays. BOTH are read
+  # by com.cobalt.prefill-refresh's schedule (configs/cobalt/jobs.yaml) AND
+  # expanded into ops/com.cobalt.prefill-refresh.plist's
+  # StartCalendarInterval array (21 firings a weekday, 105 entries); the
+  # suite compares the two. Proposed, not measured: X8 measures them.
+  - key: prefill.refresh_window
+    value: "05:45-15:45"
+    unit: window
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers:
+      - "cobalt.jobs.config.Schedule (due_now, window_opened_at, calendar_entries)"
+      - "cobalt.prefill.daily.refresh_demand_consumer (the L53 demand window)"
+      - "ops/com.cobalt.prefill-refresh.plist (StartCalendarInterval, mirrored)"
+
+  - key: prefill.refresh_interval_min
+    value: 30
+    unit: min
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    # The launchd schedule AND the floor of refresh's L53 demand: the gate
+    # is shown 3 GETs / this interval (form B, F4 FINAL §8 R4).
+    consumers:
+      - "cobalt.jobs.config.Schedule (interval_minutes, calendar_entries)"
+      - "cobalt.prefill.daily.refresh_demand_consumer (rpm = 3 / interval)"
+      - "ops/com.cobalt.prefill-refresh.plist (one entry per interval, mirrored)"

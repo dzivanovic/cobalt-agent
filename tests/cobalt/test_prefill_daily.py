@@ -23,6 +23,7 @@ from cobalt.prefill import vault_writer as vault_writer_module
 from cobalt.prefill.calendar import EarningsEvent, EconomicEvent
 from cobalt.prefill.config import GeneratedMeta, MantraItem, RuleItem, RulesConfig
 from cobalt.prefill.market import MarketRow
+from cobalt.session.clock import ET
 
 
 def make_aset_cfg() -> AsetConfig:
@@ -230,11 +231,20 @@ requires_db = pytest.mark.skipif(
 
 @requires_db
 async def test_create_path_renders_full_template(fake_vault):
-    when = datetime(2026, 8, 31, 5, 15, 0)
+    when = datetime(2026, 8, 31, 5, 15, 0, tzinfo=ET)
     result = await daily_module.run_daily_prefill(when=when)
     assert result.action == "created"
     assert set(result.filled_slots) == {"rules", "daymode", "trading", "market_calendar"}
     content = result.path.read_text()
+    # F4 (FINAL §4.5, §4.6, [F-30]): every Cobalt block is stamped, and
+    # VIX/BTC read a loud `n/a (manual)` on create.
+    assert "<!-- cobalt:unit rules -->\nas of 05:15 ET · rules from Rules.md\n\n" in content
+    assert (
+        "<!-- cobalt:unit market_table -->\nas of 05:15 ET · SPY cobalt · QQQ cobalt · IWM cobalt · "
+        "VIX n/a (manual) · BTC n/a (manual) · calendar cobalt\n\n| VIX | n/a (manual) | n/a (manual) |\n"
+    ) in content
+    assert "| BTC | n/a (manual) | n/a (manual) |" in content
+    assert "<!-- cobalt:unit market_calendar -->\nas of 05:15 ET · calendar cobalt\n\n" in content
     assert content.startswith("---\ntags:\n  - Daily\n---\n")
     assert "#### 2026-08-31 T 05:15" in content
     assert "$500.12" in content
@@ -253,7 +263,7 @@ async def test_create_path_renders_full_template(fake_vault):
 async def test_existing_note_never_rewritten_whole(fake_vault):
     """L28.1: an existing file ALWAYS takes the merge path — the whole-
     file template render is reachable only when the file is absent."""
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     original = make_note_text()
     path.write_text(original)
@@ -275,7 +285,7 @@ async def test_existing_note_never_rewritten_whole(fake_vault):
 
 @requires_db
 async def test_fill_in_place_skips_already_filled_trading_row(fake_vault):
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     path.write_text(make_note_text(spy_filled=True))
 
@@ -290,7 +300,7 @@ async def test_fill_in_place_skips_already_filled_trading_row(fake_vault):
 
 @requires_db
 async def test_fill_in_place_fills_calendar_when_blank(fake_vault):
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     path.write_text(make_note_text())
 
@@ -302,7 +312,7 @@ async def test_fill_in_place_fills_calendar_when_blank(fake_vault):
 
 @requires_db
 async def test_fill_in_place_skips_calendar_already_filled(fake_vault):
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     path.write_text(make_note_text(calendar_filled=True))
 
@@ -315,7 +325,7 @@ async def test_fill_in_place_skips_calendar_already_filled(fake_vault):
 
 @requires_db
 async def test_second_run_same_day_is_idempotent(fake_vault):
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     path.write_text(make_note_text())
 
@@ -333,7 +343,7 @@ async def test_missing_rules_anchor_appends_at_end_and_touches_nothing(fake_vaul
     """L28 replaced the old fail-the-whole-run behaviour: a note with no
     anchor gets the section appended at the END, nothing above it
     touched, and the placement is reported."""
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     original = "# just a stub note\n\nno matching anchors here\n"
     path.write_text(original)
@@ -352,7 +362,7 @@ async def test_aset_stub_takes_the_merge_path_and_keeps_everything(fake_vault):
     front of the remainder — discarding EVERYTHING above the banner. Here
     there is human text above it; it must survive byte-for-byte, and the
     card below it must survive too."""
-    when = datetime(2026, 9, 3, 10, 45, 0)
+    when = datetime(2026, 9, 3, 10, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-09-03.md"
     human_above = "# 2026-09-03\n\nSleep: 80\nReadiness: 81\n1% goal: exit on structure break\n\n"
     card_block = "\n### 10:02:06 — TSLA LONG B\n```aset\nticker: TSLA\n```\n"
@@ -374,7 +384,7 @@ async def test_pre_l28_slot_markers_are_not_duplicated(fake_vault):
     """Historical notes are NOT retro-marked. A note carrying the old
     `<!-- cobalt-slot:rules -->` marker must not get a second rules
     block bolted on."""
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     text = make_note_text().replace(
         "### Trading",
@@ -395,7 +405,7 @@ async def test_card_appended_during_fetch_window_is_not_clobbered(fake_vault, mo
     """Root-cause regression test: a card lands WHILE this run is
     mid-fetch. The pre-L28 code read `existing` before the fetch and
     wrote that stale snapshot back after, silently discarding the card."""
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     path.write_text(make_note_text())
 
@@ -417,7 +427,7 @@ async def test_card_appended_during_fetch_window_is_not_clobbered(fake_vault, mo
 
 @requires_db
 async def test_dry_run_writes_nothing(fake_vault):
-    when = datetime(2026, 8, 31, 8, 45, 0)
+    when = datetime(2026, 8, 31, 8, 45, 0, tzinfo=ET)
     path = fake_vault / "1 - Trading" / "1- Daily Notes" / "2026-08-31.md"
     path.write_text(make_note_text())
     before = hashlib.sha256(path.read_bytes()).hexdigest()

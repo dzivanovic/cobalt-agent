@@ -139,10 +139,19 @@ def merge3(base: list[str], human: list[str], cobalt: list[str]) -> MergeResult:
             take_inserts(b1)
             out.extend(cobalt[c1:c2])
         else:  # "replace" / "delete" — Cobalt rewrote or dropped base[b1:b2]
-            pending: list[str] = []
-            for i in range(b1, b2):
-                pending.extend(inserts_at.pop(i, []))
+            anchored = {i: inserts_at.pop(i, []) for i in range(b1, b2)}
+            pending: list[str] = [line for i in range(b1, b2) for line in anchored[i]]
             touched = any(i in group_of for i in range(b1, b2))
+            if not touched and c2 - c1 == b2 - b1:
+                # F4 [F-26]: an untouched replace of EQUAL length is a
+                # line-for-line rewrite, so each human insert keeps its
+                # anchor — emitted immediately before cobalt[c1+k], the
+                # line that replaced base[b1+k]. Unequal spans keep the
+                # order below (their lines have no one-to-one anchor).
+                for k in range(c2 - c1):
+                    out.extend(anchored[b1 + k])
+                    out.append(cobalt[c1 + k])
+                continue
             if touched:
                 # The human edited inside the range Cobalt wanted to
                 # rewrite. Human wins the whole range (L28.2).

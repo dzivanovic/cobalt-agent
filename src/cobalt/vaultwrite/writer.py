@@ -679,6 +679,7 @@ class VaultWriter:
         *,
         placement: Optional[Placement] = None,
         skip_if: Optional[Callable[[str], bool]] = None,
+        body_fn: Optional[Callable[[Snapshot], str]] = None,
     ) -> WriteResult:
         """L28.2: write `body` into `section`/`unit_id`, merging.
 
@@ -687,6 +688,13 @@ class VaultWriter:
         end of the note; nothing above it is touched). Human text is
         preserved verbatim in position, and a human edit to a Cobalt line
         wins and is recorded as an override.
+
+        `body_fn(snapshot) -> str` (F4 [F-26]), when given, REPLACES `body`:
+        it is called inside `build` on EVERY `_write_with_retry` attempt —
+        the retry after `NoteChangedOnDisk` included — so the proposal is
+        rebuilt from that attempt's snapshot (and from whatever baseline
+        the caller's closure reads in that same call). Omitted, the fixed
+        `body` is today's path. One writer; no lock.
         """
         path = Path(path)
         assert_write_target(path)
@@ -715,7 +723,8 @@ class VaultWriter:
             except MarkerError as e:
                 raise VaultWriteError(f"{path}: {e}") from e
 
-            cobalt_lines = body.split("\n") if body != "" else []
+            proposal = body_fn(snapshot) if body_fn is not None else body
+            cobalt_lines = proposal.split("\n") if proposal != "" else []
             notes: list[str] = []
             baseline_missing = False
 
