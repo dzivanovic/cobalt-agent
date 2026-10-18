@@ -39,6 +39,7 @@ requires_db = pytest.mark.skipif(
 )
 
 T = '"user".zz_db_apply_scratch'
+MADE = '"user".zz_db_apply_made'
 BUMP = f"UPDATE {T} SET qty = qty + 1"
 BEFORE = [(1, 10), (2, 20), (3, 30)]
 
@@ -52,9 +53,11 @@ def scratch():
         c.execute(f"CREATE TABLE {T} (id int PRIMARY KEY, qty int NOT NULL)")
         c.execute(f"INSERT INTO {T} VALUES (1, 10), (2, 20), (3, 30)")
         c.execute(f"GRANT SELECT, INSERT, UPDATE ON {T} TO cobalt_user")
+        c.execute(f"ALTER TABLE {T} OWNER TO cobalt_user")  # as every side table (0001 :29-32)
         yield
     finally:
         c.execute(f"DROP TABLE IF EXISTS {T}")
+        c.execute(f"DROP TABLE IF EXISTS {MADE}")
         c.close()
 
 
@@ -153,3 +156,37 @@ def test_t9_the_server_refuses_two_commands_in_one_prepared_piece(scratch, capsy
     out = capsys.readouterr().out
     assert "FAILED at statement 1" in out and "ROLLED BACK" in out, out
     assert rows() == BEFORE
+
+
+# ---- card 2026-10-13 448 R1: the apply role (0025) fences what the allowlist would refuse ------
+
+DDL = {
+    "drop": f"DROP TABLE {T}",
+    "alter": f"ALTER TABLE {T} ADD COLUMN y int",
+    "truncate": f"TRUNCATE {T}",
+    "create": f"CREATE TABLE {MADE} (a int)",
+}
+
+
+@requires_db
+@pytest.mark.parametrize("case", list(DDL))
+def test_ddl_that_bypasses_the_allowlist_fails_under_the_apply_role(scratch, capsys, case):
+    """Each statement is handed to `apply_statements` directly, past `check_file`, as T9 is."""
+    assert apply([DDL[case]]) == 1
+    out = capsys.readouterr().out
+    assert "FAILED at statement 1: InsufficientPrivilege" in out and "ROLLED BACK" in out, out
+    assert rows() == BEFORE
+    if case == "create":
+        c = REAL_CONNECT(env.DEV_DB_NAME, side=Side.USER)
+        try:
+            assert c.execute("SELECT to_regclass(%s)", (MADE,)).fetchone()[0] is None
+        finally:
+            c.close()
+
+
+@requires_db
+def test_an_allowed_update_succeeds_under_the_apply_role(scratch, capsys):
+    assert apply([BUMP]) == 0
+    out = capsys.readouterr().out
+    assert "ROWS 1: 3" in out and "COMMITTED · statements: 1 · rows: 3" in out, out
+    assert rows() == [(1, 11), (2, 21), (3, 31)]
