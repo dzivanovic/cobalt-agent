@@ -152,10 +152,11 @@ def test_0015_is_registered_after_0013_and_its_rollback_first():
 
     # 0016–0020 (DRC, voice V1), 0021 (S3 exits C1), 0022 (F15 P1), 0023 (the price floor) and 0024
     # (S4-P2) now follow it.  # S4-P2 (E4)
-    assert FORWARD[-10] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"
-    assert REVERSE[9] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"
-    assert FORWARD[-12].name == "0013_tunables_slug_nullable.sql"
-    assert REVERSE[11].name == "0013_tunables_slug_nullable.rollback.sql"
+    # DML roles (0025): one place further out.
+    assert FORWARD[-11] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"
+    assert REVERSE[10] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"
+    assert FORWARD[-13].name == "0013_tunables_slug_nullable.sql"
+    assert REVERSE[12].name == "0013_tunables_slug_nullable.rollback.sql"
 
 
 def test_0015_applies_twice_and_its_rollback_restores_0007s_view_inside_one_rolled_back_transaction():

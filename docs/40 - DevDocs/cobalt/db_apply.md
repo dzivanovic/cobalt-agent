@@ -21,3 +21,6 @@ New module. The order is A2, A1, A3, A4:
 
 - `parse` refuses a text holding a NUL byte (`does not parse: the text holds a NUL byte`). The parser reads a C string, so a NUL ended the checked text while the piece kept the bytes after it.
 - `apply_statements` also ends a failure of the preamble (`FAILED before statement 1: … — ROLLED BACK`) or of the commit (`FAILED at commit: … — ROLLED BACK`, e.g. a deferred constraint) in one line and exit 1, never a traceback.
+
+## 2026-10-18 — dml-roles-1013
+- A4 runs on the side's DML-only apply role: after the two timeouts `apply_statements` sends `SET LOCAL ROLE <APPLY_ROLES[side]>` (`APPLY_ROLES = {Side.USER: "cobalt_apply_user", Side.SYSTEM: "cobalt_apply_system"}`, migration 0025), and `current_user` must now equal that role (`FAILED: current_user is '<got>', not '<want>' — ROLLED BACK`). A refused `SET` is `FAILED before statement 1`. DDL, TRUNCATE or a write on the other side that slipped past the allowlist fails at the server with `InsufficientPrivilege`.

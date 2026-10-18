@@ -31,7 +31,8 @@ def test_rollback_selects_only_newer_files_newest_first():
     ahead of 0007 in REVERSE, and the property under test is "everything
     newer than the bound, newest first", never a fixed tuple length."""
     selected = _rollback_paths("0003")
-    assert [p.name for p in selected][:14] == [
+    assert [p.name for p in selected][:15] == [  # DML roles (0025): one place further out
+        "0025_dml_roles.rollback.sql",  # DML roles (0025)
         "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",  # the price floor (R692)
         "0022_prediction_records.rollback.sql",  # F15 P1 (M1)

@@ -15,7 +15,8 @@ runs. In order, nothing opened until the last step:
       schema change is a `db migrate` card;
   A3  with `--prod`, the newest backup snapshot no older than
       `BACKUP_MAX_AGE_S`;
-  A4  ONE transaction on the side's own role, every statement echoed with
+  A4  ONE transaction on the side's DML-only apply role (`APPLY_ROLES`,
+      migration 0025, card 448), every statement echoed with
       its row count, each sent through the extended protocol (one command
       per piece), a commit after the last or a rollback on any failure.
 
@@ -59,6 +60,10 @@ BACKUP_MAX_AGE_S = 900
 
 STATEMENT_TIMEOUT = "60s"
 LOCK_TIMEOUT = "5s"
+
+#: The role A4's transaction runs as, one per side (migration 0025): NOLOGIN,
+#: DML-only on its own schema, owning nothing, so DDL fails at the server.
+APPLY_ROLES = {Side.USER: "cobalt_apply_user", Side.SYSTEM: "cobalt_apply_system"}
 
 #: Where an apply file lives: beside the card that approves it.
 PROMPTS_ROOT = CODE_ROOT / "docs" / "40 - DevDocs" / "prompts"
@@ -242,6 +247,7 @@ def apply_statements(conn, statements: list[str], *, side: Side | str) -> int:
         try:
             conn.execute(f"SET LOCAL statement_timeout = '{STATEMENT_TIMEOUT}'")
             conn.execute(f"SET LOCAL lock_timeout = '{LOCK_TIMEOUT}'")
+            conn.execute(f"SET LOCAL ROLE {APPLY_ROLES[side]}")
             major = int(conn.execute("SHOW server_version_num").fetchone()[0]) // 10000
             current = conn.execute("SELECT current_user").fetchone()[0]
         except Exception as e:
@@ -252,9 +258,9 @@ def apply_statements(conn, statements: list[str], *, side: Side | str) -> int:
             conn.rollback()
             print(f"FAILED: server is Postgres {major}, apply is proved for {SERVER_PG_MAJOR} — ROLLED BACK")
             return 1
-        if current != side.role:
+        if current != APPLY_ROLES[side]:
             conn.rollback()
-            print(f"FAILED: current_user is {current!r}, not {side.role!r} — ROLLED BACK")
+            print(f"FAILED: current_user is {current!r}, not {APPLY_ROLES[side]!r} — ROLLED BACK")
             return 1
         total = 0
         for i, piece in enumerate(statements, 1):
@@ -318,6 +324,7 @@ def add_apply_parser(sub) -> None:
 
 __all__ = [
     "ALLOWED_FUNCTIONS",
+    "APPLY_ROLES",
     "ApplyRefused",
     "BACKUP_MAX_AGE_S",
     "LOCK_TIMEOUT",
