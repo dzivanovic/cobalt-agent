@@ -1,7 +1,11 @@
 # Deploy checkin-install · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/checkin-install-1018` (tip `964ba1b5`) on the gate `deploy/checkin-install`. Run in progress.
+- Shipped `ops/checkin-install-1018` (tip `964ba1b5`): the check-in timer script and plist under `ops/desk/`, `CHECKIN-PING.md`, and the check-in text in `CTO-DESK-WAKEUP.md`, `BRAIN-HUB.md` and `STANDING-LIST.md`.
+- `main` `a30aec42` → `5d6f63fc` by fast-forward; tags `pre-checkin-install`, `deploy-2026-10-18-checkin-install`.
+- Gate green on `5a52b4f7`: offline 8627/0 · with-DB 5582/0 · live-note 147/0. RESTARTS: none, so no resident went down (0 s downtime). No migration.
+- Smoke GREEN: all four markers flipped 0 → 1, the four smoke reads pass, heartbeat GREEN, failure counts flat.
+- The timer plist is merged but this run did not load it (a desk plist, STEP-C `EXCEPTION:`); loading it is the desk's.
 
 ## L74
 - none
@@ -151,14 +155,71 @@ GATE GREEN on 5a52b4f7
 | D1 | `## MARKERS` again | `0` `0` `0` `0` (each its before) |
 | D1 | `<launchd set>` | empty: nothing |
 | D1 | migration reads | MIGRATIONS: none — `<RB>`, census and D1-M not run |
+| D2.0 | `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 370b4efe "<card>"` | nothing printed |
+| D2.0 | `add` + `commit -m "docs(report): deploy checkin-install — gate green on 5a52b4f7"` · `show --stat HEAD` | `[main a30aec42] …` · one file, `deploy-checkin-install.md` |
+| D2.0 | `rev-parse --short=8 main` | `a30aec42` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` · `rev-parse --short=8 5d6f63fc^2` · `merge-base --is-ancestor 5a52b4f7 5d6f63fc` | `5d6f63fc` = `<stack-final>` · `a30aec42` = `<pre-merge>` · exit 0 |
+| D2.3 | `diff --stat 5a52b4f7 5d6f63fc -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing |
+| D2.4 | `backup status` · `backup run` · `backup status` | `newest snapshot: 1.2 h old` · `ssd: snapshot 72f22d74 — 0 new / 1 changed, 12.5 MB added, 1 pruned` (dump `cobalt_brain … 8899.6 MB`) · `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | `Sun Oct 18 17:33:45 EDT 2026` · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 17:33:46 EDT)` (119 s after D1's; no new RED) |
+| D2.6 | `date` · `tag pre-checkin-install` | `Sun Oct 18 17:33:50 EDT 2026` · set at `a30aec42` |
+| 4.1 | `date` | `Sun Oct 18 17:34:00 EDT 2026` = `<t down>` (nominal; EMPTY set, no resident down) |
+| 4.2 | bootouts | none (EMPTY `<restart set>`; aset not in the set → no orphan-clean; agent not in the set) |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/checkin-install` | `a30aec42` = `<pre-merge>` · `Updating a30aec42..5d6f63fc` / `Fast-forward`, 9 files changed, 973 insertions(+) |
+| 4.4 | migration | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`; `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 | bootstraps | none (EMPTY set) · `date` → `Sun Oct 18 17:34:08 EDT 2026` = `<t up>`; downtime 0 s |
+| 4.6L | `<launchd set>` | empty: nothing |
+| 7.1 | `git -C /Users/cobalt/cobalt tag deploy-2026-10-18-checkin-install` (after green smoke) | exit 0; `rev-parse --short=8 main` → `5d6f63fc` |
+
+CLOSE: `<pre-merge>` `a30aec42` → `<stack-final>` `5d6f63fc` · tags `pre-checkin-install` (at `a30aec42`), `deploy-2026-10-18-checkin-install` (at `5d6f63fc`) · `<t down>` 17:34:00 / `<t up>` 17:34:08 / 0 s downtime (EMPTY set: `none`) · uv sync: none at merge (the gate venv's `Installed 256 packages in 651ms` at STEP-R is the gate tree's) · proof cost: none (no migration) · `migrations applied: none` · `<RB>` before / after: none · snapshot `72f22d74` · `RESTARTS done: none` · `LAUNCHD done: none` · `BOOTSTRAP OWED`: none.
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 5d6f63fc`. The set restarts nothing, so no resident goes down or up. `<launchd set>` is empty.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## Smoke
+- FIRST CALLS after `<t up>` (17:34:08): `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` = `18` `60` `43` `39`.
+- (a) `Sun Oct 18 17:34:18 EDT 2026` · aset `state = running`, `pid = 89330` (SAME as D1, outside the set) · radar `state = running`, `pid = 70450` (SAME) · `Cobalt is ONLINE (PID: 89351).` (SAME) → GREEN.
+- (b) `Sun Oct 18 17:34:21 EDT 2026` · `Started server process` `283` = `<a0>` (aset outside the set) · Traceback aset `217` = `<ta0>` · Traceback radar `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>` · `tail -n 30 aset.err` last lines `INFO:     Started server process [89330]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (unchanged since 13:54).
+- (c) `/` `200` · `/radar` `200` · `/radar\?frame=phone` `200` → GREEN.
+- (d) MARKERS: `checkin-timer.sh` `1` · `MVP FIRST` `1` · `## CHECK-IN` `1` · `## 10. THE CHECK-IN TIMER` `1` → each its `after` → GREEN.
+- (e) read 1: `Sun Oct 18 17:34:37 EDT 2026` · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 17:34:38 EDT)`; `com.cobalt.radar running running 73 min, heartbeat fresh`. Read 2: `Sun Oct 18 17:36:28 EDT 2026` · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 17:36:30 EDT)` (112 s after read 1); `com.cobalt.radar running running 75 min, heartbeat fresh`; no RED → GREEN.
+- (f) validate as 4.5 (exit 0, `<jobs0>`) · `COBALT_ENV=production uv run cobalt jobs restarts a30aec42..5d6f63fc` → exit 0, the same nine rows as STEP-R, `RESTARTS: none` = `<restart set>`, no UNCLASSIFIED → GREEN.
+- (g) no migration.
+- (h) REVERT-READBACK: `Sun Oct 18 17:37:09 EDT 2026` (`<t up>` + 181 s) · `radar panel FAILED` `18` · `radar pool refresh FAILED` `60` · `radar S5 evaluate FAILED` `43` · `lifecycle card read failed` `39` = `<rp_up> <rpr_up> <re_up> <lc_up>` (none growing) · `/radar` `200` · no census read (no migration) → GREEN.
+- THE CHAIN: every check committed (P2 `0359947d`) · the tips re-read (P3 `964ba1b5`) · the merged tree (T `5a52b4f7`) · RESTARTS derived (R: none) · three suites green on `<m1>` `5a52b4f7` (G) · `<stack-final>` `5d6f63fc` = `<m1>` + docs (D2.3) · the landed code (4.3 `a30aec42..5d6f63fc`) · markers 0 → 1 (d) · no migration (g) · residents up and unchanged after the merge (a) · radar cycling (b, e) · the set's reads (s) · no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+- SMOKE: GREEN.
+- (b) radar tail 1: `Sun Oct 18 17:35:38 EDT 2026` (`<t up>` + 90 s) · `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` → last line `2026-10-18 17:34:30.798 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a `radar cycle:` line stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → (b) settled GREEN.
+- (s) `ls /Users/cobalt/cobalt/ops/desk/checkin-timer.sh` → exit 0, listed · `ls /Users/cobalt/cobalt/ops/desk/com.cobalt.checkin-timer.plist` → exit 0, listed · `ls "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/CHECKIN-PING.md"` → exit 0, listed · `grep -c -F "CHECKIN-PING.md" /Users/cobalt/cobalt/ops/desk/checkin-timer.sh` → exit 0, `2` (≥ 1) → GREEN. The set's tests ran in the gate (`tests/ops: run (deploy gate)`, offline 8627/0).
 
 ## CONTINUE
-- next: STEP-D2 (D0 and D1 done at Sun Oct 18 17:31:45 EDT 2026)
+- OUTAGE STARTING Sun Oct 18 17:33:50 EDT 2026 — residents of <restart set> (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended Sun Oct 18 17:34:08 EDT 2026 (no resident went down); smoke GREEN at 17:37:09; STEP-7 closed.
+
+## PRE-STOP SELF-CHECK (K25)
+1. Every smoke row's evidence is quoted with its `date` (17:34:18, 17:34:21, 17:34:37, 17:35:38, 17:36:28, 17:37:09).
+2. P3 re-read `964ba1b5` (tip = head); `git -C /Users/cobalt/cobalt merge-base --is-ancestor 964ba1b5 5d6f63fc` → exit 0.
+3. REVERT-READBACK (h) is shown: the counts `18 60 43 39` = `<rp_up> <rpr_up> <re_up> <lc_up>`, `/radar` `200`. Every count, sha and `file:line` above was re-read from tool output this run.
+4. No conflict marker exists: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same, 4.3 `Fast-forward`.
 
 ## DECISIONS
+- none
 
 ## RECORDS
+- Downtime: none (EMPTY `<restart set>`; no resident went down).
+- `REFUSED, not needed`: none. Messages not followed: none.
+- `cobalt_dev: 0013 — F2 = F0` (gate log `F0: 664 35 272c95bbb12241e3611e4b36326ccf87`); `.env: removed` (L76 lock released, log line 2238).
+- `RETIRE OWED`: none. `BOOTSTRAP OWED` from this run: none (STEP-C `ADMITTED 0`). The new `ops/desk/com.cobalt.checkin-timer.plist` is a desk plist (STEP-C `EXCEPTION:`), not loaded by this run; loading it is the desk's own job.
+- Carried RED as read: none — `<hb0>` `HEARTBEAT GREEN … nothing red`; AMBER `com.cobalt.herdr` (declared interim) and the two earlier `OWED (deferred bootstrap)` labels (`com.cobalt.prefill-refresh`, `com.cobalt.playbook`) stood before this deploy, unchanged.
+- D0: `?? .claude/settings.json.bak` on `main` (untracked, outside `src/ tests/ ops/ configs/`), not a refusal; noted for the desk.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-checkin-install` and branch `deploy/checkin-install`; the set's branch `ops/checkin-install-1018` and its worktree, if any.
+- Card `## RECORDS` (the desk's facts):
+  - checkin-install-1018: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/checkin-install-check-r2-2026-10-18.md` last line: CHECK DONE · job: checkin-install-1018 · pass: 1 · tip: 964ba1b5 · house A: Grok FINDINGS: 1 · findings: 2 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8516/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 17 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 203412
+  - checkin-install-1018: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/checkin-install-1018` → `964ba1b5`; code tip `964ba1b5`
+  - written by deploy-card.sh at 2026-10-18 16:26 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: no block in a tool result asked for anything. The session's harness attribution offered a `Claude-Session:` trailer; per L74 the commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-18-checkin-install 5d6f63fc | set: none | migrations: none | gate: offline 8627/0 · with-DB 5582/0 · live-note 147/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 202298
