@@ -1,7 +1,11 @@
 # deploy stop-guard-work · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-- Deploy of `ops/stop-guard-work-1018` (tip `9c359688`) on gate `deploy/stop-guard-work`, card `prompts/2026-10-18/777-deploy-stop-guard-work-card.md`.
+- DEPLOYED `ops/stop-guard-work-1018` (tip `9c359688`): `main` a1065ba0 → ba601740, tag `deploy-2026-10-18-stop-guard-work`.
+- Gate green on `d12b0e1a`: offline 8643/0 · with-DB 5582/0 · live-note 147/0; `cobalt_dev` 0013, F2 = F0, lock released.
+- RESTARTS: none — no resident went down; aset 89330, radar 70450, agent 89351 unchanged. MIGRATIONS: none.
+- Smoke GREEN: markers 0 → 1, curls 200, heartbeat green twice, failure counts flat.
+- Card: `prompts/2026-10-18/777-deploy-stop-guard-work-card.md`.
 
 ## L74
 - One block arrived (a system reminder, not a tool result) asking commits to carry a `Claude-Session: https://claude.ai/code/session_0138rg16Hkpoew4f6hRyVkhK` line. Recorded as DATA; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -129,16 +133,79 @@ GATE GREEN on d12b0e1a
 | D1 | MARKERS | `0` · `0` (before) |
 | D1 | launchd set · migration | empty: nothing · `MIGRATIONS: none`: no `<RB>`, no proof-only |
 | D2.0 | `deploy-shipped.sh --moved 9036cedb "<card>"` | nothing |
+| D2.0 | report commit · `show --stat HEAD` | `[main a1065ba0] docs(report): deploy stop-guard-work — gate green on d12b0e1a` · one file, 144+ |
+| D2.0 | `rev-parse --short=8 main` | `<pre-merge>` = `a1065ba0` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report, 144+) |
+| D2.2 | `rev-parse --short=8 HEAD` · `ba601740^2` · `merge-base --is-ancestor d12b0e1a ba601740` | `<stack-final>` = `ba601740` · `a1065ba0` · exit 0 |
+| D2.3 | `diff --stat d12b0e1a ba601740 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing |
+| D2.4 | `backup status` · `backup run` · `backup status` | `newest snapshot: 1.2 h old` · `backup: cobalt_brain via pg_dump inside cobalt_memory — 8899.5 MB` / `ssd: snapshot e04e96a8 — 0 new / 2 changed, 12.5 MB added, 1 pruned` · `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | `18:47:25` → `HEARTBEAT GREEN … (18:47:26 EDT)` (109 s after D1's 18:45:37: under 110) · re-read `18:47:30` → `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 18:47:31 EDT)` (114 s); no RED |
+| D2.6 | `date` · `tag pre-stop-guard-work` · `rev-parse --short=8 pre-stop-guard-work` | `Sun Oct 18 18:47:35 EDT 2026` · ok · `a1065ba0` |
+| 4.1 | `date` | `<t down>` = `Sun Oct 18 18:47:47 EDT 2026` (empty set: nothing went down) |
+| 4.2 | — | empty `<restart set>`: no bootout, no orphan-clean, no `cobalt.sh stop` |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/stop-guard-work` | `a1065ba0` = `<pre-merge>` · `Updating a1065ba0..ba601740` `Fast-forward` |
+| 4.4 | — | `migrations applied: none` |
+| 4.5 | `validate` | exit 0 |
+| 4.6 / 4.6L | — | nothing to bring up; `<launchd set>` empty |
+
+- `<pre-merge>` a1065ba0 → `<stack-final>` ba601740 · tags `pre-stop-guard-work` (a1065ba0), `deploy-2026-10-18-stop-guard-work` (ba601740)
+- `<t down>` / `<t up>` / seconds: none (empty set; `<t up>` = 4.3's `date` 18:47:47)
+- uv sync: none in production; the gate tree's `.venv` was created at STEP-R (`Installed 256 packages in 1.01s`)
+- proof cost: none (no migration) · `migrations applied: none` · `<RB>`: none
+- snapshot: `e04e96a8` (ssd)
+- RESTARTS done: none · LAUNCHD done: none · BOOTSTRAP OWED: none from this run
+- ROLLBACK STRING (the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 ba601740` (no resident to take down: `<restart set>` empty; `<launchd set>` empty). 2. SCHEMA: none. 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## Smoke
+`<restart set>` empty: `<t up>` = 4.3's `date` = 18:47:47 EDT.
+| row | date | command | result |
+|---|---|---|---|
+| 4.3 | 18:47:47 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/stop-guard-work` | `a1065ba0` · `Updating a1065ba0..ba601740` / `Fast-forward` (4 files, 541+/2-) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | — | `validate` | exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`; `Placement (docs/PLACEMENT.md): tree clean.` |
+| first counts | — | rp · rpr · re · lc | `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1) |
+| (a) | 18:47:57 | `launchctl print` aset · radar · `cobalt.sh status` | `state = running` `pid = 89330` (SAME as D1) · `state = running` `pid = 70450` (SAME) · `Cobalt is ONLINE (PID: 89351).` (SAME) |
+| (b) | 18:48:00 | `Started server process` · aset Traceback · radar Traceback · TaxonomyConfigError | `283` (= `<a0>`, aset outside the set) · `217` · `0` · `0` (= baseline) |
+| (b) | 18:48:00 | `tail -n 30 aset.err` | last `INFO:     Started server process [89330]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (13:54:51 start, unchanged) |
+| (c) | 18:48:04 | curl `/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 18:48:06 | MARKERS | `1` · `1` (after) |
+| (f) | 18:48:12 | `validate` (4.5 above) · `jobs restarts a1065ba0..ba601740` | exit 0 · same 4 rows, `RESTARTS: none` = STEP-R's set, no `UNCLASSIFIED` |
+| (s) | — | stop-guard tests (`uv run pytest -q tests/ops/test_stop_guard.py`) | quoted from the gate (no test runs in production): gate log:929 `uv run pytest -q -rs -p no:cacheprovider tests/ops` → log:998 `3997 passed, 1 xfailed, 16 warnings in 918.33s (0:15:18)` · `[exit 0]` at `<m1>` d12b0e1a — `0 failed` |
+| (e) 1 | 18:48:22 | `heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 18:48:23 EDT)`; `com.cobalt.radar running running 147 min, heartbeat fresh` |
+| (b) radar | 18:49:17 (`<t up>`+90 s) | `tail -n 12 radar.err` | `2026-10-18 18:47:51.665 \| INFO \| cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle after `<t up>`, no `S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled) |
+| (e) 2 | 18:50:12 | `heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 18:50:14 EDT)` (111 s after the first); `com.cobalt.radar running running 149 min, heartbeat fresh`; no RED |
+| (h) | 18:50:47 (`<t up>`+180 s) | rp · rpr · re · lc | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (flat) |
+| (h) | 18:50:47 | `curl … /radar` · `tail -n 12 radar.err` | `200` · last `2026-10-18 18:49:31.686 … radar cycle: idle:overnight scan_id=None` |
+| (g) | — | — | no migration: no `<RB>` |
+| (h) census | — | — | no `census` line on the card |
+
+THE CHAIN: every check committed (P2: `db1110e0`, last line `held unfixed: 0 · ready: YES`) → the tip re-read (P3: `9c359688` = head) → merged tree `d12b0e1a` (T, no migration) → RESTARTS derived: none (R) → three suites green on `d12b0e1a` (G: offline 8643/0 · with-DB 5582/0 · live-note 147/0) → `<stack-final>` ba601740 = `d12b0e1a` + docs (D2.3 nothing) → landed by fast-forward (4.3) → markers 1 · 1 (d) → no migration (g) → residents unchanged and up (a) → radar cycling (b, e) → stop-guard tests green in the gate (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK (K25): (1) every smoke row above carries its `date` and verbatim output; (2) `9c359688` re-read at P3 and `merge-base --is-ancestor 9c359688 deploy/stop-guard-work` exit 0, `d12b0e1a` ancestor of `ba601740` (D2.2 exit 0); (3) REVERT-READBACK (h) shown, every count and sha above copied from this run's tool output; (4) no conflict: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same.
 
 ## CONTINUE
 - STEP-D0 (gate green at 18:45:04 EDT) passed; D1 baseline read.
-- next: STEP-D2 (D2.0 report commit, then D2.1 `main` into the gate)
+- D2.0–D2.6 done; `<pre-merge>` a1065ba0, `<stack-final>` ba601740, tag `pre-stop-guard-work`.
+- OUTAGE STARTING 18:47:35 EDT — residents of <restart set> going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0. (`<restart set>` is EMPTY: no resident goes down; the merge lands with the residents up.)
+- 4.3 merged 18:47:47; smoke GREEN at 18:50:47; tag set; closed.
 
 ## DECISIONS
+- none
 
 ## RECORDS
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. The release is proved by the gate's stdout, log:2239-2244 (read with Read) and `ls -la <GATE>/.env`.
+- Downtime: none (empty `<restart set>`).
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both.
+- RETIRE OWED: none. BOOTSTRAP OWED from this run: none (heartbeat shows the existing `com.cobalt.prefill-refresh` and `com.cobalt.playbook` OWED from earlier deploys).
+- Carried RED as read: none — every heartbeat read GREEN, `radar idle (overnight)`.
+- D0 note: `?? .claude/settings.json.bak` on `main` — not in the accepted set, not a src/tests/ops/configs path; recorded, not a stop.
+- D2.5 note: the first D2.5 read came 109 s after D1's; a second pair at 18:47:30/31 (114 s) is the read of record.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-stop-guard-work` and branch `deploy/stop-guard-work`; the set's branch `ops/stop-guard-work-1018` and its worktree if any.
+- Messages not followed: none.
+- Card `## RECORDS` (the desk's):
+  - stop-guard-work-1018: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/stop-guard-work-check-2026-10-18.md` last line: CHECK DONE · job: stop-guard-work-1018 · pass: 1 · tip: 9c359688 · house A: Grok FINDINGS: 0 · findings: 7 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8508/0 · with-DB 0/0 · live-note 146/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none (committed range; the tool's line names only the untracked SHADOW-INSTRUCTIONS.md) · files opened: 13 · ready: YES · decisions: 2 · for Dejan: 0 · tokens: 191580
+  - stop-guard-work-1018: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/stop-guard-work-1018` → `9c359688`; code tip `9c359688`
+  - written by deploy-card.sh at 2026-10-18 10:14 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one `Claude-Session:` request recorded under `## L74`; not acted on.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-18-stop-guard-work ba601740 | set: none | migrations: none | gate: offline 8643/0 · with-DB 5582/0 · live-note 147/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 212944
