@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/cos-outage-1018
 WORKTREE: cos-outage-1018
 BASE: 0bdb7089
-TIP:
+TIP: de3e15c8
 REPORT: /Users/cobalt/cobalt-wt/cos-outage-1018/docs/40 - DevDocs/reports/cos-outage-1018-build-2026-10-18.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-outage-1018-check-2026-10-18.md
+HOUSE B: as needed
 BAND: LOW
 DB: none
 RESTARTS: none
