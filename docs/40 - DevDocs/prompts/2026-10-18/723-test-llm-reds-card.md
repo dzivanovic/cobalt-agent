@@ -8,7 +8,7 @@ BASE: 279c99ce
 TIP: 9850f4d0
 REPORT: /Users/cobalt/cobalt-wt/test-llm-reds-1018/docs/40 - DevDocs/reports/test-llm-reds-1018-build-2026-10-18.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/test-llm-reds-1018-check-2026-10-18.md
-HOUSE B: none
+HOUSE B: as needed
 BAND: MID
 RESTARTS: none
 RULINGS: 2026-10-18 R1833
