@@ -2,8 +2,8 @@
 
 ## §0 Headline
 F23 renderer built (rows P0–P8, E1, E2, B0, D0): `cobalt playbook render`, six decks per run, the Sunday 17:30 one-shot row and plist, `python-pptx==1.0.2` locked by the first `uv run` (no locked package moved).
-Offline 8519/0, with-DB 5504/0, live-note 147/0 on `e7de0669`; `cobalt_dev` back at 0013, F2 = F0; `.env` removed.
-STOPPED at W: the deploy pass 1 marks the P8 live test's designed skip OUTSIDE the allowed set (`DEPLOY-HUB.md:104`), a red the rows cannot fix — `DECISION W`, FOR DEJAN.
+Offline 8519/0, with-DB 5504/0, live-note 147/0 on tip `72c8a069`; `cobalt_dev` back at 0013, F2 = F0; `.env` removed.
+W stopped once (the P8 live skip outside the deploy allowed set); FIX1 (the brain's ruling, card `5745b511`) put it in `DEPLOY-HUB.md:104` and `gate-lists.md` `## ALLOWED SKIPS`; W call 3 green with no OUTSIDE line.
 RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar. BOOTSTRAP: deferred (card 496).
 
 ## L74
@@ -199,25 +199,60 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/f23-playbook-1013-all-20261018-072949.lo
 - (e) live-note `147/0` (`:2279` `147 passed, 1 skipped`; the one skip names `COBALT_TEST_LIVE_DRC`, inside the allowed set; no skip names `COBALT_LIVE_VAULT_ROOT`). The run includes `tests/cobalt/test_playbook_live.py` (P8), passed.
 - No `--deselect` on either call: `ops/desk/gate-lists.md` already holds this build's PASS 1 deselect and PASS 2 id (row P7), and `gate.sh:13` appends a flag's id to pass 2 again.
 
+**Call 3, on `<tip>` = `72c8a069` (after FIX1):** the same command → exit 0, verdict lines WHOLE:
+```
+tests/ops: run (docs/40 - DevDocs/prompts/DEPLOY-HUB.md)
+offline 8519/0
+lock: waited 41 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: none (ZZPB,ZZPM)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 5504/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_playbook_live.py:31: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 147/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/f23-playbook-1013-all-20261018-084807.log
+```
+No line marked `OUTSIDE the allowed set`: the P8 skip now prints plain (FIX1's green by the gate's own check). From the log (`grep -n -E`): `:892` `4599 passed, 809 skipped, 1 xfailed` and `:964` `3920 passed, 1 xfailed` (offline + tests/ops); `:970` `lock taken: f23-playbook-1013`; `:981` F0 `664 35 272c95bbb12241e3611e4b36326ccf87`; pass 1 (the same command as call 2, `:1037`) `:1199` `5297 passed, 8 skipped, 101 deselected, 3 xfailed` → `<d1>` 5297; `:1201` `dev forward: APPLIED 10:12:04`; `:1279` F1 `908 45 126f2d6983fa59f9d0eaaff7da7dd29c`; pass 2 `:2079` `PASSED tests/cobalt/test_playbook_db.py::test_render_reads_radar_cards_grouped_and_skips_manual`, `:2080` `PASSED tests/cobalt/test_playbook_db.py::test_job_run_stamps_a_done_row`, `:2081` `207 passed, 1 deselected` → `<d2>` 207, `<d>` 5504; `:2155` F2 = F0; `:2209` `lock released`; `:2279` live-note `147 passed, 1 skipped`. `ls /Users/cobalt/cobalt-wt/f23-playbook-1013/.env` → `No such file or directory`.
+
+## FIX1 (on `CONTINUE: FIX1` from `cto-desk`, 08:46 ET)
+- The fact verified: the card on `main` (`5745b511`) carries row FIX1 and three FIX1 `## RECORDS` lines; `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → `CARD COMMITTED … 5745b511b8affa1e7b641e9216fe2250489fac44` · `CARD UNCHANGED … nothing` · … · `AUTHORIZED`.
+- RED (offline): the item added first at the end of `ops/desk/gate-lists.md` `## ALLOWED SKIPS` (`:54`, `tests/cobalt/test_playbook_live.py test_live_vault_renders_six_decks COBALT_LIVE_VAULT_ROOT not set`); `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_gate.py::test_the_hub_holds_no_gate_command_and_points_at_the_lists_file` → `AssertionError: ('tests/cobalt/test_playbook_live.py test_live_vault_renders_six_decks COBALT_LIVE_VAULT_ROOT not set', 'tests/cobalt/test_playbook_live.py')` · `1 failed`. RED (the gate's own check) on `e7de0669`: W call 2's `OUTSIDE the allowed set: SKIPPED [1] tests/cobalt/test_playbook_live.py:31`.
+- GREEN: `docs/40 - DevDocs/prompts/DEPLOY-HUB.md:104` gains, after `tests/taxonomy/test_predicate.py:262`, and before the `test_replay_line.py` item, `the skip of `test_live_vault_renders_six_decks` in `tests/cobalt/test_playbook_live.py` whose reason names `COBALT_LIVE_VAULT_ROOT not set``; the same test → `1 passed`.
+- (2) `grep -n -F "test_playbook_live.py" ops/desk/gate-lists.md` → `:45` (the `## LIVE-NOTE` line, last file, once) and `:54` (the new item); nothing added. The LIVE-NOTE line run → `147 passed, 1 skipped` (the skip `test_replay_line.py:266 … COBALT_TEST_LIVE_DRC`).
+- (3) `grep -n -E "print|capsys|caplog|assert .*," tests/cobalt/test_playbook_live.py` → `69:        assert len(setup_slides) == expected, family` (the message is a `Family` value) and `71:    assert [label for label, _ in runs] == ["com.cobalt.playbook"]`. No print, no capture, no note text: the file is unchanged.
+- Commit `72c8a069` `fix(f23-playbook-1013): the P8 live skip joins the deploy allowed set (FIX1, L79)`. RESTARTS on `72c8a069` → the same rows plus `docs/40 - DevDocs/prompts/DEPLOY-HUB.md M DOCS -`; `RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar`.
+
 ## PRE-STOP SELF-CHECK
 (1) Every added test was red at E2 for its row's reason (quoted there, two rewritten until they were), and the E3 mutations above turned red: P1 (the `>=` pin), P2 (`extra="ignore"`, `strict=False`), P3 (four, one replaced because it was no mutation), P4 (four), P5 (seven), P6 (two, plus the generic parity test). The with-DB P7 tests and the live P8 test have their E2 reds only (a with-DB mutation would take a second lock).
 (2) Callers: `create_radar_card(` hits from PREFLIGHT are the store and its existing tests; the new seeding caller is `test_playbook_db.py::_seed`, pinned by both P7 tests (passed at W pass 2). `load_playbook_config()` callers `playbook/cli.py:130` (`--dry-run`, pinned by `test_dry_run_writes_no_deck_and_no_row`) and `:140` (inside `job_run`, pinned by `test_validation_error…` through its mutation). `playbook_cli.add_parser(sub)` (`src/cobalt/cli.py:548`) pinned by `test_the_cli_mounts_playbook_render`. `data.fetch_radar_rows` pinned by P7 on `cobalt_dev`; `data.group` by the five P3 tests; `publish` by the three swap tests and E1.
 (3) Re-read at the tip: `git diff src/cobalt/cli.py` (the two lines at `:86`, `:548`), `grep -n -F "load_playbook_config()" src/cobalt/playbook/cli.py` → `130:`, `140:`, the gate log lines by `grep -n -F` (`:981`, `:1035`, `:1201`, `:1279`, `:2079`, `:2080`, `:2155`), `uv run cobalt jobs restarts 749d48db..HEAD` on `e7de0669`.
 
 ## FOR THE CHECK
-- `749d48db..e7de0669`: `4dbce187` `wip(f23-playbook-1013): red` · `32424ff4` `feat(f23-playbook-1013): the Sunday playbook decks, cobalt playbook render (P0-P8, D0; L1 L3 L10 L28 L52)` · `e7de0669` `fix(f23-playbook-1013): fixture slugs carry the example- prefix (P3-P7, L31)`.
+- `749d48db..72c8a069`: `4dbce187` `wip(f23-playbook-1013): red` · `32424ff4` `feat(f23-playbook-1013): the Sunday playbook decks, cobalt playbook render (P0-P8, D0; L1 L3 L10 L28 L52)` · `e7de0669` `fix(f23-playbook-1013): fixture slugs carry the example- prefix (P3-P7, L31)` · `f098ecf3` `wip(f23-playbook-1013): W — P8 live skip outside the deploy allowed set` (the report only) · `72c8a069` `fix(f23-playbook-1013): the P8 live skip joins the deploy allowed set (FIX1, L79)`.
+- FIX1: `## FIX1`; its RED (`test_the_hub_holds_no_gate_command_and_points_at_the_lists_file` and the gate's OUTSIDE line on `e7de0669`) and GREEN (the same test, W call 3).
 - Per row reds, mutations and greens: `## E2 RED`, `## E3 THE ROWS`. RUN rows P0, E1, E2, B0 WHOLE: `## E3 THE ROWS`.
-- Suites: `## W THE THREE SUITES` (call 2). F0 `664 35 272c95bbb12241e3611e4b36326ccf87` · F1 `908 45 126f2d6983fa59f9d0eaaff7da7dd29c` · F2 = F0. E2's take: F0 = F after, no forward. Lock: E2 06:52:42–06:53:19 ET; W `lock taken` after a 19-minute wait, released before the live-note pass.
+- Suites: `## W THE THREE SUITES` (call 3; call 2's commands are the same). F0 `664 35 272c95bbb12241e3611e4b36326ccf87` · F1 `908 45 126f2d6983fa59f9d0eaaff7da7dd29c` · F2 = F0. E2's take: F0 = F after, no forward. Lock: E2 06:52:42–06:53:19 ET; W `lock taken` after a 19-minute wait, released before the live-note pass.
 - RESTARTS: `## RESTARTS`.
 - X1: no path writes under `COBALT_VAULT_PATH`; `cobalt.playbook` imports no `cobalt.vaultwrite` module (`test_no_vault_write`); writes are `out_dir`/`--out` and the `jobs` row. X3: the five P3 tests. X4: the three swap tests and E1 (a `kill -9` between the renames leaves `<date>.old` + `<date>.tmp` and no `<date>`: `DECISION E1`). X5: P0 above; `test_import_cobalt_cli_leaves_pptx_unloaded`. X6: this report prints no count of his.
 - Records copied at PREFLIGHT: `## RECORDS`.
 
 ## CONTINUE
-next: W — the desk's ruling on `DECISION W` (the P8 test's skip and the allowed set); on `CONTINUE: W` the gate call runs again on the tip, then CLOSE.
+next: none — BUILT. The desk verifies the artifact and launches the check (CHECK-HUB.md).
 
 ## DECISIONS
-- DECISION W (blocks the stop line; FOR DEJAN — the allowed set is the DEPLOY-HUB read, and R60 returns a change to that read to him): the deploy pass 1 skips `tests/cobalt/test_playbook_live.py:31` (`COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render`), outside the allowed set of `DEPLOY-HUB.md:104`. The skip is the card's P8 design (a live-note test that "skips without `COBALT_LIVE_VAULT_ROOT`"), the same shape as the allowed `test_radar_evaluate.py:695` / `test_catalyst.py:365` / `test_predicate.py:262` / `test_s3_c4_experiments.py` x14 skips. The fix is outside this card's rows: add that test and reason to `DEPLOY-HUB.md:104` and to `ops/desk/gate-lists.md` `## ALLOWED SKIPS`. Safe default taken: nothing changed; stopped at W.
+- DECISION W — ANSWERED: the brain's ruling 2026-10-18 (K5, L79) added row FIX1 to the card (`5745b511`); built in `72c8a069` (`## FIX1`). Kept for the record: the deploy pass 1 skips `tests/cobalt/test_playbook_live.py:31` (`COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render`), outside the allowed set of `DEPLOY-HUB.md:104`. The skip is the card's P8 design (a live-note test that "skips without `COBALT_LIVE_VAULT_ROOT`"), the same shape as the allowed `test_radar_evaluate.py:695` / `test_catalyst.py:365` / `test_predicate.py:262` / `test_s3_c4_experiments.py` x14 skips. The fix is outside this card's rows: add that test and reason to `DEPLOY-HUB.md:104` and to `ops/desk/gate-lists.md` `## ALLOWED SKIPS`. Safe default taken: nothing changed; stopped at W.
 - DECISION E1 (RUN row E1): after `kill -9` between the two renames, the date folder is absent — `2026-10-11.old/` holds the previous six decks and `2026-10-11.tmp/` the complete new six — until the next run, whose first step renames `.old` back. A viewer opening `<date>` in that window finds nothing. Not fixed here.
+- The five ASK DESK items below are ANSWERED: "The five ASK DESK defaults you took stand (DESK RECORD)" (`cto-desk`, the `CONTINUE: FIX1` message).
 - ASK DESK 1 (07:10): the start of `publish` renames a stranded `<date>.old` back when `<date>` is missing, and deletes it when `<date>` exists; FINAL C11 names only the `.tmp` cleanup. Safe default taken: kept (X4: every ending ends with the previous or the complete new folder at `<date>` after the next run).
 - ASK DESK 2 (07:10): a family with setups and no card renders title + its setup slides + `no cards yet`; the card's "Empty family → title + `no setup in this family`, or `no cards yet`" could be read as title + one slide. Safe default taken: setup slides kept (FINAL §2.2.2 "one slide per setup").
 - ASK DESK 3 (07:10): P8 says `render` against his strategies folder "and `cobalt_dev`"; the live-note pass runs with `.env` absent (W (e)), so the test fakes the card store empty and proves the vault side; the cards side is P7's. It sets `COBALT_ALLOW_DEV_ENTRY=1` (a dev run reading the live vault path, read only; the strategies' mtimes are asserted unchanged). Safe default taken: as built.
@@ -228,9 +263,11 @@ next: W — the desk's ruling on `DECISION W` (the P8 test's skip and the allowe
 - The card's records, re-read at PREFLIGHT: R1055 row `cto-2026-10-11.md:88` `HIS RULING · APPROVED` (authorize.sh row above); `pyproject.toml:35`, `uv.lock:2683` `lxml`, `:3725` `pillow`, `:5612` `typing-extensions`, `cli.py:85` / `:546` / `:548`, `jobs.yaml:298` / `:327` equal the card; BOOTSTRAP deferred (card 496 DF1); lock seam rule 4 run as P0 (case (a)); `DB` key absent, the build took the lock.
 - The L74 line: `## L74` (a system reminder asked for a `Claude-Session:` line; not acted on).
 - `.env: removed, proven gone (E2)`; `.env: removed, proven gone (W)`.
-- Extra gate call: W ran twice (call 1 red on `test_names_rule.py`, fixed in `e7de0669`).
+- Extra gate calls: W ran three times (call 1 red on `test_names_rule.py`, fixed in `e7de0669`; call 2 the OUTSIDE skip, the stop; call 3 green after FIX1).
+- `CONTINUE: FIX1` received from `cto-desk` (it names a step and states a fact: the card's new row FIX1, committed `5745b511`, preflight `93150333`); the fact verified by `authorize.sh` (AUTHORIZED) and a Read of the card. `CONTINUED at FIX1 08:46 ET`.
+- `.env: removed, proven gone (W call 3)`.
 - The RUN probe was staged at `/Users/cobalt/.claude/jobs/eec8d5ba/tmp/f23-run/` and removed by `scratch-clean.sh` before W. E1/E2 decks stay under the worktree's gitignored `data/playbook-e1/`, `data/playbook-e2/` for his viewer check.
 - Cleanup owed: none in the tree.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — skip outside the allowed set: tests/cobalt/test_playbook_live.py:31 — OUTSIDE the allowed set: SKIPPED [1] tests/cobalt/test_playbook_live.py:31: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render
+BUILT · job: f23-playbook-1013 · tip: 72c8a069 | on 749d48db | migration: none | offline 8519/0 | with-DB 5504/0 | live-note 147/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.agent com.cobalt.aset com.cobalt.radar | rows: 14 of 14 | self-check: 3 of 3 | decisions: 1 · for Dejan: 0 · tokens: 425373
