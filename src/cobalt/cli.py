@@ -83,6 +83,7 @@ from cobalt.vaultwrite import VaultWriter, VaultWriteStore  # noqa: E402
 from cobalt.archiver import cli as archiver_cli  # noqa: E402
 from cobalt.voice import cli as voice_cli  # noqa: E402
 from cobalt.strike import cli as strike_cli  # noqa: E402
+from cobalt.playbook import cli as playbook_cli  # noqa: E402
 from cobalt.archiver.quiet import QuietRefused  # noqa: E402
 from cobalt.archiver.store import ArchiveLockError  # noqa: E402
 
@@ -544,6 +545,7 @@ def main() -> None:
     jobs_cli.add_stop_parsers(sub)
     voice_cli.add_parser(sub)
     strike_cli.add_parser(sub)
+    playbook_cli.add_parser(sub)
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."

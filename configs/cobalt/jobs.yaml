@@ -331,6 +331,19 @@ jobs:
       production and a permanently dirty working tree is one nobody
       reads.
 
+  - label: com.cobalt.playbook
+    kind: one-shot
+    supervisor: self
+    timeout_s: 600
+    # Sunday 17:30 ET, so the decks exist when the 18:00 weekly review
+    # opens (F23 FINAL C7, Charter M11). One read of the strategy notes and
+    # one SELECT of the radar cards; it writes data/playbook/<date>/ and
+    # this row only — never the vault. Card 503 (DECISION D3): enabled,
+    # bootstrap deferred to the deploy (card 496's owed-label state file).
+    schedule: {at: "17:30", weekdays: [0]}
+    enabled: true
+    what: "the Sunday playbook decks, one .pptx per setup family (uv run cobalt playbook render)"
+
 # ---------------------------------------------------------------------
 # NO RESIDENT READS (ruled 2026-09-15)
 # ---------------------------------------------------------------------
@@ -375,6 +388,14 @@ no_resident_reads:
       called from the manual `cobalt classify route | route-read` commands.
       No job runs them; no resident loads it. com.cobalt.generated is named
       as for trial.yaml above. Card 591, 2026-10-15.
+  - path: configs/cobalt/playbook.yaml
+    readers: [com.cobalt.playbook]
+    because: >
+      Loaded only by playbook/config.py load_playbook_config, called from
+      playbook/cli.py:140 (inside job_run) and :130 (--dry-run), the
+      `cobalt playbook render` command of the com.cobalt.playbook one-shot.
+      No resident calls it: cobalt.cli imports playbook.cli for add_parser
+      only. Card 503, 2026-10-18.
   # configs/cobalt/rules.yaml LEFT this list in DRC D3 ([F-28]): the DRC build
   # calls regenerate_rules_config() inside com.cobalt.aset — it is now in that
   # job's `reads:` (the 15:40 prefill-drc reader is retired).

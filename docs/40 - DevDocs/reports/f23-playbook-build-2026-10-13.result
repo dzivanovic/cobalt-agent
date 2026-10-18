@@ -1,0 +1,15 @@
+job=f23-playbook-1013
+tip=72c8a069
+on=749d48db
+migration=none
+offline=8519/0
+with_db=5504/0
+live_note=147/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.agent com.cobalt.aset com.cobalt.radar
+rows=14 of 14
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=425373
