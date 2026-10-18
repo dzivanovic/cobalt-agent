@@ -907,7 +907,8 @@ def test_f12_no_route_wrapper_in_ops():
                     hits.append(p.name)
             except UnicodeDecodeError:
                 continue
-    assert hits == []
+    # his 2026-10-18 R1830 (F12): the one keyed wrapper, card 715 W1; no other under ops/
+    assert hits == ["jev-route.sh"]
 
 
 # -- the check of jev-shadow-1015 (CHECK-HUB ## 4): held findings -------------------------
