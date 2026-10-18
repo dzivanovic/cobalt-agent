@@ -7,7 +7,7 @@
 # check report's last non-blank line; the branch head is `git -C $REPO rev-parse --short=8 <BRANCH>`.
 # REFUSED (exit 1, nothing written), naming the job and the reason, when: the check report is
 # absent, not committed, or modified since its commit; its last line lacks `held unfixed: 0` or
-# `ready: YES`, or names no tip; the code tip is not an ancestor of the head; the head adds
+# `ready: YES`, or names no tip; the code tip is not an ancestor of the head; the code tip is already an ancestor of main; the head adds
 # anything outside docs/ past the code tip. A fix round (R376, L75; CARD.md :48; launcher-1010 row A,
 # R810): `--fix-report "<job>=<path>"` names that job's fix report under $REPORTS, read at the
 # branch head (`git show <head>:<rel>`, never a copy on main); its last line `BUILT · … tip: <hex>`
@@ -550,6 +550,7 @@ for card in "$@"; do
     git -C "$REPO" merge-base --is-ancestor "$ctip" "$head" || refuse "$job: code tip $ctip is not an ancestor of the head $head of $branch"
     past=$(git -C "$REPO" diff --name-only "$ctip" "$head" -- . ':(exclude)docs')
     [ -z "$past" ] || refuse "$job: the head $head adds paths outside docs/ past the code tip $ctip: $(printf '%s' "$past" | tr '\n' ' ')"
+    git -C "$REPO" merge-base --is-ancestor "$ctip" refs/heads/main && refuse "$job: code tip $ctip is already an ancestor of main $(git -C "$REPO" rev-parse --short=8 refs/heads/main); nothing to deploy"
 
     heads="${heads:+$heads }$head"
     if [ -z "$hn" ]; then
