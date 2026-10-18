@@ -1749,7 +1749,7 @@ build|shadow)
             *[\"\'\\\$\`\|\&\;]*) refuse "shadow: the builder allow of $model holds a character the line cannot carry: '$ballow'" ;;
         esac
         builder="\"$ballow\""
-        # card 759 L1 (R1863): gemini-4-argon-high only, routed or not. grep and sed read the
+        # card 759 L1 (R1863): gemini-4-argon-high only, routed or not. grep reads the
         # settings file; it is never written, and only an offending write rule is printed.
         if [ "$model" = "gemini-4-argon-high" ]; then
             AGY=${COBALT_AGY_SETTINGS:-/Users/cobalt/.gemini/antigravity-cli/settings.json}
@@ -1760,11 +1760,17 @@ build|shadow)
             if grep -F -e "read_url(" -e "execute_url(" -- "$AGY" >/dev/null 2>&1; then
                 refuse "shadow: gemini: ${AGY} holds a read_url or execute_url rule; X1's fetch must stay refused"
             fi
-            targets=$(sed -n 's/.*write_file(\([^)]*\)).*/\1/p' "$AGY")
-            while IFS= read -r T; do
-                [ -n "$T" ] || continue
+            # every write_file( rule, one per line, however many share a line of the file (check O1);
+            # kept whole so an empty target is not lost as a trailing blank line
+            targets=$(grep -o 'write_file([^)]*)' "$AGY")
+            while IFS= read -r R; do
+                [ -n "$R" ] || continue
+                T=${R#write_file\(}
+                T=${T%\)}
                 [ "$T" = "$grant" ] && continue
                 reach=0
+                # an empty target is a prefix of every path (check O3)
+                [ -n "$T" ] || reach=1
                 [ "$T" = "*" ] && reach=1
                 case "$T" in
                     regex:*) reach=1 ;;
