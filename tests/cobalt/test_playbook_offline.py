@@ -3,8 +3,8 @@
 THE FIXTURE IS SYNTHETIC (L32, L45). The vault is a `tmp_path` folder of
 strategy notes built from the one note the repo ships
 (`configs/cobalt/taxonomy/examples/example_trade_def.md`), re-keyed to the
-F-15 walk's slugs: `od-only` `[opening_drive]`, `both` `[opening_drive,
-continuation]`, and the real draft `draft-x` (an empty Definition unit — a
+F-15 walk's slugs: `example-od-only` `[opening_drive]`, `both` `[opening_drive,
+continuation]`, and the real draft `example-draft-x` (an empty Definition unit — a
 draft the loader lists, never a finished `family: []`). The radar rows are
 the walk's ids 1-14, constructed tickers only. The store and `job_run` are
 faked at the module seam: nothing here reaches `cobalt_dev`.
@@ -41,14 +41,14 @@ WALK_FORMED = datetime(2026, 10, 5, 0, 1, tzinfo=ET)
 SIX = ("opening_drive", "continuation", "range_break", "reversion", "time_window", "unfiled")
 
 DRAFT_NOTE = """---
-trade_def: draft-x
+trade_def: example-draft-x
 name: Draft X
 status: draft
 ---
 ## Definition
 <!-- cobalt:section definition -->
-<!-- cobalt:unit trade_def:draft-x -->
-<!-- /cobalt:unit trade_def:draft-x -->
+<!-- cobalt:unit trade_def:example-draft-x -->
+<!-- /cobalt:unit trade_def:example-draft-x -->
 <!-- /cobalt:section definition -->
 """
 
@@ -80,8 +80,8 @@ def make_vault(root: Path, notes: dict[str, str]) -> Path:
 
 def walk_vault(root: Path) -> Path:
     return make_vault(root, {
-        "OD Only": note_text("od-only", "OD Only", ["opening_drive"]),
-        "Both": note_text("both", "Both Ways", ["opening_drive", "continuation"]),
+        "OD Only": note_text("example-od-only", "OD Only", ["opening_drive"]),
+        "Both": note_text("example-both", "Both Ways", ["opening_drive", "continuation"]),
         "Draft X": DRAFT_NOTE,
     })
 
@@ -98,13 +98,13 @@ def radar_row(card_id: int, slug: str, *, formed_at=WALK_FORMED, state: str = "W
 
 
 def walk_rows() -> list[dict]:
-    """F-15: ids 1-12 `od-only` (id 12 EXPIRED, id 1 a 300-char why), id 13
+    """F-15: ids 1-12 `example-od-only` (id 12 EXPIRED, id 1 a 300-char why), id 13
     `both` FILLED a day after the titled week, id 14 `gone` (no note)."""
-    rows = [radar_row(i, "od-only") for i in range(1, 13)]
+    rows = [radar_row(i, "example-od-only") for i in range(1, 13)]
     rows[0]["why"] = "w" * 300
     rows[11]["state"] = "EXPIRED"
-    rows.append(radar_row(13, "both", state="FILLED", formed_at=datetime(2026, 10, 12, 0, 1, tzinfo=ET)))
-    rows.append(radar_row(14, "gone"))
+    rows.append(radar_row(13, "example-both", state="FILLED", formed_at=datetime(2026, 10, 12, 0, 1, tzinfo=ET)))
+    rows.append(radar_row(14, "example-gone"))
     return rows
 
 
@@ -223,36 +223,36 @@ def test_two_family_card_is_on_both_decks_with_k_1(vault):
 
 
 def test_a_draft_is_listed_and_in_no_deck(vault):
-    book = _book(vault, [*walk_rows(), radar_row(15, "draft-x")])
-    assert book.drafts == ("draft-x",)
+    book = _book(vault, [*walk_rows(), radar_row(15, "example-draft-x")])
+    assert book.drafts == ("example-draft-x",)
     for deck in book.decks:
-        assert "draft-x" not in [s.slug for s in deck.setups]
+        assert "example-draft-x" not in [s.slug for s in deck.setups]
         if deck.name != "unfiled":
             assert 15 not in _ids(deck)
     assert {c.id: c.reason for c in book.deck("unfiled").cards}[15] == "draft"
 
 
 def test_no_cap_and_null_formed_at_sorts_last_and_is_present(vault):
-    rows = [radar_row(i, "od-only", formed_at=WALK_FORMED + timedelta(minutes=i)) for i in range(1, 13)]
-    rows.append(radar_row(99, "od-only", formed_at=None))  # the highest id, no time: last, never dropped
+    rows = [radar_row(i, "example-od-only", formed_at=WALK_FORMED + timedelta(minutes=i)) for i in range(1, 13)]
+    rows.append(radar_row(99, "example-od-only", formed_at=None))  # the highest id, no time: last, never dropped
     book = _book(vault, rows, latest_per_family=None)
     assert _ids(book.deck("opening_drive")) == [*range(12, 0, -1), 99]
     assert book.deck("opening_drive").in_family == 13
 
 
 def test_unfiled_rows_carry_slug_and_reason(vault):
-    rows = [radar_row(14, "gone"), radar_row(15, "draft-x", formed_at=WALK_FORMED + timedelta(hours=1))]
+    rows = [radar_row(14, "example-gone"), radar_row(15, "example-draft-x", formed_at=WALK_FORMED + timedelta(hours=1))]
     unfiled = _book(vault, rows).deck("unfiled")
-    assert [(c.id, c.slug, c.reason) for c in unfiled.cards] == [(15, "draft-x", "draft"), (14, "gone", "no note")]
+    assert [(c.id, c.slug, c.reason) for c in unfiled.cards] == [(15, "example-draft-x", "draft"), (14, "example-gone", "no note")]
     assert unfiled.in_family == 2
 
 
 def test_card_score_never_orders(vault):
     """Same `formed_at`, scores reversed both ways: `id DESC` decides (L52)."""
     for low_first in (True, False):
-        rows = [radar_row(1, "od-only", card_score=90 if low_first else 10),
-                radar_row(2, "od-only", card_score=10 if low_first else 90),
-                radar_row(3, "od-only", card_score=None)]
+        rows = [radar_row(1, "example-od-only", card_score=90 if low_first else 10),
+                radar_row(2, "example-od-only", card_score=10 if low_first else 90),
+                radar_row(3, "example-od-only", card_score=None)]
         assert _ids(_book(vault, rows).deck("opening_drive")) == [3, 2, 1]
 
 
@@ -271,18 +271,18 @@ def test_walk_slide_counts(vault, tmp_path):
 
 
 def test_table_rows_newest_first_8_per_slide(vault, tmp_path):
-    rows = [radar_row(i, "od-only", formed_at=WALK_FORMED + timedelta(minutes=i)) for i in range(1, 18)]
+    rows = [radar_row(i, "example-od-only", formed_at=WALK_FORMED + timedelta(minutes=i)) for i in range(1, 18)]
     written = {w.name: w for w in _write(_book(vault, rows), tmp_path / "out")}
     tables = _table_slides(written["opening_drive"].path)
     assert [len(t) for t in tables] == [8, 8, 1]
     tickers = [r[1] for t in tables for r in t]
-    assert tickers == [radar_row(i, "od-only")["ticker"] for i in range(17, 0, -1)]
+    assert tickers == [radar_row(i, "example-od-only")["ticker"] for i in range(17, 0, -1)]
     dates = [r[0] for t in tables for r in t]
     assert dates == sorted(dates, reverse=True)
 
 
 def test_empty_family_deck_says_so(vault, tmp_path):
-    written = {w.name: w for w in _write(_book(vault, [radar_row(1, "od-only")]), tmp_path / "out")}
+    written = {w.name: w for w in _write(_book(vault, [radar_row(1, "example-od-only")]), tmp_path / "out")}
     assert "no setup in this family" in _slide_text(_slides(written["time_window"].path)[1])
     assert "no cards yet" in _slide_text(_slides(written["continuation"].path)[-1])
     assert "no unfiled cards" in _slide_text(_slides(written["unfiled"].path)[1])
@@ -292,9 +292,9 @@ def test_why_is_cut_to_120_plus_ellipsis(vault, tmp_path):
     written = {w.name: w for w in _write(_book(vault, walk_rows()), tmp_path / "out")}
     rows = [r for t in _table_slides(written["opening_drive"].path) for r in t]
     by_ticker = {r[1]: r for r in rows}
-    why = by_ticker[radar_row(1, "od-only")["ticker"]][11]
+    why = by_ticker[radar_row(1, "example-od-only")["ticker"]][11]
     assert why == "w" * 120 + "…" and len(why) == 121
-    assert by_ticker[radar_row(2, "od-only")["ticker"]][11] == "synthetic why"
+    assert by_ticker[radar_row(2, "example-od-only")["ticker"]][11] == "synthetic why"
 
 
 def test_both_titles_say_also_in_another_family_1(vault, tmp_path):
@@ -376,7 +376,7 @@ def test_rerun_same_date_leaves_only_the_new_run(seam, monkeypatch, tmp_path, ca
     first = capsys.readouterr().out
     for name in SIX:
         assert str(out / RUN_DATE / f"{name}.pptx") in first
-    assert "unfiled cards: 1" in first and "drafts: draft-x" in first
+    assert "unfiled cards: 1" in first and "drafts: example-draft-x" in first
     assert seam.jobs.rows[-1][:2] == ("com.cobalt.playbook", 0)
     assert seam.jobs.rows[-1][2]["families"]["opening_drive"]["cards"] == 13
 

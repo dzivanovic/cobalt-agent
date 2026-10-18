@@ -30,7 +30,7 @@ requires_db = pytest.mark.skipif(
 )
 pytestmark = [requires_db, pytest.mark.integration]
 
-OTHER_SLUG = "playbook-other"
+OTHER_SLUG = "example-playbook-other"
 MANUAL_TICKER = "ZZPM"
 
 
