@@ -1,0 +1,15 @@
+job=hub-deferred-1018
+tip=79b8ac8e
+on=170e90ca
+migration=none
+offline=8608/0
+with_db=0/0
+live_note=147/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=2 of 2
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=157900
