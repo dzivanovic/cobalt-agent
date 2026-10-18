@@ -1003,13 +1003,17 @@ def test_w4_a_dead_successor_is_still_blocked(tmp_path):
 
 
 def test_w4_a_missing_successor_is_still_blocked(tmp_path):
-    d = Desk(tmp_path)
+    a = tmp_path / "a"
+    a.mkdir()
+    d = Desk(a)
     isolate_pgrep(d)
     d.lister(DESK_ROW_LINE)
     d.owed("owed: none", STATE_1017, NEXT_1017)
     r = d.run()
     assert (r.returncode, r.stdout, r.stderr) == (2, "", block_line(FIRST_1017))
-    d = Sized(tmp_path)
+    b = tmp_path / "b"
+    b.mkdir()
+    d = Sized(b)
     isolate_pgrep(d)
     d.lister(SUCCESSOR_ROW)
     d.owed("owed: none", STATE_1017, NEXT_1017)
