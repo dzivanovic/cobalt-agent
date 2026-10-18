@@ -3,10 +3,10 @@ LADDER: S5 · F4
 BRANCH: ops/f4-refresh-1018
 WORKTREE: f4-refresh-1018
 BASE: 75dcdb5f
-TIP:
+TIP: 51b03e00
 REPORT: /Users/cobalt/cobalt-wt/f4-refresh-1018/docs/40 - DevDocs/reports/f4-refresh-build-2026-10-18.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-refresh-check-2026-10-18.md
+HOUSE B: as needed
 BAND: HIGH
 RULINGS: 2026-10-10 R849, 2026-10-10 R969, 2026-10-10 R971, 2026-10-18 R1833
 
