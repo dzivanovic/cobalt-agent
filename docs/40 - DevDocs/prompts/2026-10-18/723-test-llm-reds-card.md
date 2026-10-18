@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: test/test-llm-reds-1018
 WORKTREE: test-llm-reds-1018
 BASE: 279c99ce
-TIP:
+TIP: 9850f4d0
 REPORT: /Users/cobalt/cobalt-wt/test-llm-reds-1018/docs/40 - DevDocs/reports/test-llm-reds-1018-build-2026-10-18.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/test-llm-reds-1018-check-2026-10-18.md
+HOUSE B: none
 BAND: MID
 RESTARTS: none
 RULINGS: 2026-10-18 R1833
