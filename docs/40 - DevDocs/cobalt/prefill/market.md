@@ -27,3 +27,9 @@ leaks the auth token).
 ## Config it reads
 None directly — token resolution goes through `FinvizApiClient`'s
 existing VaultManager machinery (see `aset/prefill.py`).
+
+## 2026-10-10 — f4-refresh-1010
+Docstring only: the SLICE 2.1 "no n/a (manual)" note on VIX/BTC is marked
+superseded by the Charter (F4): they render `n/a (manual)` until a source
+owns them. `fetch_market_table` is also called by `prefill refresh`, behind
+the shared Finviz gate.

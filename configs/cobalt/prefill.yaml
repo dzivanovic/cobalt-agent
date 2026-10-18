@@ -15,3 +15,12 @@ prefill:
   # the pattern IS strftime (matches the vault's own Templater-authored
   # filenames exactly, e.g. "Trade-2025-09-24 12-51-52 -MU.md").
   trade_filename_pattern: "Trade-%Y-%m-%d %H-%M-%S -{ticker}.md"
+
+# F4 (FINAL §4.3, §4.6): what `prefill refresh` re-renders all day, and who
+# owns each market-table field. Loaded only by `DailyRefreshConfig`
+# (src/cobalt/prefill/config.py), which refuses any other unit, any other
+# field, an owner other than cobalt|manual, and VIX/BTC as `cobalt` (no
+# source can serve them yet).
+daily_refresh:
+  units: [trading/market_table, market_calendar/market_calendar]
+  fields: {SPY: cobalt, QQQ: cobalt, IWM: cobalt, VIX: manual, BTC: manual}

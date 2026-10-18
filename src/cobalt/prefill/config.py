@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Literal, Optional
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 RULES_CONFIG_PATH = REPO_ROOT / "configs" / "cobalt" / "rules.yaml"
@@ -118,6 +118,48 @@ class PrefillPathsConfig(BaseModel):
     drc_template: Optional[str] = Field(default=None, min_length=1)
 
 
+#: F4 (FINAL §4.3, §4.6, [F-05], [F-14]): the ONLY units `prefill refresh`
+#: may re-render, and the ONLY fields of the market table, in order.
+REFRESH_UNITS: tuple[str, ...] = ("trading/market_table", "market_calendar/market_calendar")
+REFRESH_FIELDS: tuple[str, ...] = ("SPY", "QQQ", "IWM", "VIX", "BTC")
+#: Fields no source can serve (`prefill/market.py:7-11`). Switching one
+#: to `cobalt` needs an implemented source capability; config alone
+#: cannot create one ([F-05]), so the load refuses it.
+NO_SOURCE_FIELDS: tuple[str, ...] = ("VIX", "BTC")
+
+
+class DailyRefreshConfig(BaseModel):
+    """`prefill.yaml` top-level `daily_refresh:` (F4 owns it, [F-14])."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    units: list[str]
+    fields: dict[str, Literal["cobalt", "manual"]]
+
+    @model_validator(mode="after")
+    def _exactly_the_supported_shape(self) -> "DailyRefreshConfig":
+        extra_units = [u for u in self.units if u not in REFRESH_UNITS]
+        if extra_units or sorted(self.units) != sorted(REFRESH_UNITS):
+            raise ValueError(
+                f"daily_refresh.units must be exactly {list(REFRESH_UNITS)}; "
+                f"got {self.units} (unsupported: {extra_units or 'none'})"
+            )
+        missing = [f for f in REFRESH_FIELDS if f not in self.fields]
+        unknown = [f for f in self.fields if f not in REFRESH_FIELDS]
+        if missing or unknown:
+            raise ValueError(
+                f"daily_refresh.fields must hold exactly {list(REFRESH_FIELDS)}; "
+                f"missing {missing or 'none'}, unknown {unknown or 'none'}"
+            )
+        sourceless = [f for f in NO_SOURCE_FIELDS if self.fields[f] == "cobalt"]
+        if sourceless:
+            raise ValueError(
+                f"daily_refresh.fields: {sourceless} set to 'cobalt' but no source capability "
+                "exists for them — they stay 'manual' until one is built (F4 [F-05])"
+            )
+        return self
+
+
 def _load_yaml_mapping(path: Path, top_key: str) -> dict:
     if not path.exists():
         raise PrefillConfigError(f"Config not found: {path}")
@@ -151,6 +193,14 @@ def load_strategies_config() -> StrategiesConfig:
         raise PrefillConfigError(
             f"{STRATEGIES_CONFIG_PATH}: invalid strategies config:\n{e}"
         ) from e
+
+
+def load_daily_refresh_config(path: Path = PREFILL_CONFIG_PATH) -> DailyRefreshConfig:
+    data = _load_yaml_mapping(path, "daily_refresh")
+    try:
+        return DailyRefreshConfig(**(data or {}))
+    except ValidationError as e:
+        raise PrefillConfigError(f"{path}: invalid daily_refresh config:\n{e}") from e
 
 
 def load_prefill_paths() -> PrefillPathsConfig:

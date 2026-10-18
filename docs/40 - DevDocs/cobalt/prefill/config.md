@@ -48,3 +48,12 @@ names HIS DRC template, vault-relative — the one template the DRC build
 reads (`drc/template.md`, `[F-20]`). It is Optional in the schema so a
 paths object built for another writer needs no DRC key; the build refuses
 loudly when it is absent, never a default path (L1).
+
+## 2026-10-10 — f4-refresh-1010
+F4 [F-14]: `DailyRefreshConfig` (`extra="forbid"`) and
+`load_daily_refresh_config(path=PREFILL_CONFIG_PATH)`, read through
+`_load_yaml_mapping(…, "daily_refresh")`. `units` must be exactly
+`REFRESH_UNITS`; `fields` exactly `REFRESH_FIELDS`, each `cobalt|manual`;
+`NO_SOURCE_FIELDS` (VIX, BTC) as `cobalt` is refused. Every refusal is a
+`PrefillConfigError` naming the key. The `prefill:` mapping and
+`PrefillPathsConfig` are unchanged.

@@ -177,3 +177,15 @@ with its own audit rows purged either side) and the **dev database**.
 Organised by clause: L28.1 create-if-absent, L28.2 markers/units/human
 text, L28.3 audit + guard + retry, L28.4 diff + dry-run, rollback,
 L28.5 the vault fences, plus merge and marker unit tests with no I/O.
+
+## 2026-10-10 — f4-refresh-1010
+- `writer.py`: `upsert_unit(…, body_fn=None)`. A `body_fn(snapshot) -> str`
+  replaces `body` and is called inside `build` on EVERY `_write_with_retry`
+  attempt, the retry after `NoteChangedOnDisk` included, so the proposal is
+  rebuilt from that attempt's snapshot. Omitted, the fixed `body` is
+  today's path. No second writer, no lock (F4 [F-26]).
+- `merge.py`: `merge3` — an UNTOUCHED replace of EQUAL length now emits
+  each human insert immediately before `cobalt[c1+k]`, the line that
+  replaced its anchor `base[b1+k]`, instead of after the whole replaced
+  block. Unequal spans and touched ranges keep the old order. One merger,
+  every writer; the existing `test_vaultwrite.py` cases are unchanged.

@@ -58,3 +58,10 @@ prefill is what does. A missing note is reported loudly and skipped.
 the merge), by the ASET sheet's `/attest`, and by
 `cobalt daymode attest|decide|propose`. Three copies of the words would
 be three chances to disagree.
+
+## 2026-10-10 — f4-refresh-1010
+F4 [F-30]: `render_body(…, when=None)` leads with `as of HH:MM ET` and a
+blank line, from an aware instant (`when`, else the session clock's UTC now)
+through `prefill.daily.format_stamp`. A naive `when` is refused. Each
+`write()` replaces the unit, so the stamp is there once, never twice.
+`daily_note_path` is unchanged; refresh and F5 reuse it ([F-31]).

@@ -44,8 +44,8 @@ CONSUMERS = {
     "radar/collector.py": "com.cobalt.radar resident, radar TokenBucket",
     "radar/propose.py": "cobalt radar screens propose (CLI, by hand), no bucket",
     "radar/throttle.py": "throttle probe (CLI, by hand), no bucket",
-    "prefill/market.py": "com.cobalt.prefill-daily 05:15, 1 screener request, no bucket",
-    "prefill/calendar.py": "com.cobalt.prefill-daily 05:15, 2 calendar requests, no bucket",
+    "prefill/market.py": "com.cobalt.prefill-daily 05:15 and com.cobalt.prefill-refresh every 30 min 05:45-15:45 (shared gate, form B), 1 screener request a run, no bucket",
+    "prefill/calendar.py": "com.cobalt.prefill-daily 05:15 and com.cobalt.prefill-refresh every 30 min 05:45-15:45 (shared gate, form B), 2 calendar requests a run, no bucket",
     "aset/prefill.py": "com.cobalt.aset resident, /export/stock p=d on demand (RTH), no bucket",
 }
 BUCKETED = {"archiver/collector.py", "radar/collector.py"}

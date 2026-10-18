@@ -32,3 +32,11 @@ are removed (F39; v2 §8 `[F-22]`): the DRC is built by `cobalt drc build`
 (K1's `drc` group) and the `/drc` drop's event. `uv run prefill drc` now
 exits 2, `invalid choice: 'drc'`. The `prefill` script entry in
 `pyproject.toml` stays — it runs `prefill daily`.
+
+## 2026-10-10 — f4-refresh-1010
+F4: `prefill refresh [--dry-run]` added — its own handler `_run_refresh`,
+constant `REFRESH_JOB = "com.cobalt.prefill-refresh"` and parser
+registration. It runs under `as_job(REFRESH_JOB, skip=dry_run)`, prints the
+run report (every unified diff) and then raises `RefreshNotClean` inside the
+block when a field degraded or a write failed, so `job_run` records
+`exit_code=1`.

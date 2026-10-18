@@ -128,6 +128,24 @@ class TestRenderBody:
         assert "- [x] full.htk" in body
         assert "- [ ] half.htk" in body
 
+    def test_f4_x7_the_body_leads_with_an_et_stamp_from_an_aware_instant(self):
+        from datetime import datetime, timezone
+
+        body = note_mod.render_body(
+            _cfg(), "reduced", stage="s", when=datetime(2026, 9, 3, 13, 0, tzinfo=timezone.utc)
+        )
+        lines = body.split("\n")
+        assert lines[0] == "as of 09:00 ET" and lines[1] == ""
+        assert lines[2].startswith("**Day mode: REDUCED**")
+
+    def test_f4_x7_a_naive_instant_is_refused(self):
+        from datetime import datetime
+
+        from cobalt.session.clock import SessionError
+
+        with pytest.raises(SessionError, match="naive"):
+            note_mod.render_body(_cfg(), "reduced", stage="s", when=datetime(2026, 9, 3, 9, 0))
+
 
 @requires_db
 @pytest.mark.integration
@@ -154,6 +172,17 @@ class TestWriteIntoTheNote:
         )
         assert "- [x] full.htk" in text
         assert "his own line, which must survive every write" in text
+
+    def test_f4_x7_the_stamp_is_there_once_after_a_second_write(self, note_path):
+        store = VaultWriteStore()
+        store.ensure_schema()
+        for attested in ("half.htk", "full.htk"):
+            note_mod.write(note_path, _cfg(), "reduced", stage="stage 1", attested=attested, store=store)
+        text = note_path.read_text(encoding="utf-8")
+        body = text.split("<!-- cobalt:unit sheet_mode -->\n", 1)[1].split("<!-- /cobalt:unit", 1)[0]
+        stamps = [line for line in body.split("\n") if line.startswith("as of ")]
+        assert stamps == ["as of 10:00 ET"], "the frozen suite clock is 10:00 ET; one stamp, never two"
+        assert body.startswith("as of 10:00 ET\n")
 
     def test_a_missing_note_is_reported_not_created(self, tmp_path, monkeypatch):
         monkeypatch.setattr(vault_writer_module, "resolve_vault_path", lambda: tmp_path)
