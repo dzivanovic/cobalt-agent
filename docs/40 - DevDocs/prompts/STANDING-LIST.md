@@ -253,3 +253,17 @@ NEW as a launch line, inside K3 (an approved production write, by one dedicated 
 | `<prod write>` → `"Bash(<the card's command>)"` | step (4): THE ONE WRITE, typed once | what that `cobalt` verb writes, in production | any other command; a `db migrate`, `db query`, `db dev-rebuild` or `backup` verb (refused at launch) |
 
 Deny (5): `AskUserQuestion`, `EnterWorktree`, `Bash(git push*)`, and `Bash(COBALT_ENV=production uv run cobalt db migrate*)` · `Bash(COBALT_ENV=production uv run cobalt backup restore*)` (a schema change and a restore are never this seat's). Every other line keeps its production deny or its named set (`tests/ops/test_hub_lines.py`, card 392 W7).
+
+## 10. THE CHECK-IN TIMER AND ITS PING SEAT (his 2026-10-18 R1854; card 2026-10-18 751)
+
+`ops/desk/checkin-timer.sh` and `ops/desk/com.cobalt.checkin-timer.plist` (CLASS (a), `:36`; bootstrapped by his hand, the script's header). The ping line of `prompts/CHECKIN-PING.md`: 3 allow, 3 deny · `--model claude-sonnet-5-5` · `--permission-mode auto` · launched from `/Users/cobalt/cobalt` by `desk-launch.sh prompt` · no `--add-dir`.
+
+| string | for | can touch | never touches |
+|---|---|---|---|
+| `Read` | the prompt | read only | writes nothing |
+| `SendMessage` | the one MESSAGE to `cto-desk` | the desk's line (CTO-DESK-WAKEUP.md:13) | any other seat |
+| `Bash(date*)` | the clock | the clock read (BRAIN-HUB.md:8) | writes nothing |
+
+NEW: none; every string stands on a proven line.
+A–D themselves live in CTO-DESK-WAKEUP.md ON TRIGGER, BRAIN-HUB.md ## CHECK-IN and CONTRACT (R1854).
+

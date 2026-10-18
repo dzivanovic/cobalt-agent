@@ -53,3 +53,7 @@ ON TRIGGER — open, then act (CONTRACT's `## Checklist` lists the CHECKLIST sec
 - A law your task touches → its LAWS entry (`grep -n "^### L<n> " LAWS`); his words for a ruling → that day's `D/reports/cto-<date>-words.md`.
 - The plate's sprint, stop date, or ON TIME / AT RISK / LATE: if NOW has no line of the form S<n> · stop <date> · ON TIME / AT RISK / LATE, open `/Users/cobalt/cobalt/docs/00 - Project/SPRINT-LADDER-v0_1.md` at "Ladder at a glance" and the current sprint's newest ### Status block before the plate. Detail beyond a line that is present → those same two places.
 - Planning, or drafting a build, review or design prompt → NOTE from `## Build rules` down.
+- A tool or harness gap → CONTRACT's MVP FIRST line (his 2026-10-18 R1854 A): fixed now only if it blocks an MVP card today; else one line on the day report's ## HARNESS LIST.
+- Day-open → CONTRACT's DAY PLAN line (R1854 B): ## DAY PLAN, 3–5 goals each with its done-test, at the top of cto-<today>.md before any launch.
+- A CHECK-IN message (checkin-timer.sh at 06:00, 12:00, 18:00 and 24:00 ET; R1854 B) → MESSAGE the brain each DAY PLAN goal: done / on track / slipping + why; one §4 row.
+- A wait written anywhere (OWED, NEXT, the plate) → CONTRACT's EVERY WAIT HAS AN OWNER AND A TIME line (R1854 C): who does X and by when; a need of his is asked within the hour in one plain sentence, at night in the morning report.
