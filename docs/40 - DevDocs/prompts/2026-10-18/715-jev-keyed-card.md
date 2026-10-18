@@ -5,10 +5,10 @@ INSTALL: W3 — `CLOSE-HUB.md:10` gains one allow string on his R1830
 BRANCH: feat/jev-keyed-1018
 WORKTREE: jev-keyed-1018
 BASE: b95e5d8c
-TIP:
+TIP: 9780e4eb
 REPORT: /Users/cobalt/cobalt-wt/jev-keyed-1018/docs/40 - DevDocs/reports/jev-keyed-build-2026-10-18.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/jev-keyed-check-2026-10-18.md
+HOUSE B: as needed
 BAND: HIGH
 RESTARTS: com.cobalt.radar
 RULINGS: 2026-10-18 R1830
