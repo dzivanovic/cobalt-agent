@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.checkin-timer</string>
+    <!-- The check-in by timer (his 2026-10-18 R1854 B; card 2026-10-18 751
+         checkin-install). An operator timer: it runs a desk script, no Cobalt code reads it, and
+         it lives under ops/desk/ (restarts.py OPS_DESK_PREFIX: no restart). His install is the
+         header of ops/desk/checkin-timer.sh. launchd uses the Mac's local clock (ET). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <!-- launchd's own PATH holds neither `claude` nor python3; desk-launch.sh runs both -->
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <string>sh</string>
+        <string>/Users/cobalt/cobalt/ops/desk/checkin-timer.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Hour</key><integer>6</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>12</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>18</integer><key>Minute</key><integer>0</integer></dict>
+        <dict><key>Hour</key><integer>0</integer><key>Minute</key><integer>0</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt-wt/.timer-logs/checkin-timer.out</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt-wt/.timer-logs/checkin-timer.err</string>
+</dict>
+</plist>

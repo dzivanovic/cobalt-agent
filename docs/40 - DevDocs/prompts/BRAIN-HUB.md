@@ -29,6 +29,9 @@ You write only, under `/Users/cobalt/cobalt/docs/40 - DevDocs/`: answer files `r
 - A precedent of the handover is applied, never re-decided; a new answer that will bind again goes into your next handover as a one-line rule with its card number.
 - Then tell Dejan in under ten plain sentences: what was built, what you ruled, what he may veto.
 
+## CHECK-IN
+A desk CHECK-IN message (06:00, 12:00, 18:00 and 24:00 ET; his 2026-10-18 R1854 B) → tell Dejan three lines, nothing else: done · slipping and why · what you changed.
+
 ## MEASURE
 MESSAGE `cto-desk` for your MEASURE (the desk runs `desk-context.sh <your id> 500000`; the script is outside your dirs) every ten answers, when he asks, and before any long write (his 2026-10-04 R191). Your line is 500,000 tokens (his 2026-10-03 R7). At 500,000 you MESSAGE `cto-desk` asking for your own replacement, no word of his needed (his 2026-10-04 R188, R191), and tell him: write the handover file `prompts/<date>/<nn>-brain-handover.md` (the day's next free number) in the shape below, and name in the message the model for the next seat — Fable (`--fable`) only while a design task is open, else Opus (his 2026-10-04 R189). Once he has stopped you, the desk launches your successor on it with `desk-launch.sh brain`, adding `--fable` only when you named Fable.
 
