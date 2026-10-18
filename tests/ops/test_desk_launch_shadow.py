@@ -431,3 +431,42 @@ def test_k5_grok_reads_no_agy_settings(desk):
     desk.env["COBALT_AGY_SETTINGS"] = str(desk.tmp / "missing-agy-settings.json")
     done = desk.run(str(desk.card), "--model", "grok-4.7")
     assert done.returncode == 0, done.stderr
+
+
+# ---- check of card 759 (agy-read-1018-check): findings O1, O3, house A 1 ----------------------
+
+
+def test_check_o1_a_wide_write_rule_on_the_grant_line_is_refused(desk):
+    card = signed_gemini(desk)
+    grant = f"{desk.wt}/x-job-gemini/"
+    Path(desk.env["COBALT_AGY_SETTINGS"]).write_text(
+        json.dumps({"permissions": {"allow": ["write_file(*)", f"write_file({grant})"]}}) + "\n")
+    agy = desk.env["COBALT_AGY_SETTINGS"]
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high"),
+        f"shadow: gemini: {agy} holds a write rule that reaches past {grant}: write_file(*)",
+    )
+
+
+def test_check_o3_an_empty_write_target_is_refused(desk):
+    card = signed_gemini(desk)
+    grant = f"{desk.wt}/x-job-gemini/"
+    write_agy(desk, [f"write_file({grant})", "write_file()"])
+    agy = desk.env["COBALT_AGY_SETTINGS"]
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high"),
+        f"shadow: gemini: {agy} holds a write rule that reaches past {grant}: write_file()",
+    )
+
+
+def test_k5_gemini_earlier_write_on_the_same_line_is_refused(desk):
+    card = signed_gemini(desk)
+    grant = f"{desk.wt}/x-job-gemini/"
+    agy_path = Path(desk.env["COBALT_AGY_SETTINGS"])
+    agy_path.write_text(
+        '{"permissions": {"allow": ["write_file(*)", "write_file(' + grant + ')"]}}\n'
+    )
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high"),
+        f"shadow: gemini: {agy_path} holds a write rule that reaches past {grant}: write_file(*)",
+    )
