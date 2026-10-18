@@ -9,9 +9,11 @@ Nothing here calls launchctl, claude, or Mattermost.
 
 from __future__ import annotations
 
+import json
 import os
 import plistlib
 import subprocess
+import time
 from pathlib import Path
 
 import pytest
@@ -51,6 +53,19 @@ NOTIFY_STUB = """#!/bin/sh
 printf '%s\\n' "$*" >> "$NOTIFY_OUT"
 """
 
+# F1: the age source (`claude agents --json`) and the close (`desk-done.sh <id> --replaced`)
+AGENTS_STUB = """#!/bin/sh
+[ ! -f "$AGENTS_FAIL" ] || exit 1
+[ -f "$AGENTS_JSON" ] || { echo '[]'; exit 0; }
+cat "$AGENTS_JSON"
+"""
+
+DONE_STUB = """#!/bin/sh
+printf 'done %s\\n' "$*" >> "$CALLS"
+echo "${DONE_LINE:-CLOSED $1}"
+exit "${DONE_EXIT:-0}"
+"""
+
 DESK_MISSING = "checkin-timer: desk missing — relaunch with desk-launch.sh desk"
 
 CTO = "aaaa1111-0000-4000-8000-000000000001 · cto-desk · ~/cobalt · running · idle"
@@ -84,6 +99,11 @@ def box(tmp_path):
     sender = tmp_path / "notify.sh"
     sender.write_text(NOTIFY_STUB)
     sender.chmod(0o755)
+    agents_cmd = tmp_path / "agents.sh"
+    agents_cmd.write_text(AGENTS_STUB)
+    agents_cmd.chmod(0o755)
+    done_stub = tmp_path / "desk-done.sh"
+    done_stub.write_text(DONE_STUB)
 
     class Box:
         pass
@@ -93,6 +113,12 @@ def box(tmp_path):
     b.calls = tmp_path / "calls.txt"
     b.list_fail = tmp_path / "list-fail"
     b.notify = tmp_path / "notify.txt"
+    b.agents_json = tmp_path / "agents.json"
+    b.agents_fail = tmp_path / "agents-fail"
+    b.prompt = repo / "docs" / "40 - DevDocs" / "prompts" / "CHECKIN-PING.md"
+
+    def agents(rows: list[dict]) -> None:
+        b.agents_json.write_text(json.dumps(rows))
 
     def run(extra: dict | None = None, drop: tuple = ()):
         env = dict(
@@ -105,6 +131,10 @@ def box(tmp_path):
             LIST_FAIL=str(b.list_fail),
             COBALT_NOTIFY=str(sender),
             NOTIFY_OUT=str(b.notify),
+            COBALT_AGENTS_CMD=str(agents_cmd),
+            AGENTS_JSON=str(b.agents_json),
+            AGENTS_FAIL=str(b.agents_fail),
+            COBALT_DESK_DONE=str(done_stub),
         )
         env.update(extra or {})
         for k in drop:
@@ -120,8 +150,24 @@ def box(tmp_path):
     def notes() -> list[str]:
         return b.notify.read_text().splitlines() if b.notify.exists() else []
 
-    b.run, b.calls_made, b.notes = run, calls, notes
+    b.run, b.calls_made, b.notes, b.agents = run, calls, notes, agents
     return b
+
+
+def ago(minutes: int) -> int:
+    """A constructed `startedAt`: epoch milliseconds, `minutes` before now (ops/cto-desk.sh:226)."""
+    return int(time.time() * 1000) - minutes * 60 * 1000
+
+
+def ping_row(ident: str, status: str = "running", state: str = "idle") -> str:
+    return f"{ident} · checkin-ping · ~/cobalt · {status} · {state}"
+
+
+def agent(ident: str, started=None) -> dict:
+    row = {"id": ident, "name": "checkin-ping", "pid": 4242}
+    if started is not None:
+        row["startedAt"] = started
+    return row
 
 
 def refused_line(done) -> str:
@@ -258,6 +304,94 @@ def test_t1_a_failed_launch_notifies_and_keeps_its_exit(box):
     assert len(logs) == 1
     assert f"LAUNCHED: checkin — exit 4 — log {logs[0]}" in done.stdout
     assert box.notes() == [f"checkin-timer: REFUSED: launcher exit 4 — log {logs[0]}"]
+
+
+# ---- F1: step (4) judges a checkin-ping row by its age, never by its state -------------------
+
+STALE = "eeee5555-0000-4000-8000-000000000005"
+YOUNG = "ffff6666-0000-4000-8000-000000000006"
+
+
+def test_f1_a_stale_working_ping_is_closed_then_replaced(box):
+    # R117: an ended --bg row can stay `working`; six hours old, it is closed whatever its state
+    box.rows.write_text(CTO + "\n" + ping_row(STALE, "idle", "working") + "\n")
+    box.agents([agent(STALE, ago(360))])
+    done = box.run()
+    assert "DEFERRED" not in done.stdout, done.stdout
+    assert done.returncode == 0, done.stderr
+    assert box.calls_made() == [f"done {STALE} --replaced", f"prompt {box.prompt}"]
+    assert f"CLOSED STALE PING: CLOSED {STALE}" in done.stdout
+    assert not box.notify.exists()
+
+
+def test_f1_a_five_minute_old_ping_still_defers(box):
+    box.rows.write_text(CTO + "\n" + ping_row(YOUNG) + "\n")
+    box.agents([agent(YOUNG, ago(5))])
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert f"DEFERRED: ping live — {YOUNG}" in done.stdout
+    assert box.calls_made() == []
+    assert not box.notify.exists()
+
+
+def test_f1_no_ping_row_launches_directly(box):
+    box.agents([agent(STALE, ago(360))])
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert box.calls_made() == [f"prompt {box.prompt}"]
+    assert not box.notify.exists()
+
+
+def test_f1_a_young_ping_defers_even_when_a_stale_one_is_closed(box):
+    box.rows.write_text(CTO + "\n" + ping_row(STALE) + "\n" + ping_row(YOUNG) + "\n")
+    box.agents([agent(STALE, ago(360)), agent(YOUNG, ago(5))])
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert box.calls_made() == [f"done {STALE} --replaced"]
+    assert f"DEFERRED: ping live — {YOUNG}" in done.stdout
+    assert not box.notify.exists()
+
+
+def test_f1_an_unknown_age_counts_stale(box):
+    # no startedAt on the row
+    box.rows.write_text(CTO + "\n" + ping_row(STALE) + "\n")
+    box.agents([agent(STALE)])
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert box.calls_made() == [f"done {STALE} --replaced", f"prompt {box.prompt}"]
+    # a startedAt that is not a number
+    box.calls.unlink()
+    box.agents([agent(STALE, "soon")])
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert box.calls_made() == [f"done {STALE} --replaced", f"prompt {box.prompt}"]
+    # an unreadable agents listing, though the row would be young
+    box.calls.unlink()
+    box.agents([agent(STALE, ago(5))])
+    box.agents_fail.write_text("x")
+    done = box.run()
+    assert done.returncode == 0, done.stderr
+    assert box.calls_made() == [f"done {STALE} --replaced", f"prompt {box.prompt}"]
+    assert not box.notify.exists()
+
+
+def test_f1_a_failed_close_refuses_and_launches_nothing(box):
+    box.rows.write_text(CTO + "\n" + ping_row(STALE) + "\n")
+    box.agents([agent(STALE, ago(360))])
+    done = box.run(extra={"DONE_EXIT": "1"})
+    assert done.returncode == 1, done.stderr
+    assert refused_line(done) == f"REFUSED: close of stale ping {STALE} failed — CLOSED {STALE}"
+    assert box.notes() == ["checkin-timer: " + refused_line(done)]
+    assert box.calls_made() == [f"done {STALE} --replaced"]
+    # a KEPT last line refuses even on exit 0
+    box.notify.unlink()
+    box.calls.unlink()
+    kept = f"KEPT {STALE}: tab t1 still present"
+    done = box.run(extra={"DONE_LINE": kept})
+    assert done.returncode == 1, done.stderr
+    assert refused_line(done) == f"REFUSED: close of stale ping {STALE} failed — {kept}"
+    assert box.notes() == ["checkin-timer: " + refused_line(done)]
+    assert box.calls_made() == [f"done {STALE} --replaced"]
 
 
 # ---- T2: the plist and the derivation ------------------------------------------------------
