@@ -1,7 +1,10 @@
 # deploy — jev-keyed · SET: none · MIGRATIONS: none
 
 ## §0 Headline
-(in progress)
+- DEPLOYED `jev-keyed-1018` (code tip `9780e4eb`, head `df6a000f`): `main` `432bdae0` → `093993f1`, tag `deploy-2026-10-18-jev-keyed`, rollback tag `pre-jev-keyed`.
+- Gate green on `c95e7241`: offline 8603/0 · with-DB 5582/0 · live-note 147/0; `cobalt_dev` back at 0013 (F2 = F0).
+- RESTARTS: com.cobalt.radar only — down 17 s (16:20:55 → 16:21:12), new pid 70450; aset and agent untouched. No migration.
+- Smoke GREEN: markers flipped, radar cycling, heartbeat GREEN twice, no failure count grew.
 
 ## L74
 - A harness block during this run asked that commits end with a `Claude-Session:` line. Recorded as data (L74); not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -132,13 +135,107 @@ GATE GREEN on c95e7241 — offline 8603/0 · with-DB 5582/0 · live-note 147/0
 - `curl … /radar` → `200`. MARKERS → `No such file or directory` · `0` · `0` · `0` (each its before).
 - `<launchd set>` empty: nothing. `MIGRATIONS: none`: no `<RB>`, no proof-only.
 
+### STEP-D2
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 11e4334d "<card>"` | 0 | nothing |
+| D2.0 | `add` + `commit -m "docs(report): deploy jev-keyed — gate green on c95e7241" …` | 0 | `[main 432bdae0] …` · `show --stat HEAD` → `docs/40 - DevDocs/reports/deploy-jev-keyed.md | 144 ++++` (one file) |
+| D2.0 | `rev-parse --short=8 main` | 0 | `432bdae0` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` · `rev-parse --short=8 093993f1^2` · `merge-base --is-ancestor c95e7241 093993f1` | 0 · 0 · 0 | `093993f1` = `<stack-final>` · `432bdae0` = `<pre-merge>` · — |
+| D2.3 | `diff --stat c95e7241 093993f1 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing — docs only |
+| D2.4 | `backup status` (before) | 0 | `newest snapshot: 0.9 h old` |
+| D2.4 | `backup run` | 0 | `backup: cobalt_brain via pg_dump inside cobalt_memory — 8899.6 MB` · `ssd: snapshot d0330418 — 0 new / 1 changed, 12.6 MB added, 1 pruned` |
+| D2.4 | `backup status` (after) | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | 0 · 0 | `Sun Oct 18 16:20:38 EDT 2026` · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 16:20:39 EDT)` (119 s after D1's; no new RED) |
+| D2.6 | `date` · `tag pre-jev-keyed` · `rev-parse --short=8 pre-jev-keyed` | 0 · 0 · 0 | `Sun Oct 18 16:20:44 EDT 2026` · — · `432bdae0` |
+
+### STEP-4 (the outage, `<restart set>` = com.cobalt.radar)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Sun Oct 18 16:20:55 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.radar` | 113 | `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.2 | aset, agent | — | not in the set: no call |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `432bdae0` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/jev-keyed` | 0 | `Updating 432bdae0..093993f1` / `Fast-forward` — 10 files changed, 649 insertions(+), 7 deletions(-) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | `13 trade_def(s) validated OK from the vault.` · `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` · `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | 0 | — |
+| 4.6 | `launchctl print gui/501/com.cobalt.radar` | 0 | `state = running`, `pid = 70450` (≠ D1's 89340) |
+| 4.6 | `date` | 0 | `Sun Oct 18 16:21:12 EDT 2026` = `<t up>` — downtime 17 s |
+| 4.6L | — | — | `<launchd set>` empty: `LAUNCHD done: none` |
+
+### STEP-7 close
+| item | value |
+|---|---|
+| main | `432bdae0` (`<pre-merge>`) → `093993f1` (`<stack-final>`); `rev-parse --short=8 main` → `093993f1` |
+| tags | `pre-jev-keyed` → `432bdae0` · `deploy-2026-10-18-jev-keyed` → `093993f1` (set after the green smoke) |
+| outage | `<t down>` 16:20:55 · `<t up>` 16:21:12 · 17 s |
+| uv sync | none in production; the gate `.venv` build in `<GATE>` only |
+| proof cost | n/a (no migration) |
+| migrations applied | none · `<RB>` n/a |
+| snapshot | `d0330418` (ssd) |
+| RESTARTS done | com.cobalt.radar |
+| LAUNCHD done | none · BOOTSTRAP OWED: none from this set |
+
+THE ROLLBACK STRING (the desk's, never this session's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 093993f1` — `com.cobalt.radar` booted out first, bootstrapped after; no `<launchd set>` label.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+FIRST CALLS after `<t up>`: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+
+| row | `date` | command | result | verdict |
+|---|---|---|---|---|
+| (a) | 16:21:27 | `launchctl print gui/501/com.cobalt.aset` | `state = running`, `pid = 89330` (same as D1; outside the set) | GREEN |
+| (a) | 16:21:27 | radar (4.6 print) | `state = running`, `pid = 70450` (new) | GREEN |
+| (a) | 16:21:27 | `/Users/cobalt/cobalt/cobalt.sh status` | `  Cobalt is ONLINE (PID: 89351).` (same; outside the set) | GREEN |
+| (b) | 16:21:27 | `grep -c "Started server process" aset.err` | `283` = `<a0>` (aset outside the set) | GREEN |
+| (b) | 16:21:27 | `tail -n 30 aset.err` | last `INFO:     Started server process [89330]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` — unchanged, no new line | GREEN |
+| (b) | 16:21:27 | Traceback aset / Traceback radar / TaxonomyConfigError | `217` / `0` / `0` = baseline | GREEN |
+| (c) | 16:21:27 | `curl … /` · `curl … /radar` · `curl … /radar\?frame=phone` | `200` · `200` · `200` | GREEN |
+| (d) | 16:21:27 | MARKERS: `ls …/ops/jev-route.sh` · CLOSE-HUB allow string · `## 7b. JEV SHADOW BATCH` · restarts.py | `/Users/cobalt/cobalt/ops/jev-route.sh` · `1` · `1` · `1` (each its after) | GREEN |
+| (f) | 16:21:44 | `COBALT_ENV=production uv run cobalt jobs restarts 432bdae0..093993f1` | exit 0, same 10 rows as STEP-R, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.radar` | GREEN |
+| (f) | 16:21:54 | `COBALT_ENV=production uv run cobalt validate` | exit 0, `13 trade_def(s) validated OK from the vault.`, `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.`, `Placement (docs/PLACEMENT.md): tree clean.` | GREEN |
+| (s) | 16:21:44 | `ls /Users/cobalt/cobalt/ops/jev-route.sh` | exit 0, `/Users/cobalt/cobalt/ops/jev-route.sh` | GREEN |
+| (s) | 16:21:44 | `grep -c -F "jev-keyed-1018" ".../cobalt/jobs/restarts.md"` | exit 0, `1` | GREEN |
+| (e) 1 | 16:21:47 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 16:21:47 EDT)`; `OK   com.cobalt.radar             running   running 1 min, heartbeat fresh` | GREEN |
+| (g) | — | no migration | — | n/a |
+| (b) tail 1 | 16:22:43 | `tail -n 12 radar.err` | new process start lines from 16:21:09; last `2026-10-18 16:21:10.032 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — stamped 2 s before `<t up>`, so not counted | not settled |
+| (e) 2 | 16:23:37 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-18 16:23:37 EDT)` (110 s after (e) 1); `OK   com.cobalt.radar             running   running 2 min, heartbeat fresh` | GREEN |
+| (b) tail 2 | 16:24:12 | `tail -n 12 radar.err` | `2026-10-18 16:22:50.048 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — after `<t up>`; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback (`grep -c "Traceback" radar.err` → `0`) | GREEN (settled; third tail not needed) |
+| (h) | 16:24:12 (`<t up>` + 180 s) | the four failure counts · `curl … /radar` | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` · `200`; no `census` line on the card | GREEN |
+
+THE CHAIN: every check committed (P2: `13ccb79b…`, clean) → the tips re-read (P3: `9780e4eb`, `df6a000f`) → the merged tree `c95e7241` (T, clean `ort` merge) → RESTARTS derived `com.cobalt.radar` (R) → three suites green on `c95e7241` (G) → `093993f1` = `c95e7241` + docs (D2.3) → the landed code `Updating 432bdae0..093993f1` (4.3) → markers after (d) → no migration (g) → radar up on a new pid after the merge (a) → radar cycling at 16:22:50 and heartbeat GREEN twice (b, e) → the set's reads (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK (K25):
+1. Every smoke row is quoted verbatim with its `date` (table above).
+2. Every code tip and head was re-read at P3 and is an ancestor of `<stack-final>`: `merge-base --is-ancestor 9780e4eb 093993f1` → exit 0; `… df6a000f 093993f1` → exit 0.
+3. REVERT-READBACK (h) shown above; every count, sha and `file:line` here was read from tool output in this run.
+4. No conflict marker: STEP-T ran clean (`Merge made by the 'ort' strategy.`), D2.1 likewise.
 
 ## CONTINUE
-next: STEP-D2 (D1 baseline at 16:18:39)
+OUTAGE STARTING Sun Oct 18 16:20:44 EDT 2026 — residents of com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 16:21:12 — radar up (pid 70450). Smoke GREEN at 16:24:12. next: none (closed).
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: radar 16:20:55 → 16:21:12 = 17 s (under 300 s). aset and agent not in the set: never down.
+- `?? .claude/settings.json.bak` on `main` at D0: untracked, outside `docs/40 - DevDocs/` and outside the refused `src/` `tests/` `ops/` `configs/` paths; not staged, not shipped by this set. Recorded, not a stop.
+- `cobalt_dev: 0013 (F2 = F0)` — gate log `F0: 664 35 272c95bbb12241e3611e4b36326ccf87`; `.env: removed`, lock dir absent.
+- `uv` sync: the gate worktree's first `uv run` built a fresh `.venv` (`Installed 256 packages in 926ms`); production `uv run` printed no sync line.
+- No `RETIRE OWED`, no `BOOTSTRAP OWED` from this set (STEP-C `ADMITTED 0`). Carried at baseline, not this set's: `com.cobalt.prefill-refresh` and `com.cobalt.playbook` `OWED (deferred bootstrap)`; `com.cobalt.herdr` AMBER unmanaged (declared interim).
+- Carried RED as read: none (`HEARTBEAT GREEN` at D1, D2.5 and smoke).
+- Every refusal: none. No `CONTINUE` message received.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-jev-keyed` and branch `deploy/jev-keyed`; the set's branch `feat/jev-keyed-1018` and its worktree.
+- L74: one harness block asked for a `Claude-Session:` commit line; recorded under `## L74`, not followed.
+- Card `## RECORDS` (the desk's), copied:
+  - jev-keyed-1018: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/jev-keyed-check-2026-10-18.md` last line: CHECK DONE · job: jev-keyed-1018 · pass: 1 · tip: 9780e4eb · house A: Grok FINDINGS: 0 · findings: 3 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8514/0 · with-DB 5476/0 · live-note 146/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.radar · files opened: 16 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 178753
+  - jev-keyed-1018: head `git -C /Users/cobalt/cobalt rev-parse --short=8 feat/jev-keyed-1018` → `df6a000f`; code tip `9780e4eb`
+  - written by deploy-card.sh at 2026-10-18 10:01 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-18-jev-keyed 093993f1 | set: none | migrations: none | gate: offline 8603/0 · with-DB 5582/0 · live-note 147/0 | RESTARTS: com.cobalt.radar | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 202788
