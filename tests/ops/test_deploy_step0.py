@@ -14,6 +14,7 @@ import json
 import os
 import subprocess
 import sys
+import textwrap
 from pathlib import Path
 
 import pytest
@@ -934,3 +935,110 @@ def test_c2_p2_reads_a_fixed_line_naming_two_ids(desk):
     """RED on BASE: `FAILED STEP-0: P2 check 1 — ops/alpha: held id O1 has no FIXED line …`."""
     held_round(desk, runs=("O1", "O2"), n="2", lines=["FIXED: O1 O2 — tests/x_test.py::test_o1"])
     passes_p2(desk)
+
+
+# ---- K2: the P8 census lists com.cobalt.cos (card 784) -----------------------------------------
+
+# The rule column of a clean Saturday run, in the order the script prints it (cos removed).
+# P0's echoed authorize rows and the per-ship P7 listings sit in that column too; :219-223 names
+# a subset and not this order.
+K2_RULES_WITHOUT_COS = (
+    "KEYS",
+    "SHIPS",
+    "P0 INSTALLED",
+    "P0 PLACEHOLDER",
+    "P0 CARD COMMITTED",
+    "P0 CARD UNCHANGED",
+    "P0 STANDING LIST 2026-01-01 R1 row",
+    "P0 STANDING LIST 2026-01-01 R1 committed",
+    "P0 STANDING LIST 2026-01-01 R1 at HEAD",
+    "P0 RULING 2026-01-02 R2 row",
+    "P0 RULING 2026-01-02 R2 committed",
+    "P0 RULING 2026-01-02 R2 at HEAD",
+    "P0 authorization",
+    "P1 window",
+    "P2 check 1",
+    "P2 committed 1",
+    "P3 tip 1",
+    "P7 listing 1",
+    "P2 check 2",
+    "P2 committed 2",
+    "P3 tip 2",
+    "P7 listing 2",
+    "P7 migrations",
+    "P8 census com.cobalt.aset",
+    "P8 census com.cobalt.radar",
+    "P8 census com.cobalt.agent",
+    "disk",
+    "main status",
+)
+
+
+def rule_column(done: subprocess.CompletedProcess) -> list[str]:
+    return [ln.split(" · ")[0] for ln in done.stdout.splitlines() if " · " in ln]
+
+
+def test_k2_census_lists_cos_after_the_agent(desk):
+    """RED on BASE: P8 census com.cobalt.cos is absent."""
+    done = desk.run()
+    assert done.returncode == 0, done.stdout + done.stderr
+    rules = rule_column(done)
+    assert "P8 census com.cobalt.cos" in rules, "P8 census com.cobalt.cos is absent"
+    i = rules.index("P8 census com.cobalt.agent")
+    assert rules[i + 1] == "P8 census com.cobalt.cos"
+    assert rules[i + 2] == "disk"
+    assert (
+        "P8 census com.cobalt.cos · launchctl print gui/501/com.cobalt.cos"
+        " · 0 · pid 1 · state running (recorded)"
+    ) in done.stdout.splitlines()
+
+
+def test_k2_dry_run_names_the_cos_census(desk):
+    """RED on BASE: WOULD RUN: launchctl print gui/501/com.cobalt.cos is absent."""
+    for name in ("git", "curl", "uv"):
+        stub(desk.bin, name, PLAIN)
+    done = desk.run("--dry-run")
+    assert done.returncode == 0, done.stdout + done.stderr
+    would = [ln for ln in done.stdout.splitlines() if ln.startswith("WOULD RUN: ")]
+    cos = "WOULD RUN: launchctl print gui/501/com.cobalt.cos"
+    agent = "WOULD RUN: launchctl print gui/501/com.cobalt.agent"
+    assert cos in would, f"{cos} is absent"
+    assert would[would.index(agent) + 1] == cos
+
+
+def test_k2_a_cos_not_loaded_is_recorded_and_fails_nothing(desk):
+    """RED on BASE: the cos census row is absent."""
+    stub(desk.bin, "launchctl", textwrap.dedent("""\
+        args = sys.argv[1:]
+        if args[:1] == ["print"]:
+            label = args[1].split("/")[-1]
+            if label == "com.cobalt.cos":
+                print('Could not find service "com.cobalt.cos" in domain for user gui: 501')
+                sys.exit(113)
+    """) + LAUNCHCTL)
+    done = desk.run()
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+    row = (
+        "P8 census com.cobalt.cos · launchctl print gui/501/com.cobalt.cos"
+        " · 113 · pid none · state none (recorded)"
+    )
+    assert row in done.stdout.splitlines(), "P8 census com.cobalt.cos is absent"
+
+
+def test_k2_the_three_residents_rows_are_unchanged(desk):
+    """Green on BASE and after: the three census rows, and the rule column with cos removed."""
+    done = desk.run()
+    assert done.returncode == 0, done.stdout + done.stderr
+    lines = done.stdout.splitlines()
+    for label, pid in (
+        ("com.cobalt.aset", 4101),
+        ("com.cobalt.radar", 4102),
+        ("com.cobalt.agent", 4103),
+    ):
+        assert (
+            f"P8 census {label} · launchctl print gui/501/{label}"
+            f" · 0 · pid {pid} · state running (recorded)"
+        ) in lines
+    rules = [r for r in rule_column(done) if r != "P8 census com.cobalt.cos"]
+    assert rules == list(K2_RULES_WITHOUT_COS)
