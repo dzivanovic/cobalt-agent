@@ -4,7 +4,7 @@ CLASS: K3, K5
 INSTALL: none
 BRANCH: ops/dml-roles-1013
 WORKTREE: dml-roles-1013
-BASE: «FILL: BASE — the 8-hex main commit after card 304 merges»
+BASE: e7ef198a
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/dml-roles-1013/docs/40 - DevDocs/reports/dml-roles-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/dml-roles-check-2026-10-13.md
