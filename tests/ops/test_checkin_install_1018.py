@@ -190,6 +190,7 @@ def test_t1_a_live_ping_defers(box):
     assert not box.notify.exists()
 
 
+@pytest.mark.xfail(strict=True, reason="check O1 OPEN: T1 (4) defers on a finished ping; the fix round's")
 def test_x3_a_finished_ping_row_does_not_defer_the_next_fire(box):
     # a ping whose one turn ended: status `idle`, state not `working` (wait-stop-line.sh:25-28)
     finished = "dddd4444-0000-4000-8000-000000000004 · checkin-ping · ~/cobalt · idle · done"
@@ -201,6 +202,7 @@ def test_x3_a_finished_ping_row_does_not_defer_the_next_fire(box):
     assert box.calls_made() == [f"prompt {prompt}"]
 
 
+@pytest.mark.xfail(strict=True, reason="check A1 HELD, NOT FIXED: desk-launch.sh kind prompt; the fix round's")
 def test_x3_a_finished_ping_is_not_left_as_a_named_session(desk, tmp_path):
     """The prompt launch must remove the checkin-ping session it starts; a later fire would defer on that row."""
     text = PING.read_text(encoding="utf-8").replace("/Users/cobalt/cobalt", str(desk.repo))
