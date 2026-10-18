@@ -1,0 +1,60 @@
+JOB: f16-close-1018
+LADDER: S5 · F16 close
+BRANCH: s5/f16-close-1018
+WORKTREE: f16-close-1018
+BASE: e7ef198a
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/f16-close-1018/docs/40 - DevDocs/reports/f16-close-1018-build-2026-10-18.md
+CHECK REPORT:
+HOUSE B:
+BAND: MID
+RULINGS: 2026-10-18 R1838
+
+## ROWS
+
+Scope: the F16 close sweep over what S5 has put on `main` at BASE (F4 card 304 port, F23 card 503; the OFF-LADDER JEV, check-in timer, agy-read and stop-guard builds swept and recorded, `## RECORDS`). F16's test is the Charter's (`docs/00 - Project/MVP-CHARTER-v0_2.md:177-179`, ladder `:1162`): `validate` passes; no inline literal in a predicate; every threshold a tunables row with a consumer; the loader fails loud on unknown keys. S5's thresholds are already rows (`prefill.refresh_window` `configs/cobalt/taxonomy/tunables.yaml:1084`, `prefill.refresh_interval_min` `:1096`, each with consumers); no S5 literal stays inline in a predicate (`## RECORDS`). What is missing is the S1 sweep's other half (ladder `:176-179`, `src/cobalt/cli.py:167-171`): `cobalt validate` builds the config families each sprint adds, and S5's two new families are not built by it, so a bad file passes the gate and fails at the job (the Sunday 17:30 playbook run, the 05:45 refresh). And the loader takes a row with no consumer (`src/cobalt/taxonomy/tunables.py:103` `consumers: list[str] = Field(default_factory=list)`; `src/cobalt/taxonomy/loader.py:76-85` checks nothing more). Re-find every place by content before the edit (BUILD-HUB E3). New tests go in ONE new file `tests/cobalt/test_f16_close_1018.py`, in the form of `tests/cobalt/test_validate_no_db.py` (no DB: its fixture removes the Postgres settings and stubs `cli.taxonomy_validate.main`; `_cmd_validate(argparse.Namespace(no_db=True))`). Every test builds its own bad file under `tmp_path` (L69: no value read from `trader_settings`; no test asserts a value of the real files).
+
+| row | what | red first | files |
+|---|---|---|---|
+| V1 | `cobalt validate` builds the F23 config family. In `_cmd_validate` (`src/cobalt/cli.py:137`), after the `Jobs (F17):` block (`:316-330`) and before the placement check (`:490-500`): `from cobalt.playbook import config as playbook_config`, `cfg = playbook_config.load_playbook_config()`, print one line `Playbook (F23): latest_per_family {…}, rows_per_slide {…}, why_max_chars {…}, out_dir {…}.` A `ValidationError` or `PlaybookConfigError` propagates (fail loud, L1), as the other loaders of this function do. The module is read through its attribute at call time (the test patches it). Import only `cobalt.playbook.config`: never `cobalt.playbook.data` or `.deck` (the import seam, `src/cobalt/playbook/cli.py:14-16`, FINAL [F-17]: `pptx` stays unloaded) | `test_v1_validate_refuses_a_bad_playbook_config`: write `tmp_path/"playbook.yaml"` = the four keys of `configs/cobalt/playbook.yaml` plus `unknown_key: 1`; monkeypatch `cobalt.playbook.config.load_playbook_config` to `lambda: real(tmp)` (real = the original function); `pytest.raises((ValidationError, PlaybookConfigError, SystemExit))` around `_cmd_validate(Namespace(no_db=True))`. RED on BASE: `DID NOT RAISE` (validate never loads the file). CONTROL `test_v1_validate_prints_the_playbook_line_and_leaves_pptx_unloaded` (red on BASE for its first assert, green after): on the real file the output holds a line starting `Playbook (F23): `, and `"pptx" not in sys.modules` after the call when it was not before (record `sys.modules` before; skip that assert only if `pptx` was already loaded) | `src/cobalt/cli.py`, `tests/cobalt/test_f16_close_1018.py` |
+| V2 | `cobalt validate` builds the F4 config family. Same place: `from cobalt.prefill import config as prefill_config`, `refresh = prefill_config.load_daily_refresh_config()`, print one line `Daily refresh (F4): units {…}; fields {…}.` (`src/cobalt/prefill/config.py:131-160`, `:198-203`: the loader already refuses another unit, another field, and VIX/BTC as `cobalt`; `PrefillConfigError` propagates) | `test_v2_validate_refuses_a_bad_daily_refresh`: write `tmp_path/"prefill.yaml"` whose `daily_refresh:` is the real block (`configs/cobalt/prefill.yaml:24-26`) with `VIX: cobalt`; monkeypatch `cobalt.prefill.config.load_daily_refresh_config` to `lambda: real(tmp)`; `pytest.raises((PrefillConfigError, SystemExit))`. RED on BASE: `DID NOT RAISE`. CONTROL `test_v2_validate_prints_the_daily_refresh_line` (red on BASE, green after): on the real file the output holds a line starting `Daily refresh (F4): ` | `src/cobalt/cli.py`, `tests/cobalt/test_f16_close_1018.py` |
+| C1 | The engine tunables loader refuses a row with no consumer (F16: "a tunables row with a consumer"). In `load_tunables` (`src/cobalt/taxonomy/loader.py:76`), after the registry is built: rows whose `consumers` is empty → `TaxonomyConfigError(f"{path}: tunables row(s) with no consumer (F16): {keys}")`, every key named. `TunableRow` (`tunables.py:103`) is NOT changed: the same model loads his per-trade vault rows (`src/cobalt/taxonomy/vault_loader.py:276`, `:552`), the taxonomy store (`src/cobalt/taxonomy/store.py:132`), the radar replay (`src/cobalt/radar/evaluate.py:1633`) and the assumed-rows writer (`src/cobalt/taxonomy/cli.py:508`); none of those is the engine registry, and a test builds rows without consumers (`tests/cobalt/test_taxonomy_store.py:265`, `tests/taxonomy/test_trade_defs.py:374`) | `test_c1_a_row_with_no_consumer_is_refused`: `tmp_path/"tunables.yaml"` with two rows (`unit: count`, `scope: global`, `dynamic: false`, `status: proposed`, `source: dwv`), one with `consumers: ["x"]`, one with none; `pytest.raises(TaxonomyConfigError, match=<the second key>)` around `load_tunables(tmp)`. RED on BASE: `DID NOT RAISE`. CONTROL `test_c1_the_engine_registry_loads` (green on BASE and after): `load_tunables()` on the real file returns rows and raises nothing (every one of its 94 rows names a consumer, `## RECORDS`). Quote whole: `uv run pytest -q -p no:cacheprovider tests/cobalt/test_f16_close_1018.py` on BASE (the file copied onto BASE) → `5 failed, 1 passed`, after → `0 failed`; then `uv run cobalt validate --no-db` → exit 0 with the two new lines quoted | `src/cobalt/taxonomy/loader.py`, `tests/cobalt/test_f16_close_1018.py` |
+
+## NOT IN THIS JOB
+- `src/cobalt/taxonomy/tunables.py` (`TunableRow`, `TunableRegistry`), `vault_loader.py`, `store.py`; his vault rows; any `trader_settings` read or write.
+- Any value of `configs/cobalt/taxonomy/tunables.yaml`, `configs/cobalt/playbook.yaml`, `configs/cobalt/prefill.yaml`: no row added, moved or re-valued.
+- `src/cobalt/playbook/` and `src/cobalt/prefill/` code; `src/cobalt/classify/`; anything under `ops/`.
+- F5, F20, F21: not on `main` at BASE; their sweep is owed after their deploys (`## RECORDS`), not here.
+- The OFF-LADDER harness literals (`src/cobalt/classify/route.py:80`, `:389`; `ops/desk/checkin-timer.sh:54`; `ops/desk/stop-guard.py:532`): recorded, not moved.
+- A red outside these rows: a `## DECISIONS` item, UNPROVEN (L70), with the output; never fixed here.
+
+## READ
+- `docs/00 - Project/MVP-CHARTER-v0_2.md:177-179`; `docs/00 - Project/SPRINT-LADDER-v0_1.md:70`, `:108-112`, `:176-179`, `:1162`.
+- `src/cobalt/cli.py:137-330`, `:490-500` (`_cmd_validate`).
+- `src/cobalt/playbook/config.py` (whole), `src/cobalt/playbook/cli.py:14-16`.
+- `src/cobalt/prefill/config.py:131-203`.
+- `src/cobalt/taxonomy/loader.py:76-85`, `src/cobalt/taxonomy/tunables.py:92-118`.
+- `tests/cobalt/test_validate_no_db.py` (the form).
+
+## CHECK ASKS
+- X1 Are `src/cobalt/cli.py`, `src/cobalt/taxonomy/loader.py` and the new test file the only changed files (`git diff --stat <BASE>`), and is no config value changed?
+- X2 Does `import cobalt.cli` or `cobalt validate` load `pptx` after V1 (FINAL [F-17])?
+- X3 Does any caller of `load_tunables` pass a file whose rows may lack consumers (a fixture, a vault path, a replay)? Name each caller and its file.
+- X4 Does `validate --no-db` still open no connection with V1 and V2 (`load_playbook_config`, `load_daily_refresh_config` read files only)?
+- X5 Sweep again on the tip: any threshold or literal in a predicate added by a file this job or BASE's S5 builds touched that is neither a tunables row nor recorded below?
+
+## DEPLOY PROOF
+- `grep -c -F "Playbook (F23): " /Users/cobalt/cobalt/src/cobalt/cli.py` · before `0` · after `1`
+- `grep -c -F "Daily refresh (F4): " /Users/cobalt/cobalt/src/cobalt/cli.py` · before `0` · after `1`
+- `grep -c -F "with no consumer (F16)" /Users/cobalt/cobalt/src/cobalt/taxonomy/loader.py` · before `0` · after `1`
+- validate · `COBALT_ENV=production uv run cobalt validate --no-db` · green: exit 0, a line starting `Playbook (F23): ` and a line starting `Daily refresh (F4): `, the last line `Placement (docs/PLACEMENT.md): tree clean.`
+
+## RECORDS
+- Drafter `draft-f16-close` (prompt 789), 2026-10-18 18:52 EDT from `date`; `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `e7ef198a` (the BASE).
+- S5 on `main` at BASE (`git log --oneline --since=2026-10-14 main -- src configs`): `51b03e00` F4 refresh (merged `db62c4b5`), `32424ff4` F23 playbook (merged `6b205122`), `5071698a` JEV keyed (merged `c95e7241`), `06e016b2`/`5316fafe` JEV shadow (10-15, OFF-LADDER). Ops only: check-in timer (merged `5a52b4f7`), agy-read (`862e3b1d`), stop-guard (`d12b0e1a`). Not on `main`: F20 (card 730, deploy waits on card 787), F5 (card 731), F21 (cards 468, 469).
+- F4 thresholds are rows with consumers: `tunables.yaml:1084`, `:1096`; read by `src/cobalt/jobs/config.py:127-153` and `src/cobalt/prefill/daily.py:759-777`. `REFRESH_GETS = 3` (`daily.py:682`) is the count of the run's own requests (1 screener + 2 calendar, `tests/cobalt/test_finviz_consumers.py:47-48`), not a threshold; `headroom_rpm <= 0` (`:791`) is a sign bound. `timeout_s: 300` is a `configs/cobalt/jobs.yaml` value.
+- F23 has no predicate threshold: `rows_per_slide`, `why_max_chars`, `latest_per_family` are render settings in their own L10 family (`configs/cobalt/playbook.yaml:8-13`; `src/cobalt/playbook/config.py:6-7`, FINAL C7, `extra="forbid"`, no defaults); `deck.py` constants are layout.
+- OFF-LADDER literals, not MVP thresholds (Charter `:177` "every threshold the MVP evaluates"): `route.py:80` `MIN_N = 30` is L8's own n (precedent `src/cobalt/replay/line.py:62` `MIN_N_FOR_AVERAGE = 30`, also inline); `route.py:389` band cutoffs 2 / 6 mirror `prompts/SHADOW-HUB.md:88` (frozen [F-13]); `checkin-timer.sh:54` `PING_MAX_AGE_MIN=30` and `stop-guard.py:532` (160 characters) are desk harness. `ops/jev-route.sh` holds exit codes only.
+- Loaders: `TunableRow`, `TunableRegistry` `extra="forbid"` (`tunables.py:93`, `:118`); `DailyRefreshConfig` (`prefill/config.py:134`), `PlaybookConfig` (`playbook/config.py`), `classify/route.py:87` the same. `grep -c "^  - key:"` and `grep -c "^    consumers:"` on `tunables.yaml` → `94` and `94`; no `consumers: []`; every block list has an item.
+- `src/cobalt/cli.py` has no `playbook`, `daily_refresh` or `refresh` reference inside `_cmd_validate` (grep: only `:86`, `:548`, the parser mount).
+- RESTARTS (K10): `src/cobalt/taxonomy/loader.py` is read by residents; the builder's `cobalt jobs restarts` line is the record and the deploy card's `RESTARTS:` comes from it.
