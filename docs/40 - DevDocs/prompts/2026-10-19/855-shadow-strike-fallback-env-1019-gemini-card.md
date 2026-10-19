@@ -2,7 +2,7 @@ JOB: strike-fallback-env-1019-gemini
 LADDER: OFF-LADDER — reports/cto-2026-10-10.md R828
 BRANCH: shadow/strike-fallback-env-1019-gemini-4-argon-high
 WORKTREE: strike-fallback-env-1019-gemini
-BASE: «FILL: BASE, the desk's 8-hex main commit»
+BASE: 8f4bbe28
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/strike-fallback-env-1019-gemini/docs/40 - DevDocs/reports/strike-fallback-env-1019-gemini-build-2026-10-19.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/strike-fallback-env-1019-gemini-check-2026-10-19.md
