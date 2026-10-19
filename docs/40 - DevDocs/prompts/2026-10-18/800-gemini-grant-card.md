@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/gemini-grant-1018
 WORKTREE: gemini-grant-1018
-BASE: 55d8b50e
+BASE: c0ebb874
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/gemini-grant-1018/docs/40 - DevDocs/reports/gemini-grant-1018-build-2026-10-18.md
 CHECK REPORT:
