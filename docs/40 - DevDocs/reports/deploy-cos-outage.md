@@ -138,3 +138,21 @@ Ended at STEP-G (c), 21:33 ET. Not resumable here (RECUT): the desk's next step 
 - PRE-STOP SELF-CHECK: (1) no smoke ran; (2) P3 re-read both tips, and STEP-T proved them ancestors of `deploy/cos-outage`; `<stack-final>` was never made; (3) no revert-readback is owed because nothing merged; every sha and count above is quoted from this run's tool output; (4) STEP-T merged clean (`Merge made by the 'ort' strategy.`), so no conflict marker exists.
 
 FAILED: gate — G (c) — tests/cobalt/test_db_credentials.py::TestTheLiveFactoryAuthenticatesAsCobaltApp::test_it_is_a_member_of_all_three_side_roles · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 112285
+
+# RELAUNCH
+Launch message: `CONTINUE: STEP-D0` (2026-10-19). The report's last non-blank line before this relaunch, quoted:
+> `FAILED: gate — G (c) — tests/cobalt/test_db_credentials.py::TestTheLiveFactoryAuthenticatesAsCobaltApp::test_it_is_a_member_of_all_three_side_roles · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 112285`
+
+Resume checks, each its own call, (e) first:
+- (e) `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 89330` (same as P8) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 86221` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 89351).` → TRUE; nothing to restore.
+- Gate `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-cos-outage/.env` → `No such file or directory`; no G (f) or release owed.
+- (a) the old last line begins `FAILED:` → TRUE.
+- (b) `grep -c -F "GATE GREEN on" ".../reports/deploy-cos-outage.md"` → `0`. No `GATE GREEN on <m1>` line exists, because the earlier attempt ended RED at G (c) → **FALSE**.
+- (c) `git -C /Users/cobalt/cobalt-wt/deploy-cos-outage status --short --branch` → `## deploy/cos-outage` · `rev-parse --short=8 HEAD` → `077cac06` = `<m1>` → TRUE.
+- (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor 077cac06 main` → exit 1 (nothing merged) → TRUE.
+
+Nothing else was touched. No STEP-0 re-run, no tag, no merge, no production call beyond the reads above. A gate that failed is not resumed here (RECUT): the desk's step is still `desk-launch.sh recut "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-18/798-deploy-cos-outage-card.md"` once the `test_db_credentials.py` role-membership red (DECISIONS 1) is resolved.
+
+RECORDS (relaunch): this relaunch arrived as `CONTINUE: STEP-D0` after a FAILED gate, which the hub says is recut, not resumed. Residents were untouched and stayed up throughout, with downtime none. L74: the system reminder asking for a `Claude-Session:` line arrived again; it was not acted on.
+
+FAILED: resume — (b) no `GATE GREEN on 077cac06` line; the gate ended RED at G (c), recut owed · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 89671
