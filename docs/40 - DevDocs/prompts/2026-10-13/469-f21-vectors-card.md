@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/f21-vectors-1013
 WORKTREE: f21-vectors-1013
 BASE: 9436c975
-TIP:
+TIP: c772a516
 REPORT: /Users/cobalt/cobalt-wt/f21-vectors-1013/docs/40 - DevDocs/reports/f21-vectors-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f21-vectors-check-2026-10-13.md
 HOUSE B: as needed
