@@ -45,7 +45,8 @@ def test_0023_is_registered_last_and_its_rollback_first():
     # S4-P2's 0024 now follows it (second-last forward, second reversed).  # S4-P2 (E4)
     # DML roles (0025): one place further out (third-last forward, third reversed).
     # F21 genesis (0026): one place further out again (fourth-last forward, fourth reversed).
-    assert FORWARD[-4] == SQL and REVERSE[3] == ROLLBACK
+    # F21 vectors (0028): one place further out again (fifth-last forward, fifth reversed).
+    assert FORWARD[-5] == SQL and REVERSE[4] == ROLLBACK
 
 
 def test_0023_creates_no_table_and_matches_the_excluded_by_in_check_only():

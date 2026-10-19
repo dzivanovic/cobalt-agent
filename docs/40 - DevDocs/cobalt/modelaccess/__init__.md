@@ -17,3 +17,6 @@ the V1 close greps for it.
 ## What a caller sees
 A route NAME in, a `ModelResult` or a typed `ModelCallError` out. Never a
 URL, a key, a provider or a model file.
+
+## 2026-10-19 — f21-vectors-1013
+Card 469 V2: exports `embed_sync` and `EmbedResult` too.

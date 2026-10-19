@@ -24,3 +24,6 @@ id, lane, kind, model_returned, latency, token usage, think block, the
 literal guard's state, error kind. Never the message text or the reply.
 The module keeps no table; the caller stores what it needs (voice: the
 `voice_turns` row).
+
+## 2026-10-19 — f21-vectors-1013
+Card 469 V2: NEW `embed_sync(route, text, *, caller, config=None)` → `EmbedResult`: the guard on the input, the embeddings adapter, no think policy, one `_record` line (`usage` / `think_block` read with `getattr`, so `-` for an embed). `ModelCallError` (`bad_response`) on a `model_returned` other than the route's `model`, a length other than `dim`, a non-finite or an all-zero vector; `http_status` / `timeout` / `unreachable` from `_classify`; `route_unknown` for a chat route. `call_sync` refuses an embeddings route as `route_unknown`.

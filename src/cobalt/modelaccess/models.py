@@ -78,6 +78,23 @@ class ModelResult(BaseModel):
     at: datetime
 
 
+class EmbedResult(BaseModel):
+    """One vector from an `openai_embeddings` route (FINAL F-01: its own
+    result type). `vector` is exactly `dim` long and never all zero;
+    anything else is a `ModelCallError`, never a result (F-14)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    route: str
+    #: AS RETURNED by the server; `embed_sync` refuses one other than the route's `model`.
+    model_returned: str
+    vector: list[float]
+    dim: int
+    #: request built → validated result (time.perf_counter).
+    latency_ms: int
+    request_id: str
+
+
 class ModelCallError(RuntimeError):
     """One typed failure. `detail` has passed `redact()`; raised `from None`
     so no chained traceback can carry request text into a log."""
@@ -95,6 +112,7 @@ class ModelCallError(RuntimeError):
 
 __all__ = [
     "ERROR_KINDS",
+    "EmbedResult",
     "ModelCallError",
     "ModelMessage",
     "ModelRequest",

@@ -56,7 +56,9 @@ def test_the_table_is_user_side_with_user_id_fk_and_a_generated_tsv():
         assert cols["user_id"][0] is True and cols["user_id"][1] != "s"
         assert cols["tsv"][1] == "s", "tsv is GENERATED ALWAYS … STORED"
         assert cols["body"][0] and cols["source"][0] and cols["source_sha256"][0]
-        assert "embedding" not in cols and not [c for c in cols if "vector" in c], "no vector column (chunk 2)"
+        # F21 vectors (0028, card 469 V4): chunk 2 adds `embedding`, `embed_model`, `embed_dim`
+        # (pinned in test_genesis_vectors_db.py); 0026 alone adds no vector column.
+        assert not [c for c in cols if "vector" in c], "no column named for a vector"
         gin = conn.execute(
             "SELECT count(*) FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
             "JOIN pg_am am ON am.oid = c.relam JOIN pg_attribute a "

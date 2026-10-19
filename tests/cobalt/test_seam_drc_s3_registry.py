@@ -20,10 +20,11 @@ def test_the_union_tail_is_0015_to_0021_and_reverse_mirrors_it():
     # S4-P2's 0024 above that.  # S4-P2 (E4)
     # DML roles' 0025 above that.  # DML roles (0025)
     # F21 genesis' 0026 above that.  # F21 genesis (0026)
-    assert [name[:4] for name in forward[-12:]] == [
-        "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026"]
-    assert [name[:4] for name in reverse[:12]] == [
-        "0026", "0025", "0024", "0023", "0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
+    # F21 vectors' 0028 above that (0027 is F5's).  # F21 vectors (0028)
+    assert [name[:4] for name in forward[-13:]] == [
+        "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0028"]
+    assert [name[:4] for name in reverse[:13]] == [
+        "0028", "0026", "0025", "0024", "0023", "0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
     assert all(p.exists() for p in (*FORWARD, *REVERSE))
 
 

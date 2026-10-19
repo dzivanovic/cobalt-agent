@@ -101,6 +101,7 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
     newest four are named explicitly: P4's 0008/0009 and the archiver's
     0010/0011 both reverse before 0007."""
     newest_four = [
+        "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028) (the list is now the newest seventeen)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026) (the list is now the newest sixteen)
         "0025_dml_roles.rollback.sql",  # DML roles (0025) (the list is now the newest fifteen)
         "0024_strike_alerts.rollback.sql",  # S4-P2 (E4) (the list is now the newest fourteen)
@@ -119,17 +120,17 @@ def test_rollback_selects_every_newer_migration_then_0007_then_0006_newest_first
         "0010_archive_progress.rollback.sql",
     ]
     reverse_names = [p.name for p in REVERSE]
-    assert reverse_names[:16] == newest_four  # DML roles (0025)  # F21 genesis (0026)
+    assert reverse_names[:17] == newest_four  # DML roles (0025)  # F21 genesis (0026)  # F21 vectors (0028)
     assert (
         reverse_names.index("0006_radar_score.rollback.sql")
         == reverse_names.index("0007_radar_cards.rollback.sql") + 1
     )
-    assert [p.name for p in _rollback_paths("0005")][:16] == newest_four  # DML roles (0025)  # F21 genesis (0026)
+    assert [p.name for p in _rollback_paths("0005")][:17] == newest_four  # DML roles (0025)  # F21 genesis (0026)  # F21 vectors (0028)
     assert [p.name for p in _rollback_paths("0005")][-2:] == [
         "0007_radar_cards.rollback.sql",
         "0006_radar_score.rollback.sql",
     ]
-    assert [p.name for p in _rollback_paths("0006")][:16] == newest_four  # DML roles (0025)  # F21 genesis (0026)
+    assert [p.name for p in _rollback_paths("0006")][:17] == newest_four  # DML roles (0025)  # F21 genesis (0026)  # F21 vectors (0028)
     assert [p.name for p in _rollback_paths("0006")][-1:] == [
         "0007_radar_cards.rollback.sql"
     ]
