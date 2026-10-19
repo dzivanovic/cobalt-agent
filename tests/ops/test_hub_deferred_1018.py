@@ -14,7 +14,7 @@ REPO = Path(__file__).resolve().parents[2]
 HUB = REPO / "docs" / "40 - DevDocs" / "prompts" / "DEPLOY-HUB.md"
 
 GATE = "- GATE: exit 0"
-THREE = "com.cobalt.agent com.cobalt.aset com.cobalt.radar"
+THREE = "com.cobalt.agent com.cobalt.aset com.cobalt.cos com.cobalt.radar"
 MINUS = "minus every label of `<deferred set>`"
 ANYTHING_ELSE = (
     "Anything else (an `UNCLASSIFIED` row, `com.cobalt.herdr` / `com.cobalt.mainframe` / "
@@ -71,7 +71,7 @@ def test_d1_card_730s_set_is_admitted():
 
 def test_d1_a_label_outside_the_three_not_deferred_is_refused():
     """CONTROL, green on BASE and after."""
-    assert admits({AGENT, ASET, COS, RADAR}, set()) is False
+    assert admits({AGENT, ASET, HERDR}, set()) is False
     assert admits({ASET, HERDR}, {COS}) is False
     assert ANYTHING_ELSE in one(GATE)
 
@@ -102,7 +102,7 @@ def test_d2_the_three_residents_strings_stand():
     assert launch.count("<launchd strings>") == 1
     for s in RESIDENT_STRINGS:
         assert launch.count(s) == 1, s
-    assert COS not in launch
+    assert launch.count(COS) == 3
     model = one("MODEL: ")
     assert "the labels of `<launchd set>`" in model
     assert DEFERRED not in model
