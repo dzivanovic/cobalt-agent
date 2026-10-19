@@ -4,12 +4,11 @@ Read on the real DEPLOY-HUB.md, in the form of tests/ops/test_hub_deferred_1018.
 only the lines its row changes, found by their own text (no whole-line pin, no BASE hash).
 R1: STEP-R's set check admits `com.cobalt.cos`: the restartable set is agent, aset, cos, radar.
 R2: a restart-set label that is not loaded is skipped and acts on nothing.
-R3: a loaded cos is booted out, waited on and bootstrapped after radar, as aset is.
+R3: a loaded cos in the restart set stops the run at STEP-R; no cos allow string is added (R60).
 """
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
@@ -22,13 +21,10 @@ ANYTHING_ELSE = (
     "Anything else (an `UNCLASSIFIED` row, `com.cobalt.herdr` / `com.cobalt.mainframe` / "
     "`com.cobalt.obsidian`, a non-zero exit)"
 )
-COS_STRINGS = (
-    "launchctl bootout gui/501/com.cobalt.cos",
-    "launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.cos.plist",
-    "launchctl kickstart -k gui/501/com.cobalt.cos",
+REFUSED = (
+    "FAILED: RESTARTS — com.cobalt.cos is loaded; its bootout and bootstrap strings are not on "
+    "the deploy list (R60), they are asked of Dejan · rollback: not used"
 )
-NAMES = {"agent", "aset", "cos", "radar"}
-LABEL = re.compile(r"com\.cobalt\.([a-z0-9-]+)")
 
 AGENT, ASET, COS, RADAR = (f"com.cobalt.{n}" for n in ("agent", "aset", "cos", "radar"))
 HERDR, OBSIDIAN = "com.cobalt.herdr", "com.cobalt.obsidian"
@@ -87,33 +83,11 @@ def test_r2_a_not_loaded_cos_is_skipped_and_acts_on_nothing():
     assert "not loaded — skipped" in smoke_f
 
 
-# ---- R3: a loaded cos is restarted after radar ------------------------------------------------
+# ---- R3: a loaded cos still stops the run at STEP-R -------------------------------------------
 
-def test_r3_cos_is_restarted_after_radar():
-    assert "`com.cobalt.aset`, `com.cobalt.radar`, `com.cobalt.cos` in `<restart set>`" in one("4.2 ")
-    four_six = one("4.6 for each label taken down")
-    cos = four_six.index("com.cobalt.cos.plist")
-    assert four_six.index("com.cobalt.radar.plist") < cos
-    assert cos < four_six.index("kickstart gui/501/com.cobalt.agent")
-    launch = one("claude --bg ")
-    for s in COS_STRINGS:
-        assert launch.count(f'"Bash({s})"') == 1, s
-    assert '"Bash(launchctl kickstart -k gui/501/com.cobalt.radar)" <launchd strings>' in launch
-    assert "`com.cobalt.cos`" in one("MODEL: ")
-    assert "loop stamping" in one("- (e) `COBALT_ENV=production uv run cobalt heartbeat show`")
-
-
-def test_c2_no_launchctl_call_names_a_label_outside_the_four():
-    """CONTROL 2, green on BASE and after."""
-    for ln in lines():
-        if "launchctl " in ln:
-            for name in LABEL.findall(ln):
-                assert name in NAMES, (name, ln)
-    launch = one("claude --bg ")
-    strings = re.findall(r'"Bash\((launchctl [^)]*)\)"', launch)
-    assert strings
-    for s in strings:
-        if s == "launchctl print gui/501/*":
-            continue
-        names = LABEL.findall(s)
-        assert names and set(names) <= NAMES, s
+def test_c3_a_loaded_cos_still_refuses():
+    at = [ln for ln in lines() if ln.startswith(NOT_LOADED)]
+    assert len(at) == 1, "no `- NOT LOADED` line"
+    assert REFUSED in at[0]
+    assert "com.cobalt.cos loaded <state or path>" not in at[0]
+    assert COS not in one("claude --bg ")

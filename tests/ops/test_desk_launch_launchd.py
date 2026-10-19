@@ -140,13 +140,13 @@ def card_line(label="com.cobalt.prefill-refresh", mode="add", card=BUILD_CARD, d
     return out + (f" · gate: {gate}" if gate is not None else "")
 
 
-TODAY_ELEVEN = 11
+TODAY_EIGHT = 8
 
 
 def test_l1_a_named_label_gets_exactly_its_strings(tmp_path):
     desk = Desk(tmp_path)
     today = launchctl_strings(desk.line())
-    assert len(today) == TODAY_ELEVEN, today
+    assert len(today) == TODAY_EIGHT, today
     desk.set_card(section(card_line()))
     line = desk.line()
     allow = tools(line, "--allowedTools")
@@ -163,7 +163,7 @@ def test_l1_a_named_label_gets_exactly_its_strings(tmp_path):
 def test_l1_no_section_no_new_string(tmp_path):
     desk = Desk(tmp_path)
     line = desk.line()
-    assert len(launchctl_strings(line)) == TODAY_ELEVEN
+    assert len(launchctl_strings(line)) == TODAY_EIGHT
     assert "<launchd strings>" not in line
     # byte for byte the line of the hub with the token removed (today's hub)
     hub = (HUBS / "DEPLOY-HUB.md").read_text(encoding="utf-8")
@@ -178,7 +178,7 @@ def test_l1_a_deferred_label_gets_no_string(tmp_path):
     desk = Desk(tmp_path)
     desk.set_card(section(card_line(mode="deferred", dry="none", gate="X8, X15")))
     line = desk.line()
-    assert len(launchctl_strings(line)) == TODAY_ELEVEN
+    assert len(launchctl_strings(line)) == TODAY_EIGHT
     assert "prefill-refresh" not in line
 
 
