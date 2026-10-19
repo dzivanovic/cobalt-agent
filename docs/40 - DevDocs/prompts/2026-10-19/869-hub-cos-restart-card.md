@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/hub-cos-restart-fr1
 WORKTREE: hub-cos-restart-fr1
-BASE: 5b71dec9
+BASE: c68efd65
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/hub-cos-restart-fr1/docs/40 - DevDocs/reports/hub-cos-restart-fr1-build-2026-10-19.md
 CHECK REPORT:
