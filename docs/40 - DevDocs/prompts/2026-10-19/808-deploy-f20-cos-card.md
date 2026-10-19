@@ -17,6 +17,9 @@ TICKERS: none
 |---|---|---|---|---|---|---|
 | 1 | `ops/f20-cos-fr1` | `753094da` | `83919213` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f20-cos-fr1-check-2026-10-19.md` | `held unfixed: 0` and `ready: YES` | |
 
+## LAUNCHD
+com.cobalt.cos · deferred · prompts/2026-10-18/730-f20-card.md:C4a · dry run: none · gate: D14, agent stopped, X1, X13, X2, X10, X3, X14, X11, X12, X15, X17, X18, X20
+
 ## MARKERS
 - `grep -c -F "label: com.cobalt.cos" /Users/cobalt/cobalt/configs/cobalt/jobs.yaml` · before `0` · after `1`
 - `grep -c -F "hitl_dirs:" /Users/cobalt/cobalt/configs/cobalt/generated.yaml` · before `0` · after `1`
