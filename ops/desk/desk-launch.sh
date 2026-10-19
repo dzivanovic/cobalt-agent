@@ -226,6 +226,7 @@ REPORTS="$REPO/docs/40 - DevDocs/reports"
 # line in or out, proved by json.loads equal to the old data but for that rule, a temp file in
 # the same directory with the old mode, then os.replace. Exit 2 prints the refusal on stdout.
 #   notgem <WT>                            stdin write_file(…) lines that are no gemini rule
+#   parse  <WT> <AGY> <pre>                nothing; refuses a file that is no JSON with the list
 #   plan   <WT> <AGY> <pre> <job> <wt>     GRANT <count> and ORPHAN <n> lines; refuses a live one
 #   sweep  <WT> <AGY> <pre>                LIVE <n> and ORPHAN <n> lines
 #   add    <WT> <AGY> <pre> <rule>         the rule in, directly after the "allow": [ line
@@ -273,7 +274,9 @@ try:
     assert isinstance(allow, list) and all(isinstance(e, str) for e in allow)
 except Exception:
     no(pre + path + " is not valid JSON with a permissions.allow list; nothing written")
-shape = pre + path + ": permissions.allow is not one rule per line; nothing written"
+if op == "parse":
+    sys.exit(0)
+shape =pre + path + ": permissions.allow is not one rule per line; nothing written"
 lines = text.splitlines(True)
 heads = [i for i, x in enumerate(lines) if x.strip() == "\"allow\": ["]
 if len(heads) != 1:
@@ -1948,6 +1951,9 @@ build|shadow)
             [ -f "$AGY" ] && [ -r "$AGY" ] || refuse "shadow: gemini: no agy settings file at $AGY"
             grant="$WT/$wt/"
             grule="write_file($grant)"
+            # card 800 G1 (check G-1): G1's first refusal, the JSON, before the raw greps below
+            gout=$(python3 -c "$AGY_PY" parse "$WT" "$AGY" "shadow: gemini: ") \
+                || refuse "${gout:-shadow: gemini: the agy helper failed on $AGY}"
             if grep -F -e "read_url(" -e "execute_url(" -- "$AGY" >/dev/null 2>&1; then
                 refuse "shadow: gemini: ${AGY} holds a read_url or execute_url rule; X1's fetch must stay refused"
             fi
