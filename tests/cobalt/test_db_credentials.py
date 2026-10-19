@@ -199,7 +199,9 @@ class TestTheLiveFactoryAuthenticatesAsCobaltApp:
             conn.execute('SELECT 1 FROM "user".vault_writes LIMIT 1').fetchone()
         assert "permission denied" in str(exc.value).lower()
 
-    def test_it_is_a_member_of_all_three_side_roles(self, real_connect):
+    def test_it_is_a_member_of_exactly_the_five_roles(self, real_connect):
+        """The five roles: the three side roles and the two DML-only apply
+        roles of migration 0025 (card 448). The full list, so a sixth fails."""
         conn = real_connect(side=db.Side.SYSTEM)
         rows = conn.execute(
             "SELECT r.rolname FROM pg_auth_members m "
@@ -208,7 +210,8 @@ class TestTheLiveFactoryAuthenticatesAsCobaltApp:
             "WHERE a.rolname = %s ORDER BY 1",
             (db.APP_ROLE,),
         ).fetchall()
-        assert [r[0] for r in rows] == ["cobalt_backup", "cobalt_system", "cobalt_user"]
+        assert [r[0] for r in rows] == [  # DML roles (0025)
+            "cobalt_apply_system", "cobalt_apply_user", "cobalt_backup", "cobalt_system", "cobalt_user"]
 
 
 class TestTheBackupDumpsAsTheAppRole:
