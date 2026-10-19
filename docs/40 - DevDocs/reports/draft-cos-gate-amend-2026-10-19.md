@@ -1,0 +1,27 @@
+# draft-cos-gate-amend — 2026-10-19
+
+## §0 Headline
+- AMENDED `prompts/2026-10-19/873-cos-gate-run.md` in place with five changes: no `-c`, no `launchctl`, X18 read from deploy logs, D14 and `agent stopped` written by the desk, mode `auto`. The 14-item list and the report path are unchanged.
+- The probes the seat can spell: X12 and X3 as named pytest tests, X1 as `claude auth status`, X13 as `claude -p`, and X18 from the deploy logs. X20, X11, X10, X14, X17 and X2 are `NOT RUN — no allowed probe`.
+- The RULINGS line is now `2026-10-18 R1863`. A rule now says only a result of exactly `OK` counts for the bootstrap card. The build report is `f20-cos-fr1-build-2026-10-18.md`. Committed nothing.
+
+## DECISIONS
+1. ASK DESK: X12 and X3 now run on named tests that use a fake SDK client and a stub CLI (`tests/cobalt/test_cos_offline.py:160`, `:180`, `:350`, `:412`, `:515`). The design (`F20-FINAL-2026-10-11.md:85-86`) asks for a real spawn. So the prompt writes both as `OK (…)` with a qualifier, and under the exact-OK rule neither counts. Default: they do not count until the desk rules that the tests are enough. [16:09]
+2. ASK DESK: no test on main runs `redact()` on a line carrying `#k=` (`grep -rn -F "#k=" tests` → only `test_hitl_offline.py:141`, which checks the text BEFORE redaction). So X20 is `NOT RUN — no allowed probe`. Default: a build card adds that test. [16:09]
+3. ASK DESK: X11, X10, X14, X17 and X2 need a real session, and no `cobalt` subcommand starts one. `cobalt cos` has only `run [--dry-run]` (`src/cobalt/cos/cli.py`, mounted at `src/cobalt/cli.py` `cos_cli.add_parser`). So all five are `NOT RUN — no allowed probe`. The dry run and the options test are recorded as evidence only. Default: the bootstrap stays blocked on them until a build card ships a probe subcommand or the desk rules otherwise. [16:09]
+4. ASK DESK: `claude auth status` appears in no file of the repo or the F20 design (Grep → nothing). The prompt runs it anyway, and an unknown subcommand gives `FAIL` with the CLI's message. `claude -p --model <m> 'Reply with exactly the word OK'` is a proven shape (`reports/drc-d2-check-2026-09-25.md:44`). The seat is of kind `brain` (`ops/desk/bare-guard.py:810-811`, not in `WORKERS` `:104`), so G7 does not route `claude -p`. Default: as drafted. [16:09]
+5. ASK DESK: the launch line can no longer deny `launchctl`. A `launchctl` string anywhere off the allow list sets `ruled=0`, and with `uv run` allowed that refuses the launch (`desk-launch.sh:836-842`). So `Bash(uv *)` and every `launchctl` deny string are gone. Under `auto`, `launchctl` is held back only by the RULES line and the classifier. Default: as drafted. [16:09]
+6. ASK DESK: the `uv run` strings pass only when RULINGS cites rows that are HIS RULING + APPROVED. `2026-10-18 R1863` is one (`cto-2026-10-18.md:90`, committed `11563e82`). The prompt cites no F20 FINAL row: R1055 was dropped as you ruled, and the FINAL's other rows (R1012, R858, …) are ones the prompt does not rest on. Default: R1863 alone. [16:09]
+7. ASK DESK: on X18, no deploy report from 2026-10-15 onward has `/api/health` (Grep → nothing). The aset bootout lines found (e.g. `deploy-jev-shadow-1015.md:192`, `deploy-f20-cos-attempt2.md:225`) give no time for both ends. The likely result is `NOT RUN — no deploy log since 2026-10-15 states both times`. Default: as drafted. The seat restarts nothing. [16:09]
+8. ASK DESK: `uv run` may sync the prod tree's `.venv` before it runs. Importing `cobalt.cli` loads the repo `.env` into the dry run's own process (`src/cobalt/cli.py` `load_dotenv`), but the dry run prints only `child_env` names (PATH, HOME, USER, LANG, COBALT_ENV). Default: as drafted. [16:09]
+9. ASK DESK (decisions 6–8 and 10 of the first draft, kept): the scratch-HOME question (6) no longer applies, because X11 is not run. The current-boot and LaunchAgent question (7) is now "shell, not under a LaunchAgent". The 20-DM fixture (8) does not apply, because X14 and X17 are not run. X15 (10) stays relayed by the desk. Default: as drafted. [16:09]
+
+## RECORDS
+- `date` 16:03 at start, 16:09 at the draft. main `e43afc45`. `git diff --stat main --` 873, `test_cos_offline.py`, `test_hitl_offline.py`, `test_redact.py`, `src/cobalt/cos`, `bare-guard.py`, `cto-2026-10-18.md`, `f20-cos-fr1-build-2026-10-18.md`, `drc-d2-check-2026-09-25.md` and `F20-FINAL-2026-10-11.md` → nothing, so the working-tree lines are main's. 873 was last committed in `98a578f5`.
+- Read: `875-draft-cos-gate-amend.md`; 873 whole; `reports/draft-cos-gate-run-2026-10-19.md`.
+- `git show main:` `src/cobalt/cli.py` (the subcommand groups), `src/cobalt/cos/cli.py`, `src/cobalt/cos/run.py`, and `F20-FINAL-2026-10-11.md` (`:72-92`, X18 at `:92`).
+- Read on disk: `tests/cobalt/test_cos_offline.py` (`:139-158`, `:160-177`, `:180-193`, `:350-362`, `:412-447`, `:515-550`); `test_hitl_offline.py:119-142`; `test_redact.py:200-250`; `bare-guard.py:795-830`, `:1095-1135`; `desk-launch.sh:458-495`, `:745-858`; `deploy-step-c.sh:183-187`; `DEPLOY-HUB.md` (Grep for the report sections).
+- Grep: `^| R1863 ` in `cto-2026-10-18.md` → `:90` `HIS RULING · APPROVED`. `git log -S` → `11563e82`. `f20-cos-fr1-build-2026-10-18.md:81-87` → the owed items of row B0. `claude auth` / `claude -p` across the repo. `bootout gui/501/com.cobalt.aset` in `deploy-*.md`.
+- Edited only 873 (the Edit tool) and wrote this report. 873 `wc -c`: 15594 before (main), 11155 after.
+
+DRAFTED · decisions: 9
