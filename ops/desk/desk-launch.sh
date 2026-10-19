@@ -219,6 +219,165 @@ WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}
 PROMPTS="$REPO/docs/40 - DevDocs/prompts"
 REPORTS="$REPO/docs/40 - DevDocs/reports"
 
+# card 2026-10-18 800 (R1942): the agy settings file. Kind shadow with gemini-4-argon-high adds
+# its one rule write_file(<WT>/<worktree>/) and kind grant-sweep removes the rules of gate seats
+# that are gone; no other kind or model reads it. AGY_PY is the one reader and writer of it:
+# `python3 -c "$AGY_PY" <op> <WT> …`, every match a fixed string (python ==), every write one
+# line in or out, proved by json.loads equal to the old data but for that rule, a temp file in
+# the same directory with the old mode, then os.replace. Exit 2 prints the refusal on stdout.
+#   notgem <WT>                            stdin write_file(…) lines that are no gemini rule
+#   plan   <WT> <AGY> <pre> <job> <wt>     GRANT <count> and ORPHAN <n> lines; refuses a live one
+#   sweep  <WT> <AGY> <pre>                LIVE <n> and ORPHAN <n> lines
+#   add    <WT> <AGY> <pre> <rule>         the rule in, directly after the "allow": [ line
+#   remove <WT> <AGY> <pre> <rule> <orphan|grant>   the rule's one line out
+# A gemini rule is write_file(<WT>/<n>/), <n> of [A-Za-z0-9._-], not starting ".", not agy-trial;
+# it is live while `claude agents --json` holds a row with a pid named <n>-gate (unreadable: refused).
+AGY=${COBALT_AGY_SETTINGS:-/Users/cobalt/.gemini/antigravity-cli/settings.json}
+AGY_PY='
+import json, os, stat, string, subprocess, sys, tempfile
+
+op, root = sys.argv[1:3]
+NAME = set(string.ascii_letters + string.digits + "._-")
+
+
+def gem(e):
+    head = "write_file(" + root + "/"
+    if not (e.startswith(head) and e.endswith("/)")):
+        return None
+    n = e[len(head):-2]
+    if not n or not set(n) <= NAME or n.startswith(".") or n == "agy-trial":
+        return None
+    return n
+
+
+if op == "notgem":
+    for x in sys.stdin.read().splitlines():
+        if x and gem(x) is None:
+            print(x)
+    sys.exit(0)
+
+path, pre = sys.argv[3:5]
+arg = sys.argv[5:]
+
+
+def no(msg):
+    print(msg)
+    sys.exit(2)
+
+
+raw = open(path, "rb").read()
+try:
+    text = raw.decode("utf-8")
+    data = json.loads(text)
+    allow = data["permissions"]["allow"]
+    assert isinstance(allow, list) and all(isinstance(e, str) for e in allow)
+except Exception:
+    no(pre + path + " is not valid JSON with a permissions.allow list; nothing written")
+shape = pre + path + ": permissions.allow is not one rule per line; nothing written"
+lines = text.splitlines(True)
+heads = [i for i, x in enumerate(lines) if x.strip() == "\"allow\": ["]
+if len(heads) != 1:
+    no(shape)
+h = heads[0]
+seen = []
+i = h + 1
+while i < len(lines) and lines[i].strip() not in ("]", "],"):
+    s = lines[i].strip()
+    try:
+        seen.append(json.loads(s[:-1] if s.endswith(",") else s))
+    except Exception:
+        no(shape)
+    i += 1
+if i == len(lines) or seen != allow:
+    no(shape)
+
+
+def live():
+    try:
+        got = subprocess.run(["claude", "agents", "--json"], capture_output=True, text=True)
+        assert got.returncode == 0
+        rows = json.loads(got.stdout)
+        assert isinstance(rows, list)
+    except Exception:
+        no(pre + "claude agents --json could not be read; nothing written")
+    return {a["name"] for a in rows if isinstance(a, dict) and a.get("pid") and isinstance(a.get("name"), str)}
+
+
+def write(new, want, msg):
+    try:
+        ok = json.loads(new) == want
+    except Exception:
+        ok = False
+    if not ok:
+        no(msg)
+    real = os.path.realpath(path)
+    mode = stat.S_IMODE(os.stat(real).st_mode)
+    fd, tmp = tempfile.mkstemp(dir=os.path.dirname(real), prefix="." + os.path.basename(real) + ".")
+    try:
+        with os.fdopen(fd, "wb") as f:
+            f.write(new.encode("utf-8"))
+        os.chmod(tmp, mode)
+        os.replace(tmp, real)
+    except Exception:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+        no(pre + path + ": the write failed; nothing written")
+
+
+def lead(x):
+    return x[: len(x) - len(x.lstrip(" \t"))]
+
+
+if op == "plan":
+    job, wt = arg
+    q = chr(39)
+    if job != wt:
+        no(pre + "JOB " + q + job + q + " is not its WORKTREE " + q + wt + q + " (the gate seat " + wt + "-gate names the rule" + q + "s owner)")
+    grant = "write_file(" + root + "/" + wt + "/)"
+    k = allow.count(grant)
+    if k >= 2:
+        no(pre + path + " holds \"" + grant + "\" " + str(k) + " times")
+    others = [n for n in map(gem, allow) if n is not None and n != wt]
+    up = live() if others else set()
+    for n in others:
+        if n + "-gate" in up:
+            no(pre + path + " holds write_file(" + root + "/" + n + "/) and " + n + "-gate is live: one Gemini build at a time (card 759 serial rule)")
+    print("GRANT " + str(k))
+    for n in others:
+        print("ORPHAN " + n)
+elif op == "sweep":
+    names = [n for n in map(gem, allow) if n is not None]
+    up = live() if names else set()
+    for n in names:
+        print(("LIVE " if n + "-gate" in up else "ORPHAN ") + n)
+elif op == "add":
+    rule = arg[0]
+    eol = lines[h][len(lines[h].rstrip("\r\n")):] or "\n"
+    nxt = lines[h + 1]
+    if nxt.strip() in ("]", "],"):
+        new = lead(lines[h]) + "  " + json.dumps(rule) + eol
+    else:
+        new = lead(nxt) + json.dumps(rule) + "," + eol
+    want = json.loads(text)
+    want["permissions"]["allow"].insert(0, rule)
+    write("".join(lines[: h + 1] + [new] + lines[h + 1:]), want,
+          pre + path + ": the edit would change more than the one rule; nothing written")
+elif op == "remove":
+    rule, why = arg
+    if rule not in allow:
+        no(pre + path + " holds no " + rule + "; nothing written")
+    at = h + 1 + allow.index(rule)
+    want = json.loads(text)
+    want["permissions"]["allow"].remove(rule)
+    if why == "orphan":
+        msg = pre + path + ": the orphan " + rule + " cannot be removed alone; nothing written"
+    else:
+        msg = pre + path + ": the edit would change more than the one rule; nothing written"
+    write("".join(lines[:at] + lines[at + 1:]), want, msg)
+else:
+    no(pre + "unknown agy op " + op)
+'
+
 refuse() {
     printf 'REFUSED: %s\n' "$*" >&2
     exit 1
@@ -355,7 +514,7 @@ tool_list() {
 }'
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | ops-hand | shadow <card> --model <id> | spike <prompt file> | prodwrite <card>"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | grant-sweep | ops-hand | shadow <card> --model <id> | spike <prompt file> | prodwrite <card>"
 kind=$1
 # recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
 # 10-03, ASK DESK 13: an ignored argument is a guess)
@@ -378,6 +537,7 @@ fi
 model=""
 builder=""
 routed=""
+gplan=""
 if [ "$kind" = "shadow" ]; then
     [ "$#" -ge 2 ] || refuse "usage: desk-launch.sh shadow <absolute card path> --model <id>"
     scard=$2
@@ -952,6 +1112,38 @@ if [ "$kind" = "install-ops" ]; then
         fi
     done
     printf 'install-ops: %s linked, %s replaced, %s kept\n' "$linked" "$replaced" "$kept"
+    exit 0
+fi
+
+# ---- kind grant-sweep: the Gemini grants of gate seats that are gone (card 2026-10-18 800 G2) --
+# Every gemini rule of $AGY whose <n>-gate is not live is removed, one line each, and a live one
+# is kept; the desk runs it once it has closed a gate seat (a seat that ended or was killed:
+# no trap sees it). DESK_LAUNCH_DRY=1 prints what it would remove and writes nothing.
+if [ "$kind" = "grant-sweep" ]; then
+    [ "$#" -eq 1 ] || refuse "usage: desk-launch.sh grant-sweep"
+    [ -f "$AGY" ] && [ -r "$AGY" ] || refuse "grant-sweep: no agy settings file at $AGY"
+    swept=$(python3 -c "$AGY_PY" sweep "$WT" "$AGY" "grant-sweep: ") \
+        || refuse "${swept:-grant-sweep: the agy helper failed on $AGY}"
+    removed=0
+    kept=0
+    for n in $(printf '%s\n' "$swept" | sed -n 's/^LIVE //p'); do
+        kept=$((kept + 1))
+    done
+    for n in $(printf '%s\n' "$swept" | sed -n 's/^ORPHAN //p'); do
+        if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
+            printf 'ORPHAN: would remove write_file(%s/%s/) from %s (no live %s-gate)\n' "$WT" "$n" "$AGY" "$n"
+        else
+            out=$(python3 -c "$AGY_PY" remove "$WT" "$AGY" "grant-sweep: " "write_file($WT/$n/)" orphan) \
+                || refuse "${out:-grant-sweep: the agy helper failed on $AGY}"
+            printf 'ORPHAN: removed write_file(%s/%s/) from %s (no live %s-gate)\n' "$WT" "$n" "$AGY" "$n"
+        fi
+        removed=$((removed + 1))
+    done
+    if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
+        printf 'GRANT-SWEEP: %s would be removed, %s live\n' "$removed" "$kept"
+    else
+        printf 'GRANT-SWEEP: %s removed, %s live\n' "$removed" "$kept"
+    fi
     exit 0
 fi
 
@@ -1749,20 +1941,22 @@ build|shadow)
             *[\"\'\\\$\`\|\&\;]*) refuse "shadow: the builder allow of $model holds a character the line cannot carry: '$ballow'" ;;
         esac
         builder="\"$ballow\""
-        # card 759 L1 (R1863): gemini-4-argon-high only, routed or not. grep reads the
-        # settings file; it is never written, and only an offending write rule is printed.
+        # card 759 L1 (R1863): gemini-4-argon-high only, routed or not. Only an offending write
+        # rule is printed. Card 800 (R1942): the launcher adds the grant on the real path below
+        # (AGY_PY plan here; the write after the worktree add), never in the dry run.
         if [ "$model" = "gemini-4-argon-high" ]; then
-            AGY=${COBALT_AGY_SETTINGS:-/Users/cobalt/.gemini/antigravity-cli/settings.json}
             [ -f "$AGY" ] && [ -r "$AGY" ] || refuse "shadow: gemini: no agy settings file at $AGY"
             grant="$WT/$wt/"
-            ngrant=$(grep -c -F "\"write_file(${grant})\"" "$AGY" || true)
-            [ "$ngrant" -eq 1 ] || refuse "shadow: gemini: ${AGY} holds no allow rule \"write_file(${grant})\" (SHADOW-HUB GRANT)"
+            grule="write_file($grant)"
             if grep -F -e "read_url(" -e "execute_url(" -- "$AGY" >/dev/null 2>&1; then
                 refuse "shadow: gemini: ${AGY} holds a read_url or execute_url rule; X1's fetch must stay refused"
             fi
             # every write_file( rule, one per line, however many share a line of the file (check O1);
-            # kept whole so an empty target is not lost as a trailing blank line
+            # kept whole so an empty target is not lost as a trailing blank line; a gemini rule
+            # (AGY_PY notgem) is the serial rule's below, not this loop's (card 800 G2)
             targets=$(grep -o 'write_file([^)]*)' "$AGY")
+            targets=$(printf '%s\n' "$targets" | python3 -c "$AGY_PY" notgem "$WT") \
+                || refuse "shadow: gemini: the agy helper failed on $AGY"
             while IFS= read -r R; do
                 [ -n "$R" ] || continue
                 T=${R#write_file\(}
@@ -1784,6 +1978,10 @@ build|shadow)
             done <<AGY_WRITE_TARGETS
 $targets
 AGY_WRITE_TARGETS
+            # card 800 G1/G2: the file's shape, JOB = WORKTREE, the grant at most once, and no
+            # other gemini rule with a live gate seat; GRANT <count> and the ORPHAN lines kept
+            gplan=$(python3 -c "$AGY_PY" plan "$WT" "$AGY" "shadow: gemini: " "$job" "$wt") \
+                || refuse "${gplan:-shadow: gemini: the agy helper failed on $AGY}"
         fi
     fi
     ;;
@@ -2392,6 +2590,23 @@ prodwrite)
 esac
 
 if [ -n "$routed" ]; then watch=$(watch_line routed "$card"); else watch=$(watch_line "$kind" "$card"); fi
+# card 800 G1/G2: the Gemini grant's plan; the dry run prints it on stderr and writes nothing
+gk=""
+gorphans=""
+if [ -n "$gplan" ]; then
+    gk=$(printf '%s\n' "$gplan" | sed -n 's/^GRANT //p')
+    gorphans=$(printf '%s\n' "$gplan" | sed -n 's/^ORPHAN //p')
+    if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
+        for n in $gorphans; do
+            printf 'ORPHAN: would remove write_file(%s/%s/) from %s (no live %s-gate)\n' "$WT" "$n" "$AGY" "$n" >&2
+        done
+        if [ "$gk" = "0" ]; then
+            printf 'GRANT: would add %s to %s\n' "$grule" "$AGY" >&2
+        else
+            printf 'GRANT: %s already in %s\n' "$grule" "$AGY" >&2
+        fi
+    fi
+fi
 if [ "${DESK_LAUNCH_DRY:-0}" = "1" ]; then
     [ -z "$add" ] || printf '%s\n' "$add"
     run_launch "$dir" "$line" "$note" "$watch"
@@ -2438,6 +2653,37 @@ if [ -n "$add" ]; then
         git -C "$REPO" worktree add -b "$branch" "$WT/$wt" "$base" || refuse "worktree add failed; nothing launched"
     else
         git -C "$REPO" worktree add -b "$branch" "$WT/$wt" main || refuse "worktree add failed; nothing launched"
+    fi
+fi
+
+# ---- card 800 G1/G2 (R1942): the Gemini grant, on the real path only -------------------------
+# The orphans out first, then the grant in. A launch that exits non-zero takes the grant out
+# again (the EXIT trap); a launch that exits 0 leaves it for the seat: grant-sweep, run by the
+# desk once it has closed the seat, or the next Gemini launch removes it then.
+grant_trap() {
+    rc=$?
+    if [ "$rc" -ne 0 ]; then
+        if gout=$(python3 -c "$AGY_PY" remove "$WT" "$AGY" "shadow: gemini: " "$grule" grant); then
+            printf 'GRANT: removed %s from %s (launch failed)\n' "$grule" "$AGY" >&2
+        else
+            printf 'REFUSED: %s\n' "${gout:-shadow: gemini: the agy helper failed on $AGY}" >&2
+        fi
+    fi
+    exit "$rc"
+}
+if [ -n "$gplan" ]; then
+    for n in $gorphans; do
+        gout=$(python3 -c "$AGY_PY" remove "$WT" "$AGY" "shadow: gemini: " "write_file($WT/$n/)" orphan) \
+            || refuse "${gout:-shadow: gemini: the agy helper failed on $AGY}"
+        printf 'ORPHAN: removed write_file(%s/%s/) from %s (no live %s-gate)\n' "$WT" "$n" "$AGY" "$n" >&2
+    done
+    if [ "$gk" = "0" ]; then
+        gout=$(python3 -c "$AGY_PY" add "$WT" "$AGY" "shadow: gemini: " "$grule") \
+            || refuse "${gout:-shadow: gemini: the agy helper failed on $AGY}"
+        printf 'GRANT: added %s to %s\n' "$grule" "$AGY" >&2
+        trap grant_trap EXIT
+    else
+        printf 'GRANT: %s already in %s\n' "$grule" "$AGY" >&2
     fi
 fi
 run_launch "$dir" "$line" "$note" "$watch"
