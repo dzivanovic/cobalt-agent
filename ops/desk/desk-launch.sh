@@ -213,7 +213,7 @@
 export LC_ALL=C
 set -u
 
-# COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for these two in tests/ops/test_devdb_lock.py only; COBALT_AGY_SETTINGS stands in for the agy settings file beside them, tests only
+# COBALT_REPO_ROOT and COBALT_WT_ROOT stand in for these two in tests/ops/test_devdb_lock.py only; COBALT_AGY_SETTINGS stands in for the agy settings file beside them, and COBALT_AGY_HOME for agy's home (kind x1-copy), tests only
 REPO=${COBALT_REPO_ROOT:-/Users/cobalt/cobalt}
 WT=${COBALT_WT_ROOT:-/Users/cobalt/cobalt-wt}
 PROMPTS="$REPO/docs/40 - DevDocs/prompts"
@@ -234,6 +234,7 @@ REPORTS="$REPO/docs/40 - DevDocs/reports"
 # A gemini rule is write_file(<WT>/<n>/), <n> of [A-Za-z0-9._-], not starting ".", not agy-trial;
 # it is live while `claude agents --json` holds a row with a pid named <n>-gate (unreadable: refused).
 AGY=${COBALT_AGY_SETTINGS:-/Users/cobalt/.gemini/antigravity-cli/settings.json}
+AGY_HOME=${COBALT_AGY_HOME:-/Users/cobalt/.gemini/antigravity-cli}
 AGY_PY='
 import json, os, stat, string, subprocess, sys, tempfile
 
@@ -517,17 +518,18 @@ tool_list() {
 }'
 }
 
-[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | grant-sweep | ops-hand | shadow <card> --model <id> | spike <prompt file> | prodwrite <card>"
+[ "$#" -ge 1 ] || refuse "usage: desk-launch.sh <build|check|deploy|devfix> <card> [PASS-2] [<resume step>] | desk | prompt <prompt file> | brain <handover file> [--fable] | close <YYYY-MM-DD> [<resume step>] | install-ops | grant-sweep | x1-copy <worktree> <leg> | ops-hand | shadow <card> --model <id> | spike <prompt file> | prodwrite <card>"
 kind=$1
 # recut takes the card and nothing else, refused before anything runs (card 03 L5, AMENDED
 # 10-03, ASK DESK 13: an ignored argument is a guess)
 [ "$kind" != "recut" ] || [ "$#" -le 2 ] || refuse "recut takes one argument, the card"
 
-# ---- the desk-size guard (cto-2026-10-01 R8): every kind but `desk`, before anything else -----
+# ---- the desk-size guard (cto-2026-10-01 R8): every kind but `desk` and `x1-copy`, first ------
 # desk-context.sh --guard, installed beside this script, refuses while the desk measures
 # 300,000 tokens or more; this script then exits with its status and its line unchanged. The
-# successor launch (`desk`) is never guarded, so a REFRESH can always complete.
-if [ "$kind" != "desk" ]; then
+# successor launch (`desk`) is never guarded, so a REFRESH can always complete; `x1-copy`
+# launches nothing (a gate seat copies a file), so it is not guarded either.
+if [ "$kind" != "desk" ] && [ "$kind" != "x1-copy" ]; then
     sh "$(dirname "$0")/desk-context.sh" --guard || exit $?
 fi
 
@@ -1147,6 +1149,85 @@ if [ "$kind" = "grant-sweep" ]; then
     else
         printf 'GRANT-SWEEP: %s removed, %s live\n' "$removed" "$kept"
     fi
+    exit 0
+fi
+
+# ---- kind x1-copy: the X1 leg's agy transcript into its worktree (card 2026-10-19 827 T1, R2015) --
+# The gate seat runs it after each agy leg of X1 (SHADOW-HUB.md `X1 for Gemini`): agy's last run,
+# read through $AGY_HOME/cli.log, is copied only when that log's one workspaceDirs= line names
+# <WT>/<worktree> and nothing else; its transcript to x1-<leg>.transcript, its conversation id and
+# soft-denying lines to x1-<leg>.log. Every match is a fixed string; a failed test refuses with
+# nothing written. It reads no DESK_LAUNCH_DRY, no card and no agy settings file, and launches nothing.
+if [ "$kind" = "x1-copy" ]; then
+    [ "$#" -eq 3 ] || refuse "x1-copy: usage: desk-launch.sh x1-copy <worktree> <leg>"
+    xwt=$2
+    leg=$3
+    case "$xwt" in
+        ""|.*|*[!A-Za-z0-9._-]*) refuse "x1-copy: worktree '$xwt' is not one plain name" ;;
+    esac
+    [ "$xwt" != "agy-trial" ] && [ "$xwt" != "x1-canary" ] || refuse "x1-copy: worktree '$xwt' is never a job's"
+    xdir="$WT/$xwt"
+    [ -d "$xdir" ] && [ ! -L "$xdir" ] || refuse "x1-copy: $xdir is no directory, or is a link"
+    case "$leg" in
+        0a|0b|0c|0d|0e|0f) ;;
+        *) refuse "x1-copy: leg '$leg' is none of 0a 0b 0c 0d 0e 0f" ;;
+    esac
+    xtr="$xdir/x1-$leg.transcript"
+    xlog="$xdir/x1-$leg.log"
+    for f in "$xtr" "$xlog"; do
+        [ ! -e "$f" ] && [ ! -L "$f" ] || refuse "x1-copy: $leg $f exists"
+    done
+    clog="$AGY_HOME/cli.log"
+    [ -f "$clog" ] && [ -r "$clog" ] || refuse "x1-copy: $leg no cli.log at $clog"
+    # (3) the workspace (R2015): one workspaceDirs= line, every listed word <WT>/<worktree>
+    n=$(grep -c -F "workspaceDirs=" "$clog")
+    [ "$n" = "1" ] || refuse "x1-copy: $leg cli.log holds $n workspaceDirs= lines, not 1"
+    wline=$(grep -F "workspaceDirs=" "$clog")
+    case "$wline" in
+        *"workspaceDirs=["*"workspaceDirs=["*) refuse "x1-copy: $leg cli.log's workspaceDirs= line holds workspaceDirs=[ twice" ;;
+        *"workspaceDirs=["*"]"*) ;;
+        *) refuse "x1-copy: $leg cli.log's workspaceDirs= line holds no [list]" ;;
+    esac
+    wlist=${wline#*"workspaceDirs=["}
+    wlist=${wlist%%"]"*}
+    words=0
+    set -f
+    oifs=$IFS
+    IFS=' '
+    for w in $wlist; do
+        words=$((words + 1))
+        [ "$w" = "$WT/$xwt" ] || refuse "x1-copy: $leg cli.log names workspace $wlist, not $WT/$xwt"
+    done
+    IFS=$oifs
+    set +f
+    [ "$words" -ge 1 ] || refuse "x1-copy: $leg cli.log names workspace $wlist, not $WT/$xwt"
+    # (4) the run: one Created conversation line, its id 36 characters of 0-9a-f-
+    n=$(grep -c -F "Created conversation " "$clog")
+    [ "$n" = "1" ] || refuse "x1-copy: $leg cli.log holds $n Created conversation lines, not 1"
+    id=$(grep -F "Created conversation " "$clog")
+    id=${id#*"Created conversation "}
+    id=${id%%" "*}
+    case "$id" in
+        ""|*[!0-9a-f-]*) refuse "x1-copy: $leg conversation id '$id' is not 36 characters of 0-9a-f-" ;;
+    esac
+    [ "${#id}" -eq 36 ] || refuse "x1-copy: $leg conversation id '$id' is not 36 characters of 0-9a-f-"
+    # (5) stale: a leg whose agy never started leaves the last leg's log behind
+    for f in "$xdir"/x1-*.log; do
+        [ -f "$f" ] || continue
+        [ "$(sed -n '1p' "$f")" != "conversation $id" ] || refuse "x1-copy: $leg stale: $f already holds conversation $id"
+    done
+    # (6) the source
+    src="$AGY_HOME/brain/$id/.system_generated/logs/transcript.jsonl"
+    [ -f "$src" ] && [ ! -L "$src" ] || refuse "x1-copy: $leg no transcript at $src"
+    cp "$src" "$xtr" || refuse "x1-copy: $leg the copy to $xtr failed"
+    { printf 'conversation %s\n' "$id"; grep -F "soft-denying" "$clog"; } > "$xlog" \
+        || refuse "x1-copy: $leg the write of $xlog failed"
+    soft=$(grep -c -F "soft-denying" "$clog")
+    bytes=$(wc -c < "$xtr" | tr -d ' ')
+    printf 'X1-COPY: %s conversation %s\n' "$leg" "$id"
+    printf 'X1-COPY: %s workspace %s\n' "$leg" "$WT/$xwt"
+    printf 'X1-COPY: %s copied %s (%s bytes)\n' "$leg" "$xtr" "$bytes"
+    printf 'X1-COPY: %s soft-denying %s\n' "$leg" "$soft"
     exit 0
 fi
 
