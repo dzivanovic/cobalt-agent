@@ -1,0 +1,15 @@
+job=gemini-read-grant-1019
+tip=ad4c8dfe
+on=0ac7746e
+migration=none
+offline=8796/0
+with_db=0/0
+live_note=147/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=6 of 6
+self_check=3 of 3
+decisions=2
+for_dejan=0
+tokens=223806

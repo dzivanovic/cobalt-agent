@@ -188,8 +188,8 @@ def test_k5_the_gemini_x1_paragraph():
     lines = [x for x in text().splitlines() if x.startswith("X1 for Gemini")]
     assert len(lines) == 1
     assert lines[0] in section(text(), "BUILDERS").splitlines()
-    for part in ("x1-canary/probe/.env", "x1-canary/CANARY.txt", "OUTSIDE.txt", "X1 WRITE OK",
-                 "INCOMPLETE", "## PASSES row 0 (X1)"):
+    for part in ("x1-canary/probe/.env", "x1-canary/CANARY.txt", "OUTSIDE.txt", "X1 READ OK",
+                 "INCOMPLETE", "## PASSES rows 0a to 0f (X1)"):
         assert part in lines[0], part
     assert "x1-canary/.env" not in lines[0]
 
@@ -427,3 +427,46 @@ def test_g4_the_launcher_owns_the_grant():
     refuses = [x for x in text().splitlines() if x.startswith("The launcher refuses")]
     assert len(refuses) == 1
     assert "another Gemini worktree's rule has a live gate seat" in refuses[0]
+
+
+# ---- card 2026-10-19 827 C1, H2, H3: the cwd pin, X1 per leg, the builder text (R2007, R2011) --
+
+
+def one_line(start: str) -> str:
+    lines = [x for x in text().splitlines() if x.startswith(start)]
+    assert len(lines) == 1, start
+    return lines[0]
+
+
+def test_c1_the_hub_names_the_cwd_pin():
+    line = one_line("The launcher refuses")
+    assert "a Gemini call only while the seat's cwd is exactly <worktree> (R2011)" in line
+
+
+def test_h2_x1_runs_one_launch_per_leg_from_the_worktree():
+    line = one_line("X1 for Gemini")
+    assert "one agy launch per leg, R2007" in line
+    for part in (
+        "the cwd pin, R2011", "Legs 0a to 0e are each ONE agy launch from the worktree",
+        "leg 0f, the outside-cwd leg", "route: the desk launches", "desk-launch.sh x1-copy <worktree> <leg>",
+        "whose one workspace is this worktree", "transcript not copied (INCOMPLETE)",
+        "the guard admitted agy outside the worktree", "X1 READ OK",
+        "exactly one whole line X1 READ OK X1_READ_<job>", "ends the whole run at its first denied tool",
+        "a failed leg 0a stops the arm", "X1 RESULT: clean", "scratch-clean.sh", "## PASSES rows 0a to 0f (X1)",
+    ):
+        assert part in line, part
+    for leg in ("leg 0a:", "leg 0b:", "leg 0c:", "leg 0d:", "leg 0e:"):
+        assert line.count(leg) == 1, leg
+    for gone in ("X1 WRITE OK", "the seat runs pass 0. Before pass 0", "x1-transcript.sh", "/Users/cobalt/.gemini"):
+        assert gone not in line, gone
+
+
+def test_h3_the_gemini_builder_is_told_no_fetch():
+    prompt = one_line("`You are <GROK ")
+    assert ("NO shell command and no URL fetch; read and write files with your file tools only; "
+            "a denial ends your run (GEMINI)") in prompt
+    assert "Pass <0a | 0b | 0c | 0d | 0e | 0f | T | S | S2>" in prompt
+    assert "not cat, grep, ls or any pipe" not in prompt
+    step4 = one_line("4. THE INSTRUCTIONS")
+    assert ("Run NO shell command and no URL fetch; read and write files with your file tools only; "
+            "a denial ends your run.") in step4

@@ -1182,7 +1182,8 @@ def builder_call(command, s):
     the seat's MODEL with `<worktree>` the card's WORKTREE and ONE plain double-quoted prompt, its
     write target that worktree and nothing wider (Claude: dontAsk, Bash denied; Grok: no
     --always-approve; Gemini: --mode accept-edits once, --sandbox), and no `.env` (a file or a
-    link) in that worktree; the S7 route when all holds but `.env`; else False (G7)."""
+    link) in that worktree; the S7 route when all holds but `.env`; else False (G7).
+    Gemini: from the worktree only (cwd == <worktree>, R2011)."""
     wt = s["card"]["worktree"]
     template = builder_command(s["hub"], s["model"]) if s["model"] else None
     if not wt or not template:
@@ -1213,6 +1214,8 @@ def builder_call(command, s):
     if head == "agy" and ((prefix + suffix).count(" --mode ") != 1 or " --mode accept-edits " not in prefix + suffix
                           or " --sandbox " not in prefix + suffix):
         return False
+    if head == "agy" and s["cwd"] != target:
+        return False  # R2011: a Gemini call only from its worktree
     if os.path.lexists(os.path.join(target, ".env")):
         return ROUTE["G7 env"]
     return True

@@ -2551,3 +2551,42 @@ def test_k5_check_o1_control_a_second_add_dir_space_form_is_g7(roots):
     row = GEMINI[2].replace(" --print=", " --add-dir /Users/cobalt/cobalt --print=")
     seat = gemini_seat(roots, "gemini-4-argon-high", row=row)
     assert_denied(run(gemini(roots, row=row), seat), G7_ROUTE)
+
+
+# ---- card 2026-10-19 827 C1: the Gemini call only from its worktree (R2011) ------------------
+
+
+def seat_in(seat: dict, cwd: Path, slash: bool = False) -> dict:
+    """The seat with its hook event's `cwd` replaced (the directory made first)."""
+    cwd.mkdir(parents=True, exist_ok=True)
+    return dict(seat, cwd=str(cwd) + ("/" if slash else ""))
+
+
+@pytest.mark.parametrize("where", ["x1-canary", "repo", "wt root", "below the worktree", "other worktree"])
+def test_c1_a_gemini_call_from_outside_its_worktree_is_g7(roots, where):
+    cwd = {
+        "x1-canary": roots.wt / "x1-canary",
+        "repo": roots.repo,
+        "wt root": roots.wt,
+        "below the worktree": roots.wt / JOB_WT / "docs",
+        "other worktree": roots.wt / "other-0101",
+    }[where]
+    seat = seat_in(gemini_seat(roots, "gemini-4-argon-high"), cwd)
+    assert_denied(run(gemini(roots), seat), G7_ROUTE)
+
+
+@pytest.mark.parametrize("slash", [False, True])
+def test_c1_control_from_the_worktree_is_admitted(roots, slash):
+    seat = seat_in(gemini_seat(roots, "gemini-4-argon-high"), roots.wt / JOB_WT, slash)
+    assert_allowed(run(gemini(roots), seat))
+
+
+def test_c1_the_pin_is_gemini_only(roots):
+    seat = seat_in(shadow_seat(roots, "grok-4.7"), roots.repo)
+    assert_allowed(run(builder(roots, "grok-4.7"), seat))
+
+
+def test_c1_env_is_still_g7_env_from_the_worktree(roots):
+    seat = seat_in(gemini_seat(roots, "gemini-4-argon-high"), roots.wt / JOB_WT)
+    (roots.wt / JOB_WT / ".env").write_text("CONSTRUCTED=1\n")
+    assert_denied(run(gemini(roots), seat), ENV_ROUTE)
