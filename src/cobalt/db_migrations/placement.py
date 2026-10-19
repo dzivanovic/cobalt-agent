@@ -120,6 +120,10 @@ CREATED_TABLES: dict[str, Side] = {
     # db_migrations/0024_strike_alerts.sql — S4-P2 S3 (DECISION E4): when one
     # trader's strike alert was pushed, shown and DM'd (L32).
     "strike_alerts": Side.USER,
+    # db_migrations/0026_genesis_chunk.sql — F21 chunk 1 (FINAL F-02, F-15):
+    # his ledger and vault history, chunked for recall. USER: one trader's
+    # own text (L32).
+    "genesis_chunk": Side.USER,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table

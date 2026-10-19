@@ -164,8 +164,9 @@ def test_s1_12_the_pair_is_registered_last_and_first_and_placed_user_side():
     # price floor (`0023_radar_price_floor`) and S4-P2 (`0024_strike_alerts`) now follow it: 0019 is
     # sixth-last.  # S4-P2 (E4)
     # DML roles (0025): one place further out, seventh-last.
-    assert FORWARD[-7] == SQL and FORWARD[-8].name == "0018_drc_stated_books.sql"
-    assert REVERSE[6] == ROLLBACK and REVERSE[7].name == "0018_drc_stated_books.rollback.sql"
+    # F21 genesis (0026): one place further out again, eighth-last.
+    assert FORWARD[-8] == SQL and FORWARD[-9].name == "0018_drc_stated_books.sql"
+    assert REVERSE[7] == ROLLBACK and REVERSE[8].name == "0018_drc_stated_books.rollback.sql"
     assert side_of("drc_events") is Side.USER and CREATED_TABLES["drc_events"] is Side.USER
     assert "drc_events" in store.TABLES
 
@@ -181,6 +182,7 @@ def test_s1_12_the_sql_is_the_seams_sketch_and_the_rollback_states_its_cost():
     assert "-- COST:" in back and 'DROP TABLE IF EXISTS "user".drc_events;' in back
     assert "to_regclass('\"user\".drc_imports')" in back
     assert [p.name for p in _rollback_paths("0018")] == [
+        "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
         "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",

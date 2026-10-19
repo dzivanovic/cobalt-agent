@@ -108,6 +108,10 @@
                          into one). No table.
 `0025_dml_roles.rollback.sql` — revokes those grants in this database; the
                          roles and the membership are cluster-wide and stay.
+`0026_genesis_chunk.sql` — F21 chunk 1 (card 468 G1): `"user".genesis_chunk`,
+                         one row per structural chunk of an imported markdown
+                         source, a generated `tsv` and its GIN index. Additive.
+`0026_genesis_chunk.rollback.sql` — drops that one table (its COST line).
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
@@ -173,10 +177,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0023_radar_price_floor.sql",
     MIGRATIONS_DIR / "0024_strike_alerts.sql",
     MIGRATIONS_DIR / "0025_dml_roles.sql",
+    MIGRATIONS_DIR / "0026_genesis_chunk.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0026_genesis_chunk.rollback.sql",
     MIGRATIONS_DIR / "0025_dml_roles.rollback.sql",
     MIGRATIONS_DIR / "0024_strike_alerts.rollback.sql",
     MIGRATIONS_DIR / "0023_radar_price_floor.rollback.sql",

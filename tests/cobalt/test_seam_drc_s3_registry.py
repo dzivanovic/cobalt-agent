@@ -19,10 +19,11 @@ def test_the_union_tail_is_0015_to_0021_and_reverse_mirrors_it():
     # F15 P1's 0022 lands on top of the union tail (FINAL `## SEAM`), the price floor's 0023 (R692) above it,
     # S4-P2's 0024 above that.  # S4-P2 (E4)
     # DML roles' 0025 above that.  # DML roles (0025)
-    assert [name[:4] for name in forward[-11:]] == [
-        "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025"]
-    assert [name[:4] for name in reverse[:11]] == [
-        "0025", "0024", "0023", "0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
+    # F21 genesis' 0026 above that.  # F21 genesis (0026)
+    assert [name[:4] for name in forward[-12:]] == [
+        "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026"]
+    assert [name[:4] for name in reverse[:12]] == [
+        "0026", "0025", "0024", "0023", "0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
     assert all(p.exists() for p in (*FORWARD, *REVERSE))
 
 
@@ -31,7 +32,8 @@ def test_placement_carries_both_lanes_and_declares_neither_built_table():
     drc = ["drc_imports", "drc_fills", "drc_rows", "drc_stated_books", "drc_events"]
     assert all(CREATED_TABLES[name] is Side.USER for name in (*drc, "legs"))
     # F15 P1's `prediction_records` (0022) follows `legs`; S4-P2's `strike_alerts` (0024) follows it.  # S4-P2 (E4)
-    assert names[-3:] == ["legs", "prediction_records", "strike_alerts"]
+    # F21 genesis' `genesis_chunk` (0026) follows it.  # F21 genesis (0026)
+    assert names[-4:] == ["legs", "prediction_records", "strike_alerts", "genesis_chunk"]
     assert max(names.index(name) for name in drc) < names.index("legs")
     assert CREATED_VIEWS["legs_current_v"] is Side.USER
     assert "legs" not in DECLARED_TABLES and "drc_rows" not in DECLARED_TABLES

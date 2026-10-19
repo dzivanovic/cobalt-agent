@@ -1,0 +1,15 @@
+job=f21-genesis-fr1
+tip=2cd0219a
+on=91490502
+migration=0026, never applied (DECISION 1)
+offline=4749/0
+with_db=0/0
+live_note=147/0
+cobalt_dev=not taken
+env=removed
+restarts=com.cobalt.radar
+rows=1 of 1 (PROOF 42: 38 byte-equal, 4 seam)
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=271277

@@ -58,8 +58,10 @@ def test_both_files_exist_and_are_registered_last_and_first():
     # DRC's 0018–0020, S3 exits C1's 0021, F15 P1's 0022, the price floor's 0023 and S4-P2's 0024 now
     # follow it.  # S4-P2 (E4)
     # DML roles (0025): one place further out.
-    assert FORWARD[-9] == SQL and REVERSE[8] == ROLLBACK
+    # F21 genesis (0026): one place further out again.
+    assert FORWARD[-10] == SQL and REVERSE[9] == ROLLBACK
     assert [p.name for p in _rollback_paths("0015")] == [
+        "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
         "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",

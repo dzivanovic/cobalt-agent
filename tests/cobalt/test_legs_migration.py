@@ -29,7 +29,8 @@ def test_the_pair_is_registered_last_and_reversed_first():
     # F15 P1's 0022, the price floor's 0023 and S4-P2's 0024 now follow it (fourth-last forward, fourth
     # reversed).  # S4-P2 (E4)
     # DML roles (0025): one place further out (fifth-last forward, fifth reversed).
-    assert FORWARD[-5] == SQL and REVERSE[4] == ROLLBACK
+    # F21 genesis (0026): one place further out again (sixth-last forward, sixth reversed).
+    assert FORWARD[-6] == SQL and REVERSE[5] == ROLLBACK
 
 
 def test_legs_and_its_view_are_user_side_and_fills_stays_declared():
