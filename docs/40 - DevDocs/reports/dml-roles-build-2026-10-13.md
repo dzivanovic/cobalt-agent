@@ -153,7 +153,8 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/dml-roles-1013-all-20261018-213701.log
 - No re-check and no gate call in this round (R1955, `cto-2026-10-18.md:15`: "no code, no re-check"). The suites on the code tip `ce3b9dc1` are the check's deploy gate, log `/Users/cobalt/cobalt-wt/.gate-logs/dml-roles-1013-all-20261018-224801.log`: `offline 8653/0` (`:1010`), `cobalt_dev: 0013 — F2 = F0` (`:2430`), `with-DB 5610/0` (`:2437`), `live-note 147/0` (`:2504`).
 - RESTARTS: `uv run cobalt jobs restarts e7ef198a..HEAD` → the table of `## RESTARTS`, with `test_db_credentials.py` and the report's `.result` (`DOCS`) among its rows; no UNCLASSIFIED row; last line `RESTARTS: com.cobalt.radar`.
 
-FIXED: A2 — tests/cobalt/test_db_apply_db.py (collect-only: 11 tests collected)
+A2's line below names the first of the 11 ids collected by `uv run pytest -q -p no:cacheprovider --collect-only tests/cobalt/test_db_apply_db.py` (`11 tests collected in 0.03s`); the fix itself is the report's `:136`, corrected from 13 to 11.
+FIXED: A2 — tests/cobalt/test_db_apply_db.py::test_t5_a_failing_second_statement_rolls_the_first_back
 SETTLED: A1 — R1953
 SETTLED: O1 — R1953
 
@@ -174,6 +175,7 @@ none open.
 - `ad8ecbb9 wip(dml-roles-1013): W — test_db_credentials.py:211 red outside the rows` committed the report at the stop.
 - `CONTINUED at W 21:36 EDT` (`date`): the `cto-desk` message "CONTINUE at W. Card 448 now carries row FIX1 (committed c8b4986d …)". The fact was verified first: `git -C /Users/cobalt/cobalt log` → `c8b4986d docs(desk): 448 FIX1 and gemini-grant cards, preflights, deploy 798 failed`; `grep -n -F "FIX1"` on the card → row `:25`; `authorize.sh build` → `CARD COMMITTED … c8b4986d…`, `CARD UNCHANGED … nothing`, `AUTHORIZED`. FIX1 is applied in `d0ffa988 fix(dml-roles-1013): cobalt_app is a member of exactly the five roles (FIX1; L1, L70)`.
 - `CONTINUED at FIX ROUND 23:40 EDT` (`date`): a new session (`78aa7cb1`) with the message "CONTINUE: FIX ROUND report A2 prose 13 to 11 at line 136 of the build report then the lines FIXED A2 and SETTLED A1 O1 with R1953". The fact was verified first: `grep` of `R1953` over `reports/` → `cto-2026-10-18.md:17` (R1953, A1 and O1 SETTLED) and `:15` (R1955, this route). RECOVERY: `git status --short --branch` → `## ops/dml-roles-1013`; `git log --oneline -3` → `88d5a98d`, `ce3b9dc1`, `10af5c76`; `ls -la …/.env` → `No such file or directory`.
+- `CONTINUED at FIX ROUND 23:42 EDT` (`date`): the `cto-desk` message "CONTINUE FIX ROUND report A2 again. deploy-card.sh REFUSED: \"dml-roles-1013: held id A2 has no FIXED line in the fix report\"". The FIXED line now names a path::name test id (the first collected id, no class); the prose sits on the line above it. No code or test change, no re-check.
 - L74: this session's system notice again asked for a `Claude-Session:` commit line; not followed.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
