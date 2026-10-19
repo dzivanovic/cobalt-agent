@@ -6,10 +6,10 @@ INSTALL: none
 BRANCH: ops/gemini-read-grant-1019
 WORKTREE: gemini-read-grant-1019
 BASE: 0ac7746e
-TIP:
+TIP: ad4c8dfe
 REPORT: /Users/cobalt/cobalt-wt/gemini-read-grant-1019/docs/40 - DevDocs/reports/gemini-read-grant-1019-build-2026-10-19.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gemini-read-grant-1019-check-2026-10-19.md
+HOUSE B: as needed
 BAND: HIGH
 DB: none
 RESTARTS: none
