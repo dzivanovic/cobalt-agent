@@ -97,12 +97,18 @@ def load_agent(path: Path = CONFIG_PATH) -> AgentSpec:
     except ValidationError as e:
         raise AgentConfigError(f"{path}: invalid voice agent entry:\n{e}") from None
     from cobalt.modelaccess import load_routes
+    from cobalt.modelaccess.config import Route
 
     routes = load_routes().routes
     if spec.route not in routes:
         raise AgentConfigError(
             f"{path}: route {spec.route!r} is not a route name in configs/cobalt/modelaccess.yaml "
             f"({sorted(routes)}) — the agent names a ROUTE, never a provider, a model or a URL"
+        )
+    if not isinstance(routes[spec.route], Route):
+        raise AgentConfigError(
+            f"{path}: route {spec.route!r} is not a chat route — the voice agent needs a chat route "
+            f"(kind: openai_compatible), not an embeddings route"
         )
     return spec
 
