@@ -35,6 +35,14 @@ files:
   - path: "configs/cobalt/rules.yaml"
     written_by: "com.cobalt.prefill-daily — refreshes `generated_at` at 05:15 ET"
 
+# F20 C2e (FINAL F-07): an agent file the CoS executor wrote after his
+# approved /hitl card. A new or changed file here is committed ONLY when its
+# bytes hash to the sha256 of an `executed` cobalt_hitl_requests row; any
+# other change under these directories fails the job loud and commits
+# nothing. `voice.yaml` lives here too and is never written by a job, so a
+# change to it fails the run.
+hitl_dirs: [configs/cobalt/agents]
+
 # `{date}` is the only placeholder, and it is the ET calendar date: the
 # job fires at 23:37 ET, which is already tomorrow in UTC for eight
 # months of the year.

@@ -8,10 +8,11 @@ influenced by a path that happens to contain a space or a semicolon, and
 
 from __future__ import annotations
 
+import hashlib
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional
 
 from loguru import logger
 
@@ -123,12 +124,62 @@ def _dirty(repo_root: Path, paths: Optional[list[str]] = None) -> list[str]:
     return found
 
 
+def _named_id(data: bytes) -> Optional[str]:
+    """The `agent.id` the file's bytes name, or None when they name none."""
+    import yaml
+
+    try:
+        raw = yaml.safe_load(data)
+    except yaml.YAMLError:
+        return None
+    agent = raw.get("agent") if isinstance(raw, dict) else None
+    return str(agent["id"]) if isinstance(agent, dict) and agent.get("id") else None
+
+
+def _backed_hitl_files(
+    repo_root: Path, dirs: list[str], executed_sha: Optional[Callable[[str], bool]]
+) -> list[str]:
+    """Every new or changed file under `hitl_dirs`, each backed by an
+    `executed` HITL row (F-07). ONE unbacked path refuses the whole run
+    before anything is staged: the bytes must hash to an executed row's
+    sha256, and a deletion has no bytes to hash."""
+    if not dirs:
+        return []
+    out = _git(repo_root, "status", "--porcelain", "-z", "--untracked-files=all", "--", *dirs)
+    entries = [(e[:2], e[3:]) for e in out.split("\0") if len(e) > 3]
+    if not entries:
+        return []
+    if executed_sha is None:
+        from cobalt.hitl.store import HitlStore
+
+        executed_sha = HitlStore().backs_sha256
+    unbacked = []
+    for code, path in entries:
+        full = repo_root / path
+        if "D" in code or not full.is_file():
+            unbacked.append(f"{path} (deleted)")
+            continue
+        data = full.read_bytes()
+        if not executed_sha(hashlib.sha256(data).hexdigest()) or _named_id(data) != full.stem:
+            # An executed row's bytes copied under another name are not what
+            # he approved: the executor writes `<agent id>.yaml` only (X4).
+            unbacked.append(path)
+    if unbacked:
+        raise GeneratedCommitRefused(
+            f"REFUSED: change(s) under {dirs} that no executed HITL request backs: {unbacked}. "
+            "A file there is committed only when its bytes hash to the sha256 he approved "
+            "on the /hitl page (F20 F-07). Nothing was staged, nothing committed."
+        )
+    return [path for _code, path in entries]
+
+
 def commit_generated(
     repo_root: Path,
     *,
     day: str,
     config: Optional[GeneratedConfig] = None,
     dry_run: bool = False,
+    executed_sha: Optional[Callable[[str], bool]] = None,
 ) -> CommitOutcome:
     """Stage the listed files that changed, commit them, and stop.
 
@@ -151,7 +202,11 @@ def commit_generated(
 
     listed = cfg.paths
     changed = _dirty(repo_root, listed)
-    others = [p for p in _dirty(repo_root) if p not in set(listed)]
+    backed = _backed_hitl_files(repo_root, cfg.hitl_dirs, executed_sha)
+    under_dirs = tuple(d.rstrip("/") + "/" for d in cfg.hitl_dirs)
+    others = [p for p in _dirty(repo_root) if p not in set(listed) and not p.startswith(under_dirs)]
+    changed = changed + backed
+    listed = listed + backed
 
     if not changed:
         logger.info("generated: nothing to commit — no listed file has changed.")

@@ -57,6 +57,12 @@ MODULE_TABLES: dict[str, Side] = {
     "setup_trade_matrix": Side.USER,   # a VIEW unnested from trade_defs.def
     # settings/migrations/0001_trader_settings.sql (ADR-0008 D3.4)
     "trader_settings": Side.USER,
+    # hitl/migrations/0001_cobalt_hitl.sql (F20 C2a) — his approvals (L32;
+    # the `voice_turns` precedent; card 730 DECISION 4).
+    "cobalt_hitl_requests": Side.USER,
+    # cos/migrations/0001_cobalt_cos.sql (F20 C3a) — his conversation (L32).
+    "cobalt_cos_sessions": Side.USER,
+    "cobalt_cos_turns": Side.USER,
 }
 
 #: Created by database-wide migrations directly on their final side. These

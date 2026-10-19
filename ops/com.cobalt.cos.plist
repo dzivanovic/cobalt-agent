@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.cos</string>
+    <!-- F20: BUILT, NOT LOADED (configs/cobalt/jobs.yaml `enabled: false`;
+         BOOTSTRAP deferred). The deploy loads it only after the D14
+         checklist, T10 and X1 (the keychain login under a LaunchAgent). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <key>COBALT_ENV</key>
+        <string>production</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- through bash: the script needs no exec bit to run -->
+        <string>/bin/bash</string>
+        <string>/Users/cobalt/cobalt/ops/start_cos.sh</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/cos.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/cos.err</string>
+</dict>
+</plist>

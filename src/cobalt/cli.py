@@ -84,6 +84,9 @@ from cobalt.archiver import cli as archiver_cli  # noqa: E402
 from cobalt.voice import cli as voice_cli  # noqa: E402
 from cobalt.strike import cli as strike_cli  # noqa: E402
 from cobalt.playbook import cli as playbook_cli  # noqa: E402
+from cobalt.cos import cli as cos_cli  # noqa: E402
+from cobalt.hitl import cli as hitl_cli  # noqa: E402
+from cobalt.agents import cli as agents_cli  # noqa: E402
 from cobalt.archiver.quiet import QuietRefused  # noqa: E402
 from cobalt.archiver.store import ArchiveLockError  # noqa: E402
 
@@ -546,6 +549,10 @@ def main() -> None:
     voice_cli.add_parser(sub)
     strike_cli.add_parser(sub)
     playbook_cli.add_parser(sub)
+    # F20 C4d: read and dry-run only; no approve subcommand (F-21).
+    cos_cli.add_parser(sub)
+    agents_cli.add_parser(sub)
+    hitl_cli.add_parser(sub)
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."

@@ -42,3 +42,6 @@ the 2026-09-09 ops report is what it exists for.
 
 ## Neighbours
 `committer.py` (the only consumer), `configs/cobalt/generated.yaml`.
+
+## 2026-10-18 — f20-cos-1018
+F20 C2e (F-07): `GeneratedConfig.hitl_dirs: list[str]` (default empty; each repo-relative, no `..`, no duplicate); the load raises when a listed dir is not a directory. `files:` and its existence / tracked raises are unchanged. `generated.yaml` lists `hitl_dirs: [configs/cobalt/agents]`. Tests: `test_generated_hitl_dirs.py`.

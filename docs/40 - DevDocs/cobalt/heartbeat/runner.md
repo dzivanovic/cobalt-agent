@@ -74,3 +74,6 @@ compared by `cobalt validate`; `heartbeat.summary_at`.
 (`launchctl print` shows `state = not running` between beats). New code
 is therefore picked up at the next beat — deploying a change here needs
 no restart of anything.
+
+## 2026-10-18 — f20-cos-1018
+F20 C4b (X9 — this is the call site): `take_beat` calls `probe_mod.cos(ts)` and `probe_mod.hitl(ts)` after `probe_mod.radar(ts)`. Both are unknown, never red, while `com.cobalt.cos` ships `enabled: false`. Test: `test_cos_probes.py::test_the_runner_calls_both`.

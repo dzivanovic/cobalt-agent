@@ -203,6 +203,29 @@ jobs:
     imports: [cobalt.cli]
     what: "the resident radar pool scanner and Finviz i1 bar poller"
 
+  - label: com.cobalt.cos
+    kind: resident
+    supervisor: self
+    # F20: BUILT, REGISTERED, NOT HANDED OVER (card 730 DECISION 6;
+    # BOOTSTRAP deferred). It refuses to start while com.cobalt.agent's
+    # pidfile is alive (F-14), and its deploy waits for the D14 checklist,
+    # T10 and X1. `self`: the LOOP stamps heartbeat_at at the top of every
+    # iteration (cos/run.py, no beater thread), so a hung poll goes ZOMBIE.
+    enabled: false
+    # > cos.turn_timeout_s (900) + one cos.poll_interval_s (no value yet;
+    # 60 s UNMEASURED stand-in, DECISION 7): a turn in flight is never ZOMBIE.
+    timeout_s: 1200
+    reads:
+      - "configs/cobalt/agents/cos.yaml"           # agents/registry.py:93 (load_entry), called from cos/run.py:87 (_build) at the start: model + charter held for the life of the process
+      - "configs/cobalt/agents/voice.yaml"         # agents/registry.py:125 (list_agents reads it by id), called from cos/tools.py:68 (_agents_list) on each agents.list call
+      - "configs/cobalt/taxonomy/tunables.yaml"    # taxonomy/loader.py:79 (load_tunables), from cos/session.py:80 (tunable_int) and hitl/actions.py:66 (request_ttl_min) on each request
+      - "configs/cobalt/notify.yaml"               # notify/config.py:51 (load_notify_config), from notify/mattermost.py:137 (send_dm) on every card, reply and failure DM, and cos/listener.py:53 (fetch_dm_posts) on every poll
+      - "ops/start_cos.sh"                         # ops/com.cobalt.cos.plist:21 (the program); its exports reach the process only at a restart
+      - "pyproject.toml"                           # ops/start_cos.sh:31 (uv sync --inexact, then exec): the environment is synced from it when the process starts
+      - "uv.lock"                                  # ops/start_cos.sh:31 (uv sync --inexact, then exec): the environment is synced from it when the process starts
+    imports: [cobalt.cos.run]
+    what: "the F20 chief of staff — one Agent SDK session he talks to in his Mattermost DM; HITL executor"
+
   # ---------------- one-shots ----------------
   - label: com.cobalt.prefill-daily
     kind: one-shot
@@ -388,6 +411,14 @@ no_resident_reads:
       called from the manual `cobalt classify route | route-read` commands.
       No job runs them; no resident loads it. com.cobalt.generated is named
       as for trial.yaml above. Card 591, 2026-10-15.
+  - path: configs/cobalt/generated.yaml
+    readers: [com.cobalt.generated]
+    because: >
+      Read only by generated/config.py:114 load_generated_config, called from
+      generated/cli.py:74 and generated/committer.py:182 — the `cobalt
+      generated commit` run of the com.cobalt.generated one-shot (23:37). The
+      radar's `uv run cobalt` imports the loader (cobalt.cli ->
+      cobalt.generated.cli) without calling it. F20 card 730 (L42).
   - path: configs/cobalt/playbook.yaml
     readers: [com.cobalt.playbook]
     because: >

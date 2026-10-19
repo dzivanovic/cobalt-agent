@@ -1380,6 +1380,170 @@ async def settings_daily_apply(request: Request) -> str:
     )
 
 
+# ---------------------------------------------------------------------
+# F20 C2c: the HITL page — the ONE place he approves (FINAL §3 step 5, B)
+# ---------------------------------------------------------------------
+#
+# `hitl_approve` and `hitl_deny` are the only `pending` -> `approved` /
+# `denied` transition in the tree (L37, T3). Both need the card's one-time
+# key (`sha256(k) = approve_key_sha256`, F-06 = B); approve also needs the
+# reviewed sha256 and is ONE statement. The kill switch is checked first.
+# Every field the model wrote is rendered through `html.escape`. The routes
+# write rows only; the executor runs in the CoS resident, never here (C3).
+
+
+def _hitl_store():
+    from cobalt.hitl.store import HitlStore
+
+    return HitlStore()
+
+
+def _hitl_page(body: str) -> str:
+    return (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width, initial-scale=1">'
+        f"<title>Cobalt · HITL</title><style>{CSS}</style></head><body><div class=\"wrap\">"
+        '<h1>HITL <span class="muted">· requests the chief of staff made</span> · '
+        '<a href="/hitl">all</a></h1>'
+        f"{body}</div></body></html>"
+    )
+
+
+def _hitl_key_sha(form: dict) -> str:
+    import hashlib
+
+    key = form.get("k", "").strip().lower()
+    return hashlib.sha256(key.encode()).hexdigest() if key else ""
+
+
+def _hitl_refusal(row: dict | None, *, reviewed: str = "", key_sha: str = "") -> str:
+    """Why the statement matched no row — read back, never guessed."""
+    from cobalt.session import clock as clock_mod
+
+    if row is None:
+        return "no such request"
+    if row["status"] != "pending":
+        return f"the request is {row['status']}, not pending"
+    if row["expires_at"] <= clock_mod.now_utc():
+        return f"the request expired at {row['expires_at']:%Y-%m-%d %H:%M} UTC"
+    if not key_sha or key_sha != row["approve_key_sha256"]:
+        return "the card's key is missing or wrong — open the link from the card DM"
+    if reviewed and reviewed != row["sha256"]:
+        return f"sha256 mismatch — reviewed {reviewed}, the request is {row['sha256']}"
+    return "the request changed underneath the page"
+
+
+@app.get("/hitl", response_class=HTMLResponse)
+async def hitl_list() -> str:
+    e = html.escape
+    try:
+        rows = _hitl_store().recent()
+    except Exception as exc:  # noqa: BLE001 - rendered, never swallowed
+        return _hitl_page(_failed(f"HITL requests unreadable: {type(exc).__name__}: {exc}"))
+    items = "".join(
+        f'<tr><td><a href="/hitl/{int(r["id"])}">{e(r["short_id"])}</a></td><td>{e(r["status"])}</td>'
+        f'<td>{e(r["action"])}</td><td>{e(str(r["reason"]))}</td></tr>'
+        for r in rows
+    ) or '<tr><td colspan="4">No requests.</td></tr>'
+    return _hitl_page(f'<div class="card"><table>{items}</table></div>')
+
+
+@app.get("/hitl/{row_id}", response_class=HTMLResponse)
+async def hitl_detail(row_id: int) -> str:
+    e = html.escape
+    try:
+        row = _hitl_store().get(row_id)
+    except Exception as exc:  # noqa: BLE001
+        return _hitl_page(_failed(f"HITL request unreadable: {type(exc).__name__}: {exc}"))
+    if row is None:
+        return _hitl_page(_failed(f"no HITL request {row_id}"))
+    rendered = bytes(row["rendered"]).decode("utf-8", errors="replace")
+    before = (
+        f'<label>Current file (before)</label><pre>{e(bytes(row["before_bytes"]).decode("utf-8", errors="replace"))}</pre>'
+        if row.get("before_bytes") else ""
+    )
+    forms = ""
+    if row["status"] == "pending":
+        forms = (
+            f'<form method="post" action="/hitl/{int(row["id"])}/approve">'
+            f'<input type="hidden" name="sha256" value="{e(row["sha256"])}">'
+            '<input type="hidden" name="k" class="hitl-k" value="">'
+            '<button class="primary" type="submit">Approve</button></form>'
+            f'<form method="post" action="/hitl/{int(row["id"])}/deny">'
+            '<input type="hidden" name="k" class="hitl-k" value="">'
+            '<label>Deny reason (optional)</label><input name="reason" value="">'
+            '<button type="submit">Deny</button></form>'
+            # The key is in the link FRAGMENT, which the browser never sends:
+            # the page copies it into the two forms.
+            "<script>const k=new URLSearchParams(location.hash.slice(1)).get('k')||'';"
+            "document.querySelectorAll('.hitl-k').forEach(i=>{i.value=k;});</script>"
+        )
+    return _hitl_page(
+        f'<div class="card"><label>Request {e(row["short_id"])} · {e(row["status"])}</label>'
+        f'<div>{e(row["action"])} · asked by {e(row["agent_id"])} · expires '
+        f'{e(str(row["expires_at"]))}</div>'
+        f'<label>Reason</label><div>{e(str(row["reason"]))}</div>'
+        f'<label>Payload</label><pre>{e(json.dumps(row["payload"], indent=2, sort_keys=True, default=str))}</pre>'
+        f"{before}"
+        f'<label>The file that will be written (sha256 {e(row["sha256"])})</label><pre>{e(rendered)}</pre>'
+        f"{forms}</div>"
+    )
+
+
+@app.post("/hitl/{row_id}/approve", response_class=HTMLResponse)
+async def hitl_approve(row_id: int, request: Request) -> str:
+    """His tap. ONE statement; zero rows → refused, nothing written."""
+    from cobalt.jobs import killswitch
+
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    reviewed = form.get("sha256", "").strip().lower()
+    key_sha = _hitl_key_sha(form)
+    e = html.escape
+    try:
+        if killswitch.is_active():
+            return _hitl_page(_failed("REFUSED: the kill switch is active — nothing approved, nothing written."))
+        store = _hitl_store()
+        approved = store.update_returning(
+            "UPDATE cobalt_hitl_requests SET status='approved', decided_at=now(), "
+            "decided_via='aset.hitl@sha256:'||sha256 WHERE id=%s AND status='pending' "
+            "AND expires_at>now() AND sha256=%s AND approve_key_sha256=%s RETURNING id",
+            (row_id, reviewed, key_sha),
+        )
+        if not approved:
+            why = _hitl_refusal(store.get(row_id), reviewed=reviewed, key_sha=key_sha)
+            return _hitl_page(_failed(f"REFUSED: {why}. Nothing written."))
+    except Exception as exc:  # noqa: BLE001
+        return _hitl_page(_failed(f"REFUSED: {type(exc).__name__}: {exc}. Nothing written."))
+    logger.info("HITL {} approved from the page (sha256 {})", row_id, reviewed)
+    return _hitl_page(
+        f'<div class="saved">APPROVED request {int(row_id)} · sha256 {e(reviewed)} — the chief of '
+        "staff's executor runs it and DMs the outcome.</div>"
+    )
+
+
+@app.post("/hitl/{row_id}/deny", response_class=HTMLResponse)
+async def hitl_deny(row_id: int, request: Request) -> str:
+    """Deny needs the key too; it records the row and an optional reason."""
+    form = {k: str(v) for k, v in (await request.form()).items()}
+    key_sha = _hitl_key_sha(form)
+    reason = form.get("reason", "").strip() or None
+    try:
+        store = _hitl_store()
+        denied = store.update_returning(
+            "UPDATE cobalt_hitl_requests SET status='denied', decided_at=now(), "
+            "decided_via='aset.hitl@sha256:'||sha256, deny_reason=%s WHERE id=%s "
+            "AND status='pending' AND approve_key_sha256=%s RETURNING id",
+            (reason, row_id, key_sha),
+        )
+        if not denied:
+            why = _hitl_refusal(store.get(row_id), key_sha=key_sha)
+            return _hitl_page(_failed(f"REFUSED: {why}. Nothing written."))
+    except Exception as exc:  # noqa: BLE001
+        return _hitl_page(_failed(f"REFUSED: {type(exc).__name__}: {exc}. Nothing written."))
+    logger.info("HITL {} denied from the page", row_id)
+    return _hitl_page(f'<div class="saved">DENIED request {int(row_id)}.</div>')
+
+
 @app.post("/card/{card_id}/move", response_class=HTMLResponse)
 async def card_move(card_id: int, request: Request) -> str:
     """One state transition, from a button whose edge was already legal.
