@@ -41,3 +41,16 @@ def test_o3_the_rollback_revokes_grants_and_never_a_role_or_a_membership():
     assert "REVOKE" in code
     for never in ("DROP", "REVOKE cobalt_apply_", "CREATE ROLE"):
         assert never not in code, never
+
+
+def test_o4_the_rollback_revokes_every_grant_the_forward_makes():
+    code = _code(ROLLBACK)
+    for schema, role in (('"user"', "cobalt_apply_user"), ("system", "cobalt_apply_system")):
+        for want in (
+            f"REVOKE SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA {schema} FROM {role}",
+            f"REVOKE USAGE ON ALL SEQUENCES IN SCHEMA {schema} FROM {role}",
+            f"REVOKE USAGE ON SCHEMA {schema} FROM {role}",
+            f"REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLES FROM {role}",
+            f"REVOKE USAGE ON SEQUENCES FROM {role}",
+        ):
+            assert want in code, want
