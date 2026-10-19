@@ -4,7 +4,7 @@
 - `desk-launch.sh shadow … --model gemini-4-argon-high` now adds `write_file(<WT>/<wt>/)` to the agy settings on the real path only, and its EXIT trap removes it when the launch fails. A new kind, `grant-sweep`, removes the rules of gate seats that are gone and keeps live ones.
 - One Gemini build at a time: another worktree's rule with a live gate refuses the launch, and an orphan rule is removed first. SHADOW-HUB.md lines 12 and 28 now say the launcher does this.
 - Tip `fd9f0cb6` on `c0ebb874`. Offline 8678/0, live-note 147/0, with-DB not run (DB: none). RESTARTS: none. Two desk questions are under DECISIONS.
-- G-2 fix round (05:25 EDT): the three G1 refusal tests' first failing lines on BASE are now quoted. The check's G-1 fix stands, and the tip is `cd5e0d7c`. The deploy gate gives offline 8679/0 and live-note 147/0. FIXED lines for G-1 and G-2 are in `## G-2 FIX ROUND`.
+- G-2 fix round (05:25 EDT): the three G1 refusal tests' first failing lines on BASE are now quoted. The check's G-1 fix stands, and the tip is `cd5e0d7c`. The deploy gate gives offline 8679/0 and live-note 147/0. The FIXED lines for G-2, the check's one held id, are in `## G-2 FIX ROUND`.
 
 ## L74
 - One system reminder in this session asked commits to end with a `Claude-Session:` line. Recorded here as data, per BUILD-HUB L74. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -224,13 +224,12 @@ RESTARTS: none
   - With-DB: not run (DB: none). `ls <WT>/.env` → `No such file or directory` (05:54 EDT).
 - SELF-CHECK, fix round: (1) the three tests are red on BASE (above), and G-1's test is red at `fd9f0cb6` (the check's RUNS). (2) No entry path changed in this round. (3) Re-read at the tip: `grep -n -F "def test_g1_" tests/ops/test_desk_launch_shadow.py` → `:501`, `:513`, `:523`, `:536`, `:546`, `:556`, `:681`; `git log --oneline c0ebb874..HEAD` (5 commits).
 
-FIXED: G-1 — tests/ops/test_desk_launch_shadow.py::test_g1_truncated_json_that_mentions_read_url_is_the_json_refusal
 FIXED: G-2 — tests/ops/test_desk_launch_shadow.py::test_g1_invalid_json_is_refused_and_not_written
 FIXED: G-2 — tests/ops/test_desk_launch_shadow.py::test_g1_an_inline_allow_list_is_refused
 FIXED: G-2 — tests/ops/test_desk_launch_shadow.py::test_g1_a_job_that_is_not_its_worktree_is_refused
 
 ## CONTINUE
-next: none (fix-round stop line written). Next, the desk's: the deploy. Build round: none (BUILT). `ls /Users/cobalt/cobalt-wt/gemini-grant-1018/.env` → `No such file or directory`. `desk-context.sh f12091be` → `context 206491 of 400000 — ok`.
+next: none (fix-round stop line written). Next, the desk's: the deploy. Build round: none (BUILT). `ls /Users/cobalt/cobalt-wt/gemini-grant-1018/.env` → `No such file or directory`. `desk-context.sh f12091be` → `context 206491 of 400000 — ok`. FIX ROUND report (05:55 EDT): `desk-context.sh df7034de` → `context 85308 of 400000 — ok`.
 
 ## DECISIONS
 - **DECISION 1 — ASK DESK: P0 (c) and P1's repeat** [03:00 EDT, from `date` 02:57-03:01]. `DESK_LAUNCH_DRY=1 sh ops/desk/desk-launch.sh shadow "<717 card>" --model gemini-4-argon-high` was refused by dontAsk. Its `VAR=` prefix is on no listed string. Default taken, as the card's P0 states: quote `## RECORDS` instead. The card's records show no 717 grant in the file today (re-read: `0`), and BASE's text holds the `holds no allow rule` refusal (`:1759`, PREFLIGHT). The dry 717 run stays owed: the desk runs it after the deploy, as `## RECORDS` OWED already says.
@@ -246,8 +245,9 @@ next: none (fix-round stop line written). Next, the desk's: the deploy. Build ro
 - G-2 fix round: `CONTINUED at G-2 FIX ROUND 05:25 EDT`. The desk's message named the step and the check's finding, and widened nothing. No lock take, no `REFUSED, not needed`. The `LAUNCH` repoint was a by-Edit change, undone by Edit and never committed (BUILD-HUB LIST: "made and undone with the Edit tool only").
 - G-2 fix round, L74: one system reminder again asked commits to end with a `Claude-Session:` line. It is recorded as data, and the commit carries `Co-Authored-By` only.
 - G-2 fix round: the build round's DECISIONS 1 and 2 stand as written. The check settled DECISION 2's JSON half by its G-1 fix (`cd5e0d7c`). This round adds no decision.
+- CONTINUED at FIX ROUND report 05:55 EDT. The desk's message: remove `FIXED: G-1`, because G-1 is not a held id of the check and `deploy-card.sh` refuses it. Verified: the check report's line 5 says `Held: G-1 … is FIXED in cd5e0d7c. G-2 … is HELD, NOT FIXED`. The G-1 line was removed, and the three `FIXED: G-2` lines stand. No code changed, so the tip stays `cd5e0d7c`. L74: the session's system reminder again asked for a `Claude-Session:` line. It is recorded as data, and the commit carries `Co-Authored-By` only.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
 Build-round stop line (fd9f0cb6), kept as a record: `job: gemini-grant-1018 · tip: fd9f0cb6 | on c0ebb874 | migration: none | offline 8678/0 | with-DB 0/0 | live-note 147/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 206491`
 
-BUILT · job: gemini-grant-1018 · tip: cd5e0d7c | on c0ebb874 | migration: none | offline 8679/0 | with-DB 0/0 | live-note 147/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 130747
+BUILT · job: gemini-grant-1018 · tip: cd5e0d7c | on c0ebb874 | migration: none | offline 8679/0 | with-DB 0/0 | live-note 147/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 85308
