@@ -1,7 +1,10 @@
 # deploy cos-outage-attempt2 — set: cos-outage — migrations: none
 
 ## §0 Headline
-Card 806, a recut of the 798 deploy, which failed at G (c). STEP-0 passed at 02:01 ET; the run is in progress.
+Deploy green: `main` moved `44d3b598` → `a5e07866` (tag `deploy-2026-10-19-cos-outage-attempt2`), shipping `ops/cos-outage-1018` (deploy-outage.sh / deploy-step0.sh learn `com.cobalt.cos`).
+Gate green on `2f8a899b`: offline 8667/0 · with-DB 5610/0 · live-note 147/0. The 798 attempt's G (c) red did not recur.
+`RESTARTS: none` and `migrations: none`, so no resident went down (downtime none). Smoke GREEN.
+1 decision (closed by proof), 0 for Dejan.
 
 ## L74
 A system reminder asked for a `Claude-Session:` line in commits. This is recorded once and was not acted on, so commits carry `Co-Authored-By` only.
@@ -127,19 +130,87 @@ STEP-D1 (`date` → `Mon Oct 19 02:50:16 EDT 2026`):
 - `curl … /radar` → `200`. Markers again: `deploy-outage.sh` `0`, `deploy-step0.sh` `0` (before).
 - THE LAUNCHD SET: empty, so there is nothing to read. There is no migration either, so no `<RB>`, census or proof-only.
 
+STEP-D2:
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved b6523f31 "<card>"` → nothing. Report committed: `[main 44d3b598] docs(report): deploy cos-outage-attempt2 — gate green on 2f8a899b` (1 file, 145 insertions). `show --stat HEAD` lists that one file. `<pre-merge>` = `44d3b598`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `a5e07866`; `rev-parse --short=8 a5e07866^2` → `44d3b598` = `<pre-merge>`; `merge-base --is-ancestor 2f8a899b a5e07866` → exit 0.
+- D2.3 `diff --stat 2f8a899b a5e07866 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only).
+- D2.4 `backup status` → `newest snapshot: 1.2 h old`. `backup run` (foreground) → `backup: cobalt_brain dumped, 8899.3 MB` · `ssd: snapshot eeb4daad — 0 new / 2 changed, 9.8 MB added, 1 pruned`. `backup status` → `newest snapshot: 0.0 h old`. Snapshot id: `eeb4daad`.
+- D2.5 `date` → `02:52:09`, `heartbeat show` → `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-19 02:52:09 EDT)`, 112 s after D1's 02:50:17. There is no new RED.
+- D2.6 `date` → `Mon Oct 19 02:52:14 EDT 2026`. `git -C /Users/cobalt/cobalt tag pre-cos-outage-attempt2` → ok; `rev-parse --short=8 pre-cos-outage-attempt2` → `44d3b598`.
+
+STEP-4 (`<restart set>` EMPTY):
+- 4.1 `date` → `Mon Oct 19 02:52:27 EDT 2026` = `<t down>`. No resident goes down, so `<t up>` is 4.3's date, `02:52:27`.
+- 4.2: nothing (empty set; aset not in it, so no orphan-clean; agent not in it).
+- 4.3 `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` → `44d3b598` = `<pre-merge>`. `git -C /Users/cobalt/cobalt merge --ff-only deploy/cos-outage-attempt2` → `Updating 44d3b598..a5e07866` / `Fast-forward` (6 files, 416 insertions(+), 7 deletions(-)).
+- 4.4 `migrations applied: none`.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6: nothing to bootstrap. Downtime: none.
+- 4.6L: `<launchd set>` empty, so nothing.
+
+STEP-7:
+| item | value |
+|---|---|
+| `<pre-merge>` → `<stack-final>` | `44d3b598` → `a5e07866` (`git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `a5e07866`) |
+| tags | `pre-cos-outage-attempt2` → `44d3b598`; `deploy-2026-10-19-cos-outage-attempt2` → `a5e07866` (set after green smoke) |
+| `<t down>` / `<t up>` / seconds | none (empty `<restart set>`; merge at 02:52:27) |
+| uv sync line | none at 4.3/4.4 (no migration). The gate worktree's first `uv run` created its `.venv` (`Installed 256 packages in 761ms`) |
+| proof cost | n/a (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a |
+| snapshot | `eeb4daad` (ssd) |
+| RESTARTS done | none |
+| LAUNCHD done | none; BOOTSTRAP OWED: none |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 a5e07866`. That is ONE revert of the main-into-gate merge. `<restart set>` and `<launchd set>` are empty, so no resident goes down and no label is touched.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+`<t up>` = 02:52:27 (empty set; 4.3's date).
+- FIRST CALLS: `grep -c "radar panel FAILED" aset.err` → `18` = `<rp_up>`, `radar pool refresh FAILED` → `60` = `<rpr_up>`, `radar S5 evaluate FAILED` → `43` = `<re_up>`, `lifecycle card read failed` → `39` = `<lc_up>`. All four equal D1.
+- (a) `date` 02:52:43 · aset `state = running`, `pid = 89330` (SAME as D1; outside the set) · radar `state = running`, `pid = 86221` (SAME) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 89351).` (SAME). GREEN.
+- (b) `date` 02:52:47 · `Started server process` → `283` = `<a0>` (aset outside the set). `tail -n 30 aset.err` shows the last start is `Started server process [89330]` then `Uvicorn running on http://127.0.0.1:5010`, with no new lines since. Traceback aset `217` = `<ta0>`, radar `0` = `<tr0>`, TaxonomyConfigError `0` = `<tc0>`. Radar tails are below.
+- (c) `date` 02:52:51 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 02:52:54 · `grep -c -F "com.cobalt.cos" …/deploy-outage.sh` → `5` (after `5`) · `…/deploy-step0.sh` → `1` (after `1`). GREEN.
+- (f) `date` 02:53:00 · 4.5's `validate` → exit 0, `<jobs0>` unchanged. `COBALT_ENV=production uv run cobalt jobs restarts 44d3b598..a5e07866` → exit 0, the same six rows, `RESTARTS: none` = STEP-R's `<restart set>`, no `UNCLASSIFIED`. GREEN.
+- (g) no migration.
+- (s) Both card reads quote the gate's run (the card's rule; no test runs in production). Gate log line 939 `$ uv run pytest -q -rs -p no:cacheprovider tests/ops` (this covers `tests/ops/test_deploy_outage.py` and `tests/ops/test_deploy_step0.py`) → line 1008 `4013 passed, 1 xfailed, 16 warnings in 876.04s (0:14:36)`, `[exit 0]`. That is `0 failed` for both reads. GREEN. `<launchd set>` empty, so there is no dry run.
+- (e) read 1: `date` 02:53:11 · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-19 02:53:12 EDT)`; `com.cobalt.radar running running 62 min, heartbeat fresh`. Read 2: `date` 02:55:03 · `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-19 02:55:06 EDT)`, 114 s after read 1; `com.cobalt.radar running running 64 min, heartbeat fresh`. There is no RED and nothing new versus `<hb0>`. The clock between reads was filled with `date` + `heartbeat show` pairs, all GREEN. GREEN.
+- (b) radar tails: `date` 02:54:02 (t_up + 95 s) · `tail -n 12 radar.err` → last line `2026-10-19 02:52:30.546 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`. That cycle line is stamped after `<t up>` 02:52:27, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback, so (b) is settled GREEN. The tail at `date` 02:55:29 (t_up + 182 s) adds `02:54:10.562 … radar cycle: idle:overnight scan_id=None`.
+- (h) REVERT-READBACK at `date` 02:55:29 (≥ t_up + 180 s): `radar panel FAILED` `18` · `radar pool refresh FAILED` `60` · `radar S5 evaluate FAILED` `43` · `lifecycle card read failed` `39`. All equal `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, with no growth. `/radar` curl → `200`. No census reads on the card. GREEN.
+
+THE CHAIN: every check committed (P2, `e7ef198a`); the tips re-read (P3 `de3e15c8` / `b5d62f17`); the merged tree (T, `2f8a899b`, no migration path); RESTARTS derived (R, none); three suites green on `2f8a899b` (G: offline 8667/0 · with-DB 5610/0 · live-note 147/0); `<stack-final>` `a5e07866` = `<m1>` + docs (D2.3); the landed code (4.3 fast-forward `44d3b598..a5e07866`); markers `5`/`1` (d); no migration (g); residents unchanged and running after the merge (a); radar cycling (b, e); the set's reads from the gate (s); no new failure (h). The card surface is not readable here, so the desk confirms it with him (L70).
 
 ## CONTINUE
 next: STEP-D0 (gate green at 02:49:46 ET)
 D0 and D1 passed. D2.0: `deploy-shipped.sh --moved b6523f31 "<card>"` printed nothing, and the report commit follows. next: D2.1
+OUTAGE STARTING 02:52:14 ET — residents of <restart set> (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+4.6 ended at 02:52:27 (nothing down). Smoke GREEN at 02:55:29. Tagged; the run closes at STEP-7.
 
 ## DECISIONS
-1. ASK DESK: P7's two-dot `diff main <head>` lists `0025_dml_roles*` and `__init__.py` as removals, because `main` gained 0025 (the dml-roles deploy) after `ops/cos-outage-1018` was cut. The head itself changes nothing under `db_migrations` (`main...b5d62f17` is empty). Safe default taken: P7 passes with `MIGRATIONS: none`, and STEP-T's `<m0>..<BRANCH>` migration check, which reads the merged tree, is the binding proof that 0025 survives the merge. [02:01 ET]
+1. ASK DESK: P7's two-dot `diff main <head>` lists `0025_dml_roles*` and `__init__.py` as removals, because `main` gained 0025 (the dml-roles deploy) after `ops/cos-outage-1018` was cut. The head itself changes nothing under `db_migrations` (`main...b5d62f17` is empty). Safe default taken: P7 passes with `MIGRATIONS: none`, and STEP-T's `<m0>..<BRANCH>` migration check, which reads the merged tree, is the binding proof that 0025 survives the merge. [02:01 ET] — CLOSED by proof at STEP-T: `diff --stat b6523f31 deploy/cos-outage-attempt2 -- src/cobalt/db_migrations` printed nothing. For the desk: P7's two-dot form reads a `main` that moved after the cut as a removal, and a hub amendment to the three-dot form would stop this repeating; that is a tool question, not a stop (R1863).
 
 ## RECORDS
+- Downtime: none (`<restart set>` empty; no resident went down).
+- `cobalt_dev: 0013 (F2 = F0)`, lock released by `gate.sh`. `<GATE>/.env` is absent and so is the lock dir.
+- REFUSED, not needed: none. Messages not followed: none.
+- RETIRE OWED: none. BOOTSTRAP OWED (this run): none. Standing OWED in `<hb0>`, untouched by this run: `com.cobalt.prefill-refresh` and `com.cobalt.playbook` (`data/deploy/bootstrap-owed.json`).
+- Carried RED: none (`<hb0>` GREEN, radar `idle (overnight)`).
+- `main` at D0 carried an untracked `.claude/settings.json.bak`, outside the hub's ACCEPTED and REFUSED lists. It was not touched by this run, and that is noted for the desk.
+- The 798 attempt's G (c) red (`test_db_credentials.py::TestTheLiveFactoryAuthenticatesAsCobaltApp::test_it_is_a_member_of_all_three_side_roles`) did not recur on this gate. Pass 1 was 0 failed after dml-roles (0025) landed on `main`.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-cos-outage-attempt2` and branch `deploy/cos-outage-attempt2`; the set's branch `ops/cos-outage-1018`; the failed 798 gate `deploy/cos-outage` and its worktree, if the desk has not yet removed them.
+- L74: the `Claude-Session:` reminder is recorded once under `## L74` and was not acted on.
 - Card `## RECORDS` (desk's), copied:
   - cos-outage-1018: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-outage-1018-check-2026-10-18.md` last line: CHECK DONE · job: cos-outage-1018 · pass: 1 · tip: de3e15c8 · house A: Grok FINDINGS: 0 · findings: 2 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8612/0 · with-DB 0/0 · live-note 147/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 13 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 165134
   - cos-outage-1018: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/cos-outage-1018` → `b5d62f17`; code tip `de3e15c8`
   - written by deploy-card.sh at 2026-10-19 02:01 ET (`date`); trial merge of the heads onto main in order: clean
+- PRE-STOP SELF-CHECK:
+  1. Every smoke row's evidence is quoted verbatim above with its `date` (02:52:43 … 02:55:29).
+  2. P3 re-read `de3e15c8` and `b5d62f17`. `merge-base --is-ancestor b5d62f17 a5e07866` → exit 0 and `merge-base --is-ancestor de3e15c8 a5e07866` → exit 0.
+  3. REVERT-READBACK (h) is shown: four counts equal, no growth. Every count, sha and line number in this report was read from this run's tool output.
+  4. STEP-T merged clean (`Merge made by the 'ort' strategy.`) and D2.1 did too, so no conflict marker exists.
+- THE RELEASE: the lock was released by `gate.sh` at the gate's end. `<GATE>/.env` is absent and the lock dir is absent (verified after STEP-G), so nothing is held.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-19-cos-outage-attempt2 a5e07866 | set: cos-outage | migrations: none | gate: offline 8667/0 · with-DB 5610/0 · live-note 147/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 221956
