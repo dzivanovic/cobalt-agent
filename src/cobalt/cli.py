@@ -336,6 +336,26 @@ def _cmd_validate(args: argparse.Namespace) -> None:
         )
         print("  These are built and registered; their plists are not bootstrapped.")
 
+    # F16 close (S5): F23 and F4. Config modules only, looked up on the
+    # module at call time — never playbook.data/.deck/.cli, so pptx stays
+    # unloaded (FINAL [F-17]) and a test can patch the loader. A bad file
+    # raises and propagates (L1), as the other loaders here do.
+    from cobalt.playbook import config as playbook_config
+
+    cfg = playbook_config.load_playbook_config()
+    print(
+        "Playbook (F23): "
+        f"latest_per_family {cfg.latest_per_family}, "
+        f"rows_per_slide {cfg.rows_per_slide}, "
+        f"why_max_chars {cfg.why_max_chars}, "
+        f"out_dir {cfg.out_dir}."
+    )
+
+    from cobalt.prefill import config as prefill_config
+
+    refresh = prefill_config.load_daily_refresh_config()
+    print(f"Daily refresh (F4): units {refresh.units}; fields {refresh.fields}.")
+
     # CROSS-CHECK 1: the registry and ops/ name the same jobs. A registry
     # that has drifted from launchd reports green for a job that is not
     # there any more; a plist with no row is a job nobody watches.
