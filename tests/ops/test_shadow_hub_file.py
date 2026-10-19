@@ -411,3 +411,19 @@ def test_k5_the_gemini_x1_read_step():
     assert "X1_READ_<job>" in line
     assert "READ OK" in line
     assert "read inside the worktree refused" in line
+
+
+# ---- card 2026-10-18 800 H1: the launcher owns the Gemini grant (R1942) ----------------------
+
+
+def test_g4_the_launcher_owns_the_grant():
+    lines = [x for x in text().splitlines() if x.startswith("- Gemini:")]
+    assert len(lines) == 1
+    line = lines[0]
+    assert "the launcher adds and removes it (his 2026-10-18 A)" in line
+    assert "desk-launch.sh grant-sweep" in line
+    assert "the desk never edits that file" in line
+    assert "with its Edit tool" not in line
+    refuses = [x for x in text().splitlines() if x.startswith("The launcher refuses")]
+    assert len(refuses) == 1
+    assert "another Gemini worktree's rule has a live gate seat" in refuses[0]
