@@ -5,10 +5,10 @@ INSTALL: none
 BRANCH: ops/dml-roles-1013
 WORKTREE: dml-roles-1013
 BASE: e7ef198a
-TIP:
+TIP: d0ffa988
 REPORT: /Users/cobalt/cobalt-wt/dml-roles-1013/docs/40 - DevDocs/reports/dml-roles-build-2026-10-13.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/dml-roles-check-2026-10-13.md
-HOUSE B:
+HOUSE B: as needed
 RULINGS: 2026-10-12 R1138
 
 ## ROWS
