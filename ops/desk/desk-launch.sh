@@ -1218,11 +1218,17 @@ if [ "$kind" = "x1-copy" ]; then
     done
     # (6) the source
     src="$AGY_HOME/brain/$id/.system_generated/logs/transcript.jsonl"
+    # no link on the way below $AGY_HOME either (check of 827, house A 3)
+    for d in "$AGY_HOME/brain" "$AGY_HOME/brain/$id" "$AGY_HOME/brain/$id/.system_generated" \
+             "$AGY_HOME/brain/$id/.system_generated/logs"; do
+        [ ! -L "$d" ] || refuse "x1-copy: $leg $d is a link"
+    done
     [ -f "$src" ] && [ ! -L "$src" ] || refuse "x1-copy: $leg no transcript at $src"
-    cp "$src" "$xtr" || refuse "x1-copy: $leg the copy to $xtr failed"
-    { printf 'conversation %s\n' "$id"; grep -F "soft-denying" "$clog"; } > "$xlog" \
-        || refuse "x1-copy: $leg the write of $xlog failed"
+    # a leg with no denial holds no soft-denying line: grep's exit 1 is no failure (check of 827, O1)
     soft=$(grep -c -F "soft-denying" "$clog")
+    cp "$src" "$xtr" || refuse "x1-copy: $leg the copy to $xtr failed"
+    { printf 'conversation %s\n' "$id"; [ "$soft" = "0" ] || grep -F "soft-denying" "$clog"; } > "$xlog" \
+        || { rm -f -- "$xtr" "$xlog"; refuse "x1-copy: $leg the write of $xlog failed"; }
     bytes=$(wc -c < "$xtr" | tr -d ' ')
     printf 'X1-COPY: %s conversation %s\n' "$leg" "$id"
     printf 'X1-COPY: %s workspace %s\n' "$leg" "$WT/$xwt"
