@@ -17,6 +17,11 @@ TICKERS: none
 |---|---|---|---|---|---|---|
 | 1 | `ops/f21-genesis-fr1` | `2cd0219a` | `b83bf7df` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f21-genesis-fr1-check-2026-10-19.md` | `held unfixed: 0` and `ready: YES` | |
 
+## READ-BACK
+`COBALT_ENV=production uv run cobalt db query --side user --prod "SELECT to_regclass('\"user\".genesis_chunk') IS NOT NULL AS m0026"`
+- BEFORE `f` (the 0025 level: the table does not exist)
+- AFTER `t` (the table exists)
+
 ## MARKERS
 - `ls /Users/cobalt/cobalt/src/cobalt/genesis/cli.py` · before `No such file or directory` · after the path
 - `ls /Users/cobalt/cobalt/src/cobalt/genesis/store.py` · before `No such file or directory` · after the path
