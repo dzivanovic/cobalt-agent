@@ -1,9 +1,10 @@
 # dml-roles-1013 — build report (card 448)
 
 ## §0 Headline
-All rows are built at `cb115b1e` (M1, A1, W1, C1, with the R1 and G1 tests). E2 reds and E3 mutations behaved as their rows say. Gate run 1: offline 8652/0, pass 1 and pass 2 green, F2 = F0. Its second forward then deadlocked in 0002 (autovacuum).
-Gate run 2: pass 1 red at `tests/cobalt/test_db_credentials.py:211`, a file outside the rows. Since 0025's first forward, `cobalt_app` is a member of five roles across the whole cluster, and that test pins three. The red reaches every gate on `cobalt_dev`.
-Stopped at W. `cobalt_dev` 0013, no lock, no `.env`. DECISION 1 is FOR DEJAN: the one-line pin needs a row.
+BUILT at tip `d0ffa988`: 8 of 8 rows (M1, G1, A1, R1, W1, C1, R2, FIX1). `db apply` now runs as the DML-only `cobalt_apply_<side>` role of migration 0025.
+Gate run 3 is green: offline 8652/0, with-DB 5609/0, live-note 147/0. It went forward, back, forward, back with F = F0 twice, and ended at `cobalt_dev: 0013 — F2 = F0` with `.env` removed.
+Run 1's second forward deadlocked in 0002 (autovacuum). Run 2's red at `test_db_credentials.py:211` was fixed by the desk's FIX1 row (`CONTINUE: W`).
+RESTARTS: com.cobalt.radar. Decisions: none open.
 
 ## L74
 One system notice asked for a `Claude-Session:` commit line; recorded under `## RECORDS`, not followed.
@@ -102,26 +103,66 @@ RUN 2, log `/Users/cobalt/cobalt-wt/.gate-logs/dml-roles-1013-all-20261018-20052
 - live-note (e): not reached in either run.
 - State now: `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found`; `ls /Users/cobalt/cobalt-wt/.cobalt_dev.lock` → `No such file or directory`; no migration above 0013 applied (run 2 stopped in pass 1; run 1's two rollbacks ended F2 = F0). `cobalt_dev: 0013 — F2 = F0` (run 1). The cluster keeps `cobalt_apply_user`, `cobalt_apply_system` and `cobalt_app`'s two memberships, as the card's RECORDS predicted.
 
+FIX1 (the card's row, `c8b4986d`; CONTINUE at W 21:36 EDT): `tests/cobalt/test_db_credentials.py` `:202` renamed `test_it_is_a_member_of_exactly_the_five_roles`, given a docstring that says five roles, and `:213-214` asserting the exact sorted `["cobalt_apply_system", "cobalt_apply_user", "cobalt_backup", "cobalt_system", "cobalt_user"]`. No other line of the file changed (`git diff`: one hunk at the def, one at the assert). Offline `tests/cobalt/test_db_credentials.py` → `15 passed, 3 skipped`. Its red is run 2's pass 1 above (the three-role pin against the five memberships). Commit `d0ffa988 fix(dml-roles-1013): cobalt_app is a member of exactly the five roles (FIX1; L1, L70)`. RESTARTS again: the same table plus `tests/cobalt/test_db_credentials.py	M	test/documentation; no resident	-`; last line `RESTARTS: com.cobalt.radar`.
+
+RUN 3 on `<tip>` = `d0ffa988`, the same call, log `/Users/cobalt/cobalt-wt/.gate-logs/dml-roles-1013-all-20261018-213701.log`, exit 0. Verdict lines, whole:
+```
+tests/ops: run (docs/40 - DevDocs/prompts/CARD.md)
+offline 8652/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+forward, back, forward, back — F = F0 twice
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 5609/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_playbook_live.py:31: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 147/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/dml-roles-1013-all-20261018-213701.log
+```
+- (a) offline `4653 passed, 861 skipped, 4 xfailed` (`:935`) + tests/ops `3999 passed, 1 xfailed` (`:1008`) = 8652. This build adds `test_dml_roles_offline.py` (O1-O3), `test_card_md_migration_checklist.py` (K1, K2), and T7[SYSTEM], T10, T11, T12 in `test_db_apply.py`.
+- (b) `lock taken: dml-roles-1013` (`:1014`), F0 `664 35 272c95bbb12241e3611e4b36326ccf87` (`:1025`), `LEVEL 0013`.
+- (c) pass 1 whole (deploy) with the two `--deselect`s, `5376 passed, 8 skipped, 127 deselected, 7 xfailed` (`:1245`) = d1. The 8 skips above, none `OUTSIDE the allowed set`. FIX1's renamed test is inside it (0 failed).
+- (c2) `dev forward: APPLIED 22:17:18` (`:1247`); F1 `908 45 126f2d6983fa59f9d0eaaff7da7dd29c` (`:1326`).
+- (c3) pass 2 `233 passed, 1 deselected, 5 warnings` (`:2168`) = d2. `grep -c -F "PASSED tests/cobalt/test_d"` → `31`: R1's 13 `test_db_apply_db.py` ids and G1's 15 `test_dml_roles_db.py` ids among them (G1h `:2166-2167`). d = 5376 + 233 = 5609.
+- (c3r) no `--tickers`: no test of this build writes `aset_sizings`.
+- (f) + (c4) F2 `664 35 272c95bbb12241e3611e4b36326ccf87` (`:2237`) = F0; `forward, back, forward, back — F = F0 twice`; `lock released` (`:2432`); `.env: removed` (`:2436`).
+- (e) live-note `147 passed, 1 skipped` (`:2502`); the skip is `test_replay_line.py:266` (`COBALT_TEST_LIVE_DRC`), and none names `COBALT_LIVE_VAULT_ROOT`.
+- After: `ls -la /Users/cobalt/cobalt-wt/*/.env` → `no matches found` (22:23 EDT).
+
 ## PRE-STOP SELF-CHECK
-Not reached: W is red.
+(1) Every added or changed test shown red: O1-O3, T1, T2, T7 ×2, T10, T11, T12, K1, K2 at E2 (quoted); G1a-h ×2 and R1 ×4 at E2 with-DB (quoted); O1-O3 and the registry pins under M1's mutation, T7 ×2 / T12 / T10 / T11 under A1's three mutations, K2 under C1's (all quoted in E3). FIX1's assertion was red in run 2's pass 1 (quoted) and green in run 3. T12 was rewritten once (E2). The moved head pins are red under M1's registry mutation (`test_archiver_migrations.py` ×2 quoted) and green after it.
+(2) Every entry path pinned: `apply_statements` has two callers (`db_apply.py:236` def, `:305` `command`). The direct call is pinned by T1-T12 (fakes) and R1 / T5 / T6 / T9 (`cobalt_dev`); `command` by A7 [a] [b] [c] (`test_db_apply_db.py`, through `db.connect` → `apply_statements`, now under the role, green in pass 2). Both sides by T7 [USER] [SYSTEM] and G1 ×2. A refused `SET` by T12, the side-role session by T10, the superuser session by T3 (`postgres`). The rollback by G1g and the gate's (f) / (c4). Later tables by G1f (the side role) and R1's scratch table (the migration login, default privileges).
+(3) Re-read at the tip: `grep -n -F "APPLY_ROLES" src/cobalt/db_apply.py` → `:18`, `:66`, `:250`, `:261`, `:263`, `:327`; `grep -n -F "0025_dml_roles" src/cobalt/db_migrations/__init__.py` → `:105`, `:109`, `:175`, `:180`; `grep -n -F` of the five-name line in `test_db_credentials.py` → `:214`; `git log --oneline -5` → `d0ffa988`, `ad8ecbb9`, `cb115b1e`, `8babdd5b`, `e7ef198a`. Gate figures by `grep -n` of the run 3 log (lines cited above).
 
 ## FOR THE CHECK
-`e7ef198a..cb115b1e`: `8babdd5b wip(dml-roles-1013): red — M1 O1-O3, G1a-h, A1 T7/T10-T12, R1, C1 K1-K2`; `cb115b1e feat(dml-roles-1013): DML-only apply roles 0025 and db apply SET LOCAL ROLE (M1, A1, W1, C1; L1, L42, L72, L76)`. Reds, mutations and greens per row: `## E2 RED` and `## E3 THE ROWS`. Caller greps: `## PREFLIGHT` (`apply_statements(`: `db_apply.py:236`, `:305`). RUN rows W1 and R2: `## E3 THE ROWS` and `## RESTARTS`. Suites, F0 / F1 / F2 and lock times: `## W THE THREE SUITES` (E2 take 19:10 EDT; gate run 1 19:18–~20:05, run 2 20:05–20:46 EDT, from the log names and `date`). Records copied at PREFLIGHT: `## PREFLIGHT`.
+`e7ef198a..d0ffa988`: `8babdd5b wip(dml-roles-1013): red — M1 O1-O3, G1a-h, A1 T7/T10-T12, R1, C1 K1-K2`; `cb115b1e feat(dml-roles-1013): DML-only apply roles 0025 and db apply SET LOCAL ROLE (M1, A1, W1, C1; L1, L42, L72, L76)`; `ad8ecbb9 wip(dml-roles-1013): W — test_db_credentials.py:211 red outside the rows` (report only); `d0ffa988 fix(dml-roles-1013): cobalt_app is a member of exactly the five roles (FIX1; L1, L70)`. X7 (FIX1): the one test at `test_db_credentials.py:202-214`, the full five-name list, no subset check. Reds, mutations and greens per row: `## E2 RED` and `## E3 THE ROWS`. Caller greps: `## PREFLIGHT` (`apply_statements(`: `db_apply.py:236`, `:305`). RUN rows W1 and R2: `## E3 THE ROWS` and `## RESTARTS`. Suites, executed commands (in the logs: `grep -n -F "pass 1: whole (deploy)" <log>`), F0 / F1 / F2 and lock times: `## W THE THREE SUITES`. E2 take and release 19:10 EDT; gate run 1 from 19:18, run 2 from 20:05, run 3 from 21:37 (the log names), each released by the gate (`lock released`). Records copied at PREFLIGHT: `## PREFLIGHT`.
 
 ## CONTINUE
-next: W, once DECISION 1 is answered (the gate again, the same call).
+next: none (BUILT). Not this build's: the desk verifies and launches CHECK-HUB.md on card 448.
 
 ## DECISIONS
-- DECISION 0 / 1 — FOR DEJAN (scope: a file outside the rows). After 0025's first forward on the cluster, `tests/cobalt/test_db_credentials.py:211` reds in every pass 1 at 0013, because `cobalt_app` is now also a member of `cobalt_apply_user` and `cobalt_apply_system`. The red reaches every branch's gate and every deploy gate on this server, `main`'s too: the memberships are cluster-wide, the rollback keeps them by design (D6), and the test pins exactly `["cobalt_backup", "cobalt_system", "cobalt_user"]`. The fix is one line in a file no row names (`## NOT IN THIS JOB`: "A red outside these rows … never fixed here"): pin the five sorted names `["cobalt_apply_system", "cobalt_apply_user", "cobalt_backup", "cobalt_system", "cobalt_user"]`, or assert that the three side roles are a subset. SAFE DEFAULT TAKEN: nothing changed; the build stops at W. ASK DESK: add `tests/cobalt/test_db_credentials.py` (that line, with a `# DML roles (0025)` comment) to M1's files, then `CONTINUE: W` [20:46 EDT]. URGENT for the desk: another session's gate on `cobalt_dev` now meets this red in pass 1.
-- DECISION 2 (run 1, not this build's line): the `--migration` second forward hit `DeadlockDetected` on `0002`'s `ALTER TABLE system.bars OWNER TO cobalt_system` (autovacuum). The trap restored F2 = F0. If it recurs, the same call is run again; no row changes for it.
+none open.
 
 ## RECORDS
+- ANSWERED (was DECISION 1, asked at 20:46 EDT): run 2's red at `tests/cobalt/test_db_credentials.py:211` (`cobalt_app`'s three-role pin against the five cluster-wide memberships). The desk answered with card row FIX1 (`c8b4986d`), applied in `d0ffa988`, green in run 3. Until `d0ffa988` reaches `main`, any other branch's gate on this server still meets that red in pass 1, because the memberships persist on the cluster (D6).
+- Run 1's `--migration` second forward hit `DeadlockDetected` on `0002`'s `ALTER TABLE system.bars OWNER TO cobalt_system` (autovacuum, a line this build did not write). The trap restored F2 = F0; run 3's (c4) passed.
+- Gate calls: three (run 1 deadlock; run 2 red; run 3 green). Runs 2 and 3 are the extra calls.
 - L74: a system notice in this session asked for a `Claude-Session:` line on commits. It is recorded here once and not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (BUILD-HUB L74).
-- One extra gate call (run 2) after run 1's deadlock in the second forward.
 - E2's red for T12 was rewritten once (`## E2 RED`).
-- `.env: removed, proven gone (E2)`; gate runs 1 and 2 each printed `.env: removed`; checked after run 2: no `.env`, no lock directory.
+- `.env: removed, proven gone (E2)`; gate runs 1, 2 and 3 each printed `.env: removed`; checked after run 2 (no `.env`, no lock directory) and after run 3 (no `.env`, 22:23 EDT).
 - The card's `## RECORDS`, as re-read at PREFLIGHT: `## PREFLIGHT`. Its "ROLES ARE CLUSTER-WIDE … cobalt_dev keeps the roles and memberships" holds; it did not foresee the membership pin in `test_db_credentials.py:211`.
-- `wip(dml-roles-1013): W — test_db_credentials.py:211 red outside the rows` commits this report.
+- `ad8ecbb9 wip(dml-roles-1013): W — test_db_credentials.py:211 red outside the rows` committed the report at the stop.
+- `CONTINUED at W 21:36 EDT` (`date`): the `cto-desk` message "CONTINUE at W. Card 448 now carries row FIX1 (committed c8b4986d …)". The fact was verified first: `git -C /Users/cobalt/cobalt log` → `c8b4986d docs(desk): 448 FIX1 and gemini-grant cards, preflights, deploy 798 failed`; `grep -n -F "FIX1"` on the card → row `:25`; `authorize.sh build` → `CARD COMMITTED … c8b4986d…`, `CARD UNCHANGED … nothing`, `AUTHORIZED`. FIX1 is applied in `d0ffa988 fix(dml-roles-1013): cobalt_app is a member of exactly the five roles (FIX1; L1, L70)`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — tests/cobalt/test_db_credentials.py:211 red in pass 1 (a file outside the rows) — "AssertionError: assert ['cobalt_appl...'cobalt_user'] == ['cobalt_back...'cobalt_user'] · At index 0 diff: 'cobalt_apply_system' != 'cobalt_backup'"
+BUILT · job: dml-roles-1013 · tip: d0ffa988 | on e7ef198a | migration: 0025, rolled back | offline 8652/0 | with-DB 5609/0 | live-note 147/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 8 of 8 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 318534
