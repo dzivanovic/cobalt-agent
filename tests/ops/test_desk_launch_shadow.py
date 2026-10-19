@@ -359,15 +359,17 @@ def signed_gemini(desk: Desk) -> Path:
     return desk.card_for("gemini")
 
 
-def test_k5_gemini_without_its_worktree_grant_is_refused(desk):
+def test_k5_gemini_without_its_worktree_grant_is_added(desk):
+    """Card 800 G1: a missing grant is the launcher's to add; the dry run says so and writes nothing."""
     card = signed_gemini(desk)
     grant = f"{desk.wt}/x-job-gemini/"
     write_agy(desk, [f"read_file({grant})"])
     agy = desk.env["COBALT_AGY_SETTINGS"]
-    refused(
-        desk.run(str(card), "--model", "gemini-4-argon-high"),
-        f'shadow: gemini: {agy} holds no allow rule "write_file({grant})" (SHADOW-HUB GRANT)',
-    )
+    before = Path(agy).read_bytes()
+    done = desk.run(str(card), "--model", "gemini-4-argon-high")
+    assert done.returncode == 0, done.stderr
+    assert f"GRANT: would add write_file({grant}) to {agy}" in done.stderr
+    assert Path(agy).read_bytes() == before
 
 
 def test_k5_gemini_without_a_settings_file_is_refused(desk):
@@ -393,12 +395,11 @@ def test_k5_gemini_with_a_read_url_rule_is_refused(desk):
 
 @pytest.mark.parametrize(
     "target",
-    ["{wt}/", "*", "regex:.*", "{wt}/x-job-other/"],
+    ["{wt}/", "*", "regex:.*"],
     ids=[
         "write_file(<tmp wt>/)",
         "write_file(*)",
         "write_file(regex:.*)",
-        "write_file(<tmp wt>/x-job-other/)",
     ],
 )
 def test_k5_gemini_with_a_wider_write_rule_is_refused(desk, target):
@@ -470,3 +471,208 @@ def test_k5_gemini_earlier_write_on_the_same_line_is_refused(desk):
         desk.run(str(card), "--model", "gemini-4-argon-high"),
         f"shadow: gemini: {agy_path} holds a write rule that reaches past {grant}: write_file(*)",
     )
+
+
+# ---- card 2026-10-18 800 G1-G3: the launcher adds and removes the grant (R1942) --------------
+
+
+HOUSE = ["read_file(/Users/cobalt/cobalt/docs/)", "command(cat *)"]
+
+
+def fake_claude(desk: Desk, agents: str = "[]", agents_rc: int = 0, bg_rc: int = 0) -> None:
+    """The stub on PATH: `claude agents --json` prints `agents` (exit `agents_rc`); a launch exits `bg_rc`."""
+    write_exe(desk.tmp / "bin" / "claude",
+              f"if [ \"$1\" = \"agents\" ]; then printf '%s\\n' '{agents}'; exit {agents_rc}; fi\n"
+              f'printf "%s | %s\\n" "$PWD" "$*" >> "{desk.calls}"\nexit {bg_rc}\n')
+
+
+def sweep(desk: Desk, dry: bool = False) -> subprocess.CompletedProcess:
+    env = dict(desk.env, DESK_LAUNCH_DRY="1") if dry else desk.env
+    return subprocess.run(
+        ["sh", str(desk.launch), "grant-sweep"], env=env, cwd=desk.tmp,
+        capture_output=True, text=True, timeout=120,
+    )
+
+
+def gate(name: str) -> str:
+    return json.dumps([{"id": "s1", "pid": 1, "name": name, "status": "idle", "state": "idle"}])
+
+
+def test_g1_the_717_shape_launches_and_holds_its_grant(desk):
+    card = signed_gemini(desk)
+    grant = f"write_file({desk.wt}/x-job-gemini/)"
+    write_agy(desk, HOUSE)
+    done = desk.run(str(card), "--model", "gemini-4-argon-high", dry=False)
+    assert done.returncode == 0, done.stderr
+    calls = desk.calls.read_text().splitlines()
+    assert len(calls) == 1 and "MODEL: gemini-4-argon-high" in calls[0]
+    assert desk.agy.read_text().count(f'"{grant}"') == 1
+    assert f"GRANT: added {grant} to {desk.agy}" in done.stderr
+
+
+def test_g1_a_dry_run_writes_nothing(desk):
+    card = signed_gemini(desk)
+    write_agy(desk, HOUSE)
+    before = desk.agy.read_bytes()
+    done = desk.run(str(card), "--model", "gemini-4-argon-high")
+    assert done.returncode == 0, done.stderr
+    assert f"GRANT: would add write_file({desk.wt}/x-job-gemini/) to {desk.agy}" in done.stderr
+    assert desk.agy.read_bytes() == before
+
+
+def test_g1_a_failed_launch_removes_the_grant(desk):
+    card = signed_gemini(desk)
+    grant = f"write_file({desk.wt}/x-job-gemini/)"
+    write_agy(desk, HOUSE)
+    before = desk.agy.read_bytes()
+    fake_claude(desk, bg_rc=1)
+    done = desk.run(str(card), "--model", "gemini-4-argon-high", dry=False)
+    assert done.returncode == 1, done.stderr
+    assert f"GRANT: added {grant} to {desk.agy}" in done.stderr
+    assert f"GRANT: removed {grant} from {desk.agy} (launch failed)" in done.stderr
+    assert desk.agy.read_bytes() == before
+
+
+def test_g1_invalid_json_is_refused_and_not_written(desk):
+    card = signed_gemini(desk)
+    desk.agy.write_text('{"permissions": {"allow": [')
+    before = desk.agy.read_bytes()
+    refused(desk.run(str(card), "--model", "gemini-4-argon-high", dry=False),
+            f"shadow: gemini: {desk.agy} is not valid JSON with a permissions.allow list; nothing written")
+    assert desk.agy.read_bytes() == before
+    assert not desk.calls.exists()
+
+
+def test_g1_an_inline_allow_list_is_refused(desk):
+    card = signed_gemini(desk)
+    desk.agy.write_text('{"permissions": {"allow": ["read_file(/x/)"]}}\n')
+    before = desk.agy.read_bytes()
+    refused(desk.run(str(card), "--model", "gemini-4-argon-high", dry=False),
+            f"shadow: gemini: {desk.agy}: permissions.allow is not one rule per line; nothing written")
+    assert desk.agy.read_bytes() == before
+    assert not desk.calls.exists()
+
+
+def test_g1_a_job_that_is_not_its_worktree_is_refused(desk):
+    signed_gemini(desk)
+    card = desk.card_for(
+        "gemini", WORKTREE="x-job-other",
+        REPORT=str(desk.wt / "x-job-other" / "docs" / "40 - DevDocs" / "reports" / "x-job-other-build.md"))
+    before = desk.agy.read_bytes()
+    refused(desk.run(str(card), "--model", "gemini-4-argon-high", dry=False),
+            "shadow: gemini: JOB 'x-job-gemini' is not its WORKTREE 'x-job-other' "
+            "(the gate seat x-job-other-gate names the rule's owner)")
+    assert desk.agy.read_bytes() == before
+
+
+def test_g2_a_live_gemini_rule_refuses_the_launch(desk):
+    card = signed_gemini(desk)
+    other = f"write_file({desk.wt}/x-job-other/)"
+    write_agy(desk, [other, *HOUSE])
+    fake_claude(desk, agents=gate("x-job-other-gate"))
+    before = desk.agy.read_bytes()
+    refused(desk.run(str(card), "--model", "gemini-4-argon-high", dry=False),
+            f"shadow: gemini: {desk.agy} holds {other} and x-job-other-gate is live: "
+            "one Gemini build at a time (card 759 serial rule)")
+    assert desk.agy.read_bytes() == before
+    assert not desk.calls.exists()
+
+
+def test_g2_an_orphan_is_removed_first_and_recorded(desk):
+    card = signed_gemini(desk)
+    grant = f"write_file({desk.wt}/x-job-gemini/)"
+    other = f"write_file({desk.wt}/x-job-other/)"
+    write_agy(desk, [other, *HOUSE])
+    dry = desk.run(str(card), "--model", "gemini-4-argon-high")
+    assert dry.returncode == 0, dry.stderr
+    assert f"ORPHAN: would remove {other} from {desk.agy} (no live x-job-other-gate)" in dry.stderr
+    done = desk.run(str(card), "--model", "gemini-4-argon-high", dry=False)
+    assert done.returncode == 0, done.stderr
+    removed = f"ORPHAN: removed {other} from {desk.agy} (no live x-job-other-gate)"
+    assert removed in done.stderr
+    assert done.stderr.index(removed) < done.stderr.index(f"GRANT: added {grant}")
+    rules = json.loads(desk.agy.read_text())["permissions"]["allow"]
+    assert rules == [grant, *HOUSE]
+
+
+def test_g2_a_dotted_orphan_never_touches_the_grant(desk):
+    """THE REGEX CASE: `x.job-gemini` read as a regex matches `x-job-gemini`; every match is a fixed string."""
+    card = signed_gemini(desk)
+    grant = f"write_file({desk.wt}/x-job-gemini/)"
+    dotted = f"write_file({desk.wt}/x.job-gemini/)"
+    write_agy(desk, [grant, dotted, *HOUSE])
+    done = desk.run(str(card), "--model", "gemini-4-argon-high", dry=False)
+    assert done.returncode == 0, done.stderr
+    assert json.loads(desk.agy.read_text())["permissions"]["allow"] == [grant, *HOUSE]
+    write_agy(desk, [dotted, grant, *HOUSE])
+    fake_claude(desk, agents=gate("x-job-gemini-gate"))
+    done = sweep(desk)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines()[-1] == "GRANT-SWEEP: 1 removed, 1 live"
+    assert json.loads(desk.agy.read_text())["permissions"]["allow"] == [grant, *HOUSE]
+
+
+def test_g2_grant_sweep_removes_orphans_and_keeps_live(desk):
+    live = f"write_file({desk.wt}/x-job-live/)"
+    dead = f"write_file({desk.wt}/x-job-dead/)"
+    write_agy(desk, [live, dead, *HOUSE])
+    fake_claude(desk, agents=gate("x-job-live-gate"))
+    before = desk.agy.read_bytes()
+    dry = sweep(desk, dry=True)
+    assert dry.returncode == 0, dry.stderr
+    assert dry.stdout.splitlines() == [
+        f"ORPHAN: would remove {dead} from {desk.agy} (no live x-job-dead-gate)",
+        "GRANT-SWEEP: 1 would be removed, 1 live",
+    ]
+    assert desk.agy.read_bytes() == before
+    fake_claude(desk, agents_rc=1)
+    bad = sweep(desk)
+    assert bad.returncode == 1 and "REFUSED: " in bad.stderr, bad.stdout + bad.stderr
+    assert desk.agy.read_bytes() == before
+    fake_claude(desk, agents=gate("x-job-live-gate"))
+    done = sweep(desk)
+    assert done.returncode == 0, done.stderr
+    assert done.stdout.splitlines() == [
+        f"ORPHAN: removed {dead} from {desk.agy} (no live x-job-dead-gate)",
+        "GRANT-SWEEP: 1 removed, 1 live",
+    ]
+    assert json.loads(desk.agy.read_text())["permissions"]["allow"] == [live, *HOUSE]
+
+
+def test_g3_the_file_is_byte_equal_but_for_the_one_rule(desk):
+    card = signed_gemini(desk)
+    trial = f"write_file({desk.wt}/agy-trial/scratch/toy-check-agy/)"
+    b = (
+        "{\n"
+        '  "model": "constructed",\n'
+        '  "ui": "café",\n'
+        '  "permissions": {\n'
+        '    "allow": [\n'
+        '      "read_file(/Users/cobalt/cobalt/docs/)",\n'
+        '      "command(cat *)",\n'
+        f'      "{trial}"\n'
+        "    ]\n"
+        "  },\n"
+        '  "trustedWorkspaces": [\n'
+        '    "/Users/cobalt/cobalt-wt/agy-trial"\n'
+        "  ]\n"
+        "}\n"
+    ).encode("utf-8")
+    desk.agy.write_bytes(b)
+    desk.agy.chmod(0o640)
+    line = f'      "write_file({desk.wt}/x-job-gemini/)",\n'.encode()
+    done = desk.run(str(card), "--model", "gemini-4-argon-high", dry=False)
+    assert done.returncode == 0, done.stderr
+    a = desk.agy.read_bytes()
+    assert a.count(line) == 1 and a.replace(line, b"", 1) == b
+    assert desk.agy.stat().st_mode & 0o777 == 0o640
+    swept = sweep(desk)
+    assert swept.returncode == 0, swept.stderr
+    assert swept.stdout.splitlines()[-1] == "GRANT-SWEEP: 1 removed, 0 live"
+    assert desk.agy.read_bytes() == b
+    assert desk.agy.stat().st_mode & 0o777 == 0o640
+    fake_claude(desk, bg_rc=1)
+    failed = desk.run(str(card), "--model", "gemini-4-argon-high", dry=False)
+    assert failed.returncode == 1, failed.stderr
+    assert desk.agy.read_bytes() == b
+    assert desk.agy.stat().st_mode & 0o777 == 0o640
