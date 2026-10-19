@@ -8,7 +8,7 @@ BASE: c0ebb874
 TIP: fd9f0cb6
 REPORT: /Users/cobalt/cobalt-wt/gemini-grant-1018/docs/40 - DevDocs/reports/gemini-grant-1018-build-2026-10-18.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/gemini-grant-1018-check-2026-10-19.md
-HOUSE B:
+HOUSE B: as needed
 BAND: HIGH
 DB: none
 RESTARTS: none
