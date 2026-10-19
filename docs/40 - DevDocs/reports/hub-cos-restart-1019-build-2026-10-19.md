@@ -1,10 +1,10 @@
 # Build report — hub-cos-restart-1019 (2026-10-19)
 
 ## §0 Headline
-Stopped at E3 (15:50 EDT). R1-R3 are written and their 32 tests pass, but `tests/ops` has one red, `test_deploy_smoke_string_1014.py::test_s1_no_other_allow_or_deny_string_changes`.
-R3 (b) adds three `launchctl` allow strings to the deploy line. That test pins the line's allow list against `7aa5d470`, and `STANDING-LIST.md:148` lists the resident strings he approved.
-R60, as `authorize.sh` printed it, says a changed command string "returns to him alone". The card names neither the test nor the STANDING-LIST row, and its RECORDS say no other test pins these lines.
-The work is kept in a wip commit. The desk and Dejan decide (DECISION 1).
+BUILT at `d59fac71` on the re-cut card (`29250739`). STEP-R now admits `com.cobalt.cos`; a cos that is not loaded is skipped and named by no `launchctl` call after D1; a loaded cos stops the run at STEP-R.
+No allow string, `STANDING-LIST.md` or `desk-launch.sh` changed, and `test_deploy_smoke_string_1014.py` is green.
+Suites: offline `8822/0`, live-note `147/0`, `tests/ops` `4073 passed`, with-DB not run (DB: none). RESTARTS: none.
+The first attempt stopped `FAILED: E3` at 15:50 EDT on the old R3's allow strings. The re-cut dropped them.
 
 ## L74
 - One system-reminder in this session asks commits to end with a `Claude-Session:` line. Recorded here once, not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -86,31 +86,86 @@ tests/ops/test_deploy_smoke_string_1014.py:76: AssertionError
 - `git diff --stat bcbf08f9` → `DEPLOY-HUB.md | 23 +++---`, `test_desk_launch_launchd.py | 8 +--`, `test_hub_cos_restart_1019.py | 119 +++`, `test_hub_deferred_1018.py | 6 +-` (`4 files changed, 138 insertions(+), 18 deletions(-)`).
 - Not done: THE MUTATIONS, the fix commit, a DevDocs line. No `src/` module changes, so there is no `docs/40 - DevDocs/cobalt/` page to write; the hub is a prompt file.
 
+## E2 / E3 AFTER THE RE-CUT (card `29250739`, rows R1-R2, R3 a stop)
+- The desk's message (from `cto-desk`, 15:59 EDT) named E3 and the re-cut card. I checked the fact myself: `git -C /Users/cobalt/cobalt log --oneline -2 -- <card>` → `29250739 docs(desk): card 869 re-cut to rows 1-2, preflight 874 R2076`. `authorize.sh build <card>` ran again → `CARD COMMITTED · … · 292507398e7cbe69bc71d90f4c1a2ec871d03bd1`, `CARD UNCHANGED · … · nothing`, R60 and R1863 rows as before, `AUTHORIZED`. I read the card whole.
+- The message narrows the job and adds nothing: drop the old R3. I removed it with Edit, not a git reset (no reset string is listed).
+  - From the hub: the MODEL `:3` cos label, the three cos allow strings on `:11`, `:78` "three" back to "two", the `:94` cos sentence, 4.2 / 4.6 / smoke (a) / smoke (e) cos text.
+  - From the tests: `test_hub_deferred_1018.py:105` back to `assert COS not in launch`; `test_desk_launch_launchd.py` back to `TODAY_EIGHT = 8` (it has no diff against BASE now); in the new file, `test_r3_cos_is_restarted_after_radar` and `test_c2_…` removed.
+- New R3: the NOT LOADED line's `Exit 0` sentence now reads the card's refusal. NEW `test_c3_a_loaded_cos_still_refuses` checks that the line holds `FAILED: RESTARTS — com.cobalt.cos is loaded; its bootout and bootstrap strings are not on the deploy list (R60), they are asked of Dejan · rollback: not used`, that it does not hold `com.cobalt.cos loaded <state or path>`, and that the `claude --bg ` line holds no `com.cobalt.cos`.
+- After the edits: `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/ops/test_hub_cos_restart_1019.py tests/ops/test_hub_deferred_1018.py tests/ops/test_desk_launch_launchd.py tests/ops/test_deploy_smoke_string_1014.py` → `35 passed, 15 warnings in 12.84s`.
+- The red without the fix (BASE's GATE span, NOT LOADED line renamed): `3 failed, 1 passed, 15 warnings in 0.78s`.
+  - Red: `test_r1_the_f16_set_is_admitted` (`:54: AssertionError: assert False is True … admits({'com.cobalt.aset', 'com.cobalt.cos', 'com.cobalt.radar'})`), `test_r2_…` (`:71: AssertionError: no \`- NOT LOADED\` line`), `test_c3_…` (`:90: AssertionError: no \`- NOT LOADED\` line`). The CONTROL `test_c1_…` passes.
+  - This is the card's `3 failed, 1 passed`. It was run on the worktree hub with those two places mutated, not on a literal copy of BASE's hub: D1 `:123` and smoke (f) `:155` kept their R2 text, and no assert checked before the first failing one reads them. `test_c1` also passed on BASE's literal hub at the first E2 (above), with the same body.
+- THE MUTATIONS, each undone with Edit:
+  - R1: GATE span back to the three → `3 failed, 6 passed` (`test_hub_cos_restart_1019.py:54` `assert False is True`; `test_hub_deferred_1018.py:57` `AssertionError: com.cobalt.agent com.cobalt.aset com.cobalt.radar` ×2).
+  - R2 (c): smoke (f) back to BASE → `1 failed, 3 passed` (`:83: assert 'not loaded — skipped' in "- (f) …"`).
+  - R3: the refusal back to the old "keeps it in `<restart set>`" sentence → `1 failed, 3 passed` (`:91: AssertionError: assert 'FAILED: RESTARTS — com.cobalt.cos is loaded; …' in '- NOT LOADED …'`).
+  - After undoing: `git diff --stat bcbf08f9` → `DEPLOY-HUB.md | 7 +-`, report `| 118 +++`, `test_hub_cos_restart_1019.py | 93 +++`, `test_hub_deferred_1018.py | 4 +-`. This is the same stat as before the mutations.
+- Commit `d59fac71 fix(hub-cos-restart-1019): STEP-R admits cos, a not-loaded cos is skipped, a loaded cos stops the run; no allow string (R1-R3, L42, R60)` (`4 files changed, 26 insertions(+), 52 deletions(-)`).
+- DevDocs line: none. No `src/` module changed; the hub is a prompt file.
+
 ## RESTARTS
-not reached (E3 stopped).
+`uv run cobalt jobs restarts bcbf08f9..HEAD` → exit 0:
+```
+path	change	rule	restart
+docs/40 - DevDocs/prompts/DEPLOY-HUB.md	M	DOCS	-
+docs/40 - DevDocs/reports/hub-cos-restart-1019-build-2026-10-19.md	M	DOCS	-
+tests/ops/test_hub_cos_restart_1019.py	A	test/documentation; no resident	-
+tests/ops/test_hub_deferred_1018.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
 
 ## W THE THREE SUITES
-not reached.
+- (a0) `git diff --name-only --no-renames bcbf08f9` → `docs/40 - DevDocs/prompts/DEPLOY-HUB.md`, `docs/40 - DevDocs/reports/hub-cos-restart-1019-build-2026-10-19.md`, `tests/ops/test_hub_cos_restart_1019.py`, `tests/ops/test_hub_deferred_1018.py`. Every path starts with `docs/` or `tests/ops/`. **`cobalt_dev: not taken (DB: none — 4 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh hub-cos-restart-1019 offline` (background) → exit 0:
+```
+tests/ops: run (docs/40 - DevDocs/prompts/DEPLOY-HUB.md)
+offline 8822/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/hub-cos-restart-1019-offline-20261019-160117.log
+```
+  The log's two summaries (`grep -n -F " passed"`): `947:4749 passed, 871 skipped, 4 xfailed, 36 warnings in 746.66s` · `1021:4073 passed, 1 xfailed, 16 warnings in 908.44s`. This build adds `test_r1_the_f16_set_is_admitted`, `test_c1_a_label_outside_the_four_is_refused`, `test_r2_a_not_loaded_cos_is_skipped_and_acts_on_nothing` and `test_c3_a_loaded_cos_still_refuses`.
+- `uv run pytest -q -rs -p no:cacheprovider --color=no tests/ops` (background) → `4073 passed, 1 xfailed, 16 warnings in 896.37s (0:14:56)`, exit 0. `test_deploy_smoke_string_1014.py` is green, so the allow list is unchanged.
+- with-DB: not run (DB: none).
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh hub-cos-restart-1019 livenote` → `live-note 147/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/hub-cos-restart-1019-livenote-20261019-162908.log`. Its one skip (`grep -n -F "SKIPPED"`): `56:SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set`. No skip names `COBALT_LIVE_VAULT_ROOT`.
 
 ## PRE-STOP SELF-CHECK
-not reached.
+1. Every added or changed test was shown red for its named reason.
+   - `test_r1`, `test_r2` and `test_c3` were red without the fix, and each was red under its own mutation (all quoted above).
+   - `test_c1` is a control: it passed on BASE and passes after.
+   - `test_hub_deferred_1018.py:17` / `:74` were red on BASE (`:57`, first E2) and under the R1 mutation (`:57` ×2).
+2. Every entry path is pinned:
+   - STEP-R GATE `:93`: `test_r1`, `test_c1`, `test_hub_deferred_1018` d1 tests.
+   - NOT LOADED `:94`, both exits: `test_r2` (not loaded) and `test_c3` (loaded).
+   - D1 `:123`: `test_r2`.
+   - Smoke (f) `:155`: `test_r2`. STEP-5 (4) re-runs (f) by reference, so it needs no own pin.
+   - The launch line has no cos: `test_c3` and `test_hub_deferred_1018.py:105`.
+   - The allow list is unchanged: `test_deploy_smoke_string_1014.py` (green), plus the empty `git diff bcbf08f9 --stat -- ops/desk/ STANDING-LIST.md test_deploy_smoke_string_1014.py test_desk_launch_launchd.py`.
+3. Every `file:line` was re-read at the tip: `grep -n -F "com.cobalt.cos" DEPLOY-HUB.md` → `:93`, `:94`, `:123` only; `git show --stat d59fac71`; `git log --oneline bcbf08f9..HEAD`.
 
 ## FOR THE CHECK
-not reached: the build stopped at E3.
+- Range `bcbf08f9..d59fac71`:
+  - `7d05ffe0 wip(hub-cos-restart-1019): red — R1-R3 hub pins, the existing pins moved to the four (tests only)`
+  - `bb5332c3 wip(hub-cos-restart-1019): E3 — R3 (b) allow strings red in test_deploy_smoke_string_1014, outside the rows; FOR DEJAN`
+  - `d59fac71 fix(hub-cos-restart-1019): STEP-R admits cos, a not-loaded cos is skipped, a loaded cos stops the run; no allow string (R1-R3, L42, R60)`
+  - The two wip commits carry the old R3, and `d59fac71` removes it. Read the net diff `git diff bcbf08f9 d59fac71`, not the commits one by one.
+- Hub changes at the tip: `:93` (the GATE span and its parenthesis), the new `:94` NOT LOADED line, D1 `:123` (the cos insertion), smoke (f) `:155`. The `Anything else (…)` sentence stands byte for byte; the full diff is quoted at E3.
+- An observation, not a decision: the card kept R2 (b)'s D1 clause `com.cobalt.cos in <restart set>: … <cos pid>`. With R3 a loaded cos stops at STEP-R, so cos never reaches D1 inside `<restart set>`, and that clause cannot run. It is the card's text (L72), and I did not re-decide it.
+- Reds, mutations and greens: under E2, E3 and `## E2 / E3 AFTER THE RE-CUT`. Callers: the grep above.
+- Suites: offline `8822/0`, live-note `147/0`, with-DB not run (DB: none). F0 / F1 / F2 and the lock times: not run (DB: none).
+- The RESTARTS table and the card's records (PREFLIGHT) are copied above.
 
 ## CONTINUE
-next: E3 — after the desk's answer to DECISION 1: either (a) a RULINGS row of his approving the three cos strings plus a card row naming `test_deploy_smoke_string_1014.py` (and, if he rules it, `STANDING-LIST.md` `## 3.`), then the mutations, the fix commit, RESTARTS, W; or (b) the card re-cut.
+next: none — the stop line is below.
 
 ## DECISIONS
-- DECISION 1 · FOR DEJAN: R3 (b) adds `Bash(launchctl bootout gui/501/com.cobalt.cos)`, `Bash(launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.cos.plist)` and `Bash(launchctl kickstart -k gui/501/com.cobalt.cos)` to the DEPLOY-HUB launch line.
-  - These are new deploy allow strings. `STANDING-LIST.md:148` lists only the aset and radar resident strings, and R60 ("a command string the close test or the DEPLOY-HUB read changes returns to him alone") puts a change to them with him. The card's RULINGS row is R1863 only.
-  - `tests/ops/test_deploy_smoke_string_1014.py:76` pins that allow list, is red under the card's own `tests/ops` step, and is outside the rows' files. The card's RECORDS say "No other test or `ops/` file pins them", which this run shows is not so.
-  - Safe default taken: stop. That test and `STANDING-LIST.md` are not edited, the work is kept in a wip commit, and nothing is deployed. UNPROVEN (L70): whether a row of his already covers these strings. The builder found none in the card.
+none
 
 ## RECORDS
-- The card's records were re-read at PREFLIGHT, as noted there. One was found wrong: "No other test or `ops/` file pins them" (see E3).
-- `cobalt_dev: not taken` (DB: none). No lock was taken, and no `.env` was ever in this worktree.
+- Stopped once at 15:50 EDT: `FAILED: E3 — R3 (b)'s three com.cobalt.cos allow strings turn test_deploy_smoke_string_1014.py red and change the STANDING-LIST deploy strings R60 returns to him` (decisions: 1 · for Dejan: 1 · tokens: 156297). That DECISION 1 was answered by the card's re-cut (`29250739`): no cos allow string is added, and a loaded cos stops the run at STEP-R. Asking Dejan for those strings is the desk's job, apart from this card.
+- CONTINUED at E3 15:59 EDT, on the `cto-desk` message, after checking the re-cut card myself (above).
+- The card's records were re-read at PREFLIGHT. The first card's line "No other test or `ops/` file pins them" was wrong, and the re-cut card's `:64` records that.
+- `cobalt_dev: not taken` (DB: none). No lock was taken; no `.env` was in this worktree at any point (`ls` → No such file, 15:50 EDT and at CLOSE).
 - The L74 line is under `## L74`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: E3 — R3 (b)'s three com.cobalt.cos allow strings turn tests/ops/test_deploy_smoke_string_1014.py::test_s1_no_other_allow_or_deny_string_changes red (a file outside the rows) and change the STANDING-LIST deploy strings R60 returns to him — "AssertionError … At index 45 diff: 'Bash(launchctl bootout gui/501/com.cobalt.cos)' != 'Bash(launchctl kickstart -k gui/501/com.cobalt.aset)'" · decisions: 1 · for Dejan: 1 · tokens: 156297
+BUILT · job: hub-cos-restart-1019 · tip: d59fac71 | on bcbf08f9 | migration: none | offline 8822/0 | with-DB 0/0 | live-note 147/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 3 of 3 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 204595
