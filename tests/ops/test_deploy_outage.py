@@ -26,6 +26,7 @@ REAL_CARD = REPO / "docs" / "40 - DevDocs" / "prompts" / "2026-10-02" / "25-depl
 ASET = "com.cobalt.aset"
 RADAR = "com.cobalt.radar"
 AGENT = "com.cobalt.agent"
+COS = "com.cobalt.cos"
 SATURDAY_1400 = "2026-01-03T14:00:00-05:00"
 THURSDAY_1400 = "2026-01-08T14:00:00-05:00"
 
@@ -490,3 +491,118 @@ def test_a_later_bootstrap_cannot_leave_an_earlier_label_down_on_success(box):
     st = box.launchd()["labels"]
     assert ASET in st and RADAR in st, (st, done.stdout, done.stderr)
     assert done.returncode == 0, done.stdout + done.stderr
+
+
+# ---- K1: com.cobalt.cos is restored like aset (card 784) ---------------------------------------
+
+
+def load_cos(box: Box) -> Path:
+    """Write <repo>/ops/com.cobalt.cos.plist and record it loaded at pid 504."""
+    plist = box.repo / "ops" / f"{COS}.plist"
+    plist.write_text("<plist/>\n")
+    st = box.launchd()
+    st["labels"][COS] = {"pid": 504, "path": str(plist)}
+    box.save(st)
+    return plist
+
+
+def test_k1_cos_goes_down_and_up_like_aset(box):
+    """RED on BASE: exit 1, REFUSED: 'com.cobalt.cos' is not a resident this script restores."""
+    plist = load_cos(box)
+    done = box.run(labels=f"{ASET},{RADAR},{AGENT},{COS}")
+    assert done.returncode == 0, done.stderr
+    assert last_line(done) == "OUTAGE DONE 0s"
+    seen = acts(box)
+    assert seen.index(("bootout", COS)) > seen.index(("bootout", RADAR))
+    assert seen.index(("bootstrap", COS)) > seen.index(("bootstrap", RADAR))
+    assert ["bootstrap", "gui/501", str(plist)] in box.launchctl_calls()
+    prefix = f"{COS} · pid before 504 · pid after "
+    hits = [ln for ln in done.stdout.splitlines() if ln.startswith(prefix)]
+    assert len(hits) == 1, done.stdout
+    assert int(hits[0][len(prefix):]) != 504
+
+
+def test_k1_dry_run_names_the_cos_bootout_and_the_repo_plist(box):
+    """RED on BASE: the same refusal, 'com.cobalt.cos' is not a resident this script restores."""
+    plist = box.repo / "ops" / f"{COS}.plist"
+    done = box.run(COS, "MERGED", "--dry-run")
+    assert done.returncode == 0, done.stderr
+    assert box.calls_list() == []
+    assert f"WOULD RUN: launchctl bootout gui/501/{COS}" in done.stdout.splitlines()
+    assert f"WOULD RUN: launchctl bootstrap gui/501 {plist}" in done.stdout.splitlines()
+
+
+def test_k1_cos_loaded_from_launchagents_is_refused_before_anything_goes_down(box):
+    """RED on BASE: the refusal names 'is not a resident', not 'is loaded from'."""
+    repo_plist = load_cos(box)
+    st = box.launchd()
+    st["labels"][COS]["path"] = str(box.agents / f"{COS}.plist")
+    box.save(st)
+    done = box.run(labels=COS)
+    assert done.returncode == 1
+    assert "is loaded from" in done.stderr, done.stderr
+    assert str(repo_plist) in done.stderr, done.stderr
+    assert [a for a in box.launchctl_calls() if a[0] != "print"] == []
+
+
+def test_k1_cos_not_loaded_is_refused_before_anything_goes_down(box):
+    """RED on BASE: the refusal names 'is not a resident', not 'is not running'."""
+    (box.repo / "ops" / f"{COS}.plist").write_text("<plist/>\n")
+    done = box.run(labels=COS)
+    assert done.returncode == 1
+    assert f"{COS} is not running before the outage (gone)" in done.stderr, done.stderr
+    assert [a for a in box.launchctl_calls() if a[0] != "print"] == []
+
+
+def test_k1_the_three_residents_print_the_same_lines(box):
+    """Green on BASE and after: aset, radar and agent, byte for byte, cos not in the set."""
+    st = box.launchd()
+    before = {
+        ASET: st["labels"][ASET]["pid"],
+        RADAR: st["labels"][RADAR]["pid"],
+        AGENT: st["agent"],
+    }
+    # the stub hands the next pid out at each bootstrap, then at the agent's kickstart
+    nxt = st["next"]
+    order = (ASET, RADAR, AGENT)
+    done = box.run(labels=f"{ASET},{RADAR},{AGENT}")
+    assert done.returncode == 0, done.stdout + done.stderr
+    after = {label: nxt + i for i, label in enumerate(order)}
+    expect = [
+        f"{label} · pid before {before[label]} · pid after {after[label]}" for label in order
+    ]
+    expect.append("OUTAGE DONE 0s")
+    assert done.stdout.splitlines() == expect
+    assert acts(box) == [
+        ("bootout", ASET), ("bootout", RADAR),
+        ("bootstrap", ASET), ("bootstrap", RADAR), ("kickstart", AGENT),
+    ]
+    dry = box.run(f"{ASET},{RADAR},{AGENT}", "MERGED", "--dry-run")
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    here = str(SCRIPT.parent)
+    card = str(box.card)
+    sh = str(box.repo / "cobalt.sh")
+    assert dry.stdout.splitlines() == [
+        f'WOULD RUN: sh {here}/deploy-step0.sh --window "{card}"',
+        f"WOULD RUN: launchctl print gui/501/{ASET}",
+        f"WOULD RUN: launchctl print gui/501/{RADAR}",
+        f"WOULD RUN: {sh} status",
+        "WOULD RUN: date +%s",
+        f"WOULD RUN: launchctl bootout gui/501/{ASET}",
+        f"WOULD RUN: launchctl print gui/501/{ASET}",
+        f"WOULD RUN: launchctl bootout gui/501/{RADAR}",
+        f"WOULD RUN: launchctl print gui/501/{RADAR}",
+        f"WOULD RUN: {sh} stop",
+        f"WOULD RUN: {sh} status",
+        f"WOULD RUN: launchctl bootstrap gui/501 {box.aset_plist}",
+        f"WOULD RUN: launchctl print gui/501/{ASET}",
+        f"WOULD RUN: launchctl bootstrap gui/501 {box.radar_plist}",
+        f"WOULD RUN: launchctl print gui/501/{RADAR}",
+        f"WOULD RUN: launchctl kickstart gui/501/{AGENT}",
+        f"WOULD RUN: {sh} status",
+        "WOULD RUN: date +%s",
+        f"WOULD RUN: launchctl print gui/501/{ASET}",
+        f"WOULD RUN: launchctl print gui/501/{RADAR}",
+        f"WOULD RUN: {sh} status",
+        "DRY RUN — nothing run: 21 commands",
+    ]

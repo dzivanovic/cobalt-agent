@@ -38,7 +38,7 @@
 #                        `git diff main <head> -- src/cobalt/db_migrations` holds nothing else: on a
 #                        `none` card NOTHING; otherwise only added `NNNN_*.sql` files and the registry
 #                        `__init__.py` (an edited or removed migration, or any other file, fails)
-#   P8 census <label>    `launchctl print gui/501/<label>` for aset, radar, agent: pid and state,
+#   P8 census <label>    `launchctl print gui/501/<label>` for aset, radar, agent, cos: pid and state,
 #                        RECORDED, never a gate
 #   disk                 `df -k <repo>`, recorded
 #   main status          `git status --short --branch` of the repo, recorded
@@ -70,7 +70,7 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 REPORTS_REL="docs/40 - DevDocs/reports"
 GIT_OPTIONAL_LOCKS=0
 export GIT_OPTIONAL_LOCKS
-RESIDENTS="com.cobalt.aset com.cobalt.radar com.cobalt.agent"
+RESIDENTS="com.cobalt.aset com.cobalt.radar com.cobalt.agent com.cobalt.cos"
 NOW_CMD="TZ=America/New_York date '+%u %H %M %Y-%m-%d %a'"
 
 refuse() {
