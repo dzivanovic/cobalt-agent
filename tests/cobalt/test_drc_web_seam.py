@@ -87,7 +87,9 @@ def _referenced(nodes) -> set[str]:
 
 def _blocks():
     attest = _index("attest")
-    d4_end = _index("card_move")  # the next existing route after D4's block
+    # F20 C2c's HITL block sits between D4's block and `card_move` (card 730):
+    # D4's block ends where it begins.
+    d4_end = _index("_hitl_store")
     d4 = BODY[attest + 1 : d4_end]
     last_existing = _index(LAST_EXISTING)
     d2 = BODY[last_existing + 1 :]

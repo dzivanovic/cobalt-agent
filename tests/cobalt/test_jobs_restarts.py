@@ -222,7 +222,8 @@ def test_notify_yaml_derives_the_aset_restart(monkeypatch):
     ])
     (row,) = classify("HEAD...HEAD")
     assert row.escalate is False
-    assert row.restarts == ("com.cobalt.aset",)
+    # F20 C4a: com.cobalt.cos re-reads it too (send_dm, the DM poll).
+    assert row.restarts == ("com.cobalt.aset", "com.cobalt.cos")
     assert row.rule == "resident reads"
 
 

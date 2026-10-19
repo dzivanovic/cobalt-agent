@@ -91,7 +91,8 @@ class TestTheDerivedRows:
         # Per-job `reads:` keys only — `no_resident_reads:` (2026-09-15) is
         # a registry-level table, not a job's key.
         keys = [line for line in text.splitlines() if line.strip().startswith("reads:")]
-        assert len(keys) == 6, "one per resident, none on a one-shot"
+        # F20 C4a: 6 -> 7, com.cobalt.cos (a resident, `enabled: false`).
+        assert len(keys) == 7, "one per resident, none on a one-shot"
 
     def test_every_resident_that_starts_through_uv_run_re_reads_the_uv_files(self):
         """`uv run` syncs the environment from pyproject.toml / uv.lock when
@@ -104,7 +105,9 @@ class TestTheDerivedRows:
         assert agent.reads == ["pyproject.toml", "uv.lock"]
         for path in ("pyproject.toml", "uv.lock"):
             readers = load_job_registry().readers_of(path)
-            assert [r.label for r in readers] == [SHEET, "com.cobalt.agent", "com.cobalt.radar"]
+            # F20 C4a: com.cobalt.cos starts through ops/start_cos.sh (`uv sync --inexact`).
+            assert [r.label for r in readers] == [SHEET, "com.cobalt.agent", "com.cobalt.radar",
+                                                  "com.cobalt.cos"]
 
 
 class TestTheModelRefusesNonsense:
@@ -141,13 +144,14 @@ class TestTheModelRefusesNonsense:
 class TestReadersOf:
     def test_it_finds_the_sheet(self):
         readers = load_job_registry().readers_of(TUNABLES)
-        assert [r.label for r in readers] == [SHEET, "com.cobalt.radar"]
+        # F20 C4a: com.cobalt.cos reads the cos.* / hitl.* rows on each request.
+        assert [r.label for r in readers] == [SHEET, "com.cobalt.radar", "com.cobalt.cos"]
 
     def test_a_leading_dot_slash_is_the_same_file(self):
         """An operator pastes a path off a `git status` line; a leading
         `./` must not produce an empty answer."""
         readers = load_job_registry().readers_of("./" + TUNABLES)
-        assert [r.label for r in readers] == [SHEET, "com.cobalt.radar"]
+        assert [r.label for r in readers] == [SHEET, "com.cobalt.radar", "com.cobalt.cos"]
 
     def test_an_unknown_path_finds_nothing(self):
         assert load_job_registry().readers_of(UNLISTED) == []
@@ -159,7 +163,8 @@ class TestReadersOf:
         # S4-P2 S4: the sheet's fallback thread calls send_dm (notify/mattermost.py:137 →
         # load_notify_config, notify/config.py:51), so a change to it restarts the sheet.
         readers = load_job_registry().readers_of(NOTIFY)
-        assert [r.label for r in readers] == [SHEET]
+        # F20 C4a: com.cobalt.cos DMs (send_dm) and polls the DM through it.
+        assert [r.label for r in readers] == [SHEET, "com.cobalt.cos"]
         assert load_job_registry().no_resident_read(NOTIFY) is None, "a path sits in one list only"
 
 
