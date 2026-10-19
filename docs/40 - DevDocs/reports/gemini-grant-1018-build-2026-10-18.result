@@ -1,8 +1,8 @@
 job=gemini-grant-1018
-tip=fd9f0cb6
+tip=cd5e0d7c
 on=c0ebb874
 migration=none
-offline=8678/0
+offline=8679/0
 with_db=0/0
 live_note=147/0
 cobalt_dev=not taken
@@ -12,4 +12,4 @@ rows=6 of 6
 self_check=3 of 3
 decisions=2
 for_dejan=0
-tokens=206491
+tokens=130747

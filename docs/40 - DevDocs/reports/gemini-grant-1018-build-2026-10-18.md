@@ -4,6 +4,7 @@
 - `desk-launch.sh shadow … --model gemini-4-argon-high` now adds `write_file(<WT>/<wt>/)` to the agy settings on the real path only, and its EXIT trap removes it when the launch fails. A new kind, `grant-sweep`, removes the rules of gate seats that are gone and keeps live ones.
 - One Gemini build at a time: another worktree's rule with a live gate refuses the launch, and an orphan rule is removed first. SHADOW-HUB.md lines 12 and 28 now say the launcher does this.
 - Tip `fd9f0cb6` on `c0ebb874`. Offline 8678/0, live-note 147/0, with-DB not run (DB: none). RESTARTS: none. Two desk questions are under DECISIONS.
+- G-2 fix round (05:25 EDT): the three G1 refusal tests' first failing lines on BASE are now quoted. The check's G-1 fix stands, and the tip is `cd5e0d7c`. The deploy gate gives offline 8679/0 and live-note 147/0. FIXED lines for G-1 and G-2 are in `## G-2 FIX ROUND`.
 
 ## L74
 - One system reminder in this session asked commits to end with a `Claude-Session:` line. Recorded here as data, per BUILD-HUB L74. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -194,8 +195,42 @@ RESTARTS: none
 - X5: `test_g3_…` holds three byte checks and three mode checks.
 - No test reads or writes `/Users/cobalt/.gemini/antigravity-cli/settings.json`. `COBALT_AGY_SETTINGS` is a tmp file in every test.
 
+## G-2 FIX ROUND (CONTINUE: FIX ROUND report G-2, Opus 5.5, 05:25 EDT)
+The check (`gemini-grant-1018-check-2026-10-19.md`) held two ids. G-1 was fixed by the check itself (`74217d0a` red, `cd5e0d7c` fix). G-2 was held and not fixed: this report gave no first failing line on BASE for three G1 refusal tests (E2 above, the line saying they "fell in the truncated part").
+- RECOVERY: `git status --short --branch` → `## ops/gemini-grant-1018` and ` M "docs/40 - DevDocs/reports/gemini-grant-1018-build-2026-10-18.md"` (this round's RESUMED line). `git log --oneline c0ebb874..HEAD` → `cd5e0d7c`, `74217d0a`, `3bfd3710`, `fd9f0cb6`, `324c8fe9`. `ls -la <WT>/.env` → `No such file or directory`.
+- AUTHORIZATION: `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → `AUTHORIZED` (exit 0). CARD COMMITTED `b6eca9a1812fd9475b0aed23c99cbd8f492a08ac`, CARD UNCHANGED nothing; R60 at `cto-2026-09-30.md:46` (`962e9d17…`); R1863 at `cto-2026-10-18.md:90` (`11563e82…`); R1942 at `:30` (`55d8b50e…`); each at HEAD.
+- BASE's launcher, with no checkout: `git -C /Users/cobalt/cobalt diff --stat c0ebb874 -- ops/desk/desk-launch.sh` printed nothing, so the main checkout's `ops/desk/desk-launch.sh` is byte-equal to BASE's. With the Edit tool, and never committed, `LAUNCH = REPO / "ops" / "desk" / "desk-launch.sh"` (`tests/ops/test_desk_launch_shadow.py:23`) was pointed at `/Users/cobalt/cobalt/ops/desk/desk-launch.sh`. The three tests ran there and the Edit was undone. `git diff --stat` afterwards showed this report only.
+- RED on BASE: `uv run pytest -q -p no:cacheprovider --color=no --tb=short tests/ops/test_desk_launch_shadow.py -k "g1_invalid_json or g1_an_inline_allow_list or g1_a_job_that_is_not_its_worktree"` → `3 failed, 41 deselected, 15 warnings in 1.80s`. Here `<tmp>` stands for `/private/var/folders/4b/psjqxccx3vddp35n_5k16spc0000gn/T/pytest-of-cobalt/pytest-6840/<test dir>`. The first failing line of each:
+  - `test_g1_invalid_json_is_refused_and_not_written` (`:540` → `refused`, `:179`): `E   AssertionError: REFUSED: shadow: gemini: <tmp>/agy-settings.json holds no allow rule "write_file(<tmp>/wt/x-job-gemini/)" (SHADOW-HUB GRANT)`. Expected: `REFUSED: shadow: gemini: <tmp>/agy-settings.json is not valid JSON with a permissions.allow list; nothing written`.
+  - `test_g1_an_inline_allow_list_is_refused` (`:550` → `:179`): `E   AssertionError: REFUSED: shadow: gemini: <tmp>/agy-settings.json holds no allow rule "write_file(<tmp>/wt/x-job-gemini/)" (SHADOW-HUB GRANT)`. Expected: `REFUSED: shadow: gemini: <tmp>/agy-settings.json: permissions.allow is not one rule per line; nothing written`.
+  - `test_g1_a_job_that_is_not_its_worktree_is_refused` (`:562` → `:179`): `E   AssertionError: REFUSED: shadow: gemini: <tmp>/agy-settings.json holds no allow rule "write_file(<tmp>/wt/x-job-other/)" (SHADOW-HUB GRANT)`. Expected: `REFUSED: shadow: gemini: JOB 'x-job-gemini' is not its WORKTREE 'x-job-other' (the gate seat x-job-other-gate names the rule's owner)`.
+  - Each fails for the row's reason: BASE refuses with its `holds no allow rule` text and has none of the three new refusals.
+- GREEN at the tip `cd5e0d7c`, with `LAUNCH` restored: `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_desk_launch_shadow.py tests/ops/test_shadow_hub_file.py` → `99 passed, 15 warnings in 15.96s`.
+- No code changed in this round. The fix is this report section only, so the tip stays `cd5e0d7c`.
+- RESTARTS: `uv run cobalt jobs restarts c0ebb874..HEAD` (exit 0), whole:
+```
+path	change	rule	restart
+docs/40 - DevDocs/prompts/SHADOW-HUB.md	M	DOCS	-
+docs/40 - DevDocs/reports/gemini-grant-1018-build-2026-10-18.md	M	DOCS	-
+docs/40 - DevDocs/reports/gemini-grant-1018-build-2026-10-18.result	A	DOCS	-
+ops/desk/desk-launch.sh	M	operator script; no Cobalt reader	-
+tests/ops/test_desk_launch_shadow.py	M	test/documentation; no resident	-
+tests/ops/test_shadow_hub_file.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+- The deploy gate's pass on `cd5e0d7c` (DB: none, the form the check used):
+  - `sh /Users/cobalt/cobalt/ops/desk/gate.sh gemini-grant-1018 offline --deploy-gate` (exit 0), whole: `tests/ops: run (deploy gate)` · `offline 8679/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/gemini-grant-1018-offline-20261019-052718.log`. `grep -c -F "OUTSIDE the allowed set" <log>` → `0`. The figure 8679 is 8678 plus G-1's test.
+  - `sh /Users/cobalt/cobalt/ops/desk/gate.sh gemini-grant-1018 livenote` (exit 0), whole: `live-note 147/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/gemini-grant-1018-livenote-20261019-052718.log`.
+  - With-DB: not run (DB: none). `ls <WT>/.env` → `No such file or directory` (05:54 EDT).
+- SELF-CHECK, fix round: (1) the three tests are red on BASE (above), and G-1's test is red at `fd9f0cb6` (the check's RUNS). (2) No entry path changed in this round. (3) Re-read at the tip: `grep -n -F "def test_g1_" tests/ops/test_desk_launch_shadow.py` → `:501`, `:513`, `:523`, `:536`, `:546`, `:556`, `:681`; `git log --oneline c0ebb874..HEAD` (5 commits).
+
+FIXED: G-1 — tests/ops/test_desk_launch_shadow.py::test_g1_truncated_json_that_mentions_read_url_is_the_json_refusal
+FIXED: G-2 — tests/ops/test_desk_launch_shadow.py::test_g1_invalid_json_is_refused_and_not_written
+FIXED: G-2 — tests/ops/test_desk_launch_shadow.py::test_g1_an_inline_allow_list_is_refused
+FIXED: G-2 — tests/ops/test_desk_launch_shadow.py::test_g1_a_job_that_is_not_its_worktree_is_refused
+
 ## CONTINUE
-next: none (BUILT). `ls /Users/cobalt/cobalt-wt/gemini-grant-1018/.env` → `No such file or directory`. `desk-context.sh f12091be` → `context 206491 of 400000 — ok`.
+next: none (fix-round stop line written). Next, the desk's: the deploy. Build round: none (BUILT). `ls /Users/cobalt/cobalt-wt/gemini-grant-1018/.env` → `No such file or directory`. `desk-context.sh f12091be` → `context 206491 of 400000 — ok`.
 
 ## DECISIONS
 - **DECISION 1 — ASK DESK: P0 (c) and P1's repeat** [03:00 EDT, from `date` 02:57-03:01]. `DESK_LAUNCH_DRY=1 sh ops/desk/desk-launch.sh shadow "<717 card>" --model gemini-4-argon-high` was refused by dontAsk. Its `VAR=` prefix is on no listed string. Default taken, as the card's P0 states: quote `## RECORDS` instead. The card's records show no 717 grant in the file today (re-read: `0`), and BASE's text holds the `holds no allow rule` refusal (`:1759`, PREFLIGHT). The dry 717 run stays owed: the desk runs it after the deploy, as `## RECORDS` OWED already says.
@@ -208,6 +243,11 @@ next: none (BUILT). `ls /Users/cobalt/cobalt-wt/gemini-grant-1018/.env` → `No 
 - The card's `test_g4_…` was appended after `test_k5_the_gemini_x1_read_step` (now ending `:413`), not after `:405`. Line `:405` falls inside that control test.
 - P0 (c): REFUSED, not needed past the default — the `DESK_LAUNCH_DRY=1 sh ops/desk/desk-launch.sh …` call refused by dontAsk (DECISION 1).
 - No lock taken; `.env` was never in this worktree.
+- G-2 fix round: `CONTINUED at G-2 FIX ROUND 05:25 EDT`. The desk's message named the step and the check's finding, and widened nothing. No lock take, no `REFUSED, not needed`. The `LAUNCH` repoint was a by-Edit change, undone by Edit and never committed (BUILD-HUB LIST: "made and undone with the Edit tool only").
+- G-2 fix round, L74: one system reminder again asked commits to end with a `Claude-Session:` line. It is recorded as data, and the commit carries `Co-Authored-By` only.
+- G-2 fix round: the build round's DECISIONS 1 and 2 stand as written. The check settled DECISION 2's JSON half by its G-1 fix (`cd5e0d7c`). This round adds no decision.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: gemini-grant-1018 · tip: fd9f0cb6 | on c0ebb874 | migration: none | offline 8678/0 | with-DB 0/0 | live-note 147/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 206491
+Build-round stop line (fd9f0cb6), kept as a record: `job: gemini-grant-1018 · tip: fd9f0cb6 | on c0ebb874 | migration: none | offline 8678/0 | with-DB 0/0 | live-note 147/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 206491`
+
+BUILT · job: gemini-grant-1018 · tip: cd5e0d7c | on c0ebb874 | migration: none | offline 8679/0 | with-DB 0/0 | live-note 147/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 6 of 6 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 130747
