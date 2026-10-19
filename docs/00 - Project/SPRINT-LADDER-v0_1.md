@@ -1128,6 +1128,36 @@ OFF-LADDER work of 2026-10-17 (each with the ruling that ordered it):
 | Gemini probe id (card `670`) | DONE-LIVE | HIS RULING R1736, R1738. `deploy-2026-10-17-gemini-probe-id` `10fb97c3`, smoke GREEN (R1825). |
 | Gemini arm shadow builds LOW/MID/HIGH | NOT STARTED | HIS RULING R1738; barred until the X1 cwd result is a row (R1804). |
 
+### Status 2026-10-18
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1018` for 10-18 alone from `reports/cto-2026-10-18.md` rows R1829–R1950 (06:08 → 21:38 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-18*"` = `deploy-2026-10-18-agy-read`, `-checkin-install`, `-deploy-card-fixes`, `-f23-playbook`, `-f4-refresh-attempt2`, `-hub-deferred`, `-jev-keyed`, `-stop-guard-work`. The 10-17 close ran (`CLOSE PUSHED 24c00696`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 | DONE-LIVE | Unchanged (see 10-08 to 10-17). |
+| S5 F4 prefill ownership flags (card `304`) | DONE-LIVE | `deploy-2026-10-18-f4-refresh-attempt2` `54feb833`, smoke GREEN (R1910); attempt 1 hub `4620d884` FAILED at STEP-C (R1908). |
+| S5 F23 playbook (card `503`) | DONE-LIVE | `deploy-2026-10-18-f23-playbook` `7398d4a7`, smoke GREEN (R1912); FIX1 built `72c8a069` (R1904). |
+| S5 F20 (card `730`, port job `f20-cos-fr1`) | BUILT-NOT-MERGED | Check ready YES tip `f3365e23` (R1933); port build `94689c99` FAILED at W on 448's role pin, kept (card 448 FIX1 first; R1948). Deploy waits on cos-outage 798 after 448. |
+| S5 F21 (cards `468`, `469`) | NOT STARTED (preflight YES) | Chained behind card 448 (R1936); no build launched. |
+| S5 F5 (card `731`) | NOT STARTED | Preflight NO, amend drafted (R1866); no build launched. |
+| S5 F16 close (card `790`) | NOT STARTED (card DRAFTED) | Preflight r2 YES (R1940); MID build waits behind the F20 chain. |
+
+**Stop date: 2026-10-28 (S5, day 4 of 14). S5: AT RISK.** Reason: 2 of 6 S5 features deployed (F4, F23); F20 is built but its deploy waits on card 448 FIX1 and the cos-outage deploy, and F21, F5, F16 are not built (`cto-2026-10-18.md` §0 and R1838, R1934). No ruling moved a date.
+
+OFF-LADDER work of 2026-10-18 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Deploy-card fixes (card `721`) | DONE-LIVE | Brain R1887. `deploy-2026-10-18-deploy-card-fixes` `5953dfe0`, smoke GREEN (R1906). |
+| JEV keyed wrapper (card `715`, deploy card `776`) | DONE-LIVE | HIS RULING R1830. `deploy-2026-10-18-jev-keyed` `093993f1`, smoke GREEN (R1921). |
+| Agy read (card `759`) | DONE-LIVE | HIS RULING R1863. `deploy-2026-10-18-agy-read` `c91162be`, smoke GREEN (R1917). |
+| Check-in install (card `751`) | DONE-LIVE | HIS RULING R1854. `deploy-2026-10-18-checkin-install` `5d6f63fc`, smoke GREEN (R1929). |
+| Stop-guard work (card `739`) | DONE-LIVE | HIS RULING R1841. `deploy-2026-10-18-stop-guard-work` `ba601740`, smoke GREEN (R1935). |
+| Hub deferred (card `787`) | DONE-LIVE | Brain R1925. `deploy-2026-10-18-hub-deferred` `6f56931b`, smoke GREEN (R1937). |
+| Card 448 FIX1 (dml-roles) | BUILDING | Brain R1945, R1948. Build `84654c40` FAILED at W (R1944), CONTINUEd at W with FIX1 after preflight YES (R1950); critical path. |
+| Cos-outage (card `784`, deploy card `798`) | BUILT-NOT-MERGED | Brain R1922. Built `de3e15c8`, check ready YES (R1935); deploy hub `b6be075e` FAILED at gate G (c) on the old role pin (R1947); relaunches after 448 DEPLOYS. |
+| Test-llm reds (card `723`) | BUILT-NOT-MERGED | Brain R1837, R1893. Check ready YES (`e7dd621a`); deploy follows. |
+| Gemini grant (card `800`) | NOT STARTED (preflight YES) | HIS RULING R1942 (A). Build waits for 448 DEPLOYED (R1950). |
+| Gemini arm shadow builds LOW/MID/HIGH (717/718/719) | NOT STARTED | HIS RULING R1738; X1 LOW build FAILED, harness INCOMPLETE (R1853, R1855); MID/HIGH held until the grant card deploys. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

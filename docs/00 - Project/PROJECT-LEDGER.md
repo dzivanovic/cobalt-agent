@@ -4734,3 +4734,128 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-17*"` = `deploy-2026-10-17-band-routing-1015`, `deploy-2026-10-17-check-scratch-1016`, `deploy-2026-10-17-check-scratch-fr1`, `deploy-2026-10-17-gemini-builder-row`, `deploy-2026-10-17-gemini-probe-id`.
 - STOP LINE (L35), `reports/close-2026-10-16.md`: `CLOSE PUSHED 369f5496`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-17.md` `## 8`.
+
+### 2026-10-18 — Eight deploys land (F4 304, F23 503, 721, JEV keyed, agy-read, checkin-install, stop-guard-work, hub-deferred); Gemini grant ruled A; 448 FIX1 is the critical path
+- R1829 06:08 RECORD: new day, `cto-2026-10-18.md` opened by desk `8ea7dcd3`.
+- R1830 06:14 HIS RULING APPROVED: yes to JEV F12 (keyed wrapper allow string); "run tribunal and JEV build".
+- R1831 06:16 DESK RECORD: "tribunal" = Gemini arm; "JEV build" = card jev-keyed-1018, BAND HIGH.
+- R1832 06:17 LAUNCHED: drafters draft-jev-keyed (714) and draft-gemini-shadow-cards (716).
+- R1833 06:19 HIS RULING APPROVED: "do everything you need, and I want to run everything that is being blocked."
+- R1834 06:20 LAUNCHED: K5 gap-filler drafters (720, 722, 725, 727, 729) and preflight 724.
+- R1835 06:20 DESK RECORD: X1 runs as step 0 of the LOW shadow build on the gate seat.
+- R1836 06:22 RECORD: card 721 DRAFTED; ship D1 only; 9 landed trees cleaned via job-clean.sh.
+- R1837 06:22 RECORD: card 723 test_llm reds DRAFTED, 3 decisions, defaults.
+- R1838 06:23 DESK RECORD: S5 AT RISK, queue order set; preflight on 503 NO, amend drafter launched.
+- R1839 06:24 LAUNCHED: Sonnet preflights and drafters in parallel (721 prompt 734, 723 prompt 732).
+- R1840 06:26 LAUNCHED: Gemini cards 717 (LOW), 718 (MID), 719 (HIGH) DRAFTED, 7 decisions.
+- R1841 06:25 HIS RULING APPROVED: the desk does not idle; every turn ends with a live worker and watch.
+- R1842 06:25 LAUNCHED: drafter for K5 card stop-guard-work-1018 (prompt 738).
+- R1843 06:27 LAUNCHED: build 723 test-llm-reds (grok-4.7); Gemini LOW shadow build `c268db2c` on card 717.
+- R1844 06:28 DESK RECORD: desk `6dc78296` took over from `8ea7dcd3`; a REFRESH is never blocked.
+- R1845 06:30 RECORD: preflight prompts 740-743 written, cards 715 726 committed (`4b89bec1`).
+- R1846 06:31 LAUNCHED: Sonnet preflights 48b2bf26, 459dad39, aba4f50c, 01da75f1; drafter 54e985e4.
+- R1847 06:31 DESK RECORD: X8 probe PROBED; card 469 V2 drops the not-loaded cell.
+- R1848 06:32 LAUNCHED: build F23 503 `eec8d5ba` (BASE 749d48db).
+- R1849 06:33 LAUNCHED: build 304 recut `c294d27f`; preflight 48b2bf26 YES.
+- R1850 06:33 LAUNCHED: F21 r2 preflight; F21 and 721 amend drafters DRAFTED.
+- R1851 06:34 LAUNCHED: build 721 deploy-card-fixes (gate 3405eee1); JEV amend drafter 026ff39d.
+- R1852 06:35 LAUNCHED: build JEV keyed `9ab5496e` (HIGH, Opus 5.5).
+- R1853 06:38 RECORD: X1 result: LOW build `c268db2c` FAILED, cwd leg inconclusive; gate kept.
+- R1854 06:45 HIS RULING APPROVED: fixes A-D (MVP first, DAY PLAN, check-ins 06/12/18/24 ET, owned waits).
+- R1855 06:45 DESK RECORD: Gemini LOW X1 = harness INCOMPLETE, not a grade; MID 718, HIGH 719 held.
+- R1857 06:55 LAUNCHED: drafter `15719707` DRAFTED K5 card 751 checkin-install-1018; preflight 7a0ce477.
+- R1858 06:58 LAUNCHED: preflight 7a0ce477 NO (2 FAIL); amend drafter 218d4a5b (prompt 753).
+- R1859 06:59 LAUNCHED: build K5 checkin-install-1018 gate `a81b6332`.
+- R1860 07:06 RECORD: desk `6dc78296` ended; desk `6e861cb4` took pane w2:pV1.
+- R1861 07:07 LAUNCHED: day-open launched via Qwen pane w2:p5.
+- R1862 07:08 LAUNCHED: Sonnet preflights on prompts 755/756/757 (cards 739, 730 F20, 731 F5).
+- R1863 07:09 HIS RULING APPROVED: work first, tools second; agy read card drafted now.
+- R1864 07:10 LAUNCHED: drafter draft-agy-read (prompt 758, card 759).
+- R1866 07:12 LAUNCHED: preflights NO on cards 739 and 731 F5; amend drafters 760, 761.
+- R1867 07:13 LAUNCHED: preflight 0580fb58 on card 730 F20 NO (4 FAIL); amend drafter 762.
+- R1868 07:13 LAUNCHED: card 730 F20 amended; r2 preflight 641fc703 (prompt 765).
+- R1869 07:14 LAUNCHED: build K5 stop-guard-work-1018 gate `3810610a` (grok-4.7).
+- R1870 07:14 LAUNCHED: build F20 f20-cos-1018 `a3892ec0` (HIGH, Opus 5.5).
+- R1871 07:16 LAUNCHED: drafter ef537145 DRAFTED card 759 agy-read-1018; preflight 4d762d3d (prompt 766).
+- R1872 07:17 DESK RECORD: card 759 defaults 1 and 4 KEEP; bounds to be amended in after preflight.
+- R1873 07:19 LAUNCHED: preflight 4d762d3d YES (14/0); amend drafter 56964d51 (prompt 767).
+- R1874 07:21 LAUNCHED: card 759 amended; r2 preflight cd2c7e76 (prompt 768).
+- R1875 07:22 LAUNCHED: build test-llm-reds-1018 BUILT (tip 31b483b9); check 4a8030b1 on card 723.
+- R1876 07:24 LAUNCHED: build K5 agy-read-1018 gate `8138ddeb` (MID, grok-4.7).
+- R1877 07:25 RECORD: day-open 10-18 GREEN, 6 of 6 PASS.
+- R1878 07:28 LAUNCHED: JEV build `9ab5496e` FAILED at W (W-1); widen drafter 39f74330 (prompt 769).
+- R1879 07:29 LAUNCHED: card 715 widened by one test (`329fc1ef`); CONTINUE: W sent to `9ab5496e`.
+- R1880 07:30 RECORD: wake-up of desk `97f862cd`; ten watches re-armed, day-open GREEN.
+- R1881 07:40 LAUNCHED: card 721 BUILT `cc4995b6`; check `e1d5fe18`.
+- R1882 07:56 LAUNCHED: F4 304 recut BUILT `51b03e00`; check `f5b70a3e`.
+- R1883 08:19 LAUNCHED: card 751 checkin-install BUILT `d5acbada`; check `f138e1ff`.
+- R1884 08:21 LAUNCHED: JEV keyed BUILT `9780e4eb`; check `e20fba10`.
+- R1885 08:40 RECORD: 721 check `e1d5fe18` ready YES (findings 5 fixed or dropped).
+- R1886 08:42 RECORD: F23 503 build `eec8d5ba` FAILED at W (skip outside allowed set); brain asked A or B.
+- R1887 08:44 LAUNCHED: brain direction: deploy 721 alone now; deploy card 770 written (TIP 0f104d47).
+- R1888 08:45 LAUNCHED: brain on 503 DECISION W: fix-round row adds live test to ALLOWED SKIPS; drafter b5d37c59.
+- R1889 08:55 LAUNCHED: card 503 FIX1 row drafted (`5745b511`); preflight c94e7154 (prompt 772).
+- R1890 09:00 LAUNCHED: card 503 FIX1 preflight YES (14/0); CONTINUE: FIX1 sent to `eec8d5ba`.
+- R1891 09:05 LAUNCHED: agy-read 759 BUILT `2b27c4e6`; check `082de1a7`.
+- R1892 09:10 LAUNCHED: stop-guard-work 739 BUILT `9b9177ea`; check `370e8711`.
+- R1893 09:16 RECORD: card 723 test-llm-reds CHECK DONE ready YES (`e7dd621a`).
+- R1894 09:25 RECORD: 751 check ready NO (tip 3108359f, held D1); brain asked (a)/(b).
+- R1895 09:30 LAUNCHED: brain on 751 D1: option (a); drafter 4be06ba8 (prompt 773).
+- R1896 09:40 LAUNCHED: card 751 fix-round row drafted (`4b685aeb`); preflight 7e89e7ca (prompt 774).
+- R1897 09:50 RECORD: 751 F1 preflight YES (16 checks, 2 cosmetic fails); launcher refused CONTINUE on a routed band.
+- R1898 09:55 DESK RECORD: routed card's fix round re-banded HIGH; card 751 BAND HIGH (`95207ab8`).
+- R1899 09:17 RECORD: wake-up of desk `66fbbbda`; six watches re-armed (times R1881-R1898 were estimates).
+- R1900 09:31 RECORD: F4 304 check ready YES (report 220f03a1); 721 deploy refused, lock held by F20 build.
+- R1901 10:00 RECORD: agy-read 759 check ready YES (report 6401c9b8); deploy card 775 written.
+- R1902 10:01 RECORD: JEV keyed 715 check ready YES (report 13ccb79b); deploy card 776 written.
+- R1903 10:08 RECORD: stop-guard-work 739 check ready YES (report db1110e0); deploy card 777 written.
+- R1904 10:19 LAUNCHED: card 503 FIX1 BUILT `72c8a069`; check `5d423ebb`.
+- R1905 10:39 LAUNCHED: F20 BUILT `a8dad394`; deploy 721 hub `3f4a4f9d`.
+- R1906 11:35 RECORD: deploy 721 DEPLOYED `5953dfe0` (tag deploy-2026-10-18-deploy-card-fixes, smoke GREEN).
+- R1907 11:37 LAUNCHED: F20 check `8bbc1308`; F4 304 deploy refused, lock held by 503 check.
+- R1908 11:52 LAUNCHED: F23 503 check ready YES (report 8df4ca7d); F4 deploy hub `4620d884` FAILED at STEP-C.
+- R1909 11:50 RECORD: RECUT f4-refresh attempt 2 FAILED at C (plist step not on the list; desk runs it as its own job).
+- R1910 12:48 RECORD: F4 304 attempt 2 DEPLOYED `54feb833` (tag deploy-2026-10-18-f4-refresh-attempt2, smoke GREEN).
+- R1911 13:08 DESK RECORD: F20 730 one fix round (HIGH, Opus), scoped check, then deploy.
+- R1912 14:08 RECORD: F23 503 DEPLOYED `7398d4a7` (tag deploy-2026-10-18-f23-playbook, smoke GREEN); drafter prompt 780.
+- R1913 14:01 LAUNCHED: build 751 F1 fix round `97e457fb`; desk `a9af7c31` launched at 255,000 tokens.
+- R1914 14:06 RECORD: wake-up of desk `a9af7c31`; three watches re-armed.
+- R1915 14:32 LAUNCHED: card 751 F1 fix round BUILT `a55810c2`; scoped check `bccb3220`.
+- R1916 14:36 LAUNCHED: deploy agy-read (card 775) hub `ef5353dc`.
+- R1917 15:28 RECORD: agy-read DEPLOYED `c91162be` (tag deploy-2026-10-18-agy-read, smoke GREEN).
+- R1918 15:34 LAUNCHED: F20 fix-row preflight `ba884c86` and deploy JEV keyed hub `bfd5f8c0`.
+- R1919 15:45 LAUNCHED: F20 fix-row preflight YES (22/0); fix-round builder `275a2b50`.
+- R1920 16:26 RECORD: card 751 F1 scoped check ready YES (tip 964ba1b5); `bccb3220` closed.
+- R1921 16:27 RECORD: JEV keyed 776 DEPLOYED `093993f1` (tag deploy-2026-10-18-jev-keyed, smoke GREEN).
+- R1922 16:29 DESK RECORD: Gemini fresh shadow on 717; draft com.cobalt.cos deploy-outage K5 card now.
+- R1923 16:30 LAUNCHED: drafter `b111fa5b` for K5 card cos-outage-1018; Gemini fresh shadow REFUSED.
+- R1924 16:32 DESK RECORD: DESK DEFECT, asking Dejan to type `rm` skipped scratch-clean.sh; ask withdrawn.
+- R1925 16:33 LAUNCHED: drafter `0a7eb347` for hub-deferred-1018; shadow 717 REFUSED at SHADOW-HUB GRANT.
+- R1926 16:42 LAUNCHED: cos-outage-1018 preflight YES (22/0); build `41081683` (LOW, grok-4.7).
+- R1927 16:36 LAUNCHED: hub-deferred card 787 preflight YES (24/0); build `351424ca`; F20 fix round BUILT `d5cbdd7a`.
+- R1928 16:40 LAUNCHED: deploy card 751 (782) hub `26c87aa2`; F20 scoped check `8533a37e`.
+- R1929 17:38 RECORD: checkin-install 751 DEPLOYED `5d6f63fc` (tag deploy-2026-10-18-checkin-install, smoke GREEN).
+- R1930 17:40 RECORD: desk `f5cf9fb2` took over from `a9af7c31`; watches re-armed.
+- R1931 17:41 LAUNCHED: hub-deferred BUILT `79b8ac8e`; check `c9aaedda`.
+- R1932 17:45 LAUNCHED: cos-outage-1018 BUILT `de3e15c8`; check `471d521a`.
+- R1933 17:54 LAUNCHED: F20 check `8533a37e` ready YES (tip f3365e23); deploy 777 hub `ac0cfc95`.
+- R1934 18:06 DESK RECORD: S5 count 2 of 6 (JEV off the six); card 448 launches once BASE is filled.
+- R1935 18:50 RECORD: stop-guard-work 777 DEPLOYED `ba601740` (tag deploy-2026-10-18-stop-guard-work); checks 787 and 784 READY YES.
+- R1936 18:53 LAUNCHED: card 448 build `84654c40` (BASE e7ef198a), F16 drafter `690401a3`, deploy 791 hub `2c1de79b`.
+- R1937 19:50 RECORD: deploy 791 hub-deferred DEPLOYED `6f56931b` (tag deploy-2026-10-18-hub-deferred, smoke GREEN); F16 card 790 DRAFTED.
+- R1938 19:52 LAUNCHED: F20 trial merge conflicts, port job f20-cos-fr1; drafter `5d79738b`, F16 preflight `dcd0cc68`.
+- R1939 19:54 LAUNCHED: F20 port drafter done; preflight `bbba5a36`; F16 preflight NO, amend drafter `ce64027d`.
+- R1940 19:58 LAUNCHED: F20 port preflight YES; Opus build `94689c99` (f20-cos-fr1); deploy card 798 written.
+- R1941 20:01 RECORD: wake-up of desk `15d38ca7`; `f5cf9fb2` stopped; watches re-armed.
+- R1942 20:47 HIS RULING APPROVED: "A for gemini", a K5 card where desk-launch.sh shadow adds and removes the one write_file rule.
+- R1943 20:48 LAUNCHED: Opus drafter (prompt 799) for card gemini-grant-1018 (HIGH).
+- R1944 20:48 RECORD: card 448 build `84654c40` FAILED at W (test_db_credentials.py:211 red); kept, brain asked.
+- R1945 20:49 LAUNCHED: brain: 448 red is the old pin; drafter `860315a8` (prompt 801); lock released.
+- R1946 20:50 LAUNCHED: deploy cos-outage (card 798).
+- R1947 21:33 RECORD: deploy cos-outage 798 hub `b6be075e` FAILED at gate G (c), old role pin; hub removed, main clean.
+- R1948 21:33 DESK RECORD: cobalt_dev holds 448's five memberships; 448 first, then F20 takes main's exact-five test.
+- R1949 21:34 LAUNCHED: Sonnet preflights for 448 FIX1 (prompt 802) and gemini-grant-1018 card 800 (prompt 803).
+- R1950 21:38 LAUNCHED: preflights YES (448 FIX1 13/0, card 800 17/0); builder `84654c40` CONTINUEd at W.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-18*"` = `deploy-2026-10-18-agy-read`, `deploy-2026-10-18-checkin-install`, `deploy-2026-10-18-deploy-card-fixes`, `deploy-2026-10-18-f23-playbook`, `deploy-2026-10-18-f4-refresh-attempt2`, `deploy-2026-10-18-hub-deferred`, `deploy-2026-10-18-jev-keyed`, `deploy-2026-10-18-stop-guard-work`.
+- STOP LINE (L35), `reports/close-2026-10-17.md`: `CLOSE PUSHED 24c00696`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-18.md` `## 8`.
