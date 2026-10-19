@@ -355,6 +355,11 @@ def test_the_route_must_be_a_registered_route_name(tmp_path, route):
         vr.load_agent(_agent(tmp_path, route=route))
 
 
+def test_the_route_must_be_a_chat_route_not_the_embed_route(tmp_path):
+    with pytest.raises(vr.AgentConfigError):
+        vr.load_agent(_agent(tmp_path, route="local.embed"))
+
+
 @pytest.mark.parametrize("words", [["yes", "yeah"], ["yep"], [], ["Yes"]])
 def test_confirm_words_are_exactly_yes(tmp_path, words):
     with pytest.raises(vr.AgentConfigError):
