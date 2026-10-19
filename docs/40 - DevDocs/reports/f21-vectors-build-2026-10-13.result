@@ -1,0 +1,15 @@
+job=f21-vectors-1013
+tip=c772a516
+on=9436c975
+migration=0028, rolled back
+offline=8851/0
+with_db=5750/0
+live_note=147/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset com.cobalt.cos com.cobalt.radar
+rows=5 of 5
+self_check=2 of 3
+decisions=8
+for_dejan=1
+tokens=325446
