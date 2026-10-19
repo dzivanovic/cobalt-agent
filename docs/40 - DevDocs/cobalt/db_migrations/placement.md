@@ -86,3 +86,7 @@ One comment line for `0023_radar_price_floor`: no table; it widens `radar_member
 
 ## 2026-10-18 — f20-cos-1018
 `MODULE_TABLES` gains `cobalt_hitl_requests`, `cobalt_cos_sessions`, `cobalt_cos_turns`, all `Side.USER` (card 730 DECISION 4: his approvals and his conversation, the `voice_turns` precedent). Created by `HitlStore.ensure_schema` / `CosStore.ensure_schema`, not by `FORWARD`. Tests: `test_hitl_offline.py::test_the_table_is_placed`, `test_hitl_db.py`, `test_cos_db.py`.
+
+## 2026-10-19 — f21-genesis-1013
+
+`CREATED_TABLES` gains `genesis_chunk: Side.USER` after `strike_alerts` (0026, F21 chunk 1, FINAL F-02 / F-15): his ledger and vault history chunked for recall (L32).
