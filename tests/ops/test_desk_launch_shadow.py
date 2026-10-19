@@ -676,3 +676,15 @@ def test_g3_the_file_is_byte_equal_but_for_the_one_rule(desk):
     assert failed.returncode == 1, failed.stderr
     assert desk.agy.read_bytes() == b
     assert desk.agy.stat().st_mode & 0o777 == 0o640
+
+
+def test_g1_truncated_json_that_mentions_read_url_is_the_json_refusal(desk):
+    card = signed_gemini(desk)
+    desk.agy.write_text('{"permissions": {"allow": ["read_url(*)"]')
+    before = desk.agy.read_bytes()
+    refused(
+        desk.run(str(card), "--model", "gemini-4-argon-high", dry=False),
+        f"shadow: gemini: {desk.agy} is not valid JSON with a permissions.allow list; nothing written",
+    )
+    assert desk.agy.read_bytes() == before
+    assert not desk.calls.exists()
