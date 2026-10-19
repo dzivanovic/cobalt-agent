@@ -159,3 +159,12 @@ ONE approved production write (class K3, his 2026-10-12 R1138): backup first, th
 |---|---|---|---|---|---|---|
 
 `command`: a `COBALT_ENV=production uv run cobalt …` command, not a `db migrate`, `db query`, `db dev-rebuild` or `backup` verb, holding none of `" ' \ $` `` ` `` `| & ; < > * ? % #`; `table`: `system.<name>` or `user.<name>`; `count read`: a `COBALT_ENV=production uv run cobalt db query --side … --prod …` read naming the table; `expected rows`: digits; `backup`: exactly `COBALT_ENV=production uv run cobalt backup run`; `inverse`: `none` or the `cobalt` command that undoes the write. A `db apply` command (`COBALT_ENV=production uv run cobalt db apply --side <side> --prod --sha256 <64 hex> <date>/<nn>-<name>-apply.sql`, card 417): the file `prompts/<date>/<nn>-<name>-apply.sql` is committed beside the card, and the body holds `## SQL` with ONE fenced block (a line ```` ```sql ````, the file's lines, a line ```` ``` ````), byte-equal to the file. `## RECORDS` optional. `desk-launch.sh` refuses anything else (card 392 W2), a report already present, any resume, and a live `deploy-hub-` or `prodwrite-` session.
+
+## A MIGRATION ROW, CHECKLIST (card 448)
+A row that adds a migration under `src/cobalt/db_migrations/` carries each of these, one line each (the practice of card 73 rows S3 and W1):
+1. The number is the next free on main (`ls src/cobalt/db_migrations/`); a number an open design names is said in `## RECORDS`.
+2. `FORWARD` last and `REVERSE` first in `src/cobalt/db_migrations/__init__.py`, plus its two docstring lines; every test pinning the previous head moved one place out (`grep -rn "<previous number>" tests`).
+3. A new table's side in `placement.py` `CREATED_TABLES`; a user-side table carries `user_id` (`0001_schemas.sql:42-49`).
+4. A NEW TABLE ADDS ITS GRANT in the same file: `GRANT SELECT, INSERT, UPDATE, DELETE ON <table> TO cobalt_apply_<side>` and `GRANT USAGE` on its sequences (never ownership, never `CREATE`); the table's rollback drop takes the grant with it, and `tests/cobalt/test_dml_roles_db.py` (G1b) fails on a side table without it.
+5. A with-DB test needing the level: `ops/desk/gate-lists.md`, its `--deselect <id>` at the end of PASS 1 and its id at the end of PASS 2.
+6. The deploy card's `MIGRATIONS` line and its `## READ-BACK`.

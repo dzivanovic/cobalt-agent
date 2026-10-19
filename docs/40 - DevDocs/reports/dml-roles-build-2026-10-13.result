@@ -1,0 +1,15 @@
+job=dml-roles-1013
+tip=ce3b9dc1
+on=e7ef198a
+migration=0025, rolled back
+offline=8653/0
+with_db=5610/0
+live_note=147/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.radar
+rows=8 of 8
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=105131

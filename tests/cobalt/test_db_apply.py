@@ -405,7 +405,7 @@ class FakeCursor:
 class FakeConn:
     """Records every call; statement `fail_at` (1-based) raises."""
 
-    def __init__(self, *, role="cobalt_user", version="160004", fail_at=None):
+    def __init__(self, *, role="cobalt_apply_user", version="160004", fail_at=None):
         self.role, self.version, self.fail_at = role, version, fail_at
         self.autocommit = True
         self.events: list = []
@@ -474,19 +474,54 @@ def test_t3_a_session_not_on_the_side_role_sends_no_statement(capsys):
     assert ("commit",) not in conn.events
 
 
-def test_t7_the_preamble_runs_in_order_and_every_statement_is_prepared():
-    conn = FakeConn()
-    run(conn)
+@pytest.mark.parametrize("side", [Side.USER, Side.SYSTEM])
+def test_t7_the_preamble_runs_in_order_and_every_statement_is_prepared(side):
+    from cobalt.db_apply import APPLY_ROLES
+
+    conn = FakeConn(role=APPLY_ROLES[side])
+    run(conn, side=side)
     executed = [e[1] for e in conn.events if e[0] == "execute"]
-    assert executed[:4] == [
+    assert executed[:5] == [
         "SET LOCAL statement_timeout = '60s'",
         "SET LOCAL lock_timeout = '5s'",
+        f"SET LOCAL ROLE {APPLY_ROLES[side]}",
         "SHOW server_version_num",
         "SELECT current_user",
     ], executed
     assert [e[1] for e in conn.statements()] == THREE
     assert all(e[2] == {"prepare": True} for e in conn.events if e[0] == "execute" and e[1] in THREE)
     assert conn.autocommit is False
+
+
+def test_t10_a_session_still_on_the_side_role_sends_no_statement(capsys):
+    conn = FakeConn(role="cobalt_user")
+    assert run(conn) == 1
+    assert conn.sent == 0
+    assert ("commit",) not in conn.events
+    assert ("rollback",) in conn.events
+    out = capsys.readouterr()
+    assert "not 'cobalt_apply_user'" in out.out + out.err
+
+
+def test_t11_the_apply_role_is_one_per_side():
+    assert db_apply.APPLY_ROLES == {Side.USER: "cobalt_apply_user", Side.SYSTEM: "cobalt_apply_system"}
+
+
+def test_t12_a_refused_set_role_sends_no_statement(capsys):
+    class SetRoleRefused(FakeConn):
+        def execute(self, query, params=None, **kw):
+            if str(query).startswith("SET LOCAL ROLE"):
+                self.events.append(("execute", str(query), kw))
+                raise RuntimeError("constructed: permission denied to set role")
+            return super().execute(query, params, **kw)
+
+    conn = SetRoleRefused()
+    assert run(conn) == 1
+    assert any(e[1].startswith("SET LOCAL ROLE") for e in conn.events if e[0] == "execute"), conn.events
+    assert conn.sent == 0
+    assert ("commit",) not in conn.events
+    out = capsys.readouterr()
+    assert "FAILED before statement 1" in out.out + out.err
 
 
 def test_t8_a_server_of_another_major_sends_no_statement(capsys):

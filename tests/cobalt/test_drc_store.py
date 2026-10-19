@@ -65,9 +65,10 @@ def test_the_pair_exists_and_is_registered_last():
     assert SQL.exists() and ROLLBACK.exists()
     # S3 exits C1's 0021, F15 P1's 0022, the price floor's 0023 and S4-P2's 0024 sit above the DRC lane:
     # every index is four places further out.  # S4-P2 (E4)
-    assert FORWARD[-9] == SQL and [p.name for p in FORWARD[-8:-6]] == [
+    # DML roles (0025): one place further out again.
+    assert FORWARD[-10] == SQL and [p.name for p in FORWARD[-9:-7]] == [
         "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[8] == ROLLBACK and [p.name for p in REVERSE[6:8]] == [
+    assert REVERSE[9] == ROLLBACK and [p.name for p in REVERSE[7:9]] == [
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql"]
 
 
@@ -143,6 +144,7 @@ def test_the_rollback_drops_exactly_the_three_tables_children_first():
 
 def test_down_to_0011_on_this_tree_selects_only_this_rollback():
     assert [p.name for p in _rollback_paths("0011")] == [
+        "0025_dml_roles.rollback.sql",  # DML roles (0025)
         "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",
         "0022_prediction_records.rollback.sql",
