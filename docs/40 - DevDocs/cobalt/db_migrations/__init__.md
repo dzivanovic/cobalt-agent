@@ -284,3 +284,4 @@ name `0021_legs.rollback.sql` first in every rollback list.
 
 ## 2026-10-18 — dml-roles-1013
 `FORWARD` gains `0025_dml_roles.sql` (last) and `REVERSE` its rollback (first), card 448: NOLOGIN NOINHERIT `cobalt_apply_user` / `cobalt_apply_system` (cluster-wide), `cobalt_app` their member, SELECT/INSERT/UPDATE/DELETE on their own schema's tables, USAGE on that schema and its sequences, and the same as default privileges for the side role and the migration login. No table. The rollback revokes those grants and default privileges in this database only; it never drops a role or revokes the membership. Every head pin moved one place out with a `# DML roles (0025)` comment.
+Check of dml-roles-1013 (O2): `test_dml_roles_offline.py::test_o4_…` pins each revoke of the rollback (tables, sequences, schema and the two default-privilege revokes, per side).
