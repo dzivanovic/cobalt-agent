@@ -980,6 +980,70 @@ tunables:
     source: ruling
     consumers: ["cobalt.jobs.watchdog (a one-shot past its cadence by this much = MISSED)"]
 
+  # --- the chief of staff + HITL (F20 FINAL §2 tunables row; F-13, F-15) ---
+  # 30 and 900 are the kit's start values (spike Q4) — UNVERIFIED; X3/X14
+  # measure them before the deploy. The null rows carry NO value from any
+  # house (card 730 DECISION 7): every reader raises on a null, missing,
+  # non-integer or <= 0 value (L1), so the deploy cannot pass them unset.
+  # cos.session_rotate_at ships null because X19 loaded a null row (F-13).
+  - key: cos.max_turns
+    value: 30
+    unit: count
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.cos.session (Cobalt counts rounds; the CLI is killed past this)"]
+
+  - key: cos.turn_timeout_s
+    value: 900
+    unit: duration
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.cos.session (asyncio.wait_for of one turn)",
+                "configs/cobalt/jobs.yaml com.cobalt.cos timeout_s (> this + one poll)"]
+
+  - key: cos.poll_interval_s
+    value: null
+    unit: duration
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.cos.run (the resident loop's sleep between iterations)"]
+
+  - key: cos.session_rotate_at
+    value: null
+    unit: time
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.cos (daily session rotation, FINAL C8 — no reader until a value is ruled)"]
+
+  - key: hitl.request_ttl_min
+    value: null
+    unit: min
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.hitl.actions (expires_at = now + this)", "cobalt.heartbeat.probes.hitl"]
+
+  # The /hitl page's https base URL for the card link (`<base>/hitl/<id>#k=<key>`).
+  # The tailnet front's name is not in the repo: null until ruled; the card
+  # refuses to send while it is (cobalt.hitl.card.page_base_url).
+  - key: hitl.page_base_url
+    value: null
+    unit: label
+    scope: global
+    dynamic: false
+    status: proposed
+    source: dwv
+    consumers: ["cobalt.hitl.card (the card DM's page link)"]
+
   # --- nightly replay (S2-P4 STEP-4, plan R1-16) --------------------------
   # The replay's ENFORCED deadline sits this far before com.cobalt.backup's
   # schedule, so no replay write is still landing when the 21:40 snapshot

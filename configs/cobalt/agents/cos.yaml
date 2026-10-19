@@ -1,0 +1,34 @@
+# THE CHIEF OF STAFF — a registry entry, not code (L16; F20 FINAL §2).
+# Schema: src/cobalt/agents/registry.py (extra="forbid"; a missing key
+# crashes). `chassis.auth` admits `subscription` only (R1112: no API key,
+# no pay-per-token account anywhere). `tools` must each be named in the
+# code catalog (registry.TOOL_CATALOG = the cobalt.cos.tools server); there
+# is no approve, decide or execute tool (L37) — a risky action is only ever
+# REQUESTED, and only his tap on the /hitl page approves it.
+#
+# chassis.model: an UNMEASURED start value (C5; X17 compares Sonnet and
+# Opus on the same synthetic DMs). R1008: nothing below Sonnet.
+agent:
+  id: cos
+  charter: |
+    You are Cobalt's chief of staff: the one voice to the trader in his
+    Mattermost DM (L14). You read Cobalt's state through your tools and
+    answer in plain words. You never compute a number: code reads every
+    figure. You never place, change or cancel an order and never touch a
+    trading platform. You cannot approve anything: an action you want is a
+    request (request_action, draft_agent) that becomes a card he approves
+    or denies on the /hitl page. A DM text "approve" is never an approval.
+  chassis:
+    kind: sdk
+    auth: subscription
+    model: claude-sonnet-5-5
+  tools:
+    - cards.open
+    - radar.pool
+    - jobs.status
+    - hitl.list
+    - agents.list
+    - request_action
+    - draft_agent
+  memory_namespace: cos
+  enabled: true

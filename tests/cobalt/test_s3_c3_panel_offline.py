@@ -57,6 +57,8 @@ NEW_ROUTES = [
 BASE_ROUTES = [
     "/", "/radar", "/api/radar/pool", "/api/health", "/api/prefill", "/size", "/fill", "/attest",
     "/settings/daily", "/settings/daily/apply",  # DRC D4's block, directly after /attest (the 09-30 seam)
+    # F20 C2c: the HITL block, after /settings/daily/apply, before /card/{card_id}/move
+    "/hitl", "/hitl/{row_id}", "/hitl/{row_id}/approve", "/hitl/{row_id}/deny",
     "/card/{card_id}/move", "/card/{card_id}/stop", "/radar/card/{card_id}/key",
     "/radar/card/{card_id}/dot/{factor}", "/radar/card/{card_id}/promote", "/radar/card/{card_id}/release",
     "/drc", "/drc/import", "/drc/no-trade", "/drc/scan",  # DRC D2's block, last in the file (S-4)

@@ -122,6 +122,71 @@ def radar(
     return Probe("radar", True, f"scanning ({session.value}), members {row.get('members', 0)}")
 
 
+#: F20 C4b: the chief of staff's registry label.
+COS_LABEL = "com.cobalt.cos"
+
+
+def _cos_enabled() -> bool:
+    from cobalt.jobs.config import load_job_registry
+
+    return load_job_registry().spec(COS_LABEL).enabled
+
+
+def cos(now: datetime, *, enabled: bool | None = None, job_store=None, cos_store=None) -> Probe:
+    """F20: the CoS loop's own stamp is fresh and its last turn did not fail.
+
+    RED is `ok=False` (there is no AMBER). While the registry row ships
+    `enabled: false` nothing runs, so the answer is unknown — never red."""
+    if enabled is None:
+        enabled = _cos_enabled()
+    if not enabled:
+        return Probe("cos", True, "unknown — NOT PROBED, registry enabled: false")
+    from cobalt.jobs.config import load_job_registry
+
+    if job_store is None:
+        from cobalt.jobs.store import JobStore
+
+        job_store = JobStore()
+    if cos_store is None:
+        from cobalt.cos.store import CosStore
+
+        cos_store = CosStore()
+    row = job_store.get(COS_LABEL)
+    if row is None or row.get("heartbeat_at") is None:
+        return Probe("cos", False, "no heartbeat — the CoS loop has never stamped")
+    limit = load_job_registry().spec(COS_LABEL).timeout_s / float(_tunable("jobs.heartbeat_fraction"))
+    stale = (now - row["heartbeat_at"]).total_seconds()
+    if stale > limit:
+        return Probe("cos", False, f"dead session: heartbeat {stale / 60:.0f} min stale (limit {limit / 60:.0f} min)")
+    last = cos_store.last_turn()
+    if last is not None and last.get("state") == "failed":
+        return Probe("cos", False, f"last turn failed: {last.get('error')}")
+    return Probe("cos", True, f"loop stamping ({stale:.0f}s ago)")
+
+
+def hitl(now: datetime, *, enabled: bool | None = None, store=None) -> Probe:
+    """F20: no `pending` request past its TTL that the sweeper missed, and no
+    `failed` execution. RED is `ok=False`; unknown while the CoS row is
+    `enabled: false` (no executor or sweeper runs)."""
+    if enabled is None:
+        enabled = _cos_enabled()
+    if not enabled:
+        return Probe("hitl", True, "unknown — NOT PROBED, registry enabled: false (com.cobalt.cos)")
+    if store is None:
+        from cobalt.hitl.store import HitlStore
+
+        store = HitlStore()
+    counts = store.probe_counts()
+    findings = []
+    if counts["pending_past_ttl"]:
+        findings.append(f"{counts['pending_past_ttl']} pending request(s) past the TTL")
+    if counts["failed"]:
+        findings.append(f"{counts['failed']} failed execution(s)")
+    if findings:
+        return Probe("hitl", False, "; ".join(findings))
+    return Probe("hitl", True, "no stale request, no failed execution")
+
+
 # ---------------------------------------------------------------------
 
 

@@ -145,6 +145,10 @@ def take_beat(*, now: Optional[datetime] = None, probe: bool = True) -> Beat:
         probe_mod.vaultwrite_blocks(now=ts),
         probe_mod.redactions(interval_min(), now=ts),
         probe_mod.radar(ts),
+        # F20 C4b (X9: this is the call site): unknown, never red, while
+        # com.cobalt.cos ships `enabled: false`.
+        probe_mod.cos(ts),
+        probe_mod.hitl(ts),
     ]
     try:
         beat.jobs = sweep(now=ts, probe=probe)

@@ -402,3 +402,6 @@ R689: `POST /radar/card/{id}/disarm` takes the posted `reason` (stripped) only i
 
 ## 2026-10-09 — s4-p2-1009
 S4-P2 S1-S3: `from . import strike as strike_web` and `app.include_router(strike_web.router)` beside voice's, serving `/strike`, `/strike/stream` and `/strike/ack` (`aset/strike.md`). Nothing else changed.
+
+## 2026-10-18 — f20-cos-1018
+F20 C2c: one block after `/settings/daily/apply`, before `/card/{card_id}/move`: `GET /hitl` (recent requests, pending first), `GET /hitl/{id}` (payload, reason, sha256, the rendered file and, for a deactivate, the current file; every field through `html.escape`; a page script copies `k` from the link fragment into the two forms), `POST /hitl/{id}/approve` and `POST /hitl/{id}/deny`. Approve checks the kill switch first, then runs ONE statement (`status='approved'` WHERE id, `pending`, `expires_at>now()`, the reviewed sha256 and `approve_key_sha256 = sha256(k)`); zero rows → `REFUSED: <reason read back>`, nothing written. Deny needs the key and records an optional reason. These two routes are the only `pending` → `approved`/`denied` write (L37, T3). The store is reached through `_hitl_store()` (the test seam). Tests: `test_hitl_web.py`, `test_hitl_offline.py::test_no_approve_symbol_outside_the_two_routes`, `test_hitl_db.py`.

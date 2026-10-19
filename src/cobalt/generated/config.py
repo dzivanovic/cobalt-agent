@@ -56,8 +56,24 @@ class GeneratedConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     files: list[GeneratedFile] = Field(min_length=1)
+    #: F20 C2e (FINAL F-07): directories whose new or changed files are
+    #: committed ONLY when their bytes hash to the sha256 of an `executed`
+    #: `cobalt_hitl_requests` row — the HITL card is the human review an
+    #: untracked file otherwise lacks. Anything else there fails the job.
+    hitl_dirs: list[str] = Field(default_factory=list)
     #: The commit subject. `{date}` is the only placeholder.
     message: str = Field(min_length=1)
+
+    @field_validator("hitl_dirs")
+    @classmethod
+    def _dirs_repo_relative(cls, v: list[str]) -> list[str]:
+        for d in v:
+            p = Path(d)
+            if p.is_absolute() or ".." in p.parts:
+                raise ValueError(f"hitl_dirs {d!r} must be REPO-RELATIVE with no `..`")
+        if len(set(v)) != len(v):
+            raise ValueError(f"duplicate hitl_dirs: {v}")
+        return v
 
     @field_validator("files")
     @classmethod
@@ -143,6 +159,10 @@ def load_generated_config(
             "This list is what a scheduled job runs `git add` on — an untracked "
             "entry would put a file into the history that no human reviewed."
         )
+
+    gone = [d for d in cfg.hitl_dirs if not (root / d).is_dir()]
+    if gone:
+        raise GeneratedConfigError(f"{cfg_path}: hitl_dirs that are not directories under {root}: {gone}")
     return cfg
 
 

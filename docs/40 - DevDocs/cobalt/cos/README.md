@@ -1,0 +1,41 @@
+# cobalt.cos — the chief of staff (F20)
+
+## 2026-10-18 — f20-cos-1018
+Built by card 730 from `docs/30 - Design/F20-FINAL-2026-10-11.md` (approved R1055; subscription only, R1112). One resident session he talks to in his Mattermost DM. `com.cobalt.cos` is registered `enabled: false` and its bootstrap is deferred: nothing runs until the deploy's D14 checklist, T10 and X1 (the build report's `BOOTSTRAP:` block).
+
+### Modules
+| file | what |
+|---|---|
+| `listener.py` | Deterministic DM reader (L2), no LLM in the watch loop. Per post: the bot's own posts are skipped; the kill phrase is matched FIRST (`killswitch.matches_kill_phrase`) → `killswitch.engage`, no turn row, no session; every other post (an "approve …" text included) is one `cobalt_cos_turns` row inserted `pending` before the session, then `running` → `done` / `failed`. There is no resume path: the switch stops this resident, so nothing here hears `COBALT RESUME` (F-31, T7'). |
+| `session.py` | The Agent SDK wrapper; the SDK is imported only inside `sdk_client_factory`. |
+| `tools.py` | The in-process tool server: `cards.open`, `radar.pool`, `jobs.status`, `hitl.list`, `agents.list` (read), `request_action`, `draft_agent` (request). No approve, decide or execute tool. Every tool returns text; a refusal is a `refused: …` result. |
+| `store.py` | `cobalt_cos_sessions`, `cobalt_cos_turns` (USER side, `migrations/0001_cobalt_cos.sql`). `message_ref` is UNIQUE (T11). |
+| `run.py` | The resident loop: each iteration `JobStore.beat` → listener poll → one executor claim → sweeper → outcome report. No `_Beater`, so a hung poll goes ZOMBIE (T12). Refuses to start while the `com.cobalt.agent` pidfile is alive (F-14). |
+| `cli.py` | `cobalt cos run [--dry-run]`. |
+
+### The session class (FINAL §4)
+- Allowed: the seven tools above (`mcp__cobalt__<name>`); built-in base set empty (`tools=[]`); every built-in also disallowed (Bash, Write, Edit, NotebookEdit, WebFetch, WebSearch, Task, Agent, Read, Grep, Glob, …).
+- `setting_sources=[]`, `strict_mcp_config=True` (spike D4). Mode `dontAsk`, never `bypassPermissions` (L55). No hook, no `can_use_tool` (C7, U1).
+- Child env: exactly `PATH`, `HOME`, `USER`, `LANG`, `COBALT_ENV`. The SDK merges the parent's `os.environ`, so the spawn runs with `os.environ` replaced by that set and restored after (L41).
+- cwd: `data/cos/scratch`. Model: `configs/cobalt/agents/cos.yaml` (Sonnet 5.5, UNMEASURED, X17).
+- Fails on `is_error` or a `terminal_reason` other than `completed`, never on subtype alone (D5); Cobalt counts rounds and kills the CLI tree at `cos.max_turns`; `asyncio.wait_for(cos.turn_timeout_s)`; no result → failed; every failure DMs; resume by stored id, a failed resume opens a fresh session and DMs.
+
+### Tables
+`cobalt_cos_sessions` (channel, agent_id, session_id, started_at, rotated_at, state active/rotated/failed) · `cobalt_cos_turns` (message_ref UNIQUE, state pending/running/done/failed, started_at, finished_at, num_turns, result_subtype, is_error, terminal_reason, error).
+
+### Tunables
+`cos.max_turns` 30, `cos.turn_timeout_s` 900 (kit values, UNVERIFIED, X3/X14), `cos.poll_interval_s` and `cos.session_rotate_at` null (no value set; readers raise).
+
+### Laws
+L2 (deterministic listener), L3 (one listener: refuses while the old agent lives), L18 (a turn row per post, heartbeat from the loop), L37 (no approve verb; a DM text is never an approval), L41 (no credential in the child env), L55 (never `bypassPermissions`).
+
+Tests: `test_cos_offline.py`, `test_cos_listener.py`, `test_cos_registry.py`, `test_cos_probes.py`, `test_cos_db.py` (with-DB).
+
+## 2026-10-18 — f20-cos-1018 (check)
+`session.py`: the open (`connect`) runs under `cos.turn_timeout_s` like the turn; a tool-result message is not a round; a max-turns stop keeps the partial reply. `listener.py`: a failed turn posts its partial reply; a raising turn ends its row `failed`; after the kill phrase no later post of the batch opens a session. `run.py`: the scratch cwd is emptied at start. Check O1–O6, G2–G4.
+
+## 2026-10-18 — f20-cos-1018 (fix round W)
+`run.py`: a failed run's `mark_finished` passes `result` as `job_run`'s does, so the resident's start and finish rows equal the wrapper's by field (G7; no `_Beater`, `jobs/wrapper.py` unchanged). The max-turns kill is the tree kill (`_kill_tree`: the CLI and every descendant; a `killpg` would hit the resident's own group), pinned by a real three-process stub (G5). `cobalt cos run` without `--dry-run` starts the resident (G6, pinned on fakes).
+
+## 2026-10-18 — f20-cos-1018 (check r2)
+`session.py`: `_SdkClient.connect` opens the CLI in a new session (the SDK's `anyio.open_process` wrapped for the open only), so the CLI leads its own process group; `_kill_tree` walks the tree, then `killpg`s that group, so a descendant reparented out of the tree when its parent exited dies too. The resident's own group is never signalled. Check r2 O1.

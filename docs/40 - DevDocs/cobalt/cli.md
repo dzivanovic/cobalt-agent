@@ -134,3 +134,6 @@ The registration puts `src/cobalt/classify/*` in
 
 ## 2026-10-18 — f23-playbook-1013
 `from cobalt.playbook import cli as playbook_cli` after the strike import and `playbook_cli.add_parser(sub)` after `strike_cli.add_parser(sub)` mount `cobalt playbook render [--date] [--out] [--dry-run]` (`playbook/README.md`). python-pptx loads inside the command only, so `import cobalt.cli` leaves `pptx` unloaded (`test_import_cobalt_cli_leaves_pptx_unloaded`).
+
+## 2026-10-18 — f20-cos-1018
+F20 C4d: `from cobalt.cos import cli as cos_cli`, `from cobalt.hitl import cli as hitl_cli`, `from cobalt.agents import cli as agents_cli` after the strike import; their `add_parser(sub)` after `strike_cli.add_parser(sub)`. Commands: `cobalt cos run [--dry-run]`, `cobalt agents list`, `cobalt hitl list [--limit N]`; read and dry-run only, no approve subcommand. None of them imports the Agent SDK (`test_import_cobalt_cli_leaves_the_sdk_unloaded`). The three packages join `com.cobalt.radar`'s static import reach.

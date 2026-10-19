@@ -83,3 +83,6 @@ One comment line for `0023_radar_price_floor`: no table; it widens `radar_member
 ## 2026-10-09 — s4-p2-1009
 
 `CREATED_TABLES` gains `strike_alerts: Side.USER` after `prediction_records` (0024, S4-P2 S3): one trader's strike alert records.
+
+## 2026-10-18 — f20-cos-1018
+`MODULE_TABLES` gains `cobalt_hitl_requests`, `cobalt_cos_sessions`, `cobalt_cos_turns`, all `Side.USER` (card 730 DECISION 4: his approvals and his conversation, the `voice_turns` precedent). Created by `HitlStore.ensure_schema` / `CosStore.ensure_schema`, not by `FORWARD`. Tests: `test_hitl_offline.py::test_the_table_is_placed`, `test_hitl_db.py`, `test_cos_db.py`.

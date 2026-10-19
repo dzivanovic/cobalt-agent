@@ -43,3 +43,9 @@ the three real entries contain spaces (`docs/40 - DevDocs/...`).
 
 ## Neighbours
 `config.py`, `cli.py`, `jobs/wrapper.py` (the F17 row this runs inside).
+
+## 2026-10-18 — f20-cos-1018
+F20 C2e (F-07): `_backed_hitl_files` reads `git status --porcelain -z --untracked-files=all -- <hitl_dirs>`; every new or changed file there is staged only when its bytes hash to the sha256 of an `executed` `cobalt_hitl_requests` row (`executed_sha`, default `HitlStore().backs_sha256`, asked only when such a file exists). One unbacked file or a deletion raises `GeneratedCommitRefused` before anything is staged. Backed files join the listed ones in the one commit and in the landed-paths check. Never pushes. Tests: `test_generated_hitl_dirs.py`.
+
+## 2026-10-18 — f20-cos-1018 (check)
+A file under `hitl_dirs` is backed only when its bytes hash to an executed row AND the `agent.id` they name is the file's stem (`_named_id`): an executed agent's bytes copied under another name refuse the run (X4). Check O7.
