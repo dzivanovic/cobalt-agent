@@ -1,12 +1,12 @@
 JOB: f20-cos
 LADDER: S5-P3 · F20
-BRANCH: deploy/f20-cos
-WORKTREE: deploy-f20-cos
+BRANCH: deploy/f20-cos-attempt2
+WORKTREE: deploy-f20-cos-attempt2
 BASE: main
 TIP: 83919213
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-f20-cos.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-f20-cos-attempt2.md
 RULINGS: 2026-10-11 R1055, 2026-10-11 R1112, 2026-10-18 R1833
-TAG: deploy-2026-10-19-f20-cos
+TAG: deploy-2026-10-19-f20-cos-attempt2
 MIGRATIONS: none
 SET: cos
 TICKERS: none
