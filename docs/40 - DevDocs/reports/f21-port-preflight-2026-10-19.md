@@ -1,0 +1,44 @@
+Preflight of card 468 as port job `f21-genesis-fr1` (read-only), 2026-10-19. Card `prompts/2026-10-13/468-f21-card.md`; drafter report `reports/draft-f21-port-2026-10-19.md`.
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | `git rev-parse --short=8 main` / `HEAD` | both `8854db35` | OK |
+| 2 | `git diff --name-only 91490502 main` (BASE proof: nothing after BASE outside `docs/`) | 13 paths, all under `docs/40 - DevDocs/` (prompts, reports); no `src`, `tests`, `configs`, `ops` | OK |
+| 3 | header JOB / BRANCH / WORKTREE / BASE / BAND / CLASS / RESTARTS / RULINGS | `f21-genesis-fr1` / `ops/f21-genesis-fr1` / `f21-genesis-fr1` / `91490502` / `HIGH` / `K2` / `com.cobalt.radar` / `2026-10-11 R1055`; TIP empty; REPORT in the worktree. The kind is the row id `PORT` (the F20 card 730 header has no KIND key either) | OK |
+| 4 | `grep -c "«FILL"` on the card | `0` | OK |
+| 5 | header `CHECK REPORT` against `CARD.md` header table (build column: `empty`) | card holds `CHECK REPORT: …/f21-genesis-fr1-check-2026-10-19.md`; the table says empty on a build card, filled by the desk at the check launch | FAIL |
+| 6 | `git diff --name-only 40e646ed a19a638a` | 44 names; minus the 2 `reports/f21-genesis-build-2026-10-13.{md,result}` = 42, as the card says | OK |
+| 7 | 42 split: 5 `src/cobalt/genesis/*.py`, 2 `0026` sql, `db_migrations/__init__.py`, `gate-lists.md`, 5 `cobalt/genesis/*.md`, `db_migrations/__init__.md`, 2 fixtures, 3 `test_genesis_*.py`, 18 pin tests (17 of G1 (c) + `test_dml_roles_offline.py`) = 38; plus `cli.py`, `cli.md`, `db_migrations/placement.md`, `placement.py` = 4 | matches the 44-name list one for one | OK |
+| 8 | `git diff --stat 40e646ed main --` over the 38 paths | empty (main touched none) | OK |
+| 9 | `git diff --name-only 40e646ed main -- src tests ops configs pyproject.toml "docs/40 - DevDocs/cobalt"` intersected with the 44 | exactly 4: `cobalt/cli.md`, `db_migrations/placement.md`, `src/cobalt/cli.py`, `src/cobalt/db_migrations/placement.py` | OK |
+| 10 | seam (1)(2) `src/cobalt/cli.py`: `git diff 40e646ed main` vs `git diff 40e646ed a19a638a` | main: hunk `@@ -84,6 +84,9` adds `cos_cli`, `hitl_cli`, `agents_cli` imports after the playbook import, and `@@ -546,6 +549,10` adds the `# F20 C4d …` comment + `cos_cli`, `agents_cli`, `hitl_cli` `add_parser(sub)` after `playbook_cli.add_parser(sub)`. Genesis: `+from cobalt.genesis import cli as genesis_cli  # noqa: E402` after the playbook import (`@@ -84`), `+genesis_cli.add_parser(sub)` after `playbook_cli.add_parser(sub)` (`@@ -546`). Card order (main's first, then genesis) matches; the card's "main's four lines" = comment + 3 | OK |
+| 11 | seam (3) `cobalt/cli.md` | both append after the `## 2026-10-18 — f23-playbook-1013` section (@@ -134): main `## 2026-10-18 — f20-cos-1018`, Genesis `## 2026-10-19 — f21-genesis-1013`; order in card as drafted | OK |
+| 12 | seam (4) `db_migrations/placement.md` | both append after `## 2026-10-09 — s4-p2-1009` (@@ -83): main `## 2026-10-18 — f20-cos-1018`, Genesis `## 2026-10-19 — f21-genesis-1013` | OK |
+| 13 | seam (5) `placement.py` | main `@@ -57` adds 3 `MODULE_TABLES` entries (`cobalt_hitl_requests`, `cobalt_cos_sessions`, `cobalt_cos_turns`); Genesis `@@ -114` adds `genesis_chunk: Side.USER` after `strike_alerts` in `CREATED_TABLES`; ~55 lines apart, no overlap | OK |
+| 14 | `ls src/cobalt/db_migrations` on main | ends `0025_dml_roles.sql` / `.rollback.sql`; no `0026` file; no `0012` (the known gap) | OK |
+| 15 | `git show a19a638a:src/cobalt/db_migrations/__init__.py` | docstring pair, `FORWARD` ends `0026_genesis_chunk.sql` after `0025_dml_roles.sql`, `REVERSE` starts `0026_genesis_chunk.rollback.sql` then `0025`; `0026` stays consistent with main's listing | OK |
+| 16 | PROOF count in the card | 42 = 38 byte-equal + 4 seam; the stop line asks for 42; each row's check named (`git diff a19a638a -- <file>` empty for the 38; seam hunks named for the 4) | OK |
+| 17 | `git show a19a638a` against `reports/f21-genesis-check-2026-10-13.md` | `CHECK DONE … tip: a19a638a … ready: YES … RESTARTS: com.cobalt.radar`; later heads add docs only (`git diff --name-only a19a638a ops/f21-genesis-1013 -- . ":(exclude)docs"` empty) | OK |
+| 18 | K10 RESTARTS class home: `src/cobalt/cli.py` gains `cobalt.genesis.cli` import; `jobs.yaml:193,203` `com.cobalt.radar` `imports: [cobalt.cli]`; `com.cobalt.aset` imports `[cobalt.aset.__main__, cobalt.aset.web]` (`:99`); `grep db_migrations\|cobalt.cli\|genesis` in those two modules | no hit. `.sql` → non-Python asset; `tests/` no resident; `docs/` DOCS; `gate-lists.md` operator script. `com.cobalt.radar` alone matches the check's `RESTARTS:` (not re-run: `cobalt jobs restarts` is not an allowed command) | OK |
+| 19 | overlap: Gemini 827 (`BASE 0ac7746e`, RESTARTS none) | `grep` of its card for `src/cobalt/cli.py`, `gate-lists.md`, `db_migrations/*.py`, `cli.md`, `placement.md`, `src/cobalt/genesis`, the two pin tests → no hit | OK |
+| 20 | overlap: F16 FIX1 (card 790, `s5/f16-close-1018`) | shares `src/cobalt/cli.py` (its V1/V2 sit in `_cmd_validate`, Genesis in imports `:84-86` and mounts `:546`; hunks apart) and `docs/.../cobalt/cli.md` (both append a section: second lander resolves the append); not the same lines | NOTE |
+| 21 | overlap: F5 731 (BASE `40e646ed`, K6 takes `0027`) | shares `db_migrations/__init__.py`, `placement.py` (adds `market_checkpoints` after `genesis_chunk`), `gate-lists.md`, `src/cobalt/cli.py` (K8 mount), and the same 18 pin files (it names them). F5 must land after Genesis; card 731 says so (DECISION 3) | NOTE |
+| 22 | the six items of F20 port preflight 795: (a) header per CARD.md, (b) file list complete and counted, (c) main-untouched stat empty, (d) each conflict file's seam hunks with both sides, (e) Edit/Write only, no merge, cherry-pick, rebase, revert; (f) PROOF lines checkable, CHECK ASKS scoped to PORT and the seams, no command string added to a launch line, card committed | (a) see #3 and #5; (b) #6–7; (c) #8; (d) #10–13; (e) PORT row text says "Edit/Write only (no git merge, no cherry-pick, no revert-of-revert, no rebase)"; (f) P1–P4 and X1–X5 scope to PORT and seams, no launch string in the card | OK |
+| 23 | `git merge-tree --write-tree` (795 check) | not an allowed command here; not re-run. The conflict set the card names (`cli.py`, `cli.md`, `db_migrations/placement.md`) equals what the hunks in #10–12 show (same anchor lines, both sides add) | NOTE |
+| 24 | drafter decision 1 (the 2 old build reports not ported) | acceptable: they are the old build's own report and result, F20 port precedent; PORT row, CHECK ASKS P1 ("neither old report in the diff against BASE") agree | OK |
+| 25 | drafter decision 2 (Genesis `cli.md` text kept verbatim, "after the playbook import") | acceptable: it is still true (the import follows the playbook line, before main's three); it keeps the PROOF byte-checkable. Cosmetic only: it is no longer the last import | OK |
+| 26 | drafter decision 3 (deploy gate's pass on the ported tree = `## OFFLINE` line of `gate-lists.md`; with-DB passes stay the deploy gate's) | acceptable: `gate-lists.md` is byte-equal to `a19a638a` and holds Genesis's `--deselect` / PASS 2 lines; with-DB under the dev lock at deploy | OK |
+| 27 | `git diff HEAD --stat -- 468-f21-card.md draft-f21-port-2026-10-19.md`; `git log -- 468-f21-card.md` | empty; last commit `8854db35` | OK |
+
+## ISSUES
+
+- FAIL #5: header `CHECK REPORT:` is set on a build card; `CARD.md` header table says `empty` for build (the desk fills it at the check launch, as the F20 preflight 795 treated TIP and CHECK REPORT "empty on purpose"). Blank the value (path stays in ORDER/the desk's record), commit, re-run `git diff` empty.
+- NOTE #20: F16 FIX1 and this port both edit `src/cobalt/cli.py` and `cobalt/cli.md` at distant places; whoever lands second re-reads the append section and its anchors by content.
+- NOTE #21: F5 731 shares the migration files, `placement.py`, `gate-lists.md`, `cli.py` and the 18 pin files; its K0 requires `FORWARD` ends `0026_genesis_chunk.sql`, so Genesis deploys first (order is the card's, not a blocker for this build).
+- NOTE #23: `merge-tree` and `cobalt jobs restarts` could not be run (allowlist); RESTARTS is derived by reading `jobs.yaml` and the card/check records, and the build's own `cobalt jobs restarts <BASE>..HEAD` is the record.
+- NOTE: header `RULINGS` lists only `2026-10-11 R1055`; the brain direction R2013 / R1993 are cited in the PORT row prose, not in the header (F20's header lists R1833). Optional.
+- BLOCKS the card's own build: the `cobalt_dev` lock only at the with-DB steps (the PORT row's suites are offline); no dependence on the 448 build (0025 is on main). Blocks the deploy: the with-DB passes under the dev lock, F5's K0 order (Genesis first), and the scoped check after PORT.
+
+PREFLIGHT DONE · card: f21-genesis-fr1 · checks: 27 · fails: 1 · ready: NO
