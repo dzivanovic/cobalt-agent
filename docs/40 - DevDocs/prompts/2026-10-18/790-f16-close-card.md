@@ -3,9 +3,9 @@ LADDER: S5 · F16 close
 BRANCH: s5/f16-close-1018
 WORKTREE: f16-close-1018
 BASE: 40e646ed
-TIP:
+TIP: be6fa7b7
 REPORT: /Users/cobalt/cobalt-wt/f16-close-1018/docs/40 - DevDocs/reports/f16-close-1018-build-2026-10-18.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f16-close-1018-check-2026-10-19.md
 HOUSE B:
 BAND: HIGH
 RULINGS: 2026-10-18 R1841
