@@ -7,7 +7,7 @@ TIP: 83919213
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-f20-cos.md
 RULINGS: 2026-10-11 R1055, 2026-10-11 R1112, 2026-10-18 R1833
 TAG: deploy-2026-10-19-f20-cos
-MIGRATIONS: none — the change to src/cobalt/db_migrations/placement.py is placement-registry code only (6 lines, build stop line "migration: none", check ready YES)
+MIGRATIONS: none
 SET: cos
 TICKERS: none
 
