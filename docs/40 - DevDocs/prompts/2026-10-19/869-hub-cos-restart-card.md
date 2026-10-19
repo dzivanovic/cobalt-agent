@@ -5,9 +5,9 @@ INSTALL: none
 BRANCH: ops/hub-cos-restart-fr1
 WORKTREE: hub-cos-restart-fr1
 BASE: c68efd65
-TIP:
+TIP: 0bf28619
 REPORT: /Users/cobalt/cobalt-wt/hub-cos-restart-fr1/docs/40 - DevDocs/reports/hub-cos-restart-fr1-build-2026-10-19.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-cos-restart-fr1-check-2026-10-19.md
 HOUSE B: as needed
 BAND: HIGH
 DB: none
