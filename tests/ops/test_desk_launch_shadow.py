@@ -688,3 +688,200 @@ def test_g1_truncated_json_that_mentions_read_url_is_the_json_refusal(desk):
     )
     assert desk.agy.read_bytes() == before
     assert not desk.calls.exists()
+
+
+# ---- card 2026-10-19 827 C2: the Gemini gate seat starts in its worktree (a pin, R2011) --------
+
+
+def test_c2_the_gemini_gate_seat_starts_in_its_worktree(desk):
+    card = signed_gemini(desk)
+    write_agy(desk, HOUSE)
+    wt = desk.wt / "x-job-gemini"
+    dry = desk.run(str(card), "--model", "gemini-4-argon-high")
+    assert dry.returncode == 0, dry.stderr
+    out = dry.stdout.splitlines()
+    assert out[-2] == f"cd {wt}", out
+    assert out[-1].startswith("claude --bg ") and "MODEL: gemini-4-argon-high" in out[-1]
+    done = desk.run(str(card), "--model", "gemini-4-argon-high", dry=False)
+    assert done.returncode == 0, done.stderr
+    cwd, args = desk.calls.read_text().splitlines()[0].split(" | ", 1)
+    assert Path(cwd).resolve() == wt.resolve()
+    assert "MODEL: gemini-4-argon-high" in args
+
+
+# ---- card 2026-10-19 827 T1: kind x1-copy, the X1 leg's agy transcript (R2015) ---------------
+
+ID = "00000000-0000-4000-8000-000000000001"
+ID2 = "00000000-0000-4000-8000-000000000002"
+CANARY = '{"step": 6, "status": "DONE", "output": "X1_CANARY=not-a-secret"}\n'
+SOFT = 'I0101 00:00:00.000000 1 print.go:88] Print mode: soft-denying tool confirmation "ViewFile" at step 6'
+
+
+def x1copy(desk: Desk, wt: str, leg: str) -> subprocess.CompletedProcess:
+    return subprocess.run(
+        ["sh", str(desk.launch), "x1-copy", wt, leg],
+        env=dict(desk.env, COBALT_AGY_HOME=str(desk.tmp / "agy-home")), cwd=desk.tmp,
+        capture_output=True, text=True, timeout=120,
+    )
+
+
+def x1wt(desk: Desk) -> Path:
+    wt = desk.wt / "x-job-gemini"
+    wt.mkdir(exist_ok=True)
+    return wt
+
+
+def agy_run(desk: Desk, workspace: str | list[str], ids: tuple[str, ...] = (ID,), transcript: bool = True) -> Path:
+    """A constructed agy home: `cli.log` a link to the run's log, one `workspaceDirs=[…]` line per
+    list given, one `Created conversation` line per id, one soft-denying line; the transcript."""
+    home = desk.tmp / "agy-home"
+    log = home / "log" / "cli-20260101_000000.log"
+    log.parent.mkdir(parents=True, exist_ok=True)
+    lists = [workspace] if isinstance(workspace, str) else workspace
+    lines = [f"I0101 00:00:00.000000 1 server.go:470] workspaceDirs=[{w}]" for w in lists]
+    lines += [f"I0101 00:00:00.000000 1 server.go:1199] Created conversation {i} (backend=BACKEND_TYPE_UNSPECIFIED)"
+              for i in ids]
+    lines.append(SOFT)
+    log.write_text("\n".join(lines) + "\n")
+    link = home / "cli.log"
+    if link.is_symlink():
+        link.unlink()
+    link.symlink_to("log/cli-20260101_000000.log")
+    if transcript:
+        src = home / "brain" / ids[0] / ".system_generated" / "logs" / "transcript.jsonl"
+        src.parent.mkdir(parents=True, exist_ok=True)
+        src.write_text(CANARY)
+    return home
+
+
+def nothing_written(desk: Desk, done: subprocess.CompletedProcess, text: str, before: list[str]) -> None:
+    refused(done, f"x1-copy: {text}")
+    assert sorted(os.listdir(desk.wt / "x-job-gemini")) == before
+
+
+@pytest.mark.parametrize("twice", [False, True], ids=["<wt>", "<wt> <wt>"])
+def test_t1_copies_the_transcript_of_its_own_workspace(desk, twice):
+    wt = x1wt(desk)
+    home = agy_run(desk, f"{wt} {wt}" if twice else str(wt))
+    done = x1copy(desk, "x-job-gemini", "0c")
+    assert done.returncode == 0, done.stderr
+    copy = wt / "x1-0c.transcript"
+    src = home / "brain" / ID / ".system_generated" / "logs" / "transcript.jsonl"
+    assert copy.read_bytes() == src.read_bytes()
+    grep = subprocess.run(["grep", "-c", "-F", "X1_CANARY", str(copy)], capture_output=True, text=True)
+    assert grep.stdout == "1\n"
+    assert (wt / "x1-0c.log").read_text() == f"conversation {ID}\n{SOFT}\n"
+    assert done.stdout.splitlines() == [
+        f"X1-COPY: 0c conversation {ID}",
+        f"X1-COPY: 0c workspace {wt}",
+        f"X1-COPY: 0c copied {copy} ({len(CANARY)} bytes)",
+        "X1-COPY: 0c soft-denying 1",
+    ]
+
+
+@pytest.mark.parametrize(
+    "shape", ["x1-canary", "x1-canary and wt", "wt and other", "below wt", "wt root", "empty"],
+)
+def test_t1_a_foreign_workspace_is_refused(desk, shape):
+    wt = x1wt(desk)
+    workspace = {
+        "x1-canary": f"{desk.wt}/x1-canary",
+        "x1-canary and wt": f"{desk.wt}/x1-canary {wt}",
+        "wt and other": f"{wt} {desk.wt}/other-0101",
+        "below wt": f"{wt}/docs",
+        "wt root": str(desk.wt),
+        "empty": "",
+    }[shape]
+    agy_run(desk, workspace)
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0c"), f"0c cli.log names workspace {workspace}, not {wt}", [])
+
+
+@pytest.mark.parametrize("n", [0, 2])
+def test_t1_zero_or_two_workspace_lines_are_refused(desk, n):
+    wt = x1wt(desk)
+    agy_run(desk, [str(wt)] * n)
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0c"), f"0c cli.log holds {n} workspaceDirs= lines", [])
+
+
+def test_t1_a_missing_transcript_is_refused(desk):
+    wt = x1wt(desk)
+    home = agy_run(desk, str(wt), transcript=False)
+    path = home / "brain" / ID / ".system_generated" / "logs" / "transcript.jsonl"
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0c"), f"0c no transcript at {path}", [])
+
+
+def test_t1_no_cli_log_is_refused(desk):
+    x1wt(desk)
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0c"), "0c no cli.log at", [])
+
+
+@pytest.mark.parametrize("ids", [(), (ID, ID2)], ids=["0", "2"])
+def test_t1_no_or_two_conversations_is_refused(desk, ids):
+    wt = x1wt(desk)
+    agy_run(desk, str(wt), ids=ids, transcript=False)
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0c"), f"0c cli.log holds {len(ids)} Created conversation lines", [])
+
+
+def test_t1_an_id_that_is_not_36_hex_characters_is_refused(desk):
+    wt = x1wt(desk)
+    agy_run(desk, str(wt), ids=("00000000-0000-4000-8000-00000000000G",), transcript=False)
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0c"), "0c conversation id", [])
+
+
+def test_t1_a_stale_log_is_refused(desk):
+    wt = x1wt(desk)
+    agy_run(desk, str(wt))
+    (wt / "x1-0a.log").write_text(f"conversation {ID}\n")
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0b"), f"0b stale: {wt}/x1-0a.log", ["x1-0a.log"])
+
+
+@pytest.mark.parametrize("bad", ["leg 0g", "../x", "x1-canary", "link"])
+def test_t1_a_bad_leg_or_worktree_is_refused(desk, bad):
+    wt = x1wt(desk)
+    agy_run(desk, str(wt))
+    (desk.wt / "x1-canary").mkdir()
+    (desk.wt / "x-link").symlink_to(wt)
+    name, leg = {"leg 0g": ("x-job-gemini", "0g"), "../x": ("../x", "0c"),
+                 "x1-canary": ("x1-canary", "0c"), "link": ("x-link", "0c")}[bad]
+    nothing_written(desk, x1copy(desk, name, leg), "", [])
+    assert os.listdir(desk.wt / "x1-canary") == []
+
+
+@pytest.mark.parametrize("kind", ["transcript", "log"])
+def test_t1_an_existing_copy_is_refused(desk, kind):
+    wt = x1wt(desk)
+    agy_run(desk, str(wt))
+    (wt / f"x1-0c.{kind}").write_text("earlier\n")
+    nothing_written(desk, x1copy(desk, "x-job-gemini", "0c"), f"0c {wt}/x1-0c.{kind} exists", [f"x1-0c.{kind}"])
+    assert (wt / f"x1-0c.{kind}").read_text() == "earlier\n"
+
+
+@pytest.mark.parametrize("args", [(), ("x-job-gemini",), ("x-job-gemini", "0c", "extra")],
+                         ids=["alone", "one", "three"])
+def test_t1_a_wrong_argument_count_is_refused(desk, args):
+    wt = x1wt(desk)
+    agy_run(desk, str(wt))
+    done = subprocess.run(
+        ["sh", str(desk.launch), "x1-copy", *args],
+        env=dict(desk.env, COBALT_AGY_HOME=str(desk.tmp / "agy-home")), cwd=desk.tmp,
+        capture_output=True, text=True, timeout=120,
+    )
+    nothing_written(desk, done, "", [])
+
+
+def test_t1_a_missing_worktree_directory_is_refused(desk):
+    x1wt(desk)
+    agy_run(desk, f"{desk.wt}/x-job-never")
+    done = x1copy(desk, "x-job-never", "0c")
+    refused(done, "x1-copy: ")
+    assert not (desk.wt / "x-job-never").exists()
+
+
+def test_t1_runs_under_a_desk_size_guard_that_exits_7(desk):
+    wt = x1wt(desk)
+    agy_run(desk, str(wt))
+    write_exe(desk.launch.parent / "desk-context.sh", "exit 7\n")
+    done = x1copy(desk, "x-job-gemini", "0c")
+    assert done.returncode == 0, done.stderr
+    assert (wt / "x1-0c.transcript").read_text() == CANARY
+    assert sweep(desk).returncode == 7
