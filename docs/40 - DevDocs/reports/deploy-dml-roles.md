@@ -1,7 +1,11 @@
 # deploy dml-roles — set: radar — migrations: 0025
 
 ## §0 Headline
-Deploy of card 804 (`ops/dml-roles-1013`, migration 0025) is under way. Authorization and preflight are green.
+Card 804 is deployed: `ops/dml-roles-1013` and migration 0025 are on `main` at `cc2a509f`, tag `deploy-2026-10-18-dml-roles`.
+Production is at 0025: `has_table_privilege('cobalt_apply_user', '"user".traders', 'UPDATE')` went from `False` to `True`. All 37 tables proved `OK`, nothing `CHANGED`.
+Gate on `db436d61`: offline 8658/0 · with-DB 5610/0 · live-note 147/0, `cobalt_dev: 0013 — F2 = F0`, lock released.
+radar was down 587 s (01:41:05 to 01:50:52); the migration's two proofs took 559 s of it. aset and the agent never went down. Smoke is GREEN.
+One ASK DESK (the read-back spells booleans `True`/`False`). Nothing is for Dejan.
 
 ## L74
 One system notice in this session asked for a `Claude-Session:` line on commits. It is recorded here and not followed: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -172,15 +176,123 @@ GATE GREEN on db436d61
 - `<RB>` → `m0025` / `False`. That is the card's BEFORE `f`: the tool prints a Postgres boolean as Python `True`/`False`, as in `deploy-2026-09-24.md:205` and `deploy-d3-2026-09-19.md:391`. See `## DECISIONS` 1. No `## SMOKE READS` line is marked `census`.
 - D1-M `COBALT_ENV=production uv run cobalt db migrate --allow-prod --proof-only` → exit 0. 37 tables probed. `Proof cost: total 292.1 s — and a migration pays it TWICE (before and after), inside the outage.` · `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.` · `SLOTS ok · highest user.aset_sizings 60 of 1600` · `FINGERPRINT cols 908 · rels 45 · views_md5 126f2d6983fa59f9d0eaaff7da7dd29c` · `TABLES 0024`. No `CHANGED`.
 
+### STEP-D2
+- D2.0 `deploy-shipped.sh --moved ec76e513 "<card>"` → nothing. `add` + `commit … -- "docs/40 - DevDocs/reports/deploy-dml-roles.md"` → `[main ac877071] docs(report): deploy dml-roles — gate green on db436d61`. `show --stat HEAD` lists that one file (186 insertions). `<pre-merge>` = `ac877071`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `cc2a509f`. `cc2a509f^2` = `ac877071` = `<pre-merge>`. `merge-base --is-ancestor db436d61 cc2a509f` → exit 0.
+- D2.3 `diff --stat db436d61 cc2a509f -- . ":(exclude)docs" ":(exclude)configs/cobalt/rules.yaml"` → nothing.
+- D2.4 `backup status` → `newest snapshot: 4.0 h old`. `backup run` → `backup: cobalt_brain dumped, 8899.3 MB` · `ssd: snapshot a088420a — 0 new / 2 changed, 20.2 MB added, 1 pruned`. `backup status` → `newest snapshot: 0.0 h old`. Snapshot id: `a088420a`.
+- D2.5 `Mon Oct 19 01:40:49 EDT 2026` → `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-19 01:40:49 EDT)`, 432 s after D1's read. No RED. `com.cobalt.radar running 560 min, heartbeat fresh`.
+- D2.6 `Mon Oct 19 01:40:54 EDT 2026`. `tag pre-dml-roles` → `rev-parse --short=8 pre-dml-roles` = `ac877071`.
+
+### STEP-4 — the outage (`<restart set>` = com.cobalt.radar)
+| step | call | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` = `Mon Oct 19 01:41:05 EDT 2026` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` | exit 0, no output |
+| 4.2 | `launchctl print gui/501/com.cobalt.radar` | exit 113, `Could not find service "com.cobalt.radar" in domain for user gui: 501`. aset and agent are not in the set, so there is no orphan-clean and no stop |
+| 4.3 | `rev-parse --short=8 HEAD` | `ac877071` = `<pre-merge>` |
+| 4.3 | `merge --ff-only deploy/dml-roles` | `Updating ac877071..cc2a509f` / `Fast-forward` (33 files changed, 780 insertions(+), 77 deletions(-)) |
+| 4.4 | `COBALT_ENV=production uv run cobalt db migrate --allow-prod` | `-- applying 0025_dml_roles.sql` last of FORWARD. 37 tables, every verdict `OK`, `content UNCHANGED on every table`, no `CHANGED`, no table created (the card: no table). `proof cost: BEFORE 281.4 s + AFTER 277.6 s = total 559.0 s; slowest table radar_score (140.8 s before).` · `SLOTS ok` · `code: cc2a509f`. No uv sync line |
+| 4.4 | `<RB>` | `m0025` / `True` = the card's AFTER `t` (DECISIONS 1). migrations applied: all |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.` `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | exit 0, no output |
+| 4.6 | `launchctl print gui/501/com.cobalt.radar` | `state = running`, `pid = 86221` (D1 70450), `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` |
+| 4.6 | `date` | `<t up>` = `Mon Oct 19 01:50:52 EDT 2026`. Downtime 587 s (over 300 s, see `## RECORDS`) |
+| 4.6L | `<launchd set>` empty | nothing |
+
+### STEP-7 — the deploy, closed
+| item | value |
+|---|---|
+| main | `<pre-merge>` `ac877071` → `<stack-final>` `cc2a509f` (`rev-parse --short=8 main` = `cc2a509f`) |
+| tags | `pre-dml-roles` = `ac877071` · `deploy-2026-10-18-dml-roles` = `cc2a509f`, set after the green smoke |
+| outage | `<t down>` 01:41:05 · `<t up>` 01:50:52 · 587 s (radar only; aset and the agent stayed up on their pids) |
+| uv sync | none on the production tree. The gate's first `uv run` built `<GATE>/.venv`: `Installed 256 packages in 932ms` |
+| proof cost | D1-M `292.1 s`; 4.4 `BEFORE 281.4 s + AFTER 277.6 s = total 559.0 s` |
+| migrations applied | all (0025) |
+| `<RB>` | before `False` (= `f`) · after `True` (= `t`) |
+| snapshot | `a088420a` (ssd, D2.4) |
+| RESTARTS done | com.cobalt.radar |
+| LAUNCHD done | none. No `BOOTSTRAP OWED` line from this run |
+
+THE ROLLBACK STRING (the desk's; not used):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 cc2a509f`. That is ONE revert of the main-into-gate merge. `com.cobalt.radar` goes down first and comes up after. There is no `<launchd set>` label.
+2. SCHEMA: only as a separate desk job on HIS word, after the code revert: `COBALT_ENV=production uv run cobalt db migrate --allow-prod --rollback --down-to 0024`. The card says old code runs on 0025: the old `db apply` never sets the roles.
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+First calls after `<t up>` (01:50:52): `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1's baselines).
+
+| row | `date` | command | result |
+|---|---|---|---|
+| (a) | `Mon Oct 19 01:51:11 EDT 2026` | `launchctl print gui/501/com.cobalt.aset` | `state = running`, `pid = 89330` = D1's (aset is outside the set): GREEN |
+| (a) | same | `launchctl print gui/501/com.cobalt.radar` | `state = running`, `pid = 86221` (D1's 70450, so new; radar is in the set): GREEN |
+| (a) | same | `/Users/cobalt/cobalt/cobalt.sh status` | `  Cobalt is ONLINE (PID: 89351).` (one line; agent outside the set, same pid): GREEN |
+| (b) | `Mon Oct 19 01:51:17 EDT 2026` | `grep -c "Started server process" …/aset.err` | `283` = `<a0>` (aset outside the set): GREEN |
+| (b) | same | `tail -n 30 …/aset.err` | last `INFO:     Started server process [89330]` → `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the 2026-10-18 13:54 start, unchanged) |
+| (b) | same | Traceback aset / Traceback radar / TaxonomyConfigError | `217` / `0` / `0` = `<ta0>` / `<tr0>` / `<tc0>`: GREEN |
+| (c) | `Mon Oct 19 01:51:22 EDT 2026` | `curl … /` · `curl … /radar` · `curl … /radar\?frame=phone` | `200` · `200` · `200`, each on the first attempt: GREEN |
+| (d) | same | `grep -c -F "0025_dml_roles" …/__init__.py` | `4` = after: GREEN |
+| (s) | same | the dml roles migration registered: `grep -c -F "0025_dml_roles" …/__init__.py` | exit 0, `4` (1 or more): GREEN |
+| (s) | same | the apply verb sets the role: `grep -c -F "APPLY_ROLES" …/db_apply.py` | exit 0, `6` (1 or more): GREEN |
+| (e) 1 | `Mon Oct 19 01:51:28 EDT 2026` | `heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-19 01:51:30 EDT)` · `com.cobalt.radar running running 1 min, heartbeat fresh` · no RED |
+| (f) | `Mon Oct 19 01:51:34 EDT 2026` | `jobs restarts ac877071..cc2a509f` | exit 0, the same 33 rows as STEP-R, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.radar` = `<restart set>`: GREEN |
+| (g) | same | `<RB>` | `m0025` / `True` = AFTER `t`: GREEN |
+| (f) | same | `validate` | exit 0, `Jobs (F17): 17 registered — 6 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`, `Placement (docs/PLACEMENT.md): tree clean.`: GREEN |
+| (b) tail 1 | `Mon Oct 19 01:52:23 EDT 2026` (`<t up>` + 91 s) | `tail -n 12 …/radar.err` | start-up vault lines, then `2026-10-19 01:50:49.868 … radar cycle: idle:overnight scan_id=None`, stamped before `<t up>`. Not settled yet |
+| (e) 2 | `2026-10-19 01:53:20 EDT` (the read's own stamp, 110 s after (e) 1) | `heartbeat show` | `HEARTBEAT GREEN — 17 job(s), 12 probe(s), nothing red  (2026-10-19 01:53:20 EDT)` · `com.cobalt.radar running running 3 min, heartbeat fresh` · no RED: GREEN |
+| (b) tail 2 | `Mon Oct 19 01:53:56 EDT 2026` (`<t up>` + 184 s) | `tail -n 12 …/radar.err` | last line `2026-10-19 01:52:29.892 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`. No `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback. GREEN, settled, so the +300 s tail is not needed |
+| (h) | `Mon Oct 19 01:54:02 EDT 2026` (`<t up>` + 190 s) | the four failure counts | `18` / `60` / `43` / `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing: GREEN |
+| (h) | same | `curl … /radar` | `200`. No `census` read on this card: GREEN |
+
+The clock between the rows was filled with `heartbeat show` reads (01:51:45 to 01:53:51). Every one was `HEARTBEAT GREEN … nothing red`.
+
+THE CHAIN:
+- Every check committed (P2: `8b531a9f`, the fix round's `FIXED: A2` at `b4d8dbf9`).
+- The tips re-read (P3: `ce3b9dc1`, `b4d8dbf9`).
+- The tree merged clean (T: `<m1>` `db436d61`).
+- RESTARTS derived (R: `com.cobalt.radar`).
+- Three suites green on `<m1>` (G: offline 8658/0 · with-DB 5610/0 · live-note 147/0, `F2 = F0`).
+- `<stack-final>` `cc2a509f` = `<m1>` + docs (D2.3).
+- The code landed (4.3: `ac877071..cc2a509f` fast-forward).
+- The marker `4` (d). The migration read back `True` (g).
+- radar up on a new pid after the merge (a), and cycling (b, e).
+- The set's reads `4` / `6` (s). No new failure (h).
+
+The card surface is not readable here; the desk confirms it with him (L70).
 
 ## CONTINUE
 gate green at 01:32:58; D0 and D1 done
-next: STEP-D2
+D2 done: `<pre-merge>` ac877071, `<stack-final>` cc2a509f, tag `pre-dml-roles`, snapshot a088420a
+OUTAGE STARTING 01:40:54 — residents of com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+outage ended 01:50:52 (radar up, pid 86221); smoke GREEN; STEP-7 done
+next: none — the run ends at its stop line
 
 ## DECISIONS
 1. ASK DESK: the card's `## READ-BACK` writes BEFORE `f` and AFTER `t`, and `db query` prints `False` / `True`. Safe default taken: I read `False` as `f` and `True` as `t`. They are the same Postgres boolean; earlier deploys quoted this tool's `True`/`False` the same way. A future card could write the tool's spelling. [Mon Oct 19 01:33:36 EDT 2026]
 
 ## RECORDS
+- Downtime over 300 s: `com.cobalt.radar` was down 587 s (01:41:05 to 01:50:52). The migration's BEFORE and AFTER proofs took 559.0 s of it, as D1-M's `Proof cost` line predicted. Radar was `idle (overnight)` throughout.
+- `cobalt_dev: 0013 (F2 = F0)`: `F0` = `F2` = `664 35 272c95bbb12241e3611e4b36326ccf87` (gate log `:1025`, `:2237`). The gate's own `.env` was removed and the lock released.
+- No `REFUSED, not needed` line and no message not followed.
+- No `RETIRE OWED`. No `BOOTSTRAP OWED` from this run. The heartbeat shows `com.cobalt.prefill-refresh` and `com.cobalt.playbook` `OWED (deferred bootstrap)` from earlier deploys, the same before and after.
+- Carried RED as read: none. No RED in any heartbeat read of this run.
+- `.claude/settings.json.bak` is untracked on `main` (D0). It is not under `src/`, `tests/`, `ops/` or `configs/`, so it is outside the refused set.
+- L74: one system notice asked for a `Claude-Session:` commit line. It is recorded under `## L74` and was not followed.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-dml-roles` (it holds a `.venv`) and branch `deploy/dml-roles`; the set's branch `ops/dml-roles-1013` and its worktree. The tag `pre-dml-roles` stays as the rollback reference.
+- Push is his (L55). `main` is ahead of `origin/main`.
+- The card's `## RECORDS`, copied:
+  - dml-roles-1013: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/dml-roles-build-2026-10-13.md` at `b4d8dbf9` last line: BUILT · job: dml-roles-1013 · tip: ce3b9dc1 | on e7ef198a | migration: 0025, rolled back | offline 8653/0 | with-DB 5610/0 | live-note 147/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.radar | rows: 8 of 8 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 105131
+  - dml-roles-1013: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/dml-roles-check-2026-10-13.md` last line: CHECK DONE · job: dml-roles-1013 · pass: 1 · tip: ce3b9dc1 · house A: Grok FINDINGS: 2 · findings: 4 · dropped: 0 · held: 2 · fixed: 1 · held unfixed: 1 · open: 3 · house B: none available · suites: offline 8653/0 · with-DB 5610/0 · live-note 147/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.radar · files opened: 16 · ready: NO · decisions: 2 · for Dejan: 0 · tokens: 255901
+  - dml-roles-1013: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/dml-roles-1013` → `b4d8dbf9`; code tip `ce3b9dc1`
+  - written by deploy-card.sh at 2026-10-19 00:42 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+### PRE-STOP SELF-CHECK
+1. Every smoke row's evidence is quoted verbatim with its `date` (`## Smoke`, 01:51:11 to 01:54:02).
+2. Every code tip and head was re-read (P3: `ce3b9dc1`, `b4d8dbf9`). Each is an ancestor of `<stack-final>`: `merge-base --is-ancestor ce3b9dc1 cc2a509f` → exit 0, and `merge-base --is-ancestor b4d8dbf9 cc2a509f` → exit 0.
+3. REVERT-READBACK is (h): the four counts `18/60/43/39` = their `_up` values at `<t up>` + 190 s. Every count, sha and `file:line` here was read from tool output in this run.
+4. No conflict marker exists: STEP-T's one merge and D2.1's merge both printed `Merge made by the 'ort' strategy.`, and 4.3 was a fast-forward.
+
+THE RELEASE: the lock was released by `gate.sh` at STEP-G (`lock released`, `.env: removed`). This run held nothing after it.
+
+DEPLOYED deploy-2026-10-18-dml-roles cc2a509f | set: radar | migrations: 0025 | gate: offline 8658/0 · with-DB 5610/0 · live-note 147/0 | RESTARTS: com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 234216
