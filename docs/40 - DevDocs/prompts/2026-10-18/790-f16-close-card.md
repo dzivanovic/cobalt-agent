@@ -2,7 +2,7 @@ JOB: f16-close-1018
 LADDER: S5 · F16 close
 BRANCH: s5/f16-close-1018
 WORKTREE: f16-close-1018
-BASE: e7ef198a
+BASE: 40e646ed
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f16-close-1018/docs/40 - DevDocs/reports/f16-close-1018-build-2026-10-18.md
 CHECK REPORT:
