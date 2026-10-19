@@ -5,7 +5,7 @@ WORKTREE: f16-close-fr1
 BASE: 6452f70e
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f16-close-fr1/docs/40 - DevDocs/reports/f16-close-fr1-build-2026-10-19.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f16-close-fr1-check-2026-10-19.md
+CHECK REPORT:
 HOUSE B:
 BAND: HIGH
 RULINGS: 2026-10-18 R1841
