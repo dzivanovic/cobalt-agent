@@ -18,8 +18,9 @@ def _code(path) -> str:
 
 
 def test_o1_the_pair_is_registered_last_and_first():
-    assert FORWARD[-1].name == "0025_dml_roles.sql"
-    assert REVERSE[0].name == "0025_dml_roles.rollback.sql"
+    # F21 genesis (0026): one place further out (second-last forward, second reversed).
+    assert FORWARD[-2].name == "0025_dml_roles.sql"
+    assert REVERSE[1].name == "0025_dml_roles.rollback.sql"
 
 
 def test_o2_the_forward_makes_two_nologin_roles_the_door_and_dml_grants_only():

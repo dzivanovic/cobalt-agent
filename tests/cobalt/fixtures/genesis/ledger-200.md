@@ -1,0 +1,206 @@
+# SYNTHETIC LEDGER — test fixture (F21 G4, X1 / X7 (a))
+
+Every entry, figure and name below is constructed (L32); none is a trader's.
+
+## 2. DECISION LOG
+
+- E001 · the replay board for constructed day 1 closed with no incident.
+- E002 · a heartbeat probe on constructed host 2 answered green.
+- E003 · the replay board for constructed day 3 closed with no incident.
+- E004 · a heartbeat probe on constructed host 4 answered green.
+- E005 · the replay board for constructed day 5 closed with no incident.
+- E006 · a heartbeat probe on constructed host 6 answered green.
+- E007 · the replay board for constructed day 7 closed with no incident.
+- E008 · a heartbeat probe on constructed host 8 answered green.
+- E009 · the replay board for constructed day 9 closed with no incident.
+- E010 · a heartbeat probe on constructed host 10 answered green.
+- E011 · the replay board for constructed day 11 closed with no incident.
+- E012 · a heartbeat probe on constructed host 12 answered green.
+- E013 · the replay board for constructed day 13 closed with no incident.
+- E014 · a heartbeat probe on constructed host 14 answered green.
+- E015 · the replay board for constructed day 15 closed with no incident.
+- E016 · a heartbeat probe on constructed host 16 answered green.
+- E017 · the replay board for constructed day 17 closed with no incident.
+- E018 · a heartbeat probe on constructed host 18 answered green.
+- E019 · the replay board for constructed day 19 closed with no incident.
+- E020 · a heartbeat probe on constructed host 20 answered green.
+- E021 · the drill stop moved under the constructed pivot after leg 21.
+- E022 · a stop order on the replay board was cancelled by the constructed operator, case 22.
+- E023 · the stop line on card 23 stayed where the constructed swing put it.
+- E024 · the drill stop moved under the constructed pivot after leg 24.
+- E025 · a stop order on the replay board was cancelled by the constructed operator, case 25.
+- E026 · the stop line on card 26 stayed where the constructed swing put it.
+- E027 · the drill stop moved under the constructed pivot after leg 27.
+- E028 · a stop order on the replay board was cancelled by the constructed operator, case 28.
+- E029 · the stop line on card 29 stayed where the constructed swing put it.
+- E030 · the drill stop moved under the constructed pivot after leg 30.
+- E031 · a stop order on the replay board was cancelled by the constructed operator, case 31.
+- E032 · the stop line on card 32 stayed where the constructed swing put it.
+- E033 · the drill stop moved under the constructed pivot after leg 33.
+- E034 · a stop order on the replay board was cancelled by the constructed operator, case 34.
+- E035 · the stop line on card 35 stayed where the constructed swing put it.
+- E036 · the drill stop moved under the constructed pivot after leg 36.
+- E037 · a stop order on the replay board was cancelled by the constructed operator, case 37.
+- E038 · the stop line on card 38 stayed where the constructed swing put it.
+- E039 · the drill stop moved under the constructed pivot after leg 39.
+- E040 · a stop order on the replay board was cancelled by the constructed operator, case 40.
+- E041 · the stop line on card 41 stayed where the constructed swing put it.
+- E042 · the drill stop moved under the constructed pivot after leg 42.
+- E043 · a stop order on the replay board was cancelled by the constructed operator, case 43.
+- E044 · the stop line on card 44 stayed where the constructed swing put it.
+- E045 · the drill stop moved under the constructed pivot after leg 45.
+- E046 · a stop order on the replay board was cancelled by the constructed operator, case 46.
+- E047 · the stop line on card 47 stayed where the constructed swing put it.
+- E048 · the drill stop moved under the constructed pivot after leg 48.
+- E049 · a stop order on the replay board was cancelled by the constructed operator, case 49.
+- E050 · the stop line on card 50 stayed where the constructed swing put it.
+- E051 · the drill stop moved under the constructed pivot after leg 51.
+- E052 · a stop order on the replay board was cancelled by the constructed operator, case 52.
+- E053 · the stop line on card 53 stayed where the constructed swing put it.
+- E054 · the drill stop moved under the constructed pivot after leg 54.
+- E055 · a stop order on the replay board was cancelled by the constructed operator, case 55.
+- E056 · the stop line on card 56 stayed where the constructed swing put it.
+- E057 · the drill stop moved under the constructed pivot after leg 57.
+- E058 · a stop order on the replay board was cancelled by the constructed operator, case 58.
+- E059 · the stop line on card 59 stayed where the constructed swing put it.
+- E060 · the drill stop moved under the constructed pivot after leg 60.
+- E061 · a stop order on the replay board was cancelled by the constructed operator, case 61.
+- E062 · the stop line on card 62 stayed where the constructed swing put it.
+- E063 · the drill stop moved under the constructed pivot after leg 63.
+- E064 · a stop order on the replay board was cancelled by the constructed operator, case 64.
+- E065 · the stop line on card 65 stayed where the constructed swing put it.
+- E066 · the drill stop moved under the constructed pivot after leg 66.
+- E067 · a stop order on the replay board was cancelled by the constructed operator, case 67.
+- E068 · the stop line on card 68 stayed where the constructed swing put it.
+- E069 · the drill stop moved under the constructed pivot after leg 69.
+- E070 · a stop order on the replay board was cancelled by the constructed operator, case 70.
+- E071 · the stop line on card 71 stayed where the constructed swing put it.
+- E072 · the drill stop moved under the constructed pivot after leg 72.
+- E073 · a stop order on the replay board was cancelled by the constructed operator, case 73.
+- E074 · the stop line on card 74 stayed where the constructed swing put it.
+- E075 · the drill stop moved under the constructed pivot after leg 75.
+- E076 · a stop order on the replay board was cancelled by the constructed operator, case 76.
+- E077 · the stop line on card 77 stayed where the constructed swing put it.
+- E078 · the drill stop moved under the constructed pivot after leg 78.
+- E079 · a stop order on the replay board was cancelled by the constructed operator, case 79.
+- E080 · the stop line on card 80 stayed where the constructed swing put it.
+- E081 · the log buffer flushed at the constructed close, run 81.
+- E082 · a buffer of spare rows was kept in the replay table, batch 82.
+- E083 · the stream buffer drained before the constructed ack, case 83.
+- E084 · the log buffer flushed at the constructed close, run 84.
+- E085 · a buffer of spare rows was kept in the replay table, batch 85.
+- E086 · the stream buffer drained before the constructed ack, case 86.
+- E087 · the log buffer flushed at the constructed close, run 87.
+- E088 · a buffer of spare rows was kept in the replay table, batch 88.
+- E089 · the stream buffer drained before the constructed ack, case 89.
+- E090 · the log buffer flushed at the constructed close, run 90.
+- E091 · a buffer of spare rows was kept in the replay table, batch 91.
+- E092 · the stream buffer drained before the constructed ack, case 92.
+- E093 · the log buffer flushed at the constructed close, run 93.
+- E094 · a buffer of spare rows was kept in the replay table, batch 94.
+- E095 · the stream buffer drained before the constructed ack, case 95.
+- E096 · the log buffer flushed at the constructed close, run 96.
+- E097 · a buffer of spare rows was kept in the replay table, batch 97.
+- E098 · the stream buffer drained before the constructed ack, case 98.
+- E099 · the log buffer flushed at the constructed close, run 99.
+- E100 · a buffer of spare rows was kept in the replay table, batch 100.
+- E101 · the stream buffer drained before the constructed ack, case 101.
+- E102 · the log buffer flushed at the constructed close, run 102.
+- E103 · a buffer of spare rows was kept in the replay table, batch 103.
+- E104 · the stream buffer drained before the constructed ack, case 104.
+- E105 · the log buffer flushed at the constructed close, run 105.
+- E106 · a buffer of spare rows was kept in the replay table, batch 106.
+- E107 · the stream buffer drained before the constructed ack, case 107.
+- E108 · the log buffer flushed at the constructed close, run 108.
+- E109 · a buffer of spare rows was kept in the replay table, batch 109.
+- E110 · the stream buffer drained before the constructed ack, case 110.
+- E111 · the log buffer flushed at the constructed close, run 111.
+- E112 · a buffer of spare rows was kept in the replay table, batch 112.
+- E113 · the stream buffer drained before the constructed ack, case 113.
+- E114 · the log buffer flushed at the constructed close, run 114.
+- E115 · a buffer of spare rows was kept in the replay table, batch 115.
+- E116 · the stream buffer drained before the constructed ack, case 116.
+- E117 · the log buffer flushed at the constructed close, run 117.
+- E118 · a buffer of spare rows was kept in the replay table, batch 118.
+- E119 · the stream buffer drained before the constructed ack, case 119.
+- E120 · the log buffer flushed at the constructed close, run 120.
+- E121 · a buffer of spare rows was kept in the replay table, batch 121.
+- E122 · the stream buffer drained before the constructed ack, case 122.
+- E123 · the log buffer flushed at the constructed close, run 123.
+- E124 · a buffer of spare rows was kept in the replay table, batch 124.
+- E125 · the stream buffer drained before the constructed ack, case 125.
+- E126 · the log buffer flushed at the constructed close, run 126.
+- E127 · a buffer of spare rows was kept in the replay table, batch 127.
+- E128 · the stream buffer drained before the constructed ack, case 128.
+- E129 · the log buffer flushed at the constructed close, run 129.
+- E130 · a buffer of spare rows was kept in the replay table, batch 130.
+- E131 · the stream buffer drained before the constructed ack, case 131.
+- E132 · the log buffer flushed at the constructed close, run 132.
+- E133 · a buffer of spare rows was kept in the replay table, batch 133.
+- E134 · the stream buffer drained before the constructed ack, case 134.
+- E135 · the log buffer flushed at the constructed close, run 135.
+- E136 · a buffer of spare rows was kept in the replay table, batch 136.
+- E137 · the stream buffer drained before the constructed ack, case 137.
+- E138 · the log buffer flushed at the constructed close, run 138.
+- E139 · a buffer of spare rows was kept in the replay table, batch 139.
+- E140 · the stream buffer drained before the constructed ack, case 140.
+- E141 · Stop buffer default set to 0.37 of the drill range, because the constructed tape's opening wicks overran a tighter buffer on the replay sample.
+- E142 · the fill ratio read 0.37 on constructed sample 142.
+- E143 · a replay latency of 0.37 seconds was measured on constructed run 143.
+- E144 · the fill ratio read 0.37 on constructed sample 144.
+- E145 · a replay latency of 0.37 seconds was measured on constructed run 145.
+- E146 · the fill ratio read 0.37 on constructed sample 146.
+- E147 · a replay latency of 0.37 seconds was measured on constructed run 147.
+- E148 · the fill ratio read 0.37 on constructed sample 148.
+- E149 · a replay latency of 0.37 seconds was measured on constructed run 149.
+- E150 · the fill ratio read 0.37 on constructed sample 150.
+- E151 · a replay latency of 0.37 seconds was measured on constructed run 151.
+- E152 · the fill ratio read 0.37 on constructed sample 152.
+- E153 · a replay latency of 0.37 seconds was measured on constructed run 153.
+- E154 · the fill ratio read 0.37 on constructed sample 154.
+- E155 · a replay latency of 0.37 seconds was measured on constructed run 155.
+- E156 · the fill ratio read 0.37 on constructed sample 156.
+- E157 · a replay latency of 0.37 seconds was measured on constructed run 157.
+- E158 · the fill ratio read 0.37 on constructed sample 158.
+- E159 · a replay latency of 0.37 seconds was measured on constructed run 159.
+- E160 · the fill ratio read 0.37 on constructed sample 160.
+- E161 · a replay latency of 0.37 seconds was measured on constructed run 161.
+- E162 · the fill ratio read 0.37 on constructed sample 162.
+- E163 · a replay latency of 0.37 seconds was measured on constructed run 163.
+- E164 · the fill ratio read 0.37 on constructed sample 164.
+- E165 · a replay latency of 0.37 seconds was measured on constructed run 165.
+- E166 · the fill ratio read 0.37 on constructed sample 166.
+- E167 · a replay latency of 0.37 seconds was measured on constructed run 167.
+- E168 · the fill ratio read 0.37 on constructed sample 168.
+- E169 · a replay latency of 0.37 seconds was measured on constructed run 169.
+- E170 · the fill ratio read 0.37 on constructed sample 170.
+- E171 · a replay latency of 0.37 seconds was measured on constructed run 171.
+- E172 · the fill ratio read 0.37 on constructed sample 172.
+- E173 · a replay latency of 0.37 seconds was measured on constructed run 173.
+- E174 · the fill ratio read 0.37 on constructed sample 174.
+- E175 · a replay latency of 0.37 seconds was measured on constructed run 175.
+- E176 · the fill ratio read 0.37 on constructed sample 176.
+- E177 · a replay latency of 0.37 seconds was measured on constructed run 177.
+- E178 · the fill ratio read 0.37 on constructed sample 178.
+- E179 · a replay latency of 0.37 seconds was measured on constructed run 179.
+- E180 · the fill ratio read 0.37 on constructed sample 180.
+- E181 · a replay latency of 0.37 seconds was measured on constructed run 181.
+- E182 · the replay board for constructed day 182 closed with no incident.
+- E183 · a heartbeat probe on constructed host 183 answered green.
+- E184 · the replay board for constructed day 184 closed with no incident.
+- E185 · a heartbeat probe on constructed host 185 answered green.
+- E186 · the replay board for constructed day 186 closed with no incident.
+- E187 · a heartbeat probe on constructed host 187 answered green.
+- E188 · the replay board for constructed day 188 closed with no incident.
+- E189 · a heartbeat probe on constructed host 189 answered green.
+- E190 · the replay board for constructed day 190 closed with no incident.
+- E191 · a heartbeat probe on constructed host 191 answered green.
+- E192 · the replay board for constructed day 192 closed with no incident.
+- E193 · a heartbeat probe on constructed host 193 answered green.
+- E194 · the replay board for constructed day 194 closed with no incident.
+- E195 · a heartbeat probe on constructed host 195 answered green.
+- E196 · the replay board for constructed day 196 closed with no incident.
+- E197 · a heartbeat probe on constructed host 197 answered green.
+- E198 · the replay board for constructed day 198 closed with no incident.
+- E199 · a heartbeat probe on constructed host 199 answered green.
+- E200 · the replay board for constructed day 200 closed with no incident.
