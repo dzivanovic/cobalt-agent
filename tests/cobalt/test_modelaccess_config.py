@@ -46,14 +46,81 @@ def _route(**over):
     return d
 
 
-def test_committed_registry_loads_with_exactly_the_local_plan_route():
+#: F21 chunk 2 (card 469 V1): an embeddings route carries only its own keys.
+EMBED = {
+    "lane": "local",
+    "kind": "openai_embeddings",
+    "api_base": "http://127.0.0.1:1234/v1",
+    "model": "constructed-embed-model",
+    "timeout_s": 30,
+    "dim": 8,
+    "key_name": None,
+}
+
+
+def _with_embed(**over):
+    import copy
+
+    d = copy.deepcopy(GOOD)
+    d["routes"]["local.embed"] = {**EMBED, **over}
+    return d
+
+
+def test_committed_registry_loads_with_local_plan_and_local_embed():
     cfg = load_routes(CONFIG_PATH)
-    assert list(cfg.routes) == ["local.plan"]
+    assert list(cfg.routes) == ["local.plan", "local.embed"]
     r = cfg.routes["local.plan"]
     assert (r.lane, r.kind, r.model, r.no_think, r.think_policy) == (
         "local", "openai_compatible", "mainframe", True, "forbid_nonempty")
     assert r.api_base == "http://127.0.0.1:1234/v1"
     assert r.key_name is None
+    e = cfg.routes["local.embed"]
+    assert (e.lane, e.kind, e.model, e.timeout_s, e.dim, e.key_name) == (
+        "local", "openai_embeddings", "text-embedding-nomic-embed-text-v1.5", 30, 768, None)
+    assert e.api_base == "http://127.0.0.1:1234/v1"
+
+
+# ---------------------------------------------------------------------
+# V1 — the embeddings kind (X5)
+# ---------------------------------------------------------------------
+
+
+def test_an_embed_route_loads_without_chat_keys(tmp_path):
+    cfg = load_routes(_write(tmp_path, _with_embed()))
+    e = cfg.routes["local.embed"]
+    assert (e.lane, e.kind, e.model, e.timeout_s, e.dim, e.key_name) == (
+        "local", "openai_embeddings", "constructed-embed-model", 30, 8, None)
+    assert cfg.routes["local.plan"].kind == "openai_compatible"
+
+
+def test_an_embed_route_with_a_fallback_key_refuses(tmp_path):
+    with pytest.raises(ModelAccessConfigError) as e:
+        load_routes(_write(tmp_path, _with_embed(fallback="cloud.embed")))
+    assert "fallback" in str(e.value)
+
+
+@pytest.mark.parametrize("key,value", [("no_think", True), ("think_policy", "forbid_nonempty"),
+                                       ("max_output_tokens", 256), ("response_format", "json_schema")])
+def test_an_embed_route_with_a_chat_key_refuses(tmp_path, key, value):
+    with pytest.raises(ModelAccessConfigError) as e:
+        load_routes(_write(tmp_path, _with_embed(**{key: value})))
+    assert key in str(e.value) and "Extra inputs are not permitted" in str(e.value)
+
+
+@pytest.mark.parametrize("key", [k for k in EMBED if k != "kind"])
+def test_every_missing_embed_key_crashes(tmp_path, key):
+    d = _with_embed()
+    del d["routes"]["local.embed"][key]
+    with pytest.raises(ModelAccessConfigError) as e:
+        load_routes(_write(tmp_path, d))
+    assert key in str(e.value)
+
+
+@pytest.mark.parametrize("over", [{"dim": 0}, {"dim": -768}, {"timeout_s": 0},
+                                  {"api_base": "http://10.0.0.5:1234/v1"}, {"lane": "metered"}])
+def test_an_embed_route_refuses_a_bad_value(tmp_path, over):
+    with pytest.raises(ModelAccessConfigError):
+        load_routes(_write(tmp_path, _with_embed(**over)))
 
 
 def test_committed_registry_lives_outside_the_old_loader_glob():
