@@ -8,7 +8,7 @@ REPORT: /Users/cobalt/cobalt-wt/f16-close-1018/docs/40 - DevDocs/reports/f16-clo
 CHECK REPORT:
 HOUSE B:
 BAND: MID
-RULINGS: none
+RULINGS: 2026-10-18 R1841
 
 ## ROWS
 
