@@ -885,3 +885,45 @@ def test_t1_runs_under_a_desk_size_guard_that_exits_7(desk):
     assert done.returncode == 0, done.stderr
     assert (wt / "x1-0c.transcript").read_text() == CANARY
     assert sweep(desk).returncode == 7
+
+
+# ---- check of card 2026-10-19 827: O1, house A 1 and 3 -----------------------------------------
+
+
+def test_check_o1_a_leg_with_no_soft_denying_line_is_copied(desk):
+    wt = x1wt(desk)
+    home = agy_run(desk, str(wt))
+    log = home / "log" / "cli-20260101_000000.log"
+    log.write_text(log.read_text().replace(SOFT + "\n", ""))
+    done = x1copy(desk, "x-job-gemini", "0a")
+    assert done.returncode == 0, done.stderr
+    assert (wt / "x1-0a.log").read_text() == f"conversation {ID}\n"
+    assert done.stdout.splitlines()[-1] == "X1-COPY: 0a soft-denying 0"
+
+
+def test_t1_zero_soft_denying_lines_still_exits_0(desk):
+    wt = x1wt(desk)
+    home = agy_run(desk, str(wt))
+    log = home / "log" / "cli-20260101_000000.log"
+    kept = [ln for ln in log.read_text().splitlines() if "soft-denying" not in ln]
+    log.write_text("\n".join(kept) + "\n")
+    done = x1copy(desk, "x-job-gemini", "0c")
+    assert done.returncode == 0, done.stderr
+    assert (wt / "x1-0c.transcript").read_text() == CANARY
+    assert (wt / "x1-0c.log").read_text() == f"conversation {ID}\n"
+    assert done.stdout.splitlines()[-1] == "X1-COPY: 0c soft-denying 0"
+
+
+def test_t1_a_linked_brain_directory_is_refused(desk):
+    wt = x1wt(desk)
+    home = agy_run(desk, str(wt))
+    brain = home / "brain"
+    real = brain / ID
+    moved = brain / "real-tree"
+    real.rename(moved)
+    real.symlink_to(moved, target_is_directory=True)
+    (moved / ".system_generated" / "logs" / "transcript.jsonl").write_text("FOREIGN-RUN\n")
+    done = x1copy(desk, "x-job-gemini", "0c")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert "REFUSED: x1-copy:" in done.stderr
+    assert not (wt / "x1-0c.transcript").exists()
