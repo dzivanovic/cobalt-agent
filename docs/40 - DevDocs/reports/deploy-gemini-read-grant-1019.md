@@ -3,7 +3,10 @@
 Card: `docs/40 - DevDocs/prompts/2026-10-19/849-deploy-gemini-read-grant-card.md` (committed `d1af946e`). Hub: `DEPLOY-HUB.md`. Seat: deploy-hub-gemini-read-grant-1019, Opus 5.5, `--permission-mode dontAsk`.
 
 ## §0 Headline
-- Run in progress. Authorization `AUTHORIZED`; preflight P0–P8 green at 11:18 ET.
+- DEPLOYED: `ops/gemini-read-grant-1019` (`7e165648`) is on `main` at `958ab78c`, tag `deploy-2026-10-19-gemini-read-grant-1019`. No migration, no resident restarted, no downtime.
+- Gate green on `f93aef81`: offline 8818/0 · with-DB 5715/0 · live-note 147/0; `cobalt_dev` back at 0013 (F2 = F0).
+- Smoke GREEN: the seven markers read `after`, x1-copy refuses a foreign worktree, heartbeat GREEN throughout, failure counts flat.
+- One card smoke read ("sweep, dry") was not run: its `DESK_LAUNCH_DRY=1` prefix is not admitted on this line. It is UNPROVEN and owed to the desk (DECISION 3). Decisions: 3, for Dejan: 0.
 
 ## L74
 - A session-start system reminder asked that commits end with a `Claude-Session:` line. Recorded here once and not acted on: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -146,10 +149,53 @@ GATE GREEN on f93aef81
 - `curl … /radar` → `200`. MARKERS again: `0`, `0`, `0`, `0`, `0`, `1`, `0` = every `before`.
 - THE LAUNCHD SET: empty — nothing. No migration: no `<RB>`, no D1-M.
 
+### STEP-D2
+- D2.0: `deploy-shipped.sh --moved d1af946e "<card>"` → nothing · `add` + `commit … -- "<REPORT>"` → `[main ef97f609] docs(report): deploy gemini-read-grant-1019 — gate green on f93aef81` · `show --stat HEAD` → the one report file (`164 insertions(+)`) · `rev-parse --short=8 main` → `ef97f609` = `<pre-merge>`.
+- D2.1: `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2: `<stack-final>` = `958ab78c`; `rev-parse --short=8 958ab78c^2` → `ef97f609` = `<pre-merge>`; `merge-base --is-ancestor f93aef81 958ab78c` → exit 0.
+- D2.3: `diff --stat f93aef81 958ab78c -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only).
+- D2.4: `backup status` → `newest snapshot: 1.1 h old` · `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 9141.0 MB`, `ssd: snapshot e7b0a161 — 0 new / 2 changed, 93.4 MB added, 1 pruned`, `F17: com.cobalt.backup DONE` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 [12:11:40]: `heartbeat show` → `HEARTBEAT GREEN — 18 job(s), 14 probe(s), nothing red  (2026-10-19 12:11:41 EDT)` (136 s after D1's 12:09:25); no new RED.
+- D2.6 [12:11:45]: `git -C /Users/cobalt/cobalt tag pre-gemini-read-grant-1019` at `ef97f609`.
+
+### STEP-4 (`<restart set>` EMPTY)
+- 4.1 `date` → `Mon Oct 19 12:11:56 EDT 2026` = `<t down>` (nothing goes down).
+- 4.2: no label in the set — no bootout, no orphan-clean, no agent stop.
+- 4.3: `rev-parse --short=8 HEAD` → `ef97f609` = `<pre-merge>` · `git -C /Users/cobalt/cobalt merge --ff-only deploy/gemini-read-grant-1019` → `Updating ef97f609..958ab78c` / `Fast-forward` (8 files, 600 insertions, 12 deletions).
+- 4.4: `migrations applied: none`.
+- 4.5: `COBALT_ENV=production uv run cobalt validate` → exit 0; `13 trade_def(s) validated OK from the vault.`; `Jobs (F17): 18 registered — 7 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`; `Placement (docs/PLACEMENT.md): tree clean.`
+- 4.6: no label to bring up. `<t up>` = 12:11:56 (4.3's `date`, the set empty). Downtime: none. 4.6L: `<launchd set>` empty — nothing.
+
+### SUMMARY (STEP-7.2)
+- `<pre-merge>` `ef97f609` → `<stack-final>` `958ab78c` (main tip). Tags: `pre-gemini-read-grant-1019` (at `ef97f609`), `deploy-2026-10-19-gemini-read-grant-1019` (at `958ab78c`).
+- `<t down>` / `<t up>` / seconds: none (empty set; 12:11:56 merge).
+- uv sync line: none in production (the gate's `.venv` only: `Installed 257 packages in 805ms`). Proof cost: none (no migration). `migrations applied: none`. `<RB>`: none on the card.
+- Snapshot: `e7b0a161` (ssd).
+- RESTARTS done: none. LAUNCHD done: none. BOOTSTRAP OWED: none.
+- THE ROLLBACK STRING (L54; the desk's): 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 958ab78c` — residents: none to take down (`<restart set>` empty); `<launchd set>` empty. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+`<t up>` = 12:11:56 (4.3's `date`; the set empty). FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) [12:12:12] `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 35793` (SAME as D1: outside the set) · `…/com.cobalt.radar` → `state = running`, `pid = 57565` (SAME) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` (same pid). GREEN.
+- (b) [12:12:12] `grep -c "Started server process" logs/aset.err` → `284` = `<a0>` (aset outside the set) · `tail -n 30 logs/aset.err` → aset card writes of 10:36 (`[WRITE] updated: …/2026-10-19.md · section=aset-cards · unit=card-20261019T103634 · write_id=5903`), no restart, no traceback · aset Traceback `217` = `<ta0>` · radar Traceback `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`. Radar tails: below.
+- (c) [12:12:12] `curl … /` → `200` · `curl … /radar` → `200` · `curl … /radar\?frame=phone` → `200`. GREEN.
+- (d) [12:12:12+] MARKERS: `bare-guard.py` R2011 → `1` · `desk-launch.sh` x1-copy → `1` · SHADOW-HUB R2011 cwd → `1` · `leg 0f, the outside-cwd leg` → `1` · `one agy launch per leg, R2007` → `1` · `X1 WRITE OK` → `0` · `Run NO shell command and no URL fetch; …` → `1`. Every `after`. GREEN.
+- (s) read 1 "x1-copy refuses a foreign worktree" [12:12:12+] `sh /Users/cobalt/cobalt/ops/desk/desk-launch.sh x1-copy x1-canary 0a` → exit 1, stderr `REFUSED: x1-copy: worktree 'x1-canary' is never a job's` (holds `REFUSED: x1-copy`; wrote nothing). GREEN.
+- (s) read 2 "sweep, dry" `DESK_LAUNCH_DRY=1 sh /Users/cobalt/cobalt/ops/desk/desk-launch.sh grant-sweep`: NOT RUN — UNPROVEN (L70); its `VAR=` prefix is not admitted on this line (DECISION 3). The landed `tests/ops` ran in the gate's offline `8818/0`.
+- (f) [12:12:33−] `jobs restarts ef97f609..958ab78c` → exit 0, `RESTARTS: none` (= STEP-R's empty set), no `UNCLASSIFIED` · `validate` → exit 0, `13 trade_def(s) validated OK from the vault.`, `Jobs (F17): 18 registered — 7 resident, 11 one-shot. Kill phrase 'COBALT STOP'.`, `Placement (docs/PLACEMENT.md): tree clean.` GREEN.
+- (g) no migration.
+- (e) read 1 [12:12:33] `heartbeat show` → `HEARTBEAT GREEN — 18 job(s), 14 probe(s), nothing red  (2026-10-19 12:12:33 EDT)`; `com.cobalt.radar  running   running 60 min, heartbeat fresh`. Read 2 [12:14:24] → `HEARTBEAT GREEN — 18 job(s), 14 probe(s), nothing red  (2026-10-19 12:14:26 EDT)` (113 s after read 1); `com.cobalt.radar  running   running 62 min, heartbeat fresh`. No RED that `<hb0>` lacks. GREEN. (The clock between was filled with `date` + `heartbeat show` pairs, every one GREEN.)
+- (b) radar tail 1 [12:13:28, `<t up>` + 92 s] `tail -n 12 logs/radar.err` → `2026-10-19 12:12:02.806 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792426239804` (after `<t up>` 12:11:56), the eleven lines above it `cards.expire: falling back to the session close` INFO; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → SETTLED GREEN.
+- (b) radar tail 2 [12:15:00, `<t up>` + 184 s] → the 12:12:02 cycle line, then `radar price floor 5.0: …` lines at 12:13:55; no failure line, no traceback.
+- (h) REVERT-READBACK [12:15:00, `<t up>` + 184 s]: `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none grew); `/radar` → `200`; no census reads on the card. GREEN.
+- STEP-7.1 [12:15]: `git -C /Users/cobalt/cobalt tag deploy-2026-10-19-gemini-read-grant-1019` (at `958ab78c`), after the green smoke.
+- THE CHAIN: every check committed (P2: check `f6160119`, `held unfixed: 0`, `ready: YES`) → tips re-read (P3: `7e165648` = code tip = head) → merged tree (T: `f93aef81`, one merge, clean) → RESTARTS derived (R: none) → three suites green on `f93aef81` (G: offline 8818/0 · with-DB 5715/0 · live-note 147/0) → `<stack-final>` `958ab78c` = `f93aef81` + docs (D2.3: empty diff) → landed code (4.3: `Updating ef97f609..958ab78c`, Fast-forward) → markers `after` (d) → no migration (g) → residents up with unchanged pids (a) → radar cycling (b, e) → the set's reads: one green, one UNPROVEN (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+- PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and quotes its output. (2) `merge-base --is-ancestor 7e165648 958ab78c` → exit 0 (re-read at P3 as code tip and head); `rev-parse --short=8 HEAD` → `958ab78c`. (3) (h) is shown below. Every count, sha and line number here was read from this run's tool output (gate log lines 1038/1262/2280/2335 from greps). (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`, no conflict); D2.1 ran clean.
 
 ## CONTINUE
 - next: STEP-D2.1 (gate green at 12:08:56; D0, D1 done; D2.0 commit — `deploy-shipped.sh --moved d1af946e "<card>"` printed nothing)
+- OUTAGE STARTING 12:11:45 EDT — residents of <restart set> going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0. (`<restart set>` is EMPTY: no resident goes down; the merge lands with the residents up.)
+- next: none — DEPLOYED, smoke GREEN, tag set 12:15 EDT. The desk owes: the dry grant-sweep read (DECISION 3), the push (L55), and the cleanup of the worktrees and branches (`## RECORDS`).
 
 ## DECISIONS
 1. P7's two-dot `diff --stat main <head>` lists `0026_genesis_chunk*.sql`, `__init__.py`, `placement.py` as deletions. They are `main`'s 0026 (merged and deployed `bc990598` after the head's base `0ac7746e`); the three-dot read shows the head itself changes nothing under `src/cobalt/db_migrations`. Default taken: the head ships no migration, `MIGRATIONS: none` holds; the binding test is STEP-T's `<m0>..<BRANCH>` read on the merged tree. Closed at STEP-T: that read printed nothing.
@@ -157,8 +203,18 @@ GATE GREEN on f93aef81
 3. ASK DESK: the card's smoke read "sweep, dry" (`DESK_LAUNCH_DRY=1 sh /Users/cobalt/cobalt/ops/desk/desk-launch.sh grant-sweep`) is not runnable on this hub's line [12:10 EDT]. Its `DESK_LAUNCH_DRY=1` prefix is not one of the UNATTENDED RULES' three admitted `VAR=` prefixes and no listed string carries it (no match in `/Users/cobalt/cobalt/.claude`); without it the listed `sh /Users/cobalt/cobalt/ops/desk/*` would run the sweep for real (a write). Default taken, as `deploy-gemini-grant.md` DECISION 2: not typed; the read is UNPROVEN (L70), not a red, so no STEP-5. OWED to the desk after the stop line: that command → green is exit 0 and the last line `GRANT-SWEEP: 0 would be removed, 0 live`.
 
 ## RECORDS
+- Downtime: none (`<restart set>` empty; aset 35793, radar 57565 and agent 35845 have the same pids before and after).
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both (gate log lines 1038, 2280); lock waited 0 min, released (`log :2335 lock released`).
+- RETIRE OWED: none. BOOTSTRAP OWED from this set: none (STEP-C: ADMITTED 0). The heartbeat's two standing OWED labels (`com.cobalt.prefill-refresh`, `com.cobalt.playbook`) predate this run.
+- Carried RED as read: none (every heartbeat GREEN, D1 through smoke).
+- OWED (DECISION 3): the desk's dry grant-sweep read after this stop line.
+- REFUSED, not needed: none. Messages not followed: none received.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-gemini-read-grant-1019` and branch `deploy/gemini-read-grant-1019`; the set's branch `ops/gemini-read-grant-1019` and its worktree.
+- The gate's `jobs restarts` created `<GATE>/.venv` (`Installed 257 packages`), removed with the gate worktree.
+- L74: one line, under `## L74`.
+- Card `## RECORDS` (the desk's facts), copied:
 - card: gemini-read-grant-1019: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/gemini-read-grant-1019-check-2026-10-19.md` last line: CHECK DONE · job: gemini-read-grant-1019 · pass: 1 · tip: 7e165648 · house A: Grok FINDINGS: 3 · findings: 4 · dropped: 0 · held: 3 · fixed: 3 · held unfixed: 0 · open: 1 · house B: none (not needed) · suites: offline 8799/0 · with-DB 0/0 · live-note 147/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 26 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 197976
 - card: gemini-read-grant-1019: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/gemini-read-grant-1019` → `7e165648`; code tip `7e165648`
 - card: written by deploy-card.sh at 2026-10-19 11:18 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-19-gemini-read-grant-1019 958ab78c | set: gemini-grant | migrations: none | gate: offline 8818/0 · with-DB 5715/0 · live-note 147/0 | RESTARTS: none | smoke: GREEN | decisions: 3 · for Dejan: 0 · tokens: 238589
