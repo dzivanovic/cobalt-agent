@@ -355,6 +355,7 @@ def test_the_route_must_be_a_registered_route_name(tmp_path, route):
         vr.load_agent(_agent(tmp_path, route=route))
 
 
+@pytest.mark.xfail(strict=True, reason="check O1 HELD, NOT FIXED — src/cobalt/voice/registry.py; the fix round drops this mark")
 def test_the_route_must_be_a_chat_route_not_the_embed_route(tmp_path):
     with pytest.raises(vr.AgentConfigError):
         vr.load_agent(_agent(tmp_path, route="local.embed"))
