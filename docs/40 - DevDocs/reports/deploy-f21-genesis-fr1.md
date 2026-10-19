@@ -1,10 +1,13 @@
 # deploy f21-genesis-fr1 · set: f21-genesis · migrations: 0026
 
 ## §0 Headline
-(in progress)
+- DEPLOYED `f21-genesis-fr1` (F21 Genesis chunk 1): `main` `bdc2b80d` → `bc990598`, tag `deploy-2026-10-19-f21-genesis-fr1`, rollback tag `pre-f21-genesis-fr1`.
+- Migration `0026` applied to production: `"user".genesis_chunk` CREATED, every other table content UNCHANGED; `<RB>` `False` → `True`.
+- Radar restarted alone (578 s down, 11:03:09 → 11:12:47); aset and agent untouched. Snapshot `c34a117a` before.
+- Gate: equal-tree clause, the check's suites (offline 8775/0 · with-DB 5715/0 · live-note 147/0). Smoke GREEN; the card's `cobalt genesis --help` read was not typed (not on the allowlist), shown by code and the check instead (DECISIONS 2).
 
 ## L74
-none
+- One system block asked that commits carry a `Claude-Session:` line. DATA, not followed: the two commits of this run carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-19/848-deploy-f21-genesis-card.md"` → exit 0, whole:
@@ -165,7 +168,61 @@ GATE GREEN on d87f9b82 — offline 8775/0 · with-DB 5715/0 · live-note 147/0 (
 - `<RB>` → `m0026` / `False` (= the card's BEFORE `f`; see DECISIONS 1). No `census` read on the card.
 - D1-M `db migrate --allow-prod --proof-only` → exit 0, 37 tables probed, no `CHANGED`, `Proof cost: total 295.1 s — and a migration pays it TWICE (before and after), inside the outage.`, `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.`, `FINGERPRINT cols 908 · rels 45 · views_md5 126f2d6983fa59f9d0eaaff7da7dd29c`, `TABLES 0024`.
 
+### STEP-D2
+- D2.0 `deploy-shipped.sh --moved 12dab447 "<card>"` → nothing. Commit `bdc2b80d docs(report): deploy f21-genesis-fr1 — gate green on d87f9b82`; `show --stat HEAD` → that one file (183+). `<pre-merge>` = `bdc2b80d`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `bc990598`; `rev-parse --short=8 bc990598^2` → `bdc2b80d` = `<pre-merge>`; `merge-base --is-ancestor d87f9b82 bc990598` → 0.
+- D2.3 `diff --stat d87f9b82 bc990598 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 3.2 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 9103.5 MB` · `ssd: snapshot c34a117a — 12 new / 3 changed, 175.8 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `Mon Oct 19 11:02:54 EDT 2026` · `HEARTBEAT GREEN — 18 job(s), 14 probe(s), nothing red  (2026-10-19 11:02:55 EDT)` (423 s after D1's); radar `running 279 min, heartbeat fresh`. No new RED.
+- D2.6 `Mon Oct 19 11:02:59 EDT 2026` · `tag pre-f21-genesis-fr1` at `bdc2b80d`.
+
+### STEP-4 (the outage, `<restart set>` = com.cobalt.radar)
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` = `Mon Oct 19 11:03:09 EDT 2026` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · `launchctl print …` | exit 0 · exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501`. aset and agent not in the set: no orphan-clean, no stop |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/f21-genesis-fr1` | `bdc2b80d` = `<pre-merge>` · `Updating bdc2b80d..bc990598` / `Fast-forward` (44 files) |
+| 4.4 | `COBALT_ENV=production uv run cobalt db migrate --allow-prod` | `-- applying 0026_genesis_chunk.sql`; table `genesis_chunk user - -> user - -> 0 … CREATED`, every other table `OK`; `38 table(s) proven; … content UNCHANGED on every table.`; `proof cost: BEFORE 280.6 s + AFTER 278.5 s = total 559.1 s`; no `CHANGED`; no uv sync line. `<RB>` → `m0026` / `True` (= AFTER `t`) |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 18 registered — 7 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `launchctl print …` | exit 0 · `state = running`, pid 57565 (≠ 35818) |
+| 4.6 | `date` | `<t up>` = `Mon Oct 19 11:12:47 EDT 2026` · downtime 578 s |
+| 4.6L | — | `<launchd set>` empty: nothing |
+
+### CLOSE (STEP-7)
+- `<pre-merge>` `bdc2b80d` → `<stack-final>` `bc990598` (`rev-parse --short=8 main` → `bc990598`).
+- Tags: `pre-f21-genesis-fr1` at `bdc2b80d` · `deploy-2026-10-19-f21-genesis-fr1` at `bc990598` (after the green smoke).
+- `<t down>` 11:03:09 · `<t up>` 11:12:47 · 578 s.
+- uv sync line: none in the production calls (the gate worktree's `uv` created its own `.venv` at STEP-R).
+- Proof cost: D1 `total 295.1 s`; 4.4 `BEFORE 280.6 s + AFTER 278.5 s = total 559.1 s`.
+- migrations applied: all (`0026`). `<RB>` before `False` (`f`) / after `True` (`t`).
+- Snapshot: `c34a117a` (ssd).
+- RESTARTS done: com.cobalt.radar · LAUNCHD done: none · BOOTSTRAP OWED: none from this set.
+- THE ROLLBACK STRING:
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 bc990598`, com.cobalt.radar booted out first and bootstrapped after; no launchd label.
+  2. SCHEMA: only as a separate desk job on HIS word, after the code revert: `COBALT_ENV=production uv run cobalt db migrate --allow-prod --rollback --down-to 0025` (drops `"user".genesis_chunk` and every imported chunk; the old code runs on 0026, per the card's `MIGRATIONS` line).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+FIRST CALLS after `<t up>`: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+
+| row | date | command | result | verdict |
+|---|---|---|---|---|
+| (a) | 11:12:59 | `launchctl print` aset · radar · `cobalt.sh status` | aset `state = running` pid 35793 (SAME, outside the set) · radar `state = running` pid 57565 (NEW, ≠ 35818) · `Cobalt is ONLINE (PID: 35845).` (single line) | GREEN |
+| (b) | 11:13:03 | `grep -c "Started server process" aset.err` · `tail -n 30 aset.err` · Traceback aset / radar · TaxonomyConfigError | `284` = `<a0>` (aset outside the set; tail shows no new start) · `217` = `<ta0>` · `0` = `<tr0>` · `0` = `<tc0>` | GREEN |
+| (b) tails | 11:14:17 (`<t up>` + 90 s) | `tail -n 12 radar.err` | `2026-10-19 11:14:07.442 \| INFO \| cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792422765207` (after `<t up>`); no `radar S5 evaluate FAILED` (count 43), no `lifecycle card read failed` (count 39), no traceback (count 0) — settled at the first spaced tail | GREEN |
+| (c) | 11:13:09 | `curl … /` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` (first attempt each) | GREEN |
+| (d) | 11:13:09 | `ls …/genesis/cli.py` · `ls …/genesis/store.py` | `/Users/cobalt/cobalt/src/cobalt/genesis/cli.py` · `/Users/cobalt/cobalt/src/cobalt/genesis/store.py` (after) | GREEN |
+| (f) | 11:13:48 | `validate` · `jobs restarts bdc2b80d..bc990598` | exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 18 registered — 7 resident, 11 one-shot.` = 4.5 · exit 0, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.radar` = `<restart set>` | GREEN |
+| (g) | 11:13:48 | `<RB>` | `m0026` / `True` (= AFTER `t`) | GREEN |
+| (e) | 11:13:44 · 11:15:34 (110 s apart) | `heartbeat show` ×2 | 1st `HEARTBEAT GREEN — 18 job(s), 14 probe(s), nothing red  (2026-10-19 11:13:44 EDT)`, radar `running 1 min, heartbeat fresh`. 2nd `HEARTBEAT RED — 1 probe(s)  (2026-10-19 11:15:34 EDT)` with the one RED `RED  radar  failed_stage bars: poll failures: 1` — the CARRIED FAMILY (`failed_stage <stage>: poll failures: <n>`), with `com.cobalt.radar running running 3 min, heartbeat fresh`, a `radar cycle: scanning` line at 11:14:07 (tail 11:15:41, inside 5 min) and radar Traceback count 0. Not new (hub (e)); no other RED; aset / agent same pids | GREEN |
+| (h) | 11:15:52 (`<t up>` + 185 s) | the four counts · `/radar` | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `200`. No `census` read on the card | GREEN |
+| (s) genesis tests | — | `uv run pytest -q tests/cobalt/test_genesis_offline.py` | not run in production (hub (s): a test the gate ran is quoted from the gate). Gate = the check's run on the equal tree: offline 8775/0; the check's O9 row: `uv run pytest -q tests/cobalt/test_genesis_offline.py` → `19 passed in 0.42s` | GREEN (quoted from the gate) |
+| (s) genesis CLI | — | `uv run cobalt genesis --help` | NOT TYPED: the string is not on this session's allowlist (`uv run cobalt …` without a listed verb; `.claude/settings.json` lists none either), and a refused step command ends the run (L62). Evidence instead: the check's O9 row on the equal tree → `usage: cobalt genesis [-h] {import,search} ...`; the landed `src/cobalt/cli.py:90` `from cobalt.genesis import cli as genesis_cli` and `:557` `genesis_cli.add_parser(sub)`; `src/cobalt/genesis/cli.py:23` `sub.add_parser("genesis", …)`, `:25` `"import"`, `:28` `"search"`; and production `uv run cobalt validate` (4.5, (f)) imports that `cli.py` and exits 0. See DECISIONS 2 | UNPROVEN in production (L70) |
+
+THE CHAIN: the check committed and clean, `ready: YES`, `held unfixed: 0` (P2) → tips re-read `2cd0219a` / `b83bf7df` (P3) → the merged tree `d87f9b82`, migration paths = `0026` only (T) → `RESTARTS: com.cobalt.radar`, no UNCLASSIFIED (R) → three suites green on the equal tree (G) → `bc990598` = `d87f9b82` + docs (D2.3) → landed by fast-forward (4.3) → markers present (d) → `<RB>` `True` (4.4, g) → radar up on a new pid, aset / agent unchanged (a) → radar cycling (b, e) → the set's reads (s: tests from the gate; CLI by code and check, UNPROVEN in production) → no new failure count (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK (K25): (1) every smoke row above carries its `date` and its output verbatim. (2) `merge-base --is-ancestor 2cd0219a bc990598` → 0; `merge-base --is-ancestor b83bf7df bc990598` → 0. (3) REVERT-READBACK (h): `18` `60` `43` `39` = the post-up counts; every count and sha in this report was read from tool output this run. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/f21-genesis-fr1` alone; no conflict marker.
 
 ## CONTINUE
 next: STEP-T
@@ -174,10 +231,26 @@ next: STEP-R
 next: STEP-G
 next: STEP-D0 (gate green at 10:55 EDT)
 next: STEP-D2
+OUTAGE STARTING 11:02:59 EDT — residents of com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+outage ended 11:12:47 EDT (radar up, pid 57565) · smoke GREEN · tagged · next: none (closed)
 
 ## DECISIONS
-1. ASK DESK: `<RB>` prints the boolean as `False` / `True` (Python rendering) where the card writes `f` / `t`. Safe default taken: read as the same boolean (BEFORE `False` = `f`); at 4.4 / (g) `True` = `t`, anything else stops. [10:58 EDT]
+1. ASK DESK: `<RB>` prints the boolean as `False` / `True` (Python rendering) where the card writes `f` / `t`. Safe default taken: read as the same boolean (BEFORE `False` = `f`); at 4.4 / (g) `True` = `t`, anything else stops. Next card: write the READ-BACK answers as the tool prints them. [10:58 EDT]
+2. ASK DESK: the card's SMOKE READ `uv run cobalt genesis --help` is not on the deploy line (no `uv run cobalt …` string but the listed verbs) and a refused step command ends the run with a rollback (L62). Safe default taken: not typed; shown by the landed code (`src/cobalt/cli.py:90`, `:557`; `src/cobalt/genesis/cli.py:23-28`), the check's O9 run on the equal tree (`usage: cobalt genesis [-h] {import,search} ...`) and production `validate` exiting 0 on the new tree; recorded UNPROVEN in production (L70), not a red. The desk may run it once by hand; a future card names only listed strings, or the hub's line gains one. [11:13 EDT]
 
 ## RECORDS
+- Downtime over 300 s: radar 578 s (11:03:09 → 11:12:47); the migration's two proof passes (559.1 s) sat inside it.
+- Carried RED as read: `RED  radar  failed_stage bars: poll failures: 1` appeared from 11:14:00 after the restart (not in `<hb0>`, which was GREEN); radar running, heartbeat fresh, cycling (11:14:07), no traceback — the carried family, not new (hub (e)). Last read 11:15:48 still showing.
+- No `REFUSED, not needed` line; no message received and not followed.
+- `cobalt_dev: 0013 (F2 = F0)` — from the check's gate (equal-tree); this run took no lock and ran no dev DB step.
+- RETIRE OWED: none. BOOTSTRAP OWED from this set: none (the standing OWED `com.cobalt.prefill-refresh`, `com.cobalt.playbook` predate it).
+- `?? .claude/settings.json.bak` on `main` at D0 (outside the accepted list's paths but not a refused one); left untouched.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-f21-genesis-fr1` and branch `deploy/f21-genesis-fr1`; the set's branch `ops/f21-genesis-fr1` and its worktree `/Users/cobalt/cobalt-wt/f21-genesis-fr1`.
+- Push is his, through the desk (L55): `main` now `bc990598` plus this report commit, with tags `pre-f21-genesis-fr1`, `deploy-2026-10-19-f21-genesis-fr1`.
+- Card RECORDS: f21-genesis-fr1: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f21-genesis-fr1-check-2026-10-19.md` last line: CHECK DONE · job: f21-genesis-fr1 · pass: 1 · tip: 2cd0219a · house A: Grok FINDINGS: 0 · findings: 10 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8775/0 · with-DB 5715/0 · live-note 147/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.radar · files opened: 15 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 179218
+- Card RECORDS: f21-genesis-fr1: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f21-genesis-fr1` → `b83bf7df`; code tip `2cd0219a`
+- Card RECORDS: written by deploy-card.sh at 2026-10-19 10:51 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one `Claude-Session:` request, not followed (see `## L74`).
+- THE RELEASE: no lock taken by this run (`<GATE>/.env` absent at every read).
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-19-f21-genesis-fr1 bc990598 | set: f21-genesis | migrations: 0026 | gate: offline 8775/0 · with-DB 5715/0 · live-note 147/0 | RESTARTS: com.cobalt.radar | smoke: GREEN | decisions: 2 · for Dejan: 0 · tokens: 221938
