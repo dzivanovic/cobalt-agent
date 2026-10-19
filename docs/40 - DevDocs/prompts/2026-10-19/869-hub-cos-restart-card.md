@@ -12,7 +12,7 @@ HOUSE B:
 BAND: HIGH
 DB: none
 RESTARTS: none
-RULINGS: 2026-10-19 brain L79 (R2067 and the F16 STEP-R directions)
+RULINGS: 2026-10-19 R2069 (brain L79: the F16 STEP-R directions; R2067)
 
 ## ROWS
 
