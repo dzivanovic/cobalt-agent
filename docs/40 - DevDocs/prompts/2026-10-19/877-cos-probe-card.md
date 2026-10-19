@@ -5,9 +5,9 @@ INSTALL: none
 BRANCH: ops/cos-probe-1019
 WORKTREE: cos-probe-1019
 BASE: 07eb89a3
-TIP:
+TIP: 8f47d85b
 REPORT: /Users/cobalt/cobalt-wt/cos-probe-1019/docs/40 - DevDocs/reports/cos-probe-1019-build-2026-10-19.md
-CHECK REPORT:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-probe-1019-check-2026-10-19.md
 HOUSE B: as needed
 BAND: HIGH
 RESTARTS: com.cobalt.radar
