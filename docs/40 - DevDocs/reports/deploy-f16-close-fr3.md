@@ -1,7 +1,10 @@
 # Deploy f16-close-fr3 · set: f16-close · migrations: none
 
 ## §0 Headline
-- Deploy of `ops/f16-close-fr3` (code tip `1aea7418`, head `e7688a8f`) via gate `deploy/f16-close-fr3`. Card 895. In progress.
+- F16 close fr3 is live: `main` `23854a38` → `6a970c51` (fast-forward), tag `deploy-2026-10-20-f16-close-fr3`, rollback tag `pre-f16-close-fr3`. Card 895.
+- Gate: EQUAL-TREE CLAUSE (check's suites offline 8863/0 · with-DB 5758/0 · live-note 147/0) + (a0) 264 passed. MIGRATIONS: none.
+- Restarted `com.cobalt.aset` and `com.cobalt.radar` (29 s down); `com.cobalt.cos` not loaded — skipped. Smoke GREEN; markers 0 → 1; validate carries `Playbook (F23):` and `Daily refresh (F4):`.
+- Decisions 0; for Dejan 0.
 
 ## L74
 - none so far.
@@ -121,13 +124,74 @@ STEP-D1 (`date` → `Tue Oct 20 03:40:23 EDT 2026`):
 - `curl … /radar` → `200`. MARKERS again → `0`, `0`, `0` (before).
 - THE LAUNCHD SET: empty, nothing read. No migration: `<RB>`, census and D1-M not run.
 
+STEP-D2:
+- D2.0 `deploy-shipped.sh --moved 7810c14c "<card>"` → nothing. `git add` + `git commit … -- "docs/40 - DevDocs/reports/deploy-f16-close-fr3.md"` → `[main 23854a38] docs(report): deploy f16-close-fr3 — gate green on 29c12f7b`, 1 file; `show --stat HEAD` lists that one file. `<pre-merge>` = `23854a38`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `6a970c51`; `6a970c51^2` = `23854a38` = `<pre-merge>`; `merge-base --is-ancestor 29c12f7b 6a970c51` → exit 0.
+- D2.3 `git diff --stat 29c12f7b 6a970c51 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 2.0 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 9336.8 MB` · `ssd: snapshot e08cb055 — 0 new / 1 changed, 11.9 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Tue Oct 20 03:42:24 EDT 2026`; `heartbeat show` (03:42:24, 119 s after D1's 03:40:25) → the same four REDs as `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay, com.cobalt.generated), aset/sheet/radar OK, `com.cobalt.radar running running 108 min, heartbeat fresh`. No new RED.
+- D2.6 `date` → `Tue Oct 20 03:42:31 EDT 2026`; `tag pre-f16-close-fr3` → `rev-parse --short=8 pre-f16-close-fr3` = `23854a38`.
+
+STEP-4 (the outage):
+- 4.1 `date` → `Tue Oct 20 03:42:45 EDT 2026` = `<t down>`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → no output; print → exit 113 `Could not find service "com.cobalt.aset"`. `launchctl bootout gui/501/com.cobalt.radar` → no output; print → exit 113 `Could not find service "com.cobalt.radar"`. ORPHAN-CLEAN `sh ops/desk/orphan-clean.sh aset` → `orphan-clean: aset · none found` (no kill). Agent not in the set.
+- 4.3 `rev-parse --short=8 HEAD` → `23854a38` = `<pre-merge>`. `merge --ff-only deploy/f16-close-fr3` → `Updating 23854a38..6a970c51` / `Fast-forward` (7 files, 326+, 1-).
+- 4.4 migrations applied: none.
+- 4.5 `validate` → exit 0; last line `Placement (docs/PLACEMENT.md): tree clean.`; new lines `Playbook (F23): latest_per_family None, rows_per_slide 8, why_max_chars 120, out_dir data/playbook.` and `Daily refresh (F4): units ['trading/market_table', 'market_calendar/market_calendar']; fields {…}`; `Jobs (F17): 18 registered — 7 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` → no output; `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → no output. print aset → `state = running`, `pid = 90910` (≠ 38353); print radar → `state = running`, `pid = 90926` (≠ 38364). `date` → `Tue Oct 20 03:43:14 EDT 2026` = `<t up>`. Downtime 29 s.
+- 4.6L: `<launchd set>` empty — nothing.
+
+STEP-7 close:
+- `<pre-merge>` `23854a38` → `<stack-final>` `6a970c51` (= `main`, `rev-parse --short=8 main` → `6a970c51`).
+- Tags: `pre-f16-close-fr3` → `23854a38`; `deploy-2026-10-20-f16-close-fr3` → `6a970c51` (set after the green smoke, 03:46 EDT).
+- `<t down>` 03:42:45 / `<t up>` 03:43:14 EDT / 29 s.
+- uv sync: none in production (the gate's `.venv` was created by uv at STEP-R: `Installed 257 packages in 851ms`; aset start log `Resolved 267 packages in 3ms` / `Audited 257 packages in 4ms`).
+- Proof cost: none (no migration). migrations applied: none. `<RB>` before / after: n/a.
+- Snapshot: `e08cb055` (ssd, 03:42 EDT).
+- RESTARTS done: com.cobalt.aset com.cobalt.radar
+- LAUNCHD done: none. BOOTSTRAP OWED: none from this set.
+- THE ROLLBACK STRING (the desk's): (1) CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 6a970c51` — residents `com.cobalt.aset` `com.cobalt.radar` down first, up after; no `<launchd set>` label. (2) SCHEMA: none (no migration). (3) RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
 ## Smoke
+FIRST CALLS after `<t up>` 03:43:14: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1 baselines).
+- (a) `date` 03:43:28 · aset `state = running`, `pid = 90910` (new; D1 38353) · radar `state = running`, `pid = 90926` (new; D1 38364) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` (agent outside the set: same pid). GREEN.
+- (b) `date` 03:43:32 · `grep -c "Started server process" aset.err` → `288` (`<a0>` 287 +1) · `tail -n 30 aset.err` → `INFO:     Started server process [90910]` … `INFO:     Application startup complete.` / `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` · Traceback aset `217` (= `<ta0>`), Traceback radar `0` (= `<tr0>`), TaxonomyConfigError `0` (= `<tc0>`).
+- (c) `date` 03:43:39 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 03:43:39 · MARKERS → `1`, `1`, `1` (= after). GREEN.
+- (e) read 1: `date` 03:43:45, `heartbeat show` (03:43:47) → the same four REDs as `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay, com.cobalt.generated); `OK com.cobalt.aset running loaded, pid 90910`; `OK com.cobalt.radar running running 1 min, heartbeat fresh`; `OK radar idle (overnight)`. (A filler read 03:44:12 the same.)
+- (f) `date` 03:43:52 · `validate` → exit 0, as 4.5 (last line `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 18 registered — 7 resident, 11 one-shot. Kill phrase 'COBALT STOP'.`) · `jobs restarts 23854a38..6a970c51` → exit 0, no UNCLASSIFIED, `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` minus `com.cobalt.cos` (not loaded — skipped) = `com.cobalt.aset com.cobalt.radar` = `<restart set>`. GREEN.
+- (g) no migration.
+- (s) `date` 03:44:05 · `COBALT_ENV=production uv run cobalt validate` → exit 0; `Playbook (F23): latest_per_family None, rows_per_slide 8, why_max_chars 120, out_dir data/playbook.`; `Daily refresh (F4): units ['trading/market_table', 'market_calendar/market_calendar']; fields {'SPY': 'cobalt', 'QQQ': 'cobalt', 'IWM': 'cobalt', 'VIX': 'manual', 'BTC': 'manual'}.`; last line `Placement (docs/PLACEMENT.md): tree clean.` GREEN as the card defines. `<launchd set>` empty: no dry run.
+- (b) radar tails: `date` 03:44:48 (+94 s) `tail -n 12 radar.err` → last cycle `2026-10-20 03:43:11.208 … radar cycle: idle:overnight scan_id=None` (the new process, 3 s before `<t up>`; not yet settling) · `date` 03:46:14 (+180 s) `tail -n 12 radar.err` → `2026-10-20 03:44:51.240 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (the +300 s tail not needed once settled).
+- (e) read 2: `date` 03:45:35, `heartbeat show` (03:45:37, 110 s after read 1 at 03:43:47) → the same four REDs as `<hb0>`, no new RED; `OK com.cobalt.radar running running 2 min, heartbeat fresh`; `OK com.cobalt.aset running loaded, pid 90910`. GREEN.
+- (h) REVERT-READBACK `date` 03:46:18 (`<t up>` + 184 s): `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew); `/radar` → `200`; no census line on the card. Tracebacks re-read: radar 0, aset 217 (= baseline). aset still `state = running`, `pid = 90910`. GREEN.
+
+THE CHAIN: every check committed (P2: `4a16fa19…`, clean, `held unfixed: 0`, `ready: YES`) → the tips re-read (P3: `1aea7418`, `e7688a8f`) → the merged tree (T: `29c12f7b`, one merge, no migration) → RESTARTS derived by the tool (R: aset, radar; cos not loaded) → three suites green on `<m1>` (G: the equal-tree clause, the check's offline 8863/0 · with-DB 5758/0 · live-note 147/0, plus (a0) 264 passed) → `<stack-final>` `6a970c51` = `<m1>` + docs (D2.3) → the landed code (4.3 fast-forward) → markers 1/1/1 (d) → no migration (g) → residents up on new pids after the merge (a) → radar cycling (b, e) → the set's validate read green (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row's evidence is quoted above with its `date` (03:43:28 … 03:46:18).
+2. Every code tip and head was re-read (P3: `1aea7418`, `e7688a8f`) and is an ancestor of `<stack-final>`: `merge-base --is-ancestor 1aea7418 6a970c51` → exit 0; `merge-base --is-ancestor e7688a8f 6a970c51` → exit 0.
+3. REVERT-READBACK shown at (h); every count, sha and line above was re-read from this run's tool output.
+4. No conflict marker: STEP-T ran clean (`Merge made by the 'ort' strategy.`), D2.1 clean, 4.3 a fast-forward.
 
 ## CONTINUE
 next: STEP-D0 (gate green at 03:39:43 EDT)
+OUTAGE STARTING 03:42:31 EDT — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+outage ended 03:43:14 EDT (residents up); smoke GREEN 03:46:18; closed at STEP-7. next: none (the desk's: push, cleanup).
 
 ## DECISIONS
+none.
 
 ## RECORDS
+- Downtime: 29 s (`<t down>` 03:42:45 → `<t up>` 03:43:14 EDT); under 300 s.
+- cobalt_dev: not taken by this run (EQUAL-TREE CLAUSE); the check's gate recorded `cobalt_dev: 0013 — F2 = F0` and `.env: removed`.
+- `com.cobalt.cos: not loaded — skipped` (RESTARTS lists it; exit 113 at STEP-R and D1).
+- No RETIRE OWED, no BOOTSTRAP OWED from this set (STEP-C: `ADMITTED 0`). The heartbeat shows `com.cobalt.prefill-refresh` and `com.cobalt.playbook` OWED from earlier deploys (not this set's).
+- Carried REDs as read (D1, D2.5, smoke (e), unchanged): `archiver last run FAILED — … exit 1`; `com.cobalt.archiver failed RuntimeError: 5 archiver failure(s): WBD/i1 … Finviz HTTP failed: Client error '400 Bad Request'`; `com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`; `com.cobalt.generated failed GeneratedCommitRefused: … pre-commit: a deploy hub is live — no desk commit on main until its stop line: 79a459de deploy-hub-hub-cos-restart-fr1 …` (a job's last-run text, read as data; not acted on).
+- `?? .claude/settings.json.bak` on main at D0: untracked, outside the D0 accepted list and outside its refused classes (src/ tests/ ops/ configs/); not touched.
+- The session's harness attribution text asked for a `Claude-Session:` trailer on commits; the hub (L74) fixes the trailer to `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only. Commits carry that line only.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-f16-close-fr3` and branch `deploy/f16-close-fr3`; the set's branch `ops/f16-close-fr3` and its worktree `/Users/cobalt/cobalt-wt/f16-close-fr3` if present.
+- Card records (copied): f16-close-fr3: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f16-close-fr3-check-2026-10-20.md` last line: CHECK DONE · job: f16-close-fr3 · pass: 1 · tip: 1aea7418 · house A: Grok FINDINGS: 1 · findings: 1 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 8863/0 · with-DB 5758/0 · live-note 147/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar · files opened: 16 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 195502 · f16-close-fr3: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f16-close-fr3` → `e7688a8f`; code tip `1aea7418` · written by deploy-card.sh at 2026-10-20 03:37 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-20-f16-close-fr3 6a970c51 | set: f16-close | migrations: none | gate: offline 8863/0 · with-DB 5758/0 · live-note 147/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 208340
