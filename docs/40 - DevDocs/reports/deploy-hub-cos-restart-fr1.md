@@ -121,11 +121,13 @@ Nothing merged, nothing down, no tag set. `<m0>` 9085d30d · `<m1>` 501c6935 · 
 Not reached.
 
 ## CONTINUE
-next: STEP-D0 after 22:30 ET (gate green at 21:29:57 on 501c6935; `<restart set>` empty). A relaunch is `CONTINUE: STEP-D0`, or the desk's recut.
+(attempt 1) STEP-D0 after 22:30 ET (gate green at 21:29:57 on 501c6935; `<restart set>` empty).
+(attempt 2) next: STEP-D2 (D2.0 commit, then D2.1 `main` into the gate).
 
 ## DECISIONS
 1. ASK DESK: the run reached STEP-D0 at 21:30 ET, inside the backup window; D2.4's `backup run` must stay off 21:30-22:30 ET (R1295) and this file has no wait command for an hour. [21:30:24] Default: stop here, `rollback: not used`, nothing in production touched; relaunch `CONTINUE: STEP-D0` after 22:30 ET (as R1513 did for 548) — the gate evidence (`GATE GREEN on 501c6935`, `<restart set>` empty) stands for that resume.
 2. ASK DESK: D0's porcelain shows ` M "docs/30 - Design/archiver-runs.md"` — not in the ACCEPTED list (`docs/40 - DevDocs/` only) and not in the REFUSED list (`src/`, `tests/`, `ops/`, `configs/`, staged). [21:30:24] Default: not a refusal (docs, unstaged, not a path this set ships); the resume reads it again.
+3. ASK DESK (attempt 2): D0's porcelain shows `?? .claude/settings.json.bak` — not in the ACCEPTED list (` M .claude/settings.json` only) and not in the REFUSED list. [22:50] Default: not a refusal (untracked, outside `src/`, `tests/`, `ops/`, `configs/`, not a path this set ships); go on.
 for Dejan: none.
 
 ## RECORDS
@@ -141,4 +143,63 @@ for Dejan: none.
   - hub-cos-restart-fr1: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/hub-cos-restart-fr1` → `6ee55933`; code tip `0bf28619`
   - written by deploy-card.sh at 2026-10-19 20:26 ET (`date`); trial merge of the heads onto main in order: clean
 
-FAILED: STEP-D0 — backup window 21:30-22:30 ET reached after a green gate (GATE GREEN on 501c6935); D2.4 backup run stays off it (R1295); nothing merged, nothing down · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 117735
+# RELAUNCH
+- Launch message: `CONTINUE: STEP-D0` (attempt 2). `date` → `Mon Oct 19 22:49:35 EDT 2026`.
+- The old last non-blank line, quoted: `FAILED: STEP-D0 — backup window 21:30-22:30 ET reached after a green gate (GATE GREEN on 501c6935); D2.4 backup run stays off it (R1295); nothing merged, nothing down · rollback: not used · decisions: 2 · for Dejan: 0 · tokens: 117735`
+
+RESUMED: STEP-D0 22:49:35
+
+- (e) FIRST: `launchctl print gui/501/com.cobalt.aset` → `state = running`, pid 35793 · `launchctl print gui/501/com.cobalt.radar` → `state = running`, pid 57565 · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` — residents up; no restore needed.
+- THE GATE'S OWN `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-hub-cos-restart-fr1/.env` → `No such file or directory` — nothing to release.
+- (a) the old last line begins `FAILED:` — true.
+- (b) `## L68 GATE` carries `GATE GREEN on 501c6935`; `## RESTARTS` records `<restart set>` EMPTY — true.
+- (c) `git -C <GATE> status --short --branch` → `## deploy/hub-cos-restart-fr1` · `git -C <GATE> rev-parse --short=8 HEAD` → `501c6935` = `<m1>` — true.
+- (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor 501c6935 main` → exit 1 — true (nothing merged).
+
+## RESUME (attempt 2)
+STEP-0, fresh rows:
+
+| rule | command | exit | result |
+|---|---|---|---|
+| P0 | `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "<card>"` | 0 | same eleven rows as `## AUTHORIZATION` (card `9085d30d…`, R60 row `962e9d17…`, R1863 row `11563e82…`), last line `AUTHORIZED` |
+| P1 | `date` | 0 | `Mon Oct 19 22:49:54 EDT 2026` — outside 21:30-22:30 |
+| P2 | `tail -n 3 ".../hub-cos-restart-fr1-check-2026-10-19.md"` | 0 | last line unchanged: `CHECK DONE · … · tip: 0bf28619 · … · held unfixed: 0 · … · ready: YES · …` |
+| P2 | `git -C /Users/cobalt/cobalt log -1 --format=%H -- "<check report>"` | 0 | `e1845f1fed3fb3073c25dda21281a79994c5d2c7` |
+| P2 | `git -C /Users/cobalt/cobalt diff --stat -- "<check report>"` | 0 | nothing |
+| P3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 0bf28619` | 0 | `0bf28619` |
+| P3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/hub-cos-restart-fr1` | 0 | `6ee55933` = row = TIP |
+| P3 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor 0bf28619 6ee55933` | 0 | — |
+| P3 | `git -C /Users/cobalt/cobalt diff --stat 0bf28619 6ee55933 -- . ':(exclude)docs'` | 0 | nothing |
+| P4 | `ls -la /Users/cobalt/cobalt-wt/*/.env` | 1 | `(eval):1: no matches found: /Users/cobalt/cobalt-wt/*/.env` — lock free |
+| P5 | `git -C <GATE> status --short --branch` | 0 | `## deploy/hub-cos-restart-fr1` (check (c)) |
+| P5 | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `501c6935` = `<m1>` (check (c)); `<m0>` stays the report's `9085d30d` |
+| P5 | `git -C /Users/cobalt/cobalt merge-base --is-ancestor 9085d30d main` | 0 | — (EMPTY check not run on a resume) |
+| P6 | the three `## MARKERS` greps | 1 · 1 · 1 | `0` · `0` · `0` = before |
+| P7 | `git -C /Users/cobalt/cobalt diff --stat main 6ee55933 -- src/cobalt/db_migrations` | 0 | nothing — MIGRATIONS: none holds |
+| P8 | `launchctl print gui/501/com.cobalt.aset` (check (e)) | 0 | `state = running`, `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` |
+| P8 | `launchctl print gui/501/com.cobalt.radar` (check (e)) | 0 | `state = running`, `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` |
+| P8 | `ls /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | listed |
+| P8 | `/Users/cobalt/cobalt/cobalt.sh status` (check (e)) | 0 | `Cobalt is ONLINE (PID: 35845).` |
+
+STEP-D0:
+- `git -C /Users/cobalt/cobalt status --short --branch` → first line `## main...origin/main [ahead 8]`.
+- `git -C /Users/cobalt/cobalt status --porcelain` → no staged line; no dirty `src/`, `tests/`, `ops/`, `configs/` path; ` M .claude/settings.json` and ` M`/`??` under `docs/40 - DevDocs/` (accepted). The earlier ` M "docs/30 - Design/archiver-runs.md"` is gone. One line outside both lists: `?? .claude/settings.json.bak` (see `## DECISIONS` 3).
+- `git -C /Users/cobalt/cobalt diff --stat 9085d30d main -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- ALLOWLIST PROBE: `tag scratch-allow-probe-hub-cos-restart-fr1` → ok · `tag -d …` → `Deleted tag 'scratch-allow-probe-hub-cos-restart-fr1' (was 0d64db02)` · `commit --allow-empty -m "scratch: …"` → `[main 9058945f] scratch: allowlist probe (reverted next line)` · `reset --soft HEAD~1` → ok · `log --oneline -1` → `0d64db02 docs(desk): 469 check ETA 23:10 ET for the lock` (HEAD back).
+- TAG NAMES: `rev-parse --verify --quiet refs/tags/deploy-2026-10-19-hub-cos-restart-fr1` → exit 1 · `… refs/tags/pre-hub-cos-restart-fr1` → exit 1 (no earlier rollback tag to delete).
+
+STEP-D1 (read-only):
+- `date` → `Mon Oct 19 22:50:20 EDT 2026`.
+- `COBALT_ENV=production uv run cobalt heartbeat show` → `<hb0>`: `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-19 22:50:21 EDT)`. REDs, named (not aset / sheet / radar, not a stop): `RED  archiver  last run FAILED — last run 2026-10-20 00:54 UTC (1.9 h ago), rows written 3369418, exit 1` · `RED  com.cobalt.archiver  failed  RuntimeError: 5 archiver failure(s): WBD/i1: Fetch failed for WBD/i1: Finviz HTTP failed: Client error '400 Bad Request' …` · `RED  com.cobalt.replay  failed  ReplayError: archiver not done: state 'failed'`. `OK sheet HTTP http://127.0.0.1:5010/ -> 200` · `OK radar idle (overnight)` · `OK com.cobalt.aset running loaded, pid 35793` · `OK com.cobalt.agent running pid 35845 alive` · `OK com.cobalt.radar running running 698 min, heartbeat fresh` · `AMB com.cobalt.herdr unmanaged …` · `com.cobalt.prefill-refresh` and `com.cobalt.playbook` `OWED (deferred bootstrap)`.
+- `COBALT_ENV=production uv run cobalt validate` → exit 0 (`13 trade_def(s) validated OK from the vault.` … `Placement (docs/PLACEMENT.md): tree clean.`) = `<val0>`; `<jobs0>` = `Jobs (F17): 18 registered — 7 resident, 11 one-shot. Kill phrase 'COBALT STOP'.`
+- `COBALT_ENV=production uv run cobalt backup status` → `newest snapshot: 1.2 h old` (ssd ARMED).
+- `launchctl print` aset → `state = running`, `<aset pid>` 35793 · radar → `state = running`, `<radar pid>` 57565 · `cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` · `ps -p 35845` → `35845 ??  0:00.03 uv run src/cobalt_agent/main.py`.
+- `tail -n 8 /Users/cobalt/cobalt/logs/radar.err` → eight `radar cycle: idle:overnight scan_id=None` lines, 22:38:00 to 22:49:40, no traceback.
+- LOG BASELINES: `<a0>` 284 · `<ta0>` 217 · `<tr0>` 0 · `<tc0>` 0 · `<rp0>` 18 · `<rpr0>` 60 · `<re0>` 43 · `<lc0>` 39.
+- `curl … /radar` → `200`. `## MARKERS` again → `0` · `0` · `0` = before.
+- THE LAUNCHD SET: empty — nothing. MIGRATION: none — `<RB>`, census and D1-M not run.
+
+STEP-D2:
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 9085d30d "<card>"` → prints nothing. Report committed next.
+
+(run in progress — next step under ## CONTINUE)
