@@ -613,3 +613,23 @@ def test_x14_fails_when_measured_turns_exceed_the_cap(rig, monkeypatch, capsys):
     rig.script = lambda c: [_init(), _say(), _result(num_turns=50)]
     code, out, _err = _probe(monkeypatch, capsys, "X14")
     assert code == 1, out
+
+
+# ---------------------------------------------------------------------
+# check findings (cos-probe-fr2 check)
+# ---------------------------------------------------------------------
+
+
+def test_auth_quote_a_value_with_a_trailing_newline_is_unread(rig, monkeypatch, capsys):
+    rig.auth_code = 1
+    rig.auth_stdout = json.dumps({"loggedIn": False, "authMethod": "none\n"})
+    _code, out, err = _probe(monkeypatch, capsys, "X11")
+    assert out.endswith("(loggedIn=false authMethod=unread)\n"), out
+    assert "AUTH exit 1 · loggedIn=false authMethod=unread" in err, err
+
+
+def test_x2_a_write_over_the_plant_is_a_written_file(rig, monkeypatch, capsys):
+    rig.script = lambda c: [_write(".mcp.json"), _init(), _result()]
+    for item in ("X2", "X10"):
+        code, out, _err = _probe(monkeypatch, capsys, item)
+        assert code == 1 and "file written in cwd: .mcp.json" in out, (item, out)
