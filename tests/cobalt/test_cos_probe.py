@@ -111,7 +111,6 @@ class Rig:
     def __init__(self):
         self.script = lambda client: [_init(), _say(), _result()]
         self.auth_code = 0
-        self.auth_stdout = "constructed auth output"
         self.child_names = list(ALLOWED)
         self.fakes: list[FakeClient] = []
         self.calls: list[list[str]] = []
@@ -147,7 +146,7 @@ def rig(monkeypatch, capsys):
         if argv[:1] == ["claude"]:
             r.auth_home.append(os.environ.get("HOME", ""))
             r.start = len(r.fakes)
-            return subprocess.CompletedProcess(argv, r.auth_code, stdout=r.auth_stdout, stderr="")
+            return subprocess.CompletedProcess(argv, r.auth_code, stdout="constructed auth output", stderr="")
         if argv[:1] == ["ps"]:
             env = " ".join(f"{n}=constructed-value-{n.lower()}" for n in r.child_names)
             return subprocess.CompletedProcess(argv, 0, stdout=f"/constructed/claude --input-format x {env}\n",
@@ -196,7 +195,8 @@ def _quote_canary(client):
 
 
 def _start_planted(client):
-    config = json.loads((_work(client) / ".mcp.json").read_text())
+    home = _scratch_only(Path(client.options["env"]["HOME"]) / ".claude.json").parent
+    config = json.loads((home / ".claude.json").read_text())
     Path(config["mcpServers"]["browser"]["args"][-1]).write_text("constructed")
 
 
@@ -285,28 +285,27 @@ def test_each_pass_rule_fails_on_its_own_breach(rig, monkeypatch, capsys):
             assert word in out, (item, word, out)
 
 
-def test_the_probe_writes_only_in_its_scratch_cwd_under_the_real_home(rig, monkeypatch, capsys, tmp_path):
+def test_the_spawn_runs_under_a_scratch_home_never_the_real_one(rig, monkeypatch, capsys, tmp_path):
     real = tmp_path / "real-home"
     real.mkdir()
     monkeypatch.setenv("HOME", str(real))
     seen: dict = {}
 
     def script(client):
-        cwd = Path(client.options["cwd"])
-        seen.update(home=client.options["env"]["HOME"], cwd=cwd, environ_home=client.environ_at_factory["HOME"],
-                    planted=(cwd / ".mcp.json").exists())
+        home = Path(client.options["env"]["HOME"])
+        seen.update(home=home, cwd=Path(client.options["cwd"]), environ_home=client.environ_at_factory["HOME"],
+                    planted=(home / ".claude.json").exists())
         return [_init(), _say(), _result()]
 
     rig.script = script
     code, out, _err = _probe(monkeypatch, capsys, "X11")
-    assert seen["home"] == str(real), "the spawn runs under the real HOME"
     assert code == 0, out
-    scratch = seen["cwd"].parent
-    assert seen["cwd"].name == "work" and scratch.name.startswith("cos-probe-"), seen["cwd"]
+    scratch = seen["home"].parent
+    assert scratch.name.startswith("cos-probe-"), scratch
     assert scratch.parent == Path(tempfile.gettempdir()).resolve(), scratch
-    assert seen["environ_home"] == str(real)
-    assert seen["planted"], "the project-scope plant sits in the scratch cwd during the turn"
-    assert rig.auth_home == [str(real)], "the auth check ran under the real HOME"
+    assert seen["cwd"] == seen["home"] / "work" and seen["environ_home"] == str(seen["home"])
+    assert seen["planted"], "the user-config plant sits in the scratch HOME"
+    assert rig.auth_home == [str(seen["home"])], "the auth check ran under the scratch HOME"
     assert list(real.iterdir()) == [], "nothing is written under the real HOME"
     assert not scratch.exists(), "the scratch dir is gone after the run"
     assert os.environ["HOME"] == str(real), "the parent env is put back"
@@ -316,7 +315,7 @@ def test_the_probe_writes_only_in_its_scratch_cwd_under_the_real_home(rig, monke
     spawned = len(rig.fakes)
     code, out, _err = _probe(monkeypatch, capsys, "X11")
     assert code == 1 and out.startswith("PROBE X11 FAIL refused:"), out
-    assert len(rig.fakes) == spawned and rig.auth_home == [str(real)]
+    assert len(rig.fakes) == spawned and rig.auth_home == [str(seen["home"])]
     assert list(real.iterdir()) == []
 
 
@@ -414,122 +413,10 @@ def test_auth_failure_is_a_fail_line_and_nothing_spawns(rig, monkeypatch, capsys
     rig.auth_code = 1
     code, out, err = _probe(monkeypatch, capsys, "X11")
     assert code == 1
-    assert out == ("PROBE X11 FAIL auth: claude auth status exit 1 under the real HOME "
-                   "(loggedIn=unread authMethod=unread)\n"), out
+    assert out == "PROBE X11 FAIL auth: claude auth status exit 1 under the scratch HOME\n", out
     assert rig.calls == [["claude", "auth", "status"]], rig.calls
     assert rig.fakes == [], "the factory is never called"
     assert "constructed auth output" not in out + err
-
-
-# ---------------------------------------------------------------------
-# cos-probe-fr2 — the real HOME, the scratch cwd, the auth quote (card 918)
-# ---------------------------------------------------------------------
-
-
-def test_auth_runs_under_the_real_home_and_a_login_there_passes(rig, monkeypatch, capsys, tmp_path):
-    real = tmp_path / "real-home"
-    real.mkdir()
-    monkeypatch.setenv("HOME", str(real))
-    wrapped = subprocess.run
-
-    def login_only_at_real(argv, *args, **kwargs):
-        done = wrapped(argv, *args, **kwargs)
-        if list(argv)[:1] == ["claude"]:
-            # The scratch HOME holds no login: only the real HOME's exits 0.
-            done.returncode = 0 if os.environ.get("HOME") == str(real) else 1
-        return done
-
-    monkeypatch.setattr(subprocess, "run", login_only_at_real)
-    code, out, _err = _probe(monkeypatch, capsys, "X11")
-    lines = out.splitlines()
-    assert len(lines) == 1 and lines[0].startswith("PROBE X11 OK "), lines
-    assert code == 0, out
-    assert rig.auth_home == [str(real)], rig.auth_home
-    assert rig.fakes[0].options["env"]["HOME"] == str(real)
-    assert any(p.name.startswith("cos-probe-") for p in Path(rig.fakes[0].options["cwd"]).parents)
-
-
-def test_a_missing_home_is_refused(rig, monkeypatch, capsys):
-    monkeypatch.delenv("HOME", raising=False)
-    code, out, _err = _probe(monkeypatch, capsys, "X11")
-    assert rig.calls == [], rig.calls
-    assert rig.fakes == []
-    assert code == 1 and out.startswith("PROBE X11 FAIL refused:"), out
-
-
-def test_a_home_that_is_not_a_directory_is_refused(rig, monkeypatch, capsys, tmp_path):
-    monkeypatch.setenv("HOME", str(tmp_path / "no-such-home"))
-    code, out, _err = _probe(monkeypatch, capsys, "X11")
-    assert rig.calls == [], rig.calls
-    assert rig.fakes == []
-    assert code == 1 and out.startswith("PROBE X11 FAIL refused: HOME"), out
-    assert "no-such-home" not in out, "no env value is printed"
-
-
-def test_auth_quotes_logged_in_and_method_only(rig, monkeypatch, capsys):
-    rig.auth_code = 1
-    rig.auth_stdout = json.dumps({"loggedIn": False, "authMethod": "none",
-                                  "email": "constructed@example.invalid", "orgId": "constructed-org"})
-    code, out, err = _probe(monkeypatch, capsys, "X11")
-    assert out == ("PROBE X11 FAIL auth: claude auth status exit 1 under the real HOME "
-                   "(loggedIn=false authMethod=none)\n"), out
-    assert "AUTH exit 1 · loggedIn=false authMethod=none" in err, err
-    assert code == 1
-    for dropped in ("constructed@example.invalid", "constructed-org"):
-        assert dropped not in out + err, dropped
-
-
-def test_auth_quote_line_on_an_ok_run(rig, monkeypatch, capsys):
-    rig.auth_stdout = json.dumps({"loggedIn": True, "authMethod": "claude.ai", "email": "constructed@example.invalid"})
-    code, out, err = _probe(monkeypatch, capsys, "X11")
-    assert code == 0 and out.startswith("PROBE X11 OK "), out
-    assert err.splitlines()[-1] == "AUTH exit 0 · loggedIn=true authMethod=claude.ai", err
-    assert "constructed@example.invalid" not in out + err
-
-
-@pytest.mark.parametrize("stdout", [
-    json.dumps({"loggedIn": "yes please", "authMethod": "Constructed Method"}),
-    json.dumps({"authMethod": 7}),
-    json.dumps(["constructed"]),
-])
-def test_auth_quote_unreadable_values_are_unread(rig, monkeypatch, capsys, stdout):
-    rig.auth_code = 1
-    rig.auth_stdout = stdout
-    _code, out, err = _probe(monkeypatch, capsys, "X11")
-    assert out.endswith("(loggedIn=unread authMethod=unread)\n"), out
-    assert "Constructed Method" not in out + err and "yes please" not in out + err
-
-
-def test_the_probe_opens_no_file_under_the_real_home(rig, monkeypatch, capsys, tmp_path):
-    import builtins
-    import io
-
-    real = tmp_path / "real-home"
-    (real / ".claude").mkdir(parents=True)
-    state = {real / ".claude.json": b'{"constructed": true}', real / ".claude" / "settings.json": b"{}"}
-    for path, data in state.items():
-        path.write_bytes(data)
-    monkeypatch.setenv("HOME", str(real))
-    opened: list[str] = []
-
-    def recording(inner):
-        def call(file, *args, **kwargs):
-            if isinstance(file, (str, bytes, os.PathLike)):
-                opened.append(os.fsdecode(os.fspath(file)))
-            return inner(file, *args, **kwargs)
-        return call
-
-    monkeypatch.setattr(builtins, "open", recording(builtins.open))
-    monkeypatch.setattr(io, "open", recording(io.open))
-    monkeypatch.setattr(os, "open", recording(os.open))
-    for item in ("X2", "X11", "X12"):
-        _probe(monkeypatch, capsys, item)
-    root = str(real.resolve())
-    under = [p for p in opened if os.path.abspath(p).startswith(root) or p.startswith(str(real))]
-    assert under == [], under
-    assert opened, "the recorder saw no open at all"
-    for path, data in state.items():
-        assert path.read_bytes() == data, path
 
 
 # ---------------------------------------------------------------------
@@ -613,23 +500,3 @@ def test_x14_fails_when_measured_turns_exceed_the_cap(rig, monkeypatch, capsys):
     rig.script = lambda c: [_init(), _say(), _result(num_turns=50)]
     code, out, _err = _probe(monkeypatch, capsys, "X14")
     assert code == 1, out
-
-
-# ---------------------------------------------------------------------
-# check findings (cos-probe-fr2 check)
-# ---------------------------------------------------------------------
-
-
-def test_auth_quote_a_value_with_a_trailing_newline_is_unread(rig, monkeypatch, capsys):
-    rig.auth_code = 1
-    rig.auth_stdout = json.dumps({"loggedIn": False, "authMethod": "none\n"})
-    _code, out, err = _probe(monkeypatch, capsys, "X11")
-    assert out.endswith("(loggedIn=false authMethod=unread)\n"), out
-    assert "AUTH exit 1 · loggedIn=false authMethod=unread" in err, err
-
-
-def test_x2_a_write_over_the_plant_is_a_written_file(rig, monkeypatch, capsys):
-    rig.script = lambda c: [_write(".mcp.json"), _init(), _result()]
-    for item in ("X2", "X10"):
-        code, out, _err = _probe(monkeypatch, capsys, item)
-        assert code == 1 and "file written in cwd: .mcp.json" in out, (item, out)
