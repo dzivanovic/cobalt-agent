@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/cos-tunables
 WORKTREE: cos-tunables
-BASE: bd7bc0c9
+BASE: e69d5ab8
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/cos-tunables/docs/40 - DevDocs/reports/cos-tunables-build-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-tunables-check-2026-10-20.md
