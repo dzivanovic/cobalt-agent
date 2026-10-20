@@ -262,3 +262,47 @@ def test_t2_every_other_refusal_still_fires(desk, case):
     assert done.returncode == 1, done.stdout
     assert "REFUSED: " in done.stderr and message in done.stderr, done.stderr
     assert "## SHIPS" not in done.stderr, done.stderr
+
+
+# ---- the check of card 931 (O1, O2 its own; A1, A2 house A Gemini) ------------------------------
+
+
+def test_o1_a_step_d0_resume_of_a_bootstrap_only_card_is_refused_with_a_none_dir(desk):
+    """Check O1: a bootstrap-only card has no gate, so STEP-D0 is refused whatever $WT holds."""
+    (desk.wt / "none").mkdir()
+    done = desk.launch(None, "STEP-D0")
+    assert done.returncode == 1, done.stdout
+    assert "REFUSED: " in done.stderr, done.stderr
+
+
+def test_o2_a_bulleted_gate_result_of_another_label_is_refused(desk):
+    """Check O2: no GATE RESULT line names another label, bulleted or not."""
+    desk.set_card(gates=gate_lines() + ["- GATE RESULT: com.cobalt.other-job · X1 · OK"])
+    done = desk.launch()
+    assert done.returncode == 1, done.stdout
+    assert "REFUSED: deploy: bootstrap-only card: " in done.stderr, done.stderr
+
+
+def test_t2_a_gate_result_of_another_label_mentioning_the_card_label_is_refused(desk):
+    desk.set_card(
+        gates=[f"GATE RESULT: com.cobalt.other-job · X1 · after GATE RESULT: {LABEL} · OK"]
+    )
+    done = desk.launch()
+    assert done.returncode == 1, done.stdout
+    assert done.stdout == ""
+    assert "REFUSED: deploy: bootstrap-only card: " in done.stderr, done.stderr
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        f"GATE RESULT: {LABEL} ·   · OK",
+        f"GATE RESULT: {LABEL} · X1 ·  ",
+    ],
+)
+def test_t2_a_gate_result_with_a_blank_item_or_result_is_refused(desk, line):
+    desk.set_card(gates=[line])
+    done = desk.launch()
+    assert done.returncode == 1, done.stdout
+    assert done.stdout == ""
+    assert "REFUSED: deploy: bootstrap-only card: " in done.stderr, done.stderr
