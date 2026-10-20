@@ -3,7 +3,7 @@ LADDER: S5 · F16 close
 BRANCH: ops/f16-close-fr3
 WORKTREE: f16-close-fr3
 BASE: 4aa0481d
-TIP:
+TIP: 1aea7418
 REPORT: /Users/cobalt/cobalt-wt/f16-close-fr3/docs/40 - DevDocs/reports/f16-close-fr3-build-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f16-close-fr3-check-2026-10-20.md
 HOUSE B: as needed
