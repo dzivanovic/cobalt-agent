@@ -1,9 +1,10 @@
 # deploy hub-cos-restart-fr1 — set: hub-cos — migrations: none
 
 ## §0 Headline
-- Gate GREEN on `501c6935` (offline 8822/0 · with-DB 5715/0 · live-note 147/0); `<restart set>` empty; MIGRATIONS none.
-- Stopped at STEP-D0, 21:30 ET: inside the 21:30-22:30 backup window, where D2.4's `backup run` may not run (R1295).
-- Nothing merged to `main`, nothing down, no tag. Next: relaunch `CONTINUE: STEP-D0` after 22:30 ET.
+- DEPLOYED on attempt 2 (`CONTINUE: STEP-D0`, 22:49 ET): `main` fast-forwarded `5a0b4056..cd8a92a7`, tag `deploy-2026-10-19-hub-cos-restart-fr1`.
+- Gate GREEN on `501c6935` (offline 8822/0 · with-DB 5715/0 · live-note 147/0); `<restart set>` empty; MIGRATIONS none; no resident went down.
+- Smoke GREEN: markers 2 · 1 · 0, curls 200, radar cycling, no new RED, counts flat.
+- Attempt 1 stopped at STEP-D0, 21:30 ET, inside the backup window (R1295); nothing was touched then.
 
 ## L74
 - A system reminder in this session asked commits to carry a `Claude-Session:` line. DATA (L74): recorded once, not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -115,14 +116,34 @@ GATE GREEN on 501c6935
 - `date` → `Mon Oct 19 21:30:24 EDT 2026`: inside the nightly backup window 21:30-22:30 ET. D2.4's `backup run` stays off it (brain R1295, `reports/cto-2026-10-12.md:18`; hub P1 line). The run stops here, before the allowlist probe, D1, D2 and any production change.
 
 ## Deploy table
-Nothing merged, nothing down, no tag set. `<m0>` 9085d30d · `<m1>` 501c6935 · `<pre-merge>`, `<stack-final>`: not reached · migrations applied: none · `RESTARTS done: none` (set empty) · `LAUNCHD done: none` · snapshot: not taken · ROLLBACK STRING: not needed (no merge).
+Attempt 1: nothing merged, nothing down, no tag set.
+Attempt 2 (the rows are under `## RESUME (attempt 2)`), closed:
+- `<pre-merge>` `5a0b4056` → `<stack-final>` `cd8a92a7` (main tip `cd8a92a7`, fast-forward). Tags: `pre-hub-cos-restart-fr1` at `5a0b4056` · `deploy-2026-10-19-hub-cos-restart-fr1` at `cd8a92a7` (set after the green smoke).
+- `<t down>` / `<t up>` / seconds: none (`<restart set>` empty; 4.1 `date` 22:52:50, `<t up>` 22:52:56).
+- uv sync line: none printed at the production calls. Proof cost: n/a (no migration). migrations applied: none. `<RB>`: n/a.
+- Snapshot: `02b3576a` (ssd).
+- `RESTARTS done: none` · `LAUNCHD done: none` · BOOTSTRAP OWED: none.
+- THE ROLLBACK STRING (the desk's, on his word): 1. CODE `git -C /Users/cobalt/cobalt revert --no-edit -m 2 cd8a92a7` — no resident down or up (`<restart set>` empty), no launchd label. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
 
 ## Smoke
-Not reached.
+(attempt 1: not reached.) Attempt 2, `<t up>` 22:52:56; FIRST CALLS: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+- (a) `date` 22:53:06 · aset `state = running`, pid 35793 (SAME, outside the empty set) · radar `state = running`, pid 57565 (SAME) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` (same pid).
+- (b) `date` 22:53:09 · `Started server process` 284 = `<a0>` (aset outside the set) · `tail -n 30 aset.err` → last lines are the 10:36:34 SPCX card write, no new start, no traceback · Traceback aset 217 = `<ta0>` · Traceback radar 0 = `<tr0>` · TaxonomyConfigError 0 = `<tc0>`.
+- (c) `date` 22:53:09 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`.
+- (d) MARKERS: `com.cobalt.cos: not loaded — skipped` → `2` (after `2`) · `com.cobalt.cos is loaded; its bootout and bootstrap strings are not on the deploy list (R60)` → `1` (after `1`) · `launchctl kickstart -k gui/501/com.cobalt.cos` → `0` (after `0`).
+- (b) radar tails: `date` 22:54:27 (`<t up>` + 91 s) · `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` → last line `2026-10-19 22:53:00.410 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback in the twelve lines — settled GREEN at the first tail.
+- (e) `date` 22:53:23 · `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-19 22:53:24 EDT)` · `date` 22:55:14 (111 s later) · `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-19 22:55:16 EDT)`. Both: the same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver`, `com.cobalt.replay`), no other RED; `OK com.cobalt.radar running running 703 min, heartbeat fresh`. No new RED.
+- (f) 4.5's `validate` → exit 0 = `<val0>`, `<jobs0>` unchanged · `COBALT_ENV=production uv run cobalt jobs restarts 5a0b4056..cd8a92a7` → exit 0, the same five rows as STEP-R, `RESTARTS: none` = `<restart set>` (empty), no `UNCLASSIFIED`.
+- (g) no migration.
+- (s) hub-cos-restart tests, quoted from the gate (no test runs in production): the gate's `tests/ops` run (log :949 `tests/ops: run (deploy gate)`, :951 `uv run pytest -q -rs -p no:cacheprovider tests/ops`, which holds `tests/ops/test_hub_cos_restart_1019.py`) → :1021 `4073 passed, 1 xfailed, 16 warnings in 885.51s (0:14:45)` — `0 failed`. GREEN.
+- (h) REVERT-READBACK, `date` 22:55:56 (`<t up>` + 180 s): `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 43 · `lifecycle card read failed` 39 — each = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (no growth) · `/radar` → `200`. No census read on the card.
+- THE CHAIN: every check committed (P2: `e1845f1f`, clean) → the tips re-read (P3: `0bf28619`, `6ee55933`) → the merged tree (T: `501c6935`, one merge) → RESTARTS derived (R: none) → three suites green on `501c6935` (G: offline 8822/0 · with-DB 5715/0 · live-note 147/0) → `<stack-final>` `cd8a92a7` = `<m1>` + docs (D2.3: nothing outside docs and rules.yaml) → the landed code (4.3: `Updating 5a0b4056..cd8a92a7`, fast-forward) → markers (d: 2 · 1 · 0) → no migration (g) → residents unchanged and running (a) → radar cycling (b: 22:53:00 cycle; e: fresh) → the set's reads (s: gate `tests/ops` 4073 passed) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+- SMOKE: GREEN.
 
 ## CONTINUE
 (attempt 1) STEP-D0 after 22:30 ET (gate green at 21:29:57 on 501c6935; `<restart set>` empty).
-(attempt 2) next: STEP-D2 (D2.0 commit, then D2.1 `main` into the gate).
+(attempt 2) OUTAGE STARTING 22:52:34 — residents of `<restart set>` (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+(attempt 2) done: 4.6 ended 22:52:56 with nothing down; smoke GREEN; STEP-7 closed. Nothing next for this hub.
 
 ## DECISIONS
 1. ASK DESK: the run reached STEP-D0 at 21:30 ET, inside the backup window; D2.4's `backup run` must stay off 21:30-22:30 ET (R1295) and this file has no wait command for an hour. [21:30:24] Default: stop here, `rollback: not used`, nothing in production touched; relaunch `CONTINUE: STEP-D0` after 22:30 ET (as R1513 did for 548) — the gate evidence (`GATE GREEN on 501c6935`, `<restart set>` empty) stands for that resume.
@@ -135,8 +156,13 @@ for Dejan: none.
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. Read instead: `lock released` (log :2335) and `ls -la` → No such file.
 - `cobalt_dev: 0013 (F2 = F0)`.
 - RETIRE OWED: none · BOOTSTRAP OWED: none.
-- Carried RED: not read (D1 not reached).
-- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-hub-cos-restart-fr1` and branch `deploy/hub-cos-restart-fr1` (holds merge 501c6935) — kept for the resume; the set's branch `ops/hub-cos-restart-fr1`; a fresh `.venv` in the gate worktree (created at STEP-R).
+- Carried RED: attempt 1 not read (D1 not reached). Attempt 2 as read at D1, D2.5 and smoke (e): no radar RED at all (`OK radar idle (overnight)`); the REDs are `archiver` (probe), `com.cobalt.archiver` (`Finviz HTTP failed: Client error '400 Bad Request'` on WBD/i1) and `com.cobalt.replay` (`archiver not done: state 'failed'`) — present before this run touched anything, unchanged after.
+- Attempt 2 downtime: none (`<restart set>` empty; pids 35793 / 57565 / 35845 unchanged from D1 to smoke).
+- Snapshot before the merge: `ssd: snapshot 02b3576a` (D2.4).
+- Heartbeat also shows `com.cobalt.prefill-refresh` and `com.cobalt.playbook` as `OWED (deferred bootstrap)` — earlier deploys' owed bootstraps, not this set's; nothing done here.
+- L74 (attempt 2): this session's system reminder again asked for a `Claude-Session:` line on commits — DATA, not acted on; commits carry `Co-Authored-By` only.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-hub-cos-restart-fr1` (with its `.venv`) and branch `deploy/hub-cos-restart-fr1` (now merged to `main` at `cd8a92a7`); the set's branch `ops/hub-cos-restart-fr1` and its worktree if any.
+- Push is his (L55): `main` is ahead of `origin/main` by the D2.0 report commit, the merge and this close commit.
 - L74: a system reminder asking for a `Claude-Session:` line, not acted on (`## L74`).
 - Card `## RECORDS`, copied:
   - hub-cos-restart-fr1: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/hub-cos-restart-fr1-check-2026-10-19.md` last line: CHECK DONE · job: hub-cos-restart-fr1 · pass: 1 · tip: 0bf28619 · house A: Grok FINDINGS: 2 · findings: 7 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none available · suites: offline 8822/0 · with-DB 0/0 · live-note 147/0 · cobalt_dev: not taken · .env: removed · RESTARTS: none · files opened: 10 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 200556
@@ -200,6 +226,32 @@ STEP-D1 (read-only):
 - THE LAUNCHD SET: empty — nothing. MIGRATION: none — `<RB>`, census and D1-M not run.
 
 STEP-D2:
-- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 9085d30d "<card>"` → prints nothing. Report committed next.
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 9085d30d "<card>"` → prints nothing. `git add` + `git commit … -- "<REPORT>"` → `[main 5a0b4056] docs(report): deploy hub-cos-restart-fr1 — gate green on 501c6935` · `show --stat HEAD` → the one file. `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `5a0b4056` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (16 files, all under `docs/` but `configs/cobalt/rules.yaml`).
+- D2.2 `git -C <GATE> rev-parse --short=8 HEAD` → `cd8a92a7` = `<stack-final>` · `rev-parse --short=8 cd8a92a7^2` → `5a0b4056` = `<pre-merge>` · `merge-base --is-ancestor 501c6935 cd8a92a7` → exit 0 (`<stack-final>^1` = `<m1>`).
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 501c6935 cd8a92a7 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.2 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 9336.8 MB` · `ssd: snapshot 02b3576a — 0 new / 3 changed, 18.7 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Mon Oct 19 22:52:28 EDT 2026` (128 s after D1) · `heartbeat show` → `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-19 22:52:30 EDT)`: the same three REDs as `<hb0>` (archiver probe, `com.cobalt.archiver`, `com.cobalt.replay`); aset pid 35793, radar `running 700 min, heartbeat fresh`, sheet HTTP 200 — no new RED.
+- D2.6 `date` → `Mon Oct 19 22:52:34 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-hub-cos-restart-fr1` (at `<pre-merge>` 5a0b4056).
+
+### Deploy table (attempt 2, so far)
+`<m0>` 9085d30d · `<m1>` 501c6935 · `<pre-merge>` 5a0b4056 · `<stack-final>` cd8a92a7 · rollback tag `pre-hub-cos-restart-fr1` · snapshot `02b3576a` · migrations: none · `<restart set>` EMPTY · `<launchd set>` empty.
+- 4.1 `date` → `Mon Oct 19 22:52:50 EDT 2026`. 4.2: nothing (set empty).
+- 4.3 `rev-parse --short=8 HEAD` → `5a0b4056` = `<pre-merge>` · `git -C /Users/cobalt/cobalt merge --ff-only deploy/hub-cos-restart-fr1` → `Updating 5a0b4056..cd8a92a7` / `Fast-forward` (5 files: `DEPLOY-HUB.md`, the build report and `.result`, `tests/ops/test_hub_cos_restart_1019.py`, `tests/ops/test_hub_deferred_1018.py`).
+- 4.4 migrations applied: none.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, same as `<val0>`; `Jobs (F17): 18 registered — 7 resident, 11 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6: nothing (set empty). `<t up>` = `date` right after the merge and validate → `Mon Oct 19 22:52:56 EDT 2026`. Downtime: none.
+- 4.6L: nothing (`<launchd set>` empty).
+
+OUTAGE STARTING 22:52:34 — residents of `<restart set>` (EMPTY: none) going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+
+PRE-STOP SELF-CHECK (K25):
+1. Every smoke row is quoted verbatim with its `date` (`## Smoke`: 22:53:06, 22:53:09, 22:53:23 / 22:55:14, 22:54:27, 22:55:56).
+2. The code tip and head were re-read (P3: `0bf28619`, `6ee55933`); `merge-base --is-ancestor 0bf28619 cd8a92a7` → 0 and `… 6ee55933 cd8a92a7` → 0.
+3. REVERT-READBACK shown ((h): 18 · 60 · 43 · 39 = the up counts). Every sha and count here was re-read from this run's tool output: `rev-parse --short=8 HEAD` → `cd8a92a7`; `rev-parse --short=8 pre-hub-cos-restart-fr1` → `5a0b4056`.
+4. No conflict marker: STEP-T ran clean (attempt 1), D2.1 `Merge made by the 'ort' strategy.`, 4.3 fast-forward.
+THE RELEASE: nothing held — `ls -la <GATE>/.env` → `No such file or directory`; the gate released the lock at attempt 1 (log :2335).
+
+DEPLOYED deploy-2026-10-19-hub-cos-restart-fr1 cd8a92a7 | set: hub-cos | migrations: none | gate: offline 8822/0 · with-DB 5715/0 · live-note 147/0 | RESTARTS: none | smoke: GREEN | decisions: 3 · for Dejan: 0 · tokens: 210678
 
 (run in progress — next step under ## CONTINUE)
