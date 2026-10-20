@@ -146,3 +146,6 @@ F20 C4d: `from cobalt.cos import cli as cos_cli`, `from cobalt.hitl import cli a
 
 ## 2026-10-19 — f5-checkpoints-1018
 `from cobalt.prefill import checkpoints as checkpoints_cli` after the genesis import, and `checkpoints_cli.add_parser(sub)` after `genesis_cli.add_parser(sub)`, mount `cobalt checkpoint run --slot HHMM [--dry-run]` (`prefill/checkpoints.md`). A window refusal exits 2 through `sys.exit` inside the command; every other failure takes this CLI's `FAILED:` path, exit 1. Ported onto main by f5-checkpoints-fr1 (card 731 PORT).
+
+## 2026-10-19 — cos-probe-1019
+`cos_cli.add_parser(sub)` now also mounts `cobalt cos probe <item>` (`item` one of X2, X10, X11, X12, X3, X14, X17; anything else exits 2), after `cobalt cos run`, which is unchanged. The handler imports `cobalt.cos.probe` inside the command (card 877; `cos/README.md`).

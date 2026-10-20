@@ -39,3 +39,9 @@ Tests: `test_cos_offline.py`, `test_cos_listener.py`, `test_cos_registry.py`, `t
 
 ## 2026-10-18 — f20-cos-1018 (check r2)
 `session.py`: `_SdkClient.connect` opens the CLI in a new session (the SDK's `anyio.open_process` wrapped for the open only), so the CLI leads its own process group; `_kill_tree` walks the tree, then `killpg`s that group, so a descendant reparented out of the tree when its parent exited dies too. The resident's own group is never signalled. Check r2 O1.
+
+## 2026-10-19 — cos-probe-1019
+NEW `probe.py`, mounted by `cli.py` as `cobalt cos probe <item>` (card 877): one live first-gate item, X2, X10, X11, X12, X3, X14 or X17 (FINAL `## First-gate experiments`), on the resident's own `CosSession` and `sdk_client_factory`. One stdout line, `PROBE <item> OK|FAIL <clause>`, exit 0 / 1; a clause holds names, counts and reasons only. The boundary: a `tempfile.mkdtemp(prefix="cos-probe-")` scratch (`home/` = the spawn's HOME, `home/work/` = cwd; refused under the real HOME or the repo; removed after); `os.environ` = the `child_env` names with the scratch HOME through `_scrubbed_environ` (X12 adds two constructed dummies); `notify` an in-memory list, `tool_call` a constructed stub (no DM, no store, no row); refused under `COBALT_ENV=production`; `claude auth status` (exit code only) before any spawn. Tests: `test_cos_probe.py` (stubs only, no `claude` spawned).
+
+## 2026-10-19 — cos-probe-1019 (check)
+`probe.py`: X2 / X10 FAIL when the stream holds no init message (a session that never ran proves no refusal); the resident's `cobalt.cos.session` log is disabled for the probe's run (a failed turn's reason carries exception text; the clause keeps the cut reason); the printed clause is folded to one line. Check O1, O2, O3, A2.
