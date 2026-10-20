@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/cos-cutover-tooling
 WORKTREE: cos-cutover-tooling
 BASE: 4a9b60bd
-TIP:
+TIP: 96728174
 REPORT: /Users/cobalt/cobalt-wt/cos-cutover-tooling/docs/40 - DevDocs/reports/cos-cutover-tooling-build-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-cutover-tooling-check-2026-10-20.md
 HOUSE B: as needed
