@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/radar-cards-survey-2026-10-08-r2.md 2026-10-08 R6
 BRANCH: shadow/radar-display-fix-1018-gemini-4-argon-high
 WORKTREE: radar-display-fix-1018-gemini
 BASE: 50b0cd87
-TIP:
+TIP: ffc36179
 REPORT: /Users/cobalt/cobalt-wt/radar-display-fix-1018-gemini/docs/40 - DevDocs/reports/radar-display-fix-1018-gemini-build-2026-10-18.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-display-fix-1018-gemini-check-2026-10-18.md
 HOUSE B: as needed
