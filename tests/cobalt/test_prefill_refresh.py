@@ -388,7 +388,8 @@ class TestTheJobRow:
         from cobalt.jobs.config import load_job_registry
 
         entry = load_job_registry().no_resident_read("configs/cobalt/templates/daily.md.j2")
-        assert entry.readers == ["com.cobalt.prefill-daily", self.LABEL]
+        assert entry.readers == ["com.cobalt.prefill-daily", self.LABEL,  # F5 card 731 K9
+                                 *(f"com.cobalt.checkpoint-{s}" for s in ("0715", "0745", "0815", "0845"))]
 
     def test_the_tunables_are_proposed_dwv(self):
         from cobalt.taxonomy.loader import load_tunables

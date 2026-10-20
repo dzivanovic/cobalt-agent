@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.cobalt.checkpoint-0715</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/Users/cobalt/.local/bin</string>
+        <!-- RULING 7 / Charter §8.4: every plist carries COBALT_ENV. The
+             checkpoint writes his live daily note and system.market_checkpoints
+             in cobalt_brain, so it declares production. -->
+        <key>COBALT_ENV</key>
+        <string>production</string>
+        <!-- The note it writes is in the production vault: the writer opens
+             it only when this process's own environment names it. -->
+        <key>COBALT_VAULT_PATH</key>
+        <string>/Users/cobalt/Vault/Think</string>
+    </dict>
+    <key>ProgramArguments</key>
+    <array>
+        <!-- ABSOLUTE PATH: launchd does not search PATH (the 2026-09-03 exit 78). -->
+        <string>/Users/cobalt/.local/bin/uv</string>
+        <string>run</string>
+        <string>cobalt</string>
+        <string>checkpoint</string>
+        <string>run</string>
+        <string>--slot</string>
+        <string>0715</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/Users/cobalt/cobalt</string>
+    <key>AbandonProcessGroup</key>
+    <true/>
+    <!-- F5 (card 731 K9): 07:15 ET, Mon-Fri (system TZ = ET, as for every
+         calendar job). prefill.yaml checkpoints.slots, jobs.yaml `at` and these
+         entries are one value (tests/cobalt/test_checkpoints_registry.py).
+         A closed exchange day is the run's own question (TradingCalendar):
+         it exits 0 and writes nothing. BOOTSTRAP: deferred (card 731 B0). -->
+    <key>StartCalendarInterval</key>
+    <array>
+        <dict><key>Weekday</key><integer>1</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>2</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>3</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>4</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>15</integer></dict>
+        <dict><key>Weekday</key><integer>5</integer><key>Hour</key><integer>7</integer><key>Minute</key><integer>15</integer></dict>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>StandardOutPath</key>
+    <string>/Users/cobalt/cobalt/logs/checkpoint-0715.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/cobalt/cobalt/logs/checkpoint-0715.err</string>
+</dict>
+</plist>

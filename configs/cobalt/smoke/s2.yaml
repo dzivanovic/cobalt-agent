@@ -589,6 +589,43 @@ checks:
     not_missed: true
     expect_text: "state done, exit_code 0, not missed against its windowed cadence"
 
+  # F5 (card 731 K9): the four market-context checkpoints, one row each.
+  - id: K12.4
+    title: checkpoint-0715 last run
+    kind: job_row
+    label: com.cobalt.checkpoint-0715
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K12.5
+    title: checkpoint-0745 last run
+    kind: job_row
+    label: com.cobalt.checkpoint-0745
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K12.6
+    title: checkpoint-0815 last run
+    kind: job_row
+    label: com.cobalt.checkpoint-0815
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
+  - id: K12.7
+    title: checkpoint-0845 last run
+    kind: job_row
+    label: com.cobalt.checkpoint-0845
+    state: done
+    exit_code: 0
+    not_missed: true
+    expect_text: "state done, exit_code 0, not missed against its cadence"
+
   - id: K13
     title: archiver freshness (cadence-aware)
     kind: job_row

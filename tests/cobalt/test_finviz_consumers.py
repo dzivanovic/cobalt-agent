@@ -47,6 +47,7 @@ CONSUMERS = {
     "prefill/market.py": "com.cobalt.prefill-daily 05:15 and com.cobalt.prefill-refresh every 30 min 05:45-15:45 (shared gate, form B), 1 screener request a run, no bucket",
     "prefill/calendar.py": "com.cobalt.prefill-daily 05:15 and com.cobalt.prefill-refresh every 30 min 05:45-15:45 (shared gate, form B), 2 calendar requests a run, no bucket",
     "aset/prefill.py": "com.cobalt.aset resident, /export/stock p=d on demand (RTH), no bucket",
+    "prefill/checkpoints.py": "com.cobalt.checkpoint-HHMM ×4, 1 screener + 1 groups request per slot, gate extra, no bucket",
 }
 BUCKETED = {"archiver/collector.py", "radar/collector.py"}
 

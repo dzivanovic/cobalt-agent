@@ -160,6 +160,43 @@ class DailyRefreshConfig(BaseModel):
         return self
 
 
+class CheckpointGroups(BaseModel):
+    """The one Finviz Groups query (`g=sector&v=140`, DATA-SOURCE-MEMO:441)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    g: Literal["sector"]
+    v: Literal[140]
+
+
+class CheckpointsConfig(BaseModel):
+    """`prefill.yaml` top-level `checkpoints:` (F5 FINAL §4 Config, [F-09]).
+    Every key required, nothing defaulted (L10); no `grace_min` ([F-07])."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    #: Charter:50 (M3) — his slot times, HH:MM ET, in order.
+    slots: list[str] = Field(min_length=1)
+    source: Literal["ruling"]
+    indices: list[str] = Field(min_length=1)
+    groups: CheckpointGroups
+    route: str = Field(min_length=1)
+    narrative_max_lines: int = Field(gt=0)
+    section: str = Field(min_length=1)
+    heading: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _slots_are_ordered_times(self) -> "CheckpointsConfig":
+        import re
+
+        bad = [s for s in self.slots if not re.fullmatch(r"([01]\d|2[0-3]):[0-5]\d", s)]
+        if bad or self.slots != sorted(set(self.slots)):
+            raise ValueError(f"checkpoints.slots must be distinct HH:MM times in order; got {self.slots}")
+        if not re.fullmatch(r"#+ \S.*", self.heading):
+            raise ValueError(f"checkpoints.heading must be a markdown heading line; got {self.heading!r}")
+        return self
+
+
 def _load_yaml_mapping(path: Path, top_key: str) -> dict:
     if not path.exists():
         raise PrefillConfigError(f"Config not found: {path}")
@@ -201,6 +238,14 @@ def load_daily_refresh_config(path: Path = PREFILL_CONFIG_PATH) -> DailyRefreshC
         return DailyRefreshConfig(**(data or {}))
     except ValidationError as e:
         raise PrefillConfigError(f"{path}: invalid daily_refresh config:\n{e}") from e
+
+
+def load_checkpoints_config(path: Path = PREFILL_CONFIG_PATH) -> CheckpointsConfig:
+    data = _load_yaml_mapping(path, "checkpoints")
+    try:
+        return CheckpointsConfig(**(data or {}))
+    except ValidationError as e:
+        raise PrefillConfigError(f"{path}: invalid checkpoints config:\n{e}") from e
 
 
 def load_prefill_paths() -> PrefillPathsConfig:

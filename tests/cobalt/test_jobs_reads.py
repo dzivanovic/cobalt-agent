@@ -180,6 +180,14 @@ class TestNoResidentReads:
         assert entry.readers
         assert all(registry.spec(label).kind.value == "one-shot" for label in entry.readers)
 
+    def test_the_daily_template_readers_are_f4s_then_the_four_checkpoints(self):
+        # F5 (card 731 K9): `ensure_daily_note` renders the template inside each checkpoint run.
+        entry = load_job_registry().no_resident_read(ONE_SHOT_ONLY)
+        assert entry.readers == [
+            "com.cobalt.prefill-daily", "com.cobalt.prefill-refresh",
+            *(f"com.cobalt.checkpoint-{s}" for s in ("0715", "0745", "0815", "0845")),
+        ]
+
     def test_a_leading_dot_slash_is_the_same_file(self):
         assert load_job_registry().no_resident_read("./" + ONE_SHOT_ONLY) is not None
 

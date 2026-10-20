@@ -118,8 +118,9 @@ def test_the_pair_exists_and_is_registered_after_0016():
     # DML roles (0025): one place further out again.
     # F21 genesis (0026): one place further out again.
     # F21 vectors (0028): one place further out again.
-    assert names[-12:-9] == ["0016_drc.sql", "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[9] == ROLLBACK and [p.name for p in REVERSE[10:12]] == [
+    # F5 card 731 K6: 0029 last, after 0028 — one place further out again.
+    assert names[-13:-10] == ["0016_drc.sql", "0017_voice_turns.sql", "0018_drc_stated_books.sql"]  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[10] == ROLLBACK and [p.name for p in REVERSE[11:13]] == [  # F5 card 731 K6: 0029 last, after 0028
         "0017_voice_turns.rollback.sql", "0016_drc.rollback.sql"]
 
 
@@ -127,6 +128,7 @@ def test_down_to_0016_selects_only_the_k1_rollback():
     # every rollback newer than 0016, newest first — voice V1's 0017 sits between (numeric order);
     # DRC D2 fix r1's 0019 is newer than K1's
     assert [p.name for p in _rollback_paths("0016")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)

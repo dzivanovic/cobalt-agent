@@ -68,9 +68,10 @@ def test_the_pair_exists_and_is_registered_last():
     # DML roles (0025): one place further out again.
     # F21 genesis (0026): one place further out again.
     # F21 vectors (0028): one place further out again.
-    assert FORWARD[-12] == SQL and [p.name for p in FORWARD[-11:-9]] == [
+    # F5 card 731 K6: 0029 last, after 0028 — one place further out again.
+    assert FORWARD[-13] == SQL and [p.name for p in FORWARD[-12:-10]] == [  # F5 card 731 K6: 0029 last, after 0028
         "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[11] == ROLLBACK and [p.name for p in REVERSE[9:11]] == [
+    assert REVERSE[12] == ROLLBACK and [p.name for p in REVERSE[10:12]] == [  # F5 card 731 K6: 0029 last, after 0028
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql"]
 
 
@@ -146,6 +147,7 @@ def test_the_rollback_drops_exactly_the_three_tables_children_first():
 
 def test_down_to_0011_on_this_tree_selects_only_this_rollback():
     assert [p.name for p in _rollback_paths("0011")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)

@@ -20,8 +20,9 @@ def _code(path) -> str:
 def test_o1_the_pair_is_registered_last_and_first():
     # F21 genesis (0026): one place further out (second-last forward, second reversed).
     # F21 vectors (0028): one place further out again (third-last forward, third reversed).
-    assert FORWARD[-3].name == "0025_dml_roles.sql"
-    assert REVERSE[2].name == "0025_dml_roles.rollback.sql"
+    # F5 card 731 K6: 0029 last, after 0028 — one place further out again (fourth-last forward, fourth reversed).
+    assert FORWARD[-4].name == "0025_dml_roles.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[3].name == "0025_dml_roles.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
 
 
 def test_o2_the_forward_makes_two_nologin_roles_the_door_and_dml_grants_only():

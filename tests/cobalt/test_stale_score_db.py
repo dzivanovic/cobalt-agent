@@ -155,10 +155,11 @@ def test_0015_is_registered_after_0013_and_its_rollback_first():
     # DML roles (0025): one place further out.
     # F21 genesis (0026): one place further out again.
     # F21 vectors (0028): one place further out again.
-    assert FORWARD[-13] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"
-    assert REVERSE[12] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"
-    assert FORWARD[-15].name == "0013_tunables_slug_nullable.sql"
-    assert REVERSE[14].name == "0013_tunables_slug_nullable.rollback.sql"
+    # F5 card 731 K6: 0029 last, after 0028 — one place further out again.
+    assert FORWARD[-14] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[13] == MIGRATIONS_DIR / "0015_shadow_agreement_stale.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-16].name == "0013_tunables_slug_nullable.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[15].name == "0013_tunables_slug_nullable.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
 
 
 def test_0015_applies_twice_and_its_rollback_restores_0007s_view_inside_one_rolled_back_transaction():

@@ -250,6 +250,39 @@ jobs:
       weekdays: [1, 2, 3, 4, 5]
     what: "the daily-note refresh, trading + calendar units all day (uv run prefill refresh)"
 
+  # F5 (FINAL §2.8, card 731 K9): the four market-context checkpoints, one
+  # one-shot per slot (Charter:50; prefill.yaml checkpoints.slots, the parity
+  # test tests/cobalt/test_checkpoints_registry.py). timeout_s 300: card 731
+  # DECISION 4, UNMEASURED — above the route's provisional 60 s plus two 30 s
+  # fetches; re-checked once X3's measured route timeout lands.
+  - label: com.cobalt.checkpoint-0715
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    schedule: {at: "07:15", weekdays: [1, 2, 3, 4, 5]}
+    what: "the 07:15 market-context checkpoint (uv run cobalt checkpoint run --slot 0715)"
+
+  - label: com.cobalt.checkpoint-0745
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    schedule: {at: "07:45", weekdays: [1, 2, 3, 4, 5]}
+    what: "the 07:45 market-context checkpoint (uv run cobalt checkpoint run --slot 0745)"
+
+  - label: com.cobalt.checkpoint-0815
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    schedule: {at: "08:15", weekdays: [1, 2, 3, 4, 5]}
+    what: "the 08:15 market-context checkpoint (uv run cobalt checkpoint run --slot 0815)"
+
+  - label: com.cobalt.checkpoint-0845
+    kind: one-shot
+    supervisor: self
+    timeout_s: 300
+    schedule: {at: "08:45", weekdays: [1, 2, 3, 4, 5]}
+    what: "the 08:45 market-context checkpoint (uv run cobalt checkpoint run --slot 0845)"
+
   - label: com.cobalt.archiver
     kind: one-shot
     supervisor: self
@@ -380,11 +413,13 @@ no_resident_reads:
   # configs/cobalt/notify.yaml LEFT this list in S4-P2 S4: the sheet's phone-fallback
   # thread sends a DM inside com.cobalt.aset — it is now in that job's `reads:`.
   - path: configs/cobalt/templates/daily.md.j2
-    readers: [com.cobalt.prefill-daily, com.cobalt.prefill-refresh]
+    readers: [com.cobalt.prefill-daily, com.cobalt.prefill-refresh, com.cobalt.checkpoint-0715, com.cobalt.checkpoint-0745, com.cobalt.checkpoint-0815, com.cobalt.checkpoint-0845]
     because: >
       Loaded only by prefill/daily.py:239 (env.get_template("daily.md.j2"),
       FileSystemLoader(TEMPLATES_DIR) at :238), the com.cobalt.prefill-daily
-      one-shot. No resident renders it. Ruled 2026-09-30.
+      one-shot. No resident renders it. Ruled 2026-09-30. F5 (card 731 K9):
+      the four checkpoint one-shots render it through ensure_daily_note when
+      the day's note is absent.
   - path: configs/cobalt/templates/drc.md.j2
     readers: [com.cobalt.prefill-daily]
     because: >

@@ -119,10 +119,14 @@
 `0028_genesis_vectors.rollback.sql` — drops the CHECK and the three columns
                          (its COST line); the extension stays (the old tree's
                          tables use it on cobalt_brain).
+`0029_market_checkpoints.sql` — F5 (card 731 K6): `system.market_checkpoints`,
+                         one row per (trade_date, slot) checkpoint, the base
+                         figures copied on it. Additive.
+`0029_market_checkpoints.rollback.sql` — drops that one table (its COST line).
 
-0027 IS NOT A GAP BY ACCIDENT: it belongs to F5 card 731
-(`0027_market_checkpoints`, not yet merged), which deploys first by the
-card's seam; whichever lands later keeps both numbers, in numeric order, and
+0027 IS NOT A GAP BY ACCIDENT: F5 card 731 took 0029, the next free number
+at its port (f5-checkpoints-fr2; migrations only go on the end), and 0027
+stays unused; whichever lands later keeps every number in numeric order and
 moves the registry pins (card 469 V4).
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
@@ -191,10 +195,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0025_dml_roles.sql",
     MIGRATIONS_DIR / "0026_genesis_chunk.sql",
     MIGRATIONS_DIR / "0028_genesis_vectors.sql",
+    MIGRATIONS_DIR / "0029_market_checkpoints.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0029_market_checkpoints.rollback.sql",
     MIGRATIONS_DIR / "0028_genesis_vectors.rollback.sql",
     MIGRATIONS_DIR / "0026_genesis_chunk.rollback.sql",
     MIGRATIONS_DIR / "0025_dml_roles.rollback.sql",
