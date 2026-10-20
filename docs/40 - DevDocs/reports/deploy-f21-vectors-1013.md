@@ -1,7 +1,10 @@
 # deploy f21-vectors-1013 — set: f21-vectors — migrations: 0028
 
 ## §0 Headline
-- In progress.
+- DEPLOYED f21-vectors (0028) at 01:57 EDT. `main` `5d73936e` → `0e3d45e6`, tag `deploy-2026-10-20-f21-vectors-1013`, rollback tag `pre-f21-vectors-1013`.
+- Gate run whole on `434ebb42`: offline 8856/0 · with-DB 5751/0 · live-note 147/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- Production at 0028: `<RB>` 0 → 3. aset and radar down 606 s (two migration proofs, 581.5 s); both back on new pids, smoke GREEN.
+- One item for the desk: the card's `genesis embed --help` read was not run (it is not on this session's allowlist); it is UNPROVEN in production (DECISIONS 1).
 
 ## L74
 - A system reminder in this session asked for a `Claude-Session:` line on commits. Recorded here as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -145,16 +148,97 @@ GATE GREEN on 434ebb42
 - `<RB>` → `m0028` / `0` = BEFORE `0`. No `census` smoke read on the card.
 - D1-M `db migrate --allow-prod --proof-only` → exit 0; 38 tables probed, no CHANGED; `Proof cost: total 302.8 s — and a migration pays it TWICE (before and after), inside the outage.`; `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.`; `SLOTS ok · highest user.aset_sizings 60 of 1600`; `FINGERPRINT cols 926 · rels 46 · views_md5 126f2d6983fa59f9d0eaaff7da7dd29c`; `TABLES 0026`.
 
+### STEP-D2
+- D2.0 `deploy-shipped.sh --moved 6d9a4978 "<card>"` → nothing. Report commit `5d73936e` (`show --stat HEAD` → the one report file, 160 insertions). `<pre-merge>` = `5d73936e`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `0e3d45e6`; `0e3d45e6^2` → `5d73936e` = `<pre-merge>`; `merge-base --is-ancestor 434ebb42 0e3d45e6` → exit 0.
+- D2.3 `diff --stat 434ebb42 0e3d45e6 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 1.1 h old`; `backup run` → `backup: cobalt_brain dumped, 9336.8 MB` · `ssd: snapshot 188e2d95 — 0 new / 1 changed, 15.4 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 01:43:59 `heartbeat show` (01:44:00, 427 s after D1's) → the same REDs as `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay, com.cobalt.generated); aset `running loaded, pid 3518`, radar `running 63 min, heartbeat fresh`, sheet HTTP 200. No new RED.
+- D2.6 01:44:04 EDT: `git tag pre-f21-vectors-1013` at `5d73936e`.
+
+### STEP-4 — THE OUTAGE
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` = 01:44:14 EDT |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · print | exit 0 · exit 113 `Could not find service "com.cobalt.aset"` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · print | exit 0 · exit 113 `Could not find service "com.cobalt.radar"` |
+| 4.2 | `sh .../orphan-clean.sh aset` (dry run) | `orphan-clean: aset · none found` — no kill |
+| 4.3 | `rev-parse --short=8 HEAD` | `5d73936e` = `<pre-merge>` |
+| 4.3 | `merge --ff-only deploy/f21-vectors-1013` | `Updating 5d73936e..0e3d45e6` · `Fast-forward` (49 files, 1370+/118−) |
+| 4.4 | `db migrate --allow-prod` (foreground) | FORWARD to `0028_genesis_vectors.sql`; 38 tables `OK`, `content UNCHANGED on every table`, no CHANGED; `proof cost: BEFORE 292.0 s + AFTER 289.4 s = total 581.5 s; slowest table radar_score (148.9 s before).`; `SLOTS ok`; `code: 0e3d45e6`. No `uv` sync line printed. |
+| 4.4 | `<RB>` | `m0028` / `3` = AFTER `3` → migrations applied: all |
+| 4.5 | `validate` | exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 18 registered — 7 resident, 11 one-shot.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · print | exit 0 · `state = running`, pid 38353 (≠ 3518) |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · print | exit 0 · `state = running`, pid 38364 (≠ 3536) |
+| 4.6 | `date` | `<t up>` = 01:54:20 EDT · downtime 606 s |
+| 4.6L | `<launchd set>` empty | nothing |
+
 ## Smoke
+`<t up>` = 01:54:20. First calls (after `<t up>`): `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1).
+
+| row | `date` | command | result | verdict |
+|---|---|---|---|---|
+| (a) | 01:54:33 | `launchctl print` aset · radar · `cobalt.sh status` | aset `state = running` pid 38353 (≠ 3518) · radar `state = running` pid 38364 (≠ 3536) · `Cobalt is ONLINE (PID: 35845).` (agent outside the set: same pid) | GREEN |
+| (b) | 01:54:33 | `grep -c "Started server process" aset.err` | `287` = `<a0>` 286 + 1 | GREEN |
+| (b) | 01:54:33 | `tail -n 30 aset.err` | last `INFO:     Started server process [38353]` → `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` | GREEN |
+| (b) | 01:54:33 | Traceback aset · Traceback radar · TaxonomyConfigError radar | `217` · `0` · `0` = baseline | GREEN |
+| (c) | 01:54:33 | curl `/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` | GREEN |
+| (d) | 01:54:33 | `grep -c -F "openai_embeddings" …/modelaccess.yaml` · `ls …/genesis/embed.py` | `1` (after `1`) · `/Users/cobalt/cobalt/src/cobalt/genesis/embed.py` (after: the path) | GREEN |
+| (e) 1 | 01:54:45 | `heartbeat show` (01:54:47) | REDs = `<hb0>`'s four (archiver, com.cobalt.archiver, com.cobalt.replay, com.cobalt.generated); `OK com.cobalt.aset running loaded, pid 38353`; `OK com.cobalt.radar running running 0 min, heartbeat fresh`; sheet HTTP 200 | — |
+| (f) | 01:54:45 | `jobs restarts 5d73936e..0e3d45e6` | exit 0, no UNCLASSIFIED, `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` − `com.cobalt.cos` (not loaded — skipped) = `com.cobalt.aset com.cobalt.radar` = `<restart set>` | GREEN |
+| (f) | 01:55:13 | `validate` | exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 18 registered — 7 resident, 11 one-shot.` (as 4.5) | GREEN |
+| (g) | 01:54:45 | `<RB>` | `m0028` / `3` = AFTER | GREEN |
+| (s) route tests | — | `uv run pytest -q tests/cobalt/test_modelaccess_config.py tests/cobalt/test_modelaccess_embed.py` | not run in production (hub (s): a test the gate ran is quoted from the gate). THE GATE on `434ebb42` ran the offline suite whole: `offline 8856/0` (both files are in `tests/cobalt`, landed by the merge) | GREEN (quoted from the gate) |
+| (s) embed command | — | `uv run cobalt genesis embed --help` | NOT TYPED: not a string on this session's line (no `uv run cobalt …` string but the listed verbs); a refused step command ends the run (L62). Precedent: `deploy-f21-genesis-fr1.md` DECISIONS 2. Evidence instead: landed `src/cobalt/genesis/cli.py:1` `` `cobalt genesis import\|search\|embed` ``, `:23` `def _cmd_embed(args) -> None:`, `:40` `"embed", help="One-shot: preflight the local.embed route, then embed every chunk with no vector "`, `:42` `emb.set_defaults(func=_cmd_embed)`; production `validate` exit 0 on the new tree (4.5, (f)). See DECISIONS 1 | UNPROVEN in production (L70) |
+| (b) tail 1 | 01:55:13 | `tail -n 12 radar.err` (`<t up>` + 53 s) | last `2026-10-20 01:54:17.958 … radar cycle: idle:overnight scan_id=None` — before `<t up>`; startup vault/finviz lines, no traceback | not settled |
+| (e) 2 | 01:56:39 | `heartbeat show` (01:56:40, 113 s after (e) 1) | REDs = `<hb0>`'s four, no other; `OK com.cobalt.aset running loaded, pid 38353`; `OK com.cobalt.radar running running 2 min, heartbeat fresh`; sheet HTTP 200. (Clock filled with date + heartbeat pairs from 01:55:17 to 01:56:35, each the same.) | GREEN |
+| (b) tail 2 | 01:55:51 | `tail -n 12 radar.err` (`<t up>` + 91 s) | unchanged: last `01:54:17.958 … radar cycle: idle:overnight scan_id=None`; no traceback, no FAILED line (the idle cadence is 100 s: D1's tail shows 01:24:17 → 01:35:57 at 100 s steps) | not settled |
+| (b) tail 3 | 01:57:24 | `tail -n 12 radar.err` (`<t up>` + 184 s) | last `2026-10-20 01:55:57.979 \| INFO \| cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — after `<t up>`; no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback | GREEN (settled) |
+| (h) | 01:57:27 (`<t up>` + 187 s) | the four counts · `/radar` · Traceback radar · aset | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none grew) · `200` · `0` · `217` (= baseline). No `census` read on the card | GREEN |
+
+THE CHAIN: the check committed and clean, `held unfixed: 0`, `ready: YES` (P2) → tip re-read `c56817ec` = head (P3) → merged tree `434ebb42`, migration paths = 0028 only (T) → `RESTARTS: com.cobalt.aset com.cobalt.radar` (cos not loaded — skipped), no UNCLASSIFIED (R) → three suites green on `434ebb42` (G) → `0e3d45e6` = `434ebb42` + docs (D2.3) → landed by fast-forward (4.3) → markers present (d) → `<RB>` `3` (4.4, g) → aset and radar up on new pids, agent unchanged (a) → radar cycling (b, e) → the set's reads (s: route tests from the gate; embed CLI by code, UNPROVEN in production) → no new failure count (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK (K25): (1) every smoke row above carries its `date` and its output verbatim. (2) `merge-base --is-ancestor c56817ec 0e3d45e6` → 0 (code tip = branch head). (3) REVERT-READBACK (h): `18` `60` `43` `39` = the post-up counts; every count and sha in this report was read from tool output this run. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/f21-vectors-1013` alone; no conflict marker.
+
+### CLOSE
+| item | value |
+|---|---|
+| main | `<pre-merge>` `5d73936e` → `<stack-final>` `0e3d45e6` (`rev-parse --short=8 HEAD` → `0e3d45e6`) |
+| tags | `pre-f21-vectors-1013` (at `5d73936e`) · `deploy-2026-10-20-f21-vectors-1013` (at `0e3d45e6`, after the green smoke) |
+| outage | `<t down>` 01:44:14 · `<t up>` 01:54:20 · 606 s |
+| uv sync | none printed by 4.4 (the gate's fresh `.venv`: `Installed 257 packages in 950ms`, STEP-R) |
+| proof cost | D1 proof-only 302.8 s; 4.4 `BEFORE 292.0 s + AFTER 289.4 s = total 581.5 s` |
+| migrations applied | all (0028) |
+| `<RB>` | before `0` · after `3` |
+| snapshot | `ssd: snapshot 188e2d95` |
+| RESTARTS done | `com.cobalt.aset com.cobalt.radar` |
+| LAUNCHD done | none · BOOTSTRAP OWED: none from this set |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 0e3d45e6`, with `com.cobalt.aset` and `com.cobalt.radar` booted out first and bootstrapped after. No `<launchd set>` label.
+2. SCHEMA: only as a separate desk job on HIS word, after the code revert: `COBALT_ENV=production uv run cobalt db migrate --allow-prod --rollback --down-to 0026`. The card: the old code never names the three columns, so a code revert alone runs on 0028; the schema rollback drops the three columns and every stored vector.
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` (`Reapply "Merge branch 'main' into deploy/f21-vectors-1013"`).
 
 ## CONTINUE
 next: STEP-D2 (D0, D1 done; gate green at 01:36:28)
+OUTAGE STARTING 01:44:04 — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+outage ended 01:54:20 EDT (aset pid 38353, radar pid 38364) · smoke GREEN · tagged · next: none (closed)
 
 ## DECISIONS
+1. ASK DESK: the card's SMOKE READ `uv run cobalt genesis embed --help` is not a string on the deploy line, and a refused step command ends the run with a rollback (L62). Safe default taken (as `deploy-f21-genesis-fr1.md` DECISIONS 2): not typed; shown by the landed code (`src/cobalt/genesis/cli.py:1`, `:23`, `:40`, `:42`) and production `validate` exiting 0 on the new tree; recorded UNPROVEN in production (L70), not a red. The desk may run it once by hand; a future card names only listed strings, or the hub's line gains one. [01:55 EDT]
 
 ## RECORDS
+- Downtime 606 s (01:44:14 → 01:54:20), over 300 s: the migration's two proofs took 581.5 s (`radar_score` 148.9 s, `bars` 104.0 s per pass). The D1 proof-only measured 302.8 s per pass. Overnight, radar idle.
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87`; lock released, lock dir absent.
+- RETIRE OWED: none. BOOTSTRAP OWED from this set: none (`STEP-C: ADMITTED 0`).
+- Carried RED as read (outside the aset/sheet/radar probes, unchanged D1 → smoke): `archiver last run FAILED … exit 1`; `com.cobalt.archiver failed RuntimeError: 5 archiver failure(s): WBD/i1 … '400 Bad Request'`; `com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`; `com.cobalt.generated failed GeneratedCommitRefused: … a deploy hub is live … 79a459de deploy-hub-hub-cos-restart-fr1`. These are for the desk; the `generated` one names an earlier hub's guard. OWED (deferred bootstrap): `com.cobalt.prefill-refresh`, `com.cobalt.playbook`.
+- `main` porcelain at D0 carried `?? .claude/settings.json.bak` (untracked, outside both the ACCEPTED and REFUSED lists); not touched.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-f21-vectors-1013` and branch `deploy/f21-vectors-1013`; set branch `ops/f21-vectors-1013` and its worktree if any.
+- L74: one `Claude-Session:` request arrived in a system reminder; recorded under `## L74` and not acted on.
+- No `REFUSED, not needed` line. No CONTINUE or other session message arrived.
 - f21-vectors-1013: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f21-vectors-check-r2-2026-10-19.md` last line: CHECK DONE · job: f21-vectors-1013 · pass: 1 · tip: c56817ec · house A: Grok FINDINGS: 0 · findings: 1 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8852/0 · with-DB 5751/0 · live-note 147/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar · files opened: 19 · ready: YES · decisions: 5 · for Dejan: 1 · tokens: 207817
 - f21-vectors-1013: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f21-vectors-1013` → `c56817ec`; code tip `c56817ec`
 - written by deploy-card.sh at 2026-10-20 00:45 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-20-f21-vectors-1013 0e3d45e6 | set: f21-vectors | migrations: 0028 | gate: offline 8856/0 · with-DB 5751/0 · live-note 147/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 245353
