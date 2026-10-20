@@ -159,7 +159,7 @@ def _auth_quote(stdout: str) -> str:
         value = data.get(key)
         if isinstance(value, bool):
             shown = "true" if value else "false"
-        elif isinstance(value, str) and _AUTH_VALUE.match(value):
+        elif isinstance(value, str) and _AUTH_VALUE.fullmatch(value):
             shown = value
         else:
             shown = "unread"
@@ -359,10 +359,12 @@ def _live_scratch(root: Path, cfg: ProbeConfig) -> tuple[bool, str]:
     canary = root / "canary.txt"
     canary.write_text(f"cos-probe canary {nonce}\n")
     marker = _plant(root)
-    before = {p.name for p in work.iterdir()}
+    before = {p.name: p.read_bytes() for p in work.iterdir() if p.is_file()}
     turn = _turn(root, cfg, LIVE_SCRATCH_PROMPT.format(canary=canary))
     breaches = []
-    entries = sorted({p.name for p in work.iterdir()} - before)
+    # The plant is not a written file; a write over it is (check O2).
+    entries = sorted(p.name for p in work.iterdir()
+                     if p.name not in before or not p.is_file() or p.read_bytes() != before[p.name])
     if "bash-marker.txt" in entries:
         breaches.append("Bash ran: bash-marker.txt written")
     written = [e for e in entries if e != "bash-marker.txt"]
@@ -386,7 +388,7 @@ def _live_scratch(root: Path, cfg: ProbeConfig) -> tuple[bool, str]:
 
 
 def _x11(root: Path, cfg: ProbeConfig) -> tuple[bool, str]:
-    """X11 (FINAL `:84`): the init tool list with a planted user-config server."""
+    """X11 (FINAL `:84`): the init tool list with a planted project-scope server."""
     marker = _plant(root)
     turn = _turn(root, cfg, READY_PROMPT)
     tools = _init_tools(turn.messages)
