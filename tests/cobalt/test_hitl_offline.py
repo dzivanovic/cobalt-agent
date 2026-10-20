@@ -143,6 +143,24 @@ def test_card_dm_carries_the_fragment_and_is_redacted(monkeypatch):
     assert result.redactions, "the constructed token was redacted on the way out (T8)"
 
 
+def test_x20_redact_keeps_the_card_fragment_key(monkeypatch):
+    """X20 (F20 FINAL `## First-gate experiments`; card 877 row X20): `redact()`
+    on the card's `#k=<hex>` line, the real `redact.yaml`. The design passes
+    when the key SURVIVES: a redacted key breaks the link in the DM."""
+    from cobalt.hitl import card
+    from cobalt.redact.guard import redact
+
+    monkeypatch.setattr("cobalt.redact.guard._record", lambda *a, **kw: None)  # G1, as above
+    monkeypatch.delenv("COBALT_MASTER_KEY", raising=False)  # the literal half inactive
+    key = "0123456789abcdef" * 2
+    text = card.card_text(7, "a1b2c3d4", card.CardFacts("agents.create", "create agent scout"), key,
+                          base_url="https://sheet.example.invalid")
+    (line,) = [ln for ln in text.splitlines() if "#k=" in ln]
+    out = redact(line, channel="mattermost")
+    assert "#k=" + key in out.text, out.describe()
+    assert out.clean, out.describe()
+
+
 # ---------------------------------------------------------------------
 # C2c — T3: no approve path outside the two routes (L37)
 # ---------------------------------------------------------------------

@@ -1,0 +1,15 @@
+job=cos-probe-fr1
+tip=78b93da3
+on=0f3c3e01
+migration=none
+offline=4884/0
+with_db=0/0
+live_note=148/0
+cobalt_dev=not taken
+env=removed
+restarts=com.cobalt.radar
+rows=1 of 1 (PORT · PROOF 6 of 6)
+self_check=3 of 3
+decisions=3
+for_dejan=0
+tokens=218983
