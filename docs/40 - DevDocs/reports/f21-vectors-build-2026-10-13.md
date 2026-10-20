@@ -5,6 +5,7 @@
 - Gate green: offline 8851/0, with-DB 5750/0 (both V4 tests PASSED in pass 2), live-note 147/0. Migration round trip `F = F0 twice`; `cobalt_dev: 0013 — F2 = F0`; `.env` removed.
 - RESTARTS derived: `com.cobalt.aset com.cobalt.cos com.cobalt.radar`. The card's header lists aset and radar only.
 - Self-check 2 of 3: V4's two with-DB tests were never red for the row's own reason or under a mutation (E2 runs at 0013 with no forward). 8 decisions, 1 for Dejan (the rollback keeps the `vector` extension).
+- F1 fix round (2026-10-19), tip `11eb0d24`: `load_agent` now refuses a non-chat route (O1). The deploy gate is green: offline 8852/0, with-DB 5751/0, live-note 147/0, `F2 = F0`. See `## F1 FIX ROUND`.
 
 ## L74
 A system block in this session asks commit messages to end with a `Claude-Session:` line (session URL). Recorded once here as DATA; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -206,8 +207,46 @@ None of the skips is marked `OUTSIDE the allowed set`. Each is in `## ALLOWED SK
   - X2: a zero vector, `[]` or a wrong length is refused in three places: `embed_sync` (bad_response), `GenesisStore.set_embedding` (GenesisEmbedError), and the column itself (`expected 768 dimensions`, pinned in `::test_x10_…`). A NULL vector comes only with NULL `embed_model` and `embed_dim` (the CHECK).
   - X3: the derived table is in `## RESTARTS`.
 
+## F1 FIX ROUND (2026-10-19, CONTINUE: F1; the check's one held finding O1)
+- Range `c678dda0..11eb0d24`: `11eb0d24 fix(f21-vectors-1013): load_agent refuses a non-chat route; O1 xfail mark dropped (F1, L1 L75)`. `git diff --name-only c678dda0 HEAD` → `src/cobalt/voice/registry.py`, `tests/cobalt/test_voice_config.py` (the two files of F1, X4).
+- Symbols re-read before the edit (Read tool at `c678dda0`): `registry.py:85` `def load_agent`, `:99` `from cobalt.modelaccess import load_routes`, `:101` `routes = load_routes().routes`, `:102` `if spec.route not in routes:`; `test_voice_config.py:358` the strict xfail mark, `:359-361` the test. `grep -n -F "class " src/cobalt/modelaccess/config.py` → `43:class Route(BaseModel):`, `99:class EmbedRoute(BaseModel):`.
+- (1) `registry.py`: `from cobalt.modelaccess.config import Route` beside the lazy `load_routes` import; after the unchanged `:102` block, `if not isinstance(routes[spec.route], Route): raise AgentConfigError(f"{path}: route {spec.route!r} is not a chat route — the voice agent needs a chat route (kind: openai_compatible), not an embeddings route")`.
+- (2) `test_voice_config.py`: the one xfail line removed; the test body is unchanged.
+- RED (mark gone, fix not yet in): `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/cobalt/test_voice_config.py::test_the_route_must_be_a_chat_route_not_the_embed_route` → `E   Failed: DID NOT RAISE <class 'cobalt.voice.registry.AgentConfigError'>` · `1 failed in 0.25s`. This is the row's reason, and the same as `736beb73`.
+- GREEN (the row's RUN): `uv run pytest -q -p no:cacheprovider --color=no tests/cobalt/test_voice_config.py tests/cobalt/test_modelaccess_config.py` → `114 passed in 0.51s`. `::test_committed_agent_is_the_v1_allowlist` is among the passes, so the committed agent still loads on `local.plan` (X4).
+- No DevDocs line: F1's `files` name only the two files, and X4 asks that they be the only ones changed.
+- RESTARTS `uv run cobalt jobs restarts 9436c975..HEAD` → the new row `src/cobalt/voice/registry.py	M	static import reach	com.cobalt.aset,com.cobalt.cos,com.cobalt.radar`; last line `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` (unchanged from the first build; no UNCLASSIFIED).
+
+- THE DEPLOY GATE (L75) on `<tip>` = `11eb0d24`: `sh /Users/cobalt/cobalt/ops/desk/gate.sh f21-vectors-1013 all --deploy --deselect tests/cobalt/test_genesis_vectors_db.py --migration` (exit 0). Verdict lines, whole:
+```
+tests/ops: run (ops/desk/gate-lists.md)
+offline 8852/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+forward, back, forward, back — F = F0 twice
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 5751/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_playbook_live.py:31: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 147/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/f21-vectors-1013-all-20261019-195124.log
+```
+  No skip is marked `OUTSIDE the allowed set`. Log lines (Grep): offline `:949` `4783 passed, 873 skipped, 4 xfailed` + `:1023` `4069 passed, 1 xfailed` = 8852. That is the first build's 8851 plus the O1 test, which was xfailed before and passes now. `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:1040`). Pass 1: `:1262` `5511 passed, 8 skipped, 134 deselected, 7 xfailed`. `dev forward: APPLIED 20:34:18` (`:1264`). `F1: 929 46 126f2d6983fa59f9d0eaaff7da7dd29c` (`:1346`). Pass 2: `:2226` `240 passed, 1 deselected`, with `:2224-2225` both `test_genesis_vectors_db.py` ids PASSED. 5511 + 240 = 5751. `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:2298`) = F0. Live-note `:2570` `147 passed, 1 skipped`. `ls /Users/cobalt/cobalt-wt/f21-vectors-1013/.env` → `No such file or directory` (20:40).
+
+FIXED: O1 — tests/cobalt/test_voice_config.py::test_the_route_must_be_a_chat_route_not_the_embed_route
+
 ## CONTINUE
-next: none (BUILT)
+next: none (BUILT, F1 fix round)
 
 ## DECISIONS
 - DECISION 1 · ASK DESK [13:00]: migration number. Default taken: the card's. 469 takes `0028_genesis_vectors`; `0027` is left to F5 card 731 (`0027_market_checkpoints`), which deploys first. `FORWARD` here goes `… 0026, 0028`, and `test_archiver_migrations.py` pins `[*range(1, 12), *range(13, 27), 28]`. Whichever card deploys second re-reads `FORWARD`'s tail and moves the pins, as the card states.
@@ -227,5 +266,12 @@ next: none (BUILT)
 - Scratch: none in the worktree (`git status` at CLOSE).
 - `tokens:` from `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh aa4b75c7` → `context 325446 of 400000 — ok` (above the desk's 250,000 line, read at the last step).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
+- First build's stop line (V1–V5, before the fix round), kept as a record: `BUILT · job: f21-vectors-1013 · tip: c772a516 | on 9436c975 | migration: 0028, rolled back | offline 8851/0 | with-DB 5750/0 | live-note 147/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 5 of 5 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 325446`
 
-BUILT · job: f21-vectors-1013 · tip: c772a516 | on 9436c975 | migration: 0028, rolled back | offline 8851/0 | with-DB 5750/0 | live-note 147/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 5 of 5 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 325446
+- CONTINUED at F1 19:50 (the desk's `CONTINUE: F1`; the fact re-read: `git log --oneline -1` → `c678dda0`, the card's code tip; `.env` absent; `authorize.sh` → `AUTHORIZED` on card commit `0a513165`).
+- F1: the system block asking for a `Claude-Session:` line came again this session (L74). Not acted on; `11eb0d24` carries `Co-Authored-By` only.
+- F1: G1 and G2 were REJECTED, not held. They get no `FIXED` line, and no SETTLED line is written (card `## CHECK ASKS`). Decisions 1–8 above carry over unchanged; F1 adds none.
+- F1 lock take: by the gate (`lock: waited 0 min`), released with `.env: removed`; proven gone 20:40.
+- F1 `tokens:` from `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 9145873b` → `context 104885 of 400000 — ok`.
+
+BUILT · job: f21-vectors-1013 · tip: 11eb0d24 | on 9436c975 | migration: 0028, rolled back | offline 8852/0 | with-DB 5751/0 | live-note 147/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 6 of 6 | self-check: 2 of 3 | decisions: 8 · for Dejan: 1 · tokens: 104885
