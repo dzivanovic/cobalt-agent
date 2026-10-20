@@ -1,0 +1,42 @@
+# cos-cutover-tooling preflight · 2026-10-20 17:51 ET (`date`)
+
+Card 931 (`prompts/2026-10-20/931-cos-cutover-tooling-card.md`), K5, BAND HIGH. Read-only; nothing run but reads.
+
+## CHECKS
+
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main`; `git diff bd7bc0c9 main --stat -- ops/desk tests/ops DEPLOY-HUB.md BUILD-HUB.md` | `cd9affb7` (a desk commit above BASE `bd7bc0c9`); the diff prints nothing, so every `file:line` read at `main` is the BASE's | OK |
+| 2 | `git diff HEAD --stat -- <card>`; `git log --oneline -3 -- <card>` | empty; committed in `cd9affb7` | OK |
+| 3 | header: JOB `cos-cutover-tooling`, CLASS K5, BRANCH `ops/cos-cutover-tooling`, WORKTREE `cos-cutover-tooling`, BASE `bd7bc0c9`, TIP empty, BAND HIGH, DB none, HOUSE B, INSTALL none; `ls` of the worktree, `rev-parse --verify` of the branch, `ls` of both reports; `grep -c -F «` | worktree, branch, build and check reports all absent; no FILL token (0). Names follow card 933's (`ops/cos-tunables`, `cos-tunables`). DB none fits (every file under `ops/`, `tests/ops/`, `docs/`) | OK |
+| 4 | `RULINGS: none` vs `authorize.sh:205-210` | `none) ;;` accepted; no TIP/SHIPS/BRANCH/WORKTREE read in `authorize.sh` | OK |
+| 5 | `RULINGS: none` vs `desk-launch.sh build` (`:1328-1332`, `kind=$1` `:522`) | `:1330` `none) [ "$kind" = "deploy" ] \|\| [ "$kind" = "recut" ] \|\| refuse "incomplete card: RULINGS is 'none' only on a deploy card"`; `CARD.md:24` says the same (`none` is a deploy value). `desk-launch.sh build` on this card is REFUSED at `:1330`. The tunables preflight (check 3 there) proved only `authorize.sh`; card 933 carries the same `none` | FAIL |
+| 6 | `desk-launch.sh` cites: `:1286`, `:1328-1332`, `:1350-1352`, `:1374-1392`, `:1703-1760`, `:1848-1920` (`:1865` agent/aset/radar refused), `:2159-2210`, `:2640-2655`, `:2670` | each is where the card says; `:2743` runs `worktree add` only when `$add` is non-empty, so leaving `add` empty at `:2670` cuts nothing | OK |
+| 7 | `deploy-step0.sh` cites: `:41-42`, `:73`, `:874-886`, `:877-879` | match; the hub never calls this script (hub types P8 itself) | OK |
+| 8 | `deploy-outage.sh` cites: `:4`, `:11-14`, `:25-27`, `:88-97`, `:118-151`, `:230-235`, `:327-356`, `:429-437` | match (`:90-91` the four labels, `:436` the OFFLINE fail, `:433-435` agent-in-set trap append) | OK |
+| 9 | `DEPLOY-HUB.md` cites `:11`, `:65`, `:93`, `:123`, `:150`, `:169`; `:3`, `:78`, `:94`, `:140`, `:144`, `:146` | each at the line and holds the quoted text; `com.cobalt.agent recorded retired` count today 0 | OK |
+| 10 | rows vs `cos-bootstrap-decisions-2026-10-20.md` items (2), (3) | T1 = RESIDENTS, outage `:90-91` and final read, P8, D1, record one fact a test reads, absent = BASE; T2 = the bootstrap-only form, every other refusal stays. T1b(i) refusing a retired label in the set and T1c (c)-(e) go past the brain's list but only to keep the retired agent from being stopped, restarted or read red (ASK DESK 1, default in) | OK |
+| 11 | retired agent found ONLINE fails loud (F-14, no two listeners) | outage: agent refused in the set (T1b(i)); final read ONLINE → `fail com.cobalt.agent "retired but ONLINE"`; hub P8 and D1 `FAILED PREFLIGHT`. `deploy-step0.sh` census prints nothing for a retired agent (never a gate) | OK |
+| 12 | every builder command vs `BUILD-HUB.md:14`, `:16` | `uv run pytest *`, `uv run cobalt jobs restarts *`, `grep *`, `sh /Users/cobalt/cobalt/ops/desk/*` listed; the card types no other | OK |
+| 13 | the four marker `before` values re-proved now: `grep -c -F` of `card 931 T2` (desk-launch.sh), `is retired; a retired label is never restarted` (deploy-outage.sh), `retired (recorded)` (deploy-step0.sh), `com.cobalt.agent recorded retired` (DEPLOY-HUB.md) | `0`, `0`, `0`, `0` | OK |
+| 14 | `## DEPLOY PROOF` forms vs `deploy-smoke.sh:6-22`, `:114-167` | four lines are `` `grep -c -F "<s>" <path>` · before · after `` (mapped; `deploy-card.sh:573` takes lines holding both `· before ` and `· after ` as markers). The `uv run pytest` line is no mapped shape (`ls`, `grep -c -F`, `curl`, `db query` only); the same line shipped in card 869 and deploy-hub-cos-restart-fr1 read it as the gate's quoted run (`:138`) | OK (NOTE 3) |
+| 15 | RED test first | T2: BASE refuses at `:2161` (`no '## SHIPS' section`), so the 929 form is red; partial-form and refusal tests say in their docstrings that BASE refuses by another message. T1a: BASE prints `pid … state …` and runs the print. T1b: BASE final read fails OFFLINE and the set of two runs. T1c: count 0 on BASE | OK |
+| 16 | `RESTARTS: none` vs `restarts.py:38`, `:225-228`, `:230-232`, `:246` | `ops/desk/` operator script, `docs/` DOCS, `tests/` no resident; no resident reads these files. K10 home named (R5) | OK |
+| 17 | installed copies | `~/.claude/ops/desk-launch.sh`, `deploy-step0.sh`, `deploy-outage.sh` are links into `/Users/cobalt/cobalt/ops/desk/`; the merge is the install (`INSTALL: none`) | OK |
+| 18 | existing readers of the five hub lines: `grep` in `tests/ops` for ONLINE, OFFLINE, `cobalt.sh`, `com.cobalt.agent` | only `test_hub_deferred_1018.py:17` (`THREE`) and `:57` (the `within` span), which the card keeps byte for byte; the `tests/ops` full run covers the rest | OK |
+| 19 | the card weakens no guard for another card | T2 relaxes `section SHIPS`, `hex8`/`commit_exists` on TIP, `$WT/none`, `ships_checked` and the `worktree add` only on the whole form; the FILL, committed-card, RULINGS, JOB, TAG, REPORT, `%`, report-exists, lock, line-token and `--add-dir` checks stay | OK |
+| 20 | hub reads of the agent after T1c: all lines holding `ONLINE`, `OFFLINE`, `the agent`, `com.cobalt.agent` in `DEPLOY-HUB.md` | covered: `:65`, `:93`, `:123`, `:150`, `:169`. NOT covered: `:53` (e) (resume: `cobalt.sh status` → ONLINE, else "residents down" and STEP-5 (3) runs), `:155` (f) (derived `RESTARTS:` minus deferred and not-loaded must EQUAL `<restart set>`; with the agent subtracted at `:93` and a `pyproject.toml`/`uv.lock` change, (f) is false → RED), `:160` (RED list: "agent OFFLINE at tail 3" → STEP-5, which reverts the merge, against the new smoke (a) that accepts OFFLINE) | FAIL |
+
+## ISSUES
+
+1. FAIL (check 5) · `RULINGS: none` is refused by `desk-launch.sh build` at `:1330` (`none` only on deploy or recut), so the build cannot launch. Fix: a `HIS RULING` + `APPROVED` row of Dejan's, `<date> R<n>` (then `authorize.sh` proves it), or his word that the K5 build may carry `none`. The brain's ruling is not his row. Card 933 has the same `RULINGS: none` and the same refusal. The desk set `none` on the tunables preflight's word, which read `authorize.sh` only.
+2. FAIL (check 20) · T1c leaves three hub places that contradict it for a retired agent: `:53` (e) (false → STEP-5 (3) runs on a healthy resume), `:155` (f) (set-equality fails when `:93` removed the agent), `:160` (the RED list reds an OFFLINE agent). Add them to T1c as (f)-(h) with the same clause, add them to the `NOT IN THIS JOB` exception list and the test (`the literal eight times`), and change the DEPLOY PROOF `after` from `5` to `8`.
+3. NOTE · the `uv run pytest` DEPLOY PROOF line is no `deploy-smoke.sh` shape; same form as card 869, read by the hub as the gate's quoted run.
+4. NOTE · markers pin counts by `grep -c -F` (lines): the builder must put `retired (recorded)` and `is retired; a retired label is never restarted` on exactly one line each of their script (header comment and dry-run mirror must word it differently), else `after 1` is 2.
+5. NOTE · T1c wording: "holds the literal once" per line and `(a)` P8's `FAILED PREFLIGHT: com.cobalt.agent recorded retired but ONLINE` repeat the literal on one line. The test counts lines; say so, or the builder reads "once" as an occurrence count.
+6. NOTE · `LADDER` is `OFF-LADDER — <report> 2026-10-20 brain 9b07db5a (L79)`; `CARD.md:14` asks `<date> R<n>`. The launcher only needs it non-empty (`:1312`).
+7. NOTE · T1b(ii) says OFFLINE passes and ONLINE fails; a status line that is neither (`cobalt.sh` error) is unstated. The builder reads it as a fail unless told otherwise.
+8. NOTE · `deploy-step0.sh` census prints nothing for a retired agent, so an ONLINE one is not seen there (never a gate); the loud reads are the outage final read and hub P8/D1.
+9. NOTE · what blocks the card's own build: issue 1 only (the launcher). Issue 2 does not block the build; it makes the deployed hub wrong on first use.
+
+PREFLIGHT DONE · card: cos-cutover-tooling · checks: 20 · fails: 2 · ready: NO
