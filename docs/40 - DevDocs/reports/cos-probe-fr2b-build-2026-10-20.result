@@ -1,0 +1,15 @@
+job=cos-probe-fr2b
+tip=9b912c83
+on=656f2ca1
+migration=none
+offline=4897/0
+with_db=5869/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.radar
+rows=5 of 5
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=166019
