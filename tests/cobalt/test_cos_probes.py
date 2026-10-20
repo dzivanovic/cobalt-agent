@@ -112,3 +112,28 @@ def test_cos_probe_is_unknown_green_while_owed(monkeypatch):
     assert owed.ok is True and "OWED" in owed.detail
     hitl = probes.hitl(NOW, enabled=True, store=store)
     assert hitl.ok is True and "OWED" in hitl.detail
+
+
+def test_an_unreadable_owed_file_raises_through_both_probes(monkeypatch, tmp_path):
+    from cobalt.heartbeat import probes
+    from cobalt.jobs import watchdog
+
+    path = tmp_path / "bootstrap-owed.json"
+    path.write_text("[]")
+    monkeypatch.setattr(watchdog, "BOOTSTRAP_OWED_PATH", path)
+    with pytest.raises(watchdog.BootstrapOwedError):
+        probes.cos(NOW, enabled=True, job_store=_never_stamped(), cos_store=_turns(None))
+    with pytest.raises(watchdog.BootstrapOwedError):
+        probes.hitl(NOW, enabled=True, store=SimpleNamespace(probe_counts=_counts_raise))
+
+
+def test_the_runner_path_reads_the_real_row_then_the_owed_file(monkeypatch):
+    from cobalt.heartbeat import probes
+    from cobalt.jobs import watchdog
+    from cobalt.jobs.config import load_job_registry
+
+    if load_job_registry().spec(probes.COS_LABEL).enabled:
+        monkeypatch.setattr(watchdog, "bootstrap_owed", _owed((probes.COS_LABEL,)))
+        for probe in (probes.cos(NOW), probes.hitl(NOW)):
+            assert probe.ok is True
+            assert "unknown" in probe.detail and "OWED" in probe.detail

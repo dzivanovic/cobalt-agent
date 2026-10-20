@@ -147,3 +147,6 @@ F20 C4b (F-27): `cos(now)` — RED on a missing or stale `com.cobalt.cos` heartb
 
 ## 2026-10-20 — cos-tunables
 `cos` and `hitl`, once the row is enabled, return ok `unknown — NOT PROBED, OWED (deferred bootstrap)` when `bootstrap_owed()` lists `com.cobalt.cos`, before any store is built; `BootstrapOwedError` is not caught.
+
+## 2026-10-20 — cos-tunables check
+Two tests pin P1 (check O2, O4): `test_an_unreadable_owed_file_raises_through_both_probes` and `test_the_runner_path_reads_the_real_row_then_the_owed_file` (the `enabled=None` call the runner makes). No code change.
