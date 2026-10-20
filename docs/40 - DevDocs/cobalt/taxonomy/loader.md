@@ -117,3 +117,9 @@ at all four merge sites. X19's truth table is
 `tests/cobalt/test_assumed_store.py`. Two consequences of scope
 equality: a per-trade row never fills a global key, and a strategy-note
 row, being per-trade, never fills an engine key.
+
+## 2026-10-19 — f16-close-1018
+`load_tunables` raises `TaxonomyConfigError` naming every engine tunables row whose `consumers` list is empty.
+
+## 2026-10-19 — f16-close-1018 (FIX1)
+A `consumers` list of blank or whitespace names counts as no consumer: the refusal now reads `not any(name.strip() for name in row.consumers)` (check O1).
