@@ -1,0 +1,64 @@
+JOB: cos-tunables
+LADDER: OFF-LADDER — reports/cos-bootstrap-decisions-2026-10-20.md 2026-10-20 R2201
+CLASS: K5
+INSTALL: none
+BRANCH: ops/cos-tunables
+WORKTREE: cos-tunables
+BASE: bd7bc0c9
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/cos-tunables/docs/40 - DevDocs/reports/cos-tunables-build-2026-10-20.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-tunables-check-2026-10-20.md
+HOUSE B: as needed
+BAND: MID
+RESTARTS: com.cobalt.aset com.cobalt.radar
+RULINGS: 2026-10-20 brain 9b07db5a (L79)
+DEFAULT cos.poll_interval_s: 10 — DEFAULT (brain; his word may change it)
+DEFAULT hitl.request_ttl_min: 30 — DEFAULT (brain; his word may change it)
+
+## ROWS
+
+Scope: two settings and one flag, so `com.cobalt.cos` can be bootstrapped later by card 929. THIS CARD DEPLOYS BEFORE CARD 929 and never loads cos: `ops/com.cobalt.cos.plist` stays unloaded, `com.cobalt.cos` stays OWED in `data/deploy/bootstrap-owed.json` (desk state, gitignored; the card does not touch it). Why the two values must be set first: `tunable_int` raises `CosConfigError` on a null row (`src/cobalt/cos/session.py:76-84`; `cos.poll_interval_s` is read at `src/cobalt/cos/run.py:99`, `hitl.request_ttl_min` at `src/cobalt/hitl/actions.py:62-63`). The two values are the brain's DEFAULTS to Dejan (header lines above); they are written as defaults, not as ruled values, and his word may change them. No migration. No `launchctl` call, no `ops/` file, no `src/` change outside row P1.
+
+| row | what | red first | files |
+|---|---|---|---|
+| T1 | `configs/cobalt/taxonomy/tunables.yaml:1008-1015` `cos.poll_interval_s` `value: null` → `value: 10` and `:1026-1033` `hitl.request_ttl_min` `value: null` → `value: 30`. Each `value:` line ends with the comment `# DEFAULT (brain; his word may change it)` (find the rows by `key:`, not by line). `status: proposed`, `source`, `unit`, `consumers` stand (the same shape as `cos.max_turns` 30 `proposed`, pinned at `tests/cobalt/test_cos_offline.py:291`). `cos.session_rotate_at` and `hitl.page_base_url` stay null (NOT IN THIS JOB) | EXISTING PIN, changed in this row: `tests/cobalt/test_cos_offline.py:287-294` `test_the_shipped_cos_rows`; the loop over `("cos.poll_interval_s", "hitl.request_ttl_min")` asserts `value is None` (`:294`). It becomes an invariant (L69): each of the two is an `int`, not a `bool`, and `> 0` — the very rule `tunable_int` enforces (`session.py:83-84`), never the number 10 or 30. RED on BASE: `rows[gap].value` is `None`. `:291-292` (`cos.max_turns`, `cos.turn_timeout_s`) stand. `test_each_cos_tunable_is_read_loud` (`:270-284`) stands untouched | `configs/cobalt/taxonomy/tunables.yaml`, `tests/cobalt/test_cos_offline.py` (`:293-294`) |
+| T2 | `configs/cobalt/jobs.yaml:214` `enabled: false` → `enabled: true` for the `com.cobalt.cos` entry (`:206`). The comment above it (`:207-213`, "NOT HANDED OVER … `enabled: false`") and `:215-216` ("no value yet; 60 s UNMEASURED stand-in") are re-worded to say what is now true: registered and enabled, the bootstrap OWED (card 929), `cos.poll_interval_s` has a DEFAULT value. `timeout_s: 1200` and every `reads:` line stand. With `enabled: true` and cos unloaded and listed in the owed file, the sweep reads it OWED, not red (`src/cobalt/jobs/watchdog.py:430-449`: unloaded → `bootstrap_owed()` at `:437` → `spec.label in owed` at `:441` → `Finding(…, True, OWED_STATE, …)`), and smoke K18 passes (`src/cobalt/smoke/checks.py:428-438` puts it in `owed_labels`; the FAIL at `:444-447` needs `not_loaded` or `loaded_disabled`; the PASS with `OWED (deferred bootstrap): …` is `:448-451`). The watchdog skips a DISABLED label at `watchdog.py:387-396`, so today cos is "disabled", after this card "OWED" | NEW test in `tests/cobalt/test_cos_registry.py`, in the form of `tests/cobalt/test_smoke.py:1578-1600` (card 496 OW1: a fake `deps`, an owed file under `tmp_path`): `test_k18_reads_cos_as_owed_while_unloaded` runs the `_launchctl` check (`src/cobalt/smoke/checks.py:415-451`, mode not `running`) over the REAL registry with every label loaded except `com.cobalt.cos`, the owed file listing `com.cobalt.cos`, and asserts the verdict is PASS and the detail holds `OWED (deferred bootstrap): com.cobalt.cos`. CONTROL, same test: the owed file empty → FAIL with `com.cobalt.cos` in `enabled but not loaded`. RED on BASE: the row is disabled, so the detail has no OWED clause. EXISTING PIN, changed in this row: `tests/cobalt/test_cos_registry.py:28` `assert spec.enabled is False` and the module docstring (`:1-6`, "`enabled: false`") and the test name `test_the_row_is_a_disabled_self_resident`. The assert becomes an invariant: an enabled row has its plist (`if spec.enabled: assert (REPO_ROOT / "ops" / "com.cobalt.cos.plist").is_file()`), never the flag's value; the test is renamed `test_the_row_is_a_self_resident`. `:29-32` (the `timeout_s` > turn timeout + poll invariant, with the `POLL_FALLBACK_S` fallback at `:13-15`) stands | `configs/cobalt/jobs.yaml` (`:207-216`), `tests/cobalt/test_cos_registry.py` |
+| P1 | The heartbeat's own `cos` and `hitl` probes go RED the moment cos is enabled and unloaded, which the card's T2 would cause at the next beat (a standing red and a DM): `src/cobalt/heartbeat/probes.py:154-156` `row is None or row.get("heartbeat_at") is None` → `Probe("cos", False, "no heartbeat — the CoS loop has never stamped")`, and `:175-179` `HitlStore().probe_counts()` reads tables cos has not created yet (the first start's `CREATE … IF NOT EXISTS`, brain item 8). Fix: in `probes.cos` (`:135`) and `probes.hitl` (`:167`), after the `enabled` check and before any store is built, when `COS_LABEL` is listed by `cobalt.jobs.watchdog.bootstrap_owed()` return the same shape as the disabled answer: `Probe("cos", True, "unknown — NOT PROBED, OWED (deferred bootstrap)")` and `Probe("hitl", True, "unknown — NOT PROBED, OWED (deferred bootstrap) (com.cobalt.cos)")`. An unreadable owed file raises (`BootstrapOwedError`, L1): it is not swallowed. Nothing else in `probes.py` changes; `runner.py:148-149` comment is re-worded ("while the row is `enabled: false` or OWED"). DEFAULT of ASK DESK 1 in the drafter's report | NEW tests in the file that already pins these probes (`grep -rln "probe_mod.cos\|probes.cos" tests` names it; if none, NEW `tests/cobalt/test_cos_probes_owed.py`): `test_cos_probe_is_unknown_green_while_owed`: `monkeypatch` `cobalt.jobs.watchdog.bootstrap_owed` to `frozenset({"com.cobalt.cos"})`, `probes.cos(now, enabled=True, job_store=<fake whose get returns None>, cos_store=<fake>)` → `ok` True and `"OWED"` in `detail`; the same for `probes.hitl(now, enabled=True, store=<fake whose probe_counts raises>)` → `ok` True. CONTROL (green on BASE and after): `bootstrap_owed` → `frozenset()` and the same fakes → `probes.cos` is `ok=False` with `"no heartbeat"`, `probes.hitl` raises/behaves as the code does today (no silent green). RED on BASE: both OWED asserts fail (`ok` False / raises) | `src/cobalt/heartbeat/probes.py` (`:135-187`), `src/cobalt/heartbeat/runner.py` (the comment at `:148-149` only), the test file above |
+
+Suites, quoted whole in the build report: `uv run pytest -q -p no:cacheprovider tests/cobalt/test_cos_offline.py tests/cobalt/test_cos_registry.py` → `0 failed`; the P1 test file → `0 failed` (RED on BASE first); then the offline suites that read `jobs.yaml` or `tunables.yaml` (`tests/cobalt/test_jobs.py`, `test_jobs_reads.py`, `test_jobs_restarts.py`, `test_smoke.py`, `test_setups_d1.py`, `test_setups_registries.py`, `test_heartbeat*.py`) → `0 failed`. The with-DB passes stay the deploy gate's own, under the dev lock, per `ops/desk/gate-lists.md`.
+
+## NOT IN THIS JOB
+- Loading `com.cobalt.cos`, any `launchctl` call real or stubbed, `ops/com.cobalt.cos.plist`, `ops/start_cos.sh`, `data/deploy/bootstrap-owed.json` (the desk's; the cos entry stays until card 929's `--owed-clear`), card 929, `cos-cutover-tooling` (card 930), the agent retirement.
+- Any other tunable: `cos.max_turns`, `cos.turn_timeout_s`, `cos.session_rotate_at` (stays null, no reader until ruled), `hitl.page_base_url` (stays null: the HITL card refuses to send while it is, `tunables.yaml:1035-1037`; ASK DESK 2).
+- `src/cobalt/cos/*`, `src/cobalt/hitl/*`: the readers do not change (F-14 stays as built, brain item 1: `src/cobalt/cos/run.py:44-57`).
+- A migration. None: `MIGRATIONS` of the deploy is `none`.
+- A red outside these rows: a `## DECISIONS` item, UNPROVEN (L70), with the output; never fixed here.
+
+## READ
+- `docs/40 - DevDocs/reports/cos-bootstrap-decisions-2026-10-20.md` item 5 and `## ORDER`.
+- `src/cobalt/cos/session.py:49-51, 72-85` (`POLL_KEY`, `CosConfigError`, `tunable_int`); `src/cobalt/cos/run.py:95-100`; `src/cobalt/hitl/actions.py:33, 62-66`.
+- `configs/cobalt/taxonomy/tunables.yaml:1008-1033`; `configs/cobalt/jobs.yaml:206-226`.
+- `src/cobalt/jobs/watchdog.py:54-80, 380-449`; `src/cobalt/smoke/checks.py:415-451`; `src/cobalt/heartbeat/probes.py:126-187`; `src/cobalt/heartbeat/runner.py:140-156`.
+- `tests/cobalt/test_cos_offline.py:270-294`; `tests/cobalt/test_cos_registry.py`; `tests/cobalt/test_smoke.py:1578-1600`; `tests/cobalt/test_jobs.py:945-1030`.
+
+## CHECK ASKS
+- X1 Is every changed line of `tunables.yaml` one of the two `value:` lines (and nothing else in the file), and do both carry the `DEFAULT (brain; his word may change it)` comment?
+- X2 Re-derive from the code, not the card: with cos `enabled: true`, unloaded, listed in the owed file, is every consumer of the cos row green or OWED: the sweep (`watchdog.py:437-449`), K18 (`checks.py:428-438`), `probes.cos`, `probes.hitl`? Name any that reads RED.
+- X3 With `bootstrap-owed.json` NOT listing cos, which consumer turns red? (The control; the entry is the desk's and must stay until 929.)
+- X4 Does any test still pin a value (`enabled is False`, `value is None`, `10`, `30`) rather than an invariant (L69)?
+- X5 Which residents does `cobalt jobs restarts` derive for the changed paths, and does it match the header `RESTARTS:` line (cos skipped as not loaded)?
+
+## DEPLOY PROOF
+- `grep -c -F "enabled: false" "/Users/cobalt/cobalt/configs/cobalt/jobs.yaml"` · before `1` · after `0`
+- `grep -c -F "DEFAULT (brain; his word may change it)" "/Users/cobalt/cobalt/configs/cobalt/taxonomy/tunables.yaml"` · before `0` · after `2`
+- cos plist stays unloaded, present on disk · `ls /Users/cobalt/cobalt/ops/com.cobalt.cos.plist` · exit 0, listed
+- the sheet answers after the restart · `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/` · exit 0, `200`
+
+## RECORDS
+- Drafter `draft-cos-tunables` (prompt 932), 2026-10-20 17:43 EDT (`date`); `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `bd7bc0c9` (the BASE). Every `file:line` above was read with `git show main:<file>` / `git grep -n main`; nothing run but reads, no test executed.
+- DEPLOYS BEFORE card 929 (the brain's order, `cos-bootstrap-decisions-2026-10-20.md` `## ORDER`); the cos plist stays unloaded and OWED (`data/deploy/bootstrap-owed.json` line 4 lists `com.cobalt.cos`, read by the drafter 2026-10-20), so a deploy of this card leaves cos unloaded: the sweep reads OWED (`watchdog.py:437-449`), K18 PASSES with `OWED (deferred bootstrap): com.cobalt.cos` (`checks.py:428-438, 448-451`).
+- Correction to the prompt's anchors: K18's FAIL branch (`checks.py:444-447`) fires on `not_loaded` (enabled, unloaded, NOT owed) or `loaded_disabled`; a DISABLED unloaded label passes today. The brain's "K18 fails on `enabled: false`" is true only if cos were loaded while disabled. What `enabled: true` needs is the owed entry, which exists. The watchdog skip is `watchdog.py:387-396` (`if not spec.enabled:` at `:387`).
+- Values: `cos.poll_interval_s` 10 and `hitl.request_ttl_min` 30 are the brain's defaults to him, not rulings. Fit: `jobs.yaml:217` `timeout_s: 1200` > `cos.turn_timeout_s` 900 + 10 (the invariant `test_cos_registry.py:29-32`).
+- RESTARTS (K10): `tunables.yaml` is read by `com.cobalt.aset` (`jobs.yaml:69`), `com.cobalt.radar` (`:200`) and `com.cobalt.cos` (`:221`); cos is unloaded, so the hub records `com.cobalt.cos: not loaded — skipped` (hub card 869, merged: `tests/ops/test_hub_cos_restart_1019.py`). `jobs.yaml` itself is in no resident's `reads:`; `src/cobalt/heartbeat/probes.py` and `runner.py` are in `com.cobalt.radar`'s import closure (`imports: [cobalt.cli]`, `jobs.yaml:202`, `cli.py:71`). The builder's `cobalt jobs restarts` line is the record and overrides the header `RESTARTS:` if it differs. None of the touched paths restarts cos, which is unloaded and OWED.
+- MIGRATIONS `none`. The first start of cos (card 929) creates its three tables with `CREATE … IF NOT EXISTS`; the rollback leaves them (brain item 8).
+- Between 929's bootstrap and its `--owed-clear` (after a green smoke (s)) the heartbeat reads cos as OWED-unknown; after the clear, `probes.cos` / `probes.hitl` probe for real.
