@@ -10,6 +10,7 @@ TAG: «FILL: deploy-<run date>-cos-bootstrap»
 MIGRATIONS: none
 SET: cos
 TICKERS: none
+WAITS: cos-cutover-tooling DEPLOYED, cos-tunables DEPLOYED, agent retired
 
 ## LAUNCHD
 com.cobalt.cos · add · prompts/2026-10-18/730-f20-card.md:C4a · dry run: none
@@ -27,7 +28,7 @@ GATE RESULT: com.cobalt.cos · X11 · OK — init tools 7, all mcp__cobalt__* al
 GATE RESULT: com.cobalt.cos · X12 · OK — neither dummy in the child
 GATE RESULT: com.cobalt.cos · X15 · «FILL: his — his phone result row»
 GATE RESULT: com.cobalt.cos · X17 · OK — sonnet ok 20/20 · opus ok 20/20
-GATE RESULT: com.cobalt.cos · X18 · OK — median 30.5 s, max 641 s; the max was F5's migration deploy (two migration proofs), not an aset restart
+GATE RESULT: com.cobalt.cos · X18 · OK — median 28.5 s; the max, 641 s, was F5's migration deploy (0029, card 909)
 GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
 
 ## NOT IN THIS JOB
@@ -46,16 +47,18 @@ GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
 - cos tunables · `grep -c -F "CosConfigError" /Users/cobalt/cobalt/logs/cos.err` · `0`
 - cos Mattermost poll · `grep -c -F "Traceback" /Users/cobalt/cobalt/logs/cos.err` · `0`
 - cos steps · `grep -c -F "CoS step" /Users/cobalt/cobalt/logs/cos.err` · `0`
-- cos auth under LaunchAgent · `grep -c -F "CoS turn FAILED" /Users/cobalt/cobalt/logs/cos.err` · `0`
+- cos turn failures · `grep -c -F "CoS turn FAILED" /Users/cobalt/cobalt/logs/cos.err` · `0` — `Traceback` = 0 proves the poll; LaunchAgent auth stays UNPROVEN (L70) until one DM turn of his after the hub's green, asked by day in one sentence and confirmed by the desk; `CoS turn FAILED` > 0 → bootout cos, record `FAILED: smoke (s)`; the agent is not brought back by this step, a rollback is his
 
 ## CHECK ASKS
 - X1 Cos bootstrap-only card, brain 2026-10-20: 4.6L-BO loads `com.cobalt.cos` alone, after the market (16:30+ ET), no other deploy in between.
-- X2 Smoke (s) proves the LaunchAgent auth and the Mattermost connect. FAIL → bootout cos, `FAILED: smoke (s) — cos auth under LaunchAgent`, recorded, agent untouched.
+- X2 Smoke (s) reads the five absence counts; `Traceback` = 0 proves the poll; LaunchAgent auth is UNPROVEN until his one DM turn, confirmed by the desk. `CoS turn FAILED` > 0 → bootout cos, `FAILED: smoke (s)`, agent not brought back (a rollback is his).
 - X3 Agent retirement is a separate desk job on his strings, after green.
 - X4 D14, agent stopped and X15 are his rows.
 - X5 The tunables card (K5: `cos.poll_interval_s`, `hitl.request_ttl_min`; the brain's defaults to him 10 and 30) deploys first: cos raises on null (`src/cobalt/cos/session.py:76-85`, `src/cobalt/hitl/actions.py:62-71`).
+- X6 RECORDS: cos bootstrap 929 — no listener overlap (F-14 kept, run.py:44-57); agent retired first after F5 checkpoints cleared, X2 green and his D14; cos-cutover-tooling (K5, HIGH) T1 RESIDENTS/P8/D1/final read accept a retired agent, T2 desk-launch.sh deploy admits a bootstrap-only card; tunables card sets jobs.yaml:214 enabled: true; smoke (s) auth UNPROVEN until his one DM turn; MIGRATIONS none (additive CREATE IF NOT EXISTS) — brain 9b07db5a 2026-10-20
 
 ## RECORDS
+- MIGRATIONS: none; the first start CREATEs cobalt_cos_sessions, cobalt_cos_turns, cobalt_hitl_requests IF NOT EXISTS plus the jobs row (run.py:105, :109, :150, :155): additive, the rollback leaves them.
 - PREREQUISITE: the K5 config card sets `cos.poll_interval_s` (`configs/cobalt/taxonomy/tunables.yaml:1008-1009`, `value: null`) and `hitl.request_ttl_min` (`:1026-1027`, `value: null`) with his values and is DEPLOYED before this card. `tunable_int` raises `CosConfigError` on a null (`src/cobalt/cos/session.py:76-85`), called at the start (`src/cobalt/cos/run.py:99`); `request_ttl_min` raises on a null (`src/cobalt/hitl/actions.py:62-71`).
 - HIS INPUTS: GATE RESULT D14 and agent stopped = his ruling's R row (retire yes/no); X15 = his phone result row. Each stays `«FILL: his …»` until the desk writes it from his row.
 - ORDER: `sh /Users/cobalt/cobalt/ops/desk/deploy-step-c.sh --bootstrap-only "<card>" com.cobalt.cos` → `ADMITTED: com.cobalt.cos · bootstrap-only` → 4.6L `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.cos.plist`, `launchctl print gui/501/com.cobalt.cos` (found, `path = ` that plist) → smoke (s) → `sh /Users/cobalt/cobalt/ops/desk/deploy-step-c.sh --owed-clear "<card>" com.cobalt.cos` → `OWED CLEARED: com.cobalt.cos`. `com.cobalt.agent` is not touched.
