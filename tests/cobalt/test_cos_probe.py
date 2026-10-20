@@ -471,3 +471,32 @@ def test_a_killed_turn_does_not_log_the_cli_exception_text(rig, monkeypatch, cap
         logger.remove(sink)
     assert code == 0, out
     assert "constructed: the CLI is gone" not in "".join(lines)
+
+
+# ---------------------------------------------------------------------
+# check findings (cos-probe-fr1 check)
+# ---------------------------------------------------------------------
+
+
+def test_auth_and_ps_are_spawned_with_cwd_inside_scratch(rig, monkeypatch, capsys):
+    import subprocess
+
+    seen = []
+    wrapped = subprocess.run
+
+    def record(argv, *args, **kwargs):
+        seen.append((list(argv), kwargs.get("cwd")))
+        return wrapped(argv, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", record)
+    code, out, _err = _probe(monkeypatch, capsys, "X12")
+    assert code == 0, out
+    assert seen, "no subprocess"
+    for argv, cwd in seen:
+        assert cwd is not None and "cos-probe-" in str(Path(cwd)), (argv, cwd)
+
+
+def test_x14_fails_when_measured_turns_exceed_the_cap(rig, monkeypatch, capsys):
+    rig.script = lambda c: [_init(), _say(), _result(num_turns=50)]
+    code, out, _err = _probe(monkeypatch, capsys, "X14")
+    assert code == 1, out
