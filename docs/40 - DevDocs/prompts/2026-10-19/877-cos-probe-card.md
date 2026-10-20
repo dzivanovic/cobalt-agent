@@ -1,13 +1,13 @@
-JOB: cos-probe-1019
+JOB: cos-probe-fr1
 LADDER: S5-P3 · F20
 CLASS: K2
 INSTALL: none
-BRANCH: ops/cos-probe-1019
-WORKTREE: cos-probe-1019
-BASE: 07eb89a3
-TIP: 8f47d85b
-REPORT: /Users/cobalt/cobalt-wt/cos-probe-1019/docs/40 - DevDocs/reports/cos-probe-1019-build-2026-10-19.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-probe-1019-check-2026-10-19.md
+BRANCH: ops/cos-probe-fr1
+WORKTREE: cos-probe-fr1
+BASE: f1196d2b
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/cos-probe-fr1/docs/40 - DevDocs/reports/cos-probe-fr1-build-2026-10-20.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-probe-fr1-check-2026-10-20.md
 HOUSE B: as needed
 BAND: HIGH
 RESTARTS: com.cobalt.radar
@@ -26,7 +26,11 @@ WHY: the bootstrap-only deploy of `com.cobalt.cos` needs a `GATE RESULT … OK` 
 | R1 | RUN — asserts nothing. `uv run cobalt jobs restarts <BASE>..HEAD`, the table WHOLE; the header's `RESTARTS` is the drafter's reading (`## RECORDS`), the tool's last line is the record | — (tool output quoted in the report) | none |
 | D0 | THE MODULE DOCS. One dated line `## 2026-10-19 — cos-probe-1019` in `docs/40 - DevDocs/cobalt/cos/README.md` (the probe, its seven items, the boundary) and in `docs/40 - DevDocs/cobalt/cli.md` (`cobalt cos probe <item>`) | the symbol-check gate, if it asks | `docs/40 - DevDocs/cobalt/cos/README.md`, `docs/40 - DevDocs/cobalt/cli.md` |
 
-ORDER: P1, P2, A1 (one red commit for the three: `test_cos_probe.py`), X20, R1, D0.
+| PORT | `PORT (port, desk record 2026-10-20 03:49, L79; R1485): BASE = main HEAD at launch (header: f1196d2b). Re-apply by Edit/Write only (no git merge, no cherry-pick, no revert-of-revert, no rebase) the net change of branch ops/cos-probe-1019 between its BASE 07eb89a3 and its checked code tip 8f47d85b (anything after 8f47d85b is a report commit and is not ported). Read it from git (git show 8f47d85b:<file>, git diff 07eb89a3 8f47d85b -- <file>, git show main:<file>); the old branch and tree are not touched. Why: deploy-card.sh exits 3 CONFLICT cos-probe-1019 docs/40 - DevDocs/cobalt/cli.md, main having landed the Genesis, 469 (0e3d45e6) and F16 fr3 (6a970c51) sections at the same anchor; a merge of main into the branch is barred (10-09 seam rule). One PROOF line per file of git diff --name-only 07eb89a3 8f47d85b (6 names, none a report). (A) Five files are untouched by main since 07eb89a3 (git diff --stat 07eb89a3 main -- <file> is empty for each, drafter-proved), so each is byte-equal to 8f47d85b after the port, git diff 8f47d85b -- <file> empty: src/cobalt/cos/cli.py (PROBE_ITEMS, _probe, the probe parser; the run parser lines unchanged), src/cobalt/cos/probe.py (new, 458 lines), tests/cobalt/test_cos_probe.py (new, 419 lines), tests/cobalt/test_hitl_offline.py (test_x20_redact_keeps_the_card_fragment_key, 18 added lines), docs/40 - DevDocs/cobalt/cos/README.md (the ## 2026-10-19 — cos-probe-1019 section). (B) One file main HAS touched: docs/40 - DevDocs/cobalt/cli.md (main added 3 lines at its end since 07eb89a3: a blank line, ## 2026-10-19 — f16-close-1018 and the line `cobalt validate` builds the F23 playbook config and the F4 daily-refresh config and prints one line for each; a bad file fails loud.). The seam hunk: main's side added the f16-close-1018 section after the f21-genesis-1013 section; the branch's side added the ## 2026-10-19 — cos-probe-1019 section (a blank line, the heading, the line starting `cos_cli.add_parser(sub)` now also mounts) at the same anchor. Resolution: keep main's file whole, then append after main's last line (the f16-close-1018 line, found by content) the branch's three added lines unchanged; the result equals 8f47d85b's cli.md plus main's f16-close-1018 section between the genesis section and the probe section, no other line differs. Any other drift the builder finds (a file main touched in the probe set, a pin, a count) is folded into this row, not a second round: the drafter found none. No migration, no config value, no restart set change (RESTARTS unchanged). THEN the suites: the card's offline suite uv run pytest -q -p no:cacheprovider --color=no tests/cobalt/test_cos_probe.py tests/cobalt/test_hitl_offline.py tests/cobalt/test_cos_offline.py (whole, quoted, 0 failed); the ## DEPLOY PROOF reads after the port; then the deploy gate's pass on the ported tree: the ## OFFLINE line of ops/desk/gate-lists.md as written, whole, quoted, 0 failed. The with-DB passes of gate-lists.md stay the deploy gate's own, under the dev lock; this job touches no with-DB test and no migration. Write the build report. The stop line carries the PROOF count (expected 6: 5 byte-equal to 8f47d85b, cli.md equal except the named seam hunk). No re-check after a fix round (L75).` | none: a port; the proof is the PROOF lines and the suites | `src/cobalt/cos/cli.py`, `src/cobalt/cos/probe.py`, `tests/cobalt/test_cos_probe.py`, `tests/cobalt/test_hitl_offline.py`, `docs/40 - DevDocs/cobalt/cos/README.md`, `docs/40 - DevDocs/cobalt/cli.md` |
+
+PORT JOB (cos-probe-fr1): rows P1, P2, A1, X20, R1 and D0 above are the content of the port, NOT rebuilt; the old job `cos-probe-1019` (ops/cos-probe-1019, BASE 07eb89a3, code tip 8f47d85b, check ready YES, `reports/cos-probe-1019-check-2026-10-19.md`) stays as evidence.
+
+ORDER: launch `build` at `PORT`, then the suites, then the stop line with the PROOF count (expected 6). After PORT: the check scoped to PORT and the seams with the suites, then the deploy.
 
 ## NOT IN THIS JOB
 - Running `cobalt cos probe <item>` or `python -m cobalt.cos.probe` outside a test; any `claude` command (`BUILD-HUB.md:16`); every live gate run: the gate seat's (`prompts/2026-10-19/873-cos-gate-run.md`).
@@ -49,12 +53,15 @@ ORDER: P1, P2, A1 (one red commit for the three: `test_cos_probe.py`), X20, R1, 
 - X3 Is `probe` registered under `cobalt cos` (`cobalt.cli.main(["cos", "probe", "--help"])` exit 0), and is `cobalt cos run` unchanged (`git diff <BASE> -- src/cobalt/cos/run.py src/cobalt/cos/session.py` empty; the `run` parser lines unchanged)?
 - X4 Is each item's pass rule the FINAL's line (`:82`, `:84-87`, `:91`) or a default the report marks ASK DESK, and does each FAIL path exit non-zero?
 - X5 Is the X20 test on the real `redact.yaml` and the real `redact()`, and is its mutation red?
+- P1 PORT PROOF: for each of the 6 files, the PROOF line's claim holds: `git diff 8f47d85b -- <file>` is empty for the five untouched files; for `cli.md` it is exactly main's f16-close-1018 section.
+- P2 SHARED SEAMS with the open F5 port job (`ops/f5-checkpoints-fr1`, card 731, BASE `bd5dd70a`): `docs/40 - DevDocs/cobalt/cli.md` is named in both; re-read its end by content (the last section of main at the check, then F16's, this job's probe section, any F5 section), not by line. The other five files are not in card 731's list.
+- P3 Before the deploy card the desk proves `git merge-base main <tip>` equals main's HEAD.
 
 ## DEPLOY PROOF
 - `ls /Users/cobalt/cobalt/src/cobalt/cos/probe.py` · before `ls: /Users/cobalt/cobalt/src/cobalt/cos/probe.py: No such file or directory` · after `/Users/cobalt/cobalt/src/cobalt/cos/probe.py`
 - `grep -c -F "def test_x20_redact_keeps_the_card_fragment_key" /Users/cobalt/cobalt/tests/cobalt/test_hitl_offline.py` · before `0` · after `1`
 - cos probe offline · `uv run pytest -q tests/cobalt/test_cos_probe.py tests/cobalt/test_hitl_offline.py tests/cobalt/test_cos_offline.py` · green: `0 failed`
-- probe mounted · `uv run cobalt cos probe --help` · green: names X2, X10, X11, X12, X3, X14, X17, exit 0
+- probe mounted · `grep -c -F 'csub.add_parser("probe"' /Users/cobalt/cobalt/src/cobalt/cos/cli.py` · before `0` · after `1` (replaces `uv run cobalt cos probe --help`, which the deploy hub's launch line does not admit; the mount itself is pinned by `test_cos_probe.py::test_the_probe_is_mounted_and_lists_the_seven_items` in the offline suite above)
 
 ## RECORDS
 - Drafter `draft-cos-probe` (prompt 876), 2026-10-19 16:11 EDT (`date`). `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `07eb89a3` (BASE). `git diff --stat main -- src/cobalt tests/cobalt configs/cobalt/redact.yaml "docs/30 - Design/F20-FINAL-2026-10-11.md"` and the 808 / 873 cards → nothing: the on-disk lines are main's.
@@ -63,4 +70,5 @@ ORDER: P1, P2, A1 (one red commit for the three: `test_cos_probe.py`), X20, R1, 
 - RULINGS: `cto-2026-10-18.md:90` R1863 `HIS RULING · APPROVED` (brain, L79).
 - RESTARTS, by reading `src/cobalt/jobs/restarts.py` `classify` (`:178-264`): `src/cobalt/cos/cli.py` and `src/cobalt/cos/probe.py` → static import reach; the only importer of `cobalt.cos.cli` is `src/cobalt/cli.py:87`, reached by `com.cobalt.radar` (`imports: [cobalt.cli]`, `jobs.yaml:203`); `com.cobalt.cos` (`imports: [cobalt.cos.run]`, `:226`) does not reach `cos.cli` (`cos/run.py` imports listed by grep). `tests/` → no resident; `docs/` → DOCS. Not run by the drafter (`uv run` in the prod tree); row R1 is the record.
 - Anchors re-found by content on main: `cos/cli.py:11-14` (`_run`), `:17-23` (`add_parser`); `cli.py:87` (`cos_cli` import), `:554` (`cos_cli.add_parser(sub)`); `session.py:54`, `:67`, `:93`, `:98`, `:118`, `:130`, `:206`, `:255`, `:361`; `hitl/card.py:46`, `:50`; `redact/guard.py:80`; `redact.yaml:125`, `:176`; `test_hitl_offline.py:141`; `test_cos_offline.py:139`, `:160`, `:180`, `:350`, `:412`, `:458`, `:515`; `F20-FINAL-2026-10-11.md:72`, `:82`, `:84-87`, `:91`.
+- Drafter `draft-cos-probe-port` (prompt 897), 2026-10-20 03:48 EDT (`date`), nothing run. Reads: `git rev-parse --short=8 main` → `f1196d2b` (BASE); `git diff --name-only 07eb89a3 8f47d85b` → the 6 files; `git diff --stat 07eb89a3 main` over them → only `cli.md` (+3, the f16-close-1018 section, `1aea7418`); `git diff 07eb89a3 8f47d85b` over `cli.md`, `cos/README.md`, `cos/cli.py`, `test_hitl_offline.py`; `git show main:src/cobalt/cos/cli.py`; `desk-launch.sh` (deploy kind) and `prompts/DEPLOY-HUB.md:11` allow list: admitted reads are `ls`, `grep`, `uv run pytest *`, bare `COBALT_ENV=production uv run cobalt validate`; `uv run cobalt cos probe --help` is not admitted, replaced by a `grep -c -F` read; no `--no-db` spelling in the card; `prompts/2026-10-18/731-f5-card.md` header and `cobalt/cli.md` mentions; `prompts/2026-10-20/893-draft-f16-port3.md`; `topics/writing-rules.md`. 8f47d85b's non-report diff is 919 insertions, 1 deletion.
 - Gate mapping (for the gate seat, not this build): `PROBE <item> OK …` → `GATE RESULT: com.cobalt.cos · <item> · OK`; X20 → the pytest id of row X20.
