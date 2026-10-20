@@ -10,7 +10,7 @@ TAG: «FILL: deploy-<run date>-cos-bootstrap»
 MIGRATIONS: none
 SET: cos
 TICKERS: none
-WAITS: cos-cutover-tooling DEPLOYED, cos-tunables DEPLOYED, agent retired
+WAITS: cos-cutover-tooling DEPLOYED, cos-tunables DEPLOYED, agent retired, hitl.page_base_url set
 
 ## LAUNCHD
 com.cobalt.cos · add · prompts/2026-10-18/730-f20-card.md:C4a · dry run: none
@@ -47,7 +47,7 @@ GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
 - cos tunables · `grep -c -F "CosConfigError" /Users/cobalt/cobalt/logs/cos.err` · `0`
 - cos Mattermost poll · `grep -c -F "Traceback" /Users/cobalt/cobalt/logs/cos.err` · `0`
 - cos steps · `grep -c -F "CoS step" /Users/cobalt/cobalt/logs/cos.err` · `0`
-- cos turn failures · `grep -c -F "CoS turn FAILED" /Users/cobalt/cobalt/logs/cos.err` · `0` — `Traceback` = 0 proves the poll; LaunchAgent auth stays UNPROVEN (L70) until one DM turn of his after the hub's green, asked by day in one sentence and confirmed by the desk; `CoS turn FAILED` > 0 → bootout cos, record `FAILED: smoke (s)`; the agent is not brought back by this step, a rollback is his
+- cos turn failures · `grep -c -F "CoS turn FAILED" /Users/cobalt/cobalt/logs/cos.err` · `0`
 
 ## CHECK ASKS
 - X1 Cos bootstrap-only card, brain 2026-10-20: 4.6L-BO loads `com.cobalt.cos` alone, after the market (16:30+ ET), no other deploy in between.
@@ -65,5 +65,7 @@ GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
 - FILES AND OBJECTS IT TOUCHES: launchd label `com.cobalt.cos` (loaded); `/Users/cobalt/cobalt/logs/cos.log`, `/Users/cobalt/cobalt/logs/cos.err` (new, `ops/com.cobalt.cos.plist:33`, `:35`); `/Users/cobalt/cobalt/data/deploy/bootstrap-owed.json` (the cos entry removed); `/Users/cobalt/cobalt/data/cos/scratch/` (emptied and made, `src/cobalt/cos/run.py:103`); production DB at cos's first start: the jobs row of `com.cobalt.cos` (`run.py:150`, `:155`), `cobalt_cos_sessions`, `cobalt_cos_turns` (`src/cobalt/cos/migrations/0001_cobalt_cos.sql:14`, `:28`) and `cobalt_hitl_requests` (`src/cobalt/hitl/migrations/0001_cobalt_hitl.sql:20`), each `CREATE … IF NOT EXISTS` (`run.py:105`, `:109`).
 - ROLLBACK (returns the old state): `launchctl bootout gui/501/com.cobalt.cos`, then `launchctl print gui/501/com.cobalt.cos` → `Could not find service` (STEP-5 (1L); an `add` label stays out, (2L)). With `--owed-clear` run last, a red smoke (s) leaves the owed entry in place. No revert: nothing merged. The log files, the scratch dir and the `IF NOT EXISTS` tables stay.
 - HUB STEPS WITH NO CARD VALUE (no code tip): P2 and P3 (no `## SHIPS` row), P5 (no gate worktree), P7, STEP-T, STEP-R, STEP-G, D2.0's `deploy-shipped.sh --moved`, D2.1–D2.3, D2.6's `pre-<JOB>` tag at a merge, STEP-4 4.1–4.6, smoke (f)'s `jobs restarts <pre-merge>..<stack-final>`, and the ROLLBACK STRING's revert.
-- gate report `reports/cos-gate-run-2026-10-20.md` at `7de50210`: `GATES DONE · ok: 10 · fail: 1 · not run: 3`; X13 ruled PASS by the brain (`reports/cto-2026-10-20.md:22`, R2197): 11 OK. Brief: `reports/cto-2026-10-20.md:21`, R2198.
+- gate report `reports/cos-gate-run-2026-10-20.md` at `7de50210`: `GATES DONE · ok: 10 · fail: 1 · not run: 3`; X13 ruled PASS by the brain (row R2197 of `reports/cto-2026-10-20.md`): 11 OK. Brief: row R2198 of `reports/cto-2026-10-20.md`.
+- SMOKE READS row 5 (`cos turn failures`): `Traceback` = 0 proves the poll; LaunchAgent auth stays UNPROVEN (L70) until one DM turn of his after the hub's green, asked by day in one sentence and confirmed by the desk; `CoS turn FAILED` > 0 → bootout cos, record `FAILED: smoke (s)`; the agent is not brought back by this step, a rollback is his.
+- tunables 933 — P1 probes cos/hitl unknown-green while com.cobalt.cos is in bootstrap-owed.json (mirrors watchdog.py:441-449), BAND MID; hitl.page_base_url his value, owed before 929 (WAITS) — brain 9b07db5a 2026-10-20
 - written by hand by drafter `draft-cos-bootstrap` at 2026-10-20 17:38 ET (`date`); `ops/desk/deploy-card.sh` cannot cut a card with no code branch.
