@@ -69,7 +69,8 @@ def test_route_dim_not_column_dim_crashes_before_any_write(tmp_path):
 
     with pytest.raises(GenesisEmbedError) as e:
         run_embed(store, config=_config(8), embed=fake_embed, out=lambda line: None)
-    assert "768" in str(e.value) and "8" in str(e.value)
+    # Both numbers, each in its place: "8" alone is a substring of "768" (check r2 O1).
+    assert "the route's dim 8 is not" in str(e.value) and "declared dimension 768" in str(e.value)
     assert texts == [PREFLIGHT_TEXT], "no chunk was sent"
     assert _vectors(store, source) == before
 

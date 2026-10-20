@@ -10,3 +10,4 @@ Check (card 820, O1/A1): `replace` sets `conn.autocommit = False` on the `autoco
 
 ## 2026-10-19 — f21-vectors-1013
 Card 469 V4 (FINAL F-02, X10): `column_embed_dim()` reads `embedding`'s `atttypmod`; `check_embed_dim(dim)` raises `GenesisEmbedError` when the column is absent or its dimension is not the route's `dim`; `null_chunks()` lists `(id, body)` with no vector; `set_embedding(id, vector, *, model, dim)` refuses before the check, a wrong length, an empty, zero or non-finite vector and an empty model, then writes one row (autocommit, so each vector lands on its own).
+Check r2 (O1): `test_genesis_vectors_db.py::test_route_dim_not_column_dim_crashes_before_any_write` pins both numbers of `check_embed_dim`'s message in place (`the route's dim <d> is not`, `declared dimension <c>`). Before, it asserted only that `"8"` was in the message, and `"8"` is a substring of `"768"`.
