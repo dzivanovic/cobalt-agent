@@ -4,7 +4,7 @@ CLASS: K2
 INSTALL: none
 BRANCH: ops/f5-checkpoints-fr1
 WORKTREE: f5-checkpoints-fr1
-BASE: ceb61973
+BASE: bd5dd70a
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f5-checkpoints-fr1/docs/40 - DevDocs/reports/f5-checkpoints-fr1-build-2026-10-19.md
 CHECK REPORT:
