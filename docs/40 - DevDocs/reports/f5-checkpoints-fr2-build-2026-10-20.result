@@ -1,0 +1,15 @@
+job=f5-checkpoints-fr2
+tip=d910d45c
+on=4ab0d0f4
+migration=0029, rolled back
+offline=8929/0
+with_db=5828/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset com.cobalt.cos com.cobalt.radar
+rows=1 of 1
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=385341
