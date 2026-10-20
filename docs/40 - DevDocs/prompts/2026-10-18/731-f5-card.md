@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/f5-checkpoints-fr1
 WORKTREE: f5-checkpoints-fr1
 BASE: bd5dd70a
-TIP: e29cad00
+TIP: 3c96ad2e
 REPORT: /Users/cobalt/cobalt-wt/f5-checkpoints-fr1/docs/40 - DevDocs/reports/f5-checkpoints-fr1-build-2026-10-19.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-checkpoints-fr1-check-2026-10-20.md
 HOUSE B: as needed
