@@ -144,3 +144,6 @@ behaviour, including the unreadable case, lives in
 
 ## 2026-10-18 — f20-cos-1018
 F20 C4b (F-27): `cos(now)` — RED on a missing or stale `com.cobalt.cos` heartbeat (older than `timeout_s / jobs.heartbeat_fraction`) or a last turn `failed`; `hitl(now)` — RED on a `pending` request past its TTL or any `failed` execution. RED is `ok=False`; no AMBER. While the registry row is `enabled: false` both return ok with detail `unknown — NOT PROBED …`, never red, and read nothing. Tests: `test_cos_probes.py`.
+
+## 2026-10-20 — cos-tunables
+`cos` and `hitl`, once the row is enabled, return ok `unknown — NOT PROBED, OWED (deferred bootstrap)` when `bootstrap_owed()` lists `com.cobalt.cos`, before any store is built; `BootstrapOwedError` is not caught.

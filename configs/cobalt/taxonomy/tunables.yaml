@@ -1006,7 +1006,7 @@ tunables:
                 "configs/cobalt/jobs.yaml com.cobalt.cos timeout_s (> this + one poll)"]
 
   - key: cos.poll_interval_s
-    value: null
+    value: 10  # DEFAULT (brain; his word may change it)
     unit: duration
     scope: global
     dynamic: false
@@ -1024,7 +1024,7 @@ tunables:
     consumers: ["cobalt.cos (daily session rotation, FINAL C8 — no reader until a value is ruled)"]
 
   - key: hitl.request_ttl_min
-    value: null
+    value: 30  # DEFAULT (brain; his word may change it)
     unit: min
     scope: global
     dynamic: false
