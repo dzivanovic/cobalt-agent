@@ -39,8 +39,9 @@
 #                        `none` card NOTHING; otherwise only added `NNNN_*.sql` files and the registry
 #                        `__init__.py` (an edited or removed migration, or any other file, fails)
 #   P8 census <label>    `launchctl print gui/501/<label>` for aset, radar, agent, cos: pid and state,
-#                        RECORDED, never a gate
-#   disk                 `df -k <repo>`, recorded
+#                        RECORDED, never a gate; the agent named in the retirement record
+#                        (card 931 T1) is not printed, and its row says so
+#   disk                `df -k <repo>`, recorded
 #   main status          `git status --short --branch` of the repo, recorded
 # NOT mirrored here (the hub keeps them): P4 the lock census, P5 the gate worktree, P6 the markers'
 # before values (deploy-smoke.sh reads markers), P8's `path =` gate (deploy-outage.sh proves it
@@ -71,6 +72,12 @@ REPORTS_REL="docs/40 - DevDocs/reports"
 GIT_OPTIONAL_LOCKS=0
 export GIT_OPTIONAL_LOCKS
 RESIDENTS="com.cobalt.aset com.cobalt.radar com.cobalt.agent com.cobalt.cos"
+# THE RETIREMENT RECORD (card 931 T1): one launchd label per line, a desk commit on main, never
+# written by this script; a line `com.cobalt.agent` = the agent is retired. Absent, nothing is.
+RETIRED="$REPO/ops/desk/retired-labels"
+agent_retired() {
+    grep -q -x -F com.cobalt.agent "$RETIRED" 2>/dev/null
+}
 NOW_CMD="TZ=America/New_York date '+%u %H %M %Y-%m-%d %a'"
 
 refuse() {
@@ -874,6 +881,10 @@ fi
 # ---- RECORDED, never a gate: the census, the disk, main ---------------------------------------
 for label in $RESIDENTS; do
     c="launchctl print gui/501/$label"
+    if [ "$label" = com.cobalt.agent ] && agent_retired; then
+        [ "$mode" = dry ] || row "P8 census $label" "grep -x -F $label $RETIRED" 0 "retired (recorded)" 0
+        continue
+    fi
     if [ "$mode" = dry ]; then
         would "$c"
         continue
