@@ -4,7 +4,7 @@ CLASS: K2
 INSTALL: none
 BRANCH: ops/cos-probe-fr1
 WORKTREE: cos-probe-fr1
-BASE: f1196d2b
+BASE: 0f3c3e01
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/cos-probe-fr1/docs/40 - DevDocs/reports/cos-probe-fr1-build-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-probe-fr1-check-2026-10-20.md
