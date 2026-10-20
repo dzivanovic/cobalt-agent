@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/cos-probe-fr1
 WORKTREE: cos-probe-fr1
 BASE: 0f3c3e01
-TIP:
+TIP: 78b93da3
 REPORT: /Users/cobalt/cobalt-wt/cos-probe-fr1/docs/40 - DevDocs/reports/cos-probe-fr1-build-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-probe-fr1-check-2026-10-20.md
 HOUSE B: as needed
