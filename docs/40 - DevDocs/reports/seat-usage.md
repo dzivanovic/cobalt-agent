@@ -28,19 +28,19 @@ weekly_pct_close:
 <!-- cobalt:unit seat-usage:2026-10-19 -->
 | model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
 |---|---|---:|---:|---:|---:|---:|
-| `grok-4.7-build` | grok · — | 34,661,248 | 0 | 888,293 | $9.75 | +$2.19 |
+| `grok-4.7-build` | grok · — | 34,661,248 | 0 | 888,293 | $9.75 | $0.00 |
 | `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 4,667 | $0.00 [^free] | $0.00 |
-| `claude-opus-5-5` | claude · — | 604,413,783 | 13,213,679 | 2,891,901 | **unpriced** | — |
-| `claude-sonnet-5-5` | claude · — | 395,474,381 | 5,800,937 | 1,239,931 | **unpriced** | — |
+| `claude-opus-5-5` | claude · — | 630,712,656 | 13,491,115 | 2,974,275 | **unpriced** | — |
+| `claude-sonnet-5-5` | claude · — | 408,733,644 | 5,964,273 | 1,288,611 | **unpriced** | — |
 
-**Day total (API-equivalent):** ≥ $9.75 · **1,061,803,729** tokens across 4 model(s), seats: claude, grok, qwen
-**Fresh input tokens:** 3,214,909 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+**Day total (API-equivalent):** ≥ $9.75 · **1,101,934,223** tokens across 4 model(s), seats: claude, grok, qwen
+**Fresh input tokens:** 3,215,441 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
 
 > **UNPRICED MODELS: `claude-opus-5-5`, `claude-sonnet-5-5`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
 
 [^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
 
-_Generated 2026-10-19 22:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Generated 2026-10-19 23:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
 _Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20261019 --until 20261019 --by-agent --offline`_
 <!-- /cobalt:unit seat-usage:2026-10-19 -->
 <!-- /cobalt:section seat-usage:2026-10-19 -->
