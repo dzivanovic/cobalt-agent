@@ -1,0 +1,15 @@
+job=cos-cutover-tooling
+tip=96728174
+on=4a9b60bd
+migration=none
+offline=9018/0
+with_db=0/0
+live_note=148/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=5 of 5
+self_check=3 of 3
+decisions=4
+for_dejan=0
+tokens=288545
