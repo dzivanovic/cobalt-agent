@@ -1,7 +1,11 @@
 # deploy f5-checkpoints-fr2 · set: f5-checkpoints · migrations: 0029
 
 ## §0 Headline
-- Run in progress.
+- DEPLOYED `deploy-2026-10-20-f5-checkpoints-fr2` at `25c51ca0`. `main` moved `5feacaff` → `25c51ca0`. Rollback tag: `pre-f5-checkpoints-fr2`.
+- Migration 0029 applied: `system.market_checkpoints` CREATED, every other table UNCHANGED. `<RB>` read `0` before and `1` after.
+- aset and radar restarted. Down 09:59:24 → 10:10:05 (641 s; the migration proof alone took 591.8 s). com.cobalt.cos not loaded, skipped.
+- Smoke GREEN. The four checkpoint one-shots are merged and not loaded: BOOTSTRAP OWED.
+- Gate: the equal-tree clause held, so the check's suite lines stand: offline 8929/0, with-DB 5828/0, live-note 148/0.
 
 ## L74
 - The session's attribution reminder asked for a `Claude-Session:` line on commits. Recorded here as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -205,13 +209,127 @@ GATE GREEN on 8eecfc55
 | census | — | — | no `## SMOKE READS` line marked `census` |
 | D1-M | `COBALT_ENV=production uv run cobalt db migrate --allow-prod --proof-only` | 0 | 38 tables probed, no `CHANGED`; `Proof cost: total 310.7 s — and a migration pays it TWICE (before and after), inside the outage.`; `NOTHING WAS APPLIED: --proof-only ran in a READ ONLY transaction.`; `SLOTS ok · highest user.aset_sizings 60 of 1600`; `FINGERPRINT cols 929 · rels 46 · views_md5 126f2d6983fa59f9d0eaaff7da7dd29c`; `TABLES 0026` |
 
+### STEP-D2
+| step | command | exit | result |
+|---|---|---|---|
+| D2.0 | `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved d55956f2 "<card>"` | 0 | nothing |
+| D2.0 | `git add` + `git commit … -- "docs/40 - DevDocs/reports/deploy-f5-checkpoints-fr2.md"` | 0 | `[main 5feacaff] docs(report): deploy f5-checkpoints-fr2 — gate green on 8eecfc55` · `1 file changed, 217 insertions(+)` |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `5feacaff` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` | 0 | `25c51ca0` = `<stack-final>` |
+| D2.2 | `rev-parse --short=8 25c51ca0^2` | 0 | `5feacaff` = `<pre-merge>` |
+| D2.2 | `merge-base --is-ancestor 8eecfc55 25c51ca0` | 0 | — |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat 8eecfc55 25c51ca0 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 6.3 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain via pg_dump inside cobalt_memory — 9499.0 MB` · `ssd: snapshot 3794eb40 — 8 new / 3 changed, 371.9 MB added, 1 pruned` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | 0 · 0 | `Tue Oct 20 09:59:02 EDT 2026` (469 s after D1) · `HEARTBEAT RED — 3 job(s) and 1 probe(s)  (2026-10-20 09:59:03 EDT)`: the same REDs as `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay, com.cobalt.generated); aset `OK … pid 90910`, radar `OK   radar                    scanning (rth), members 50` and `running 376 min, heartbeat fresh`. No new RED |
+| D2.6 | `date` · `tag pre-f5-checkpoints-fr2` · `rev-parse --short=8 pre-f5-checkpoints-fr2` | 0 · 0 · 0 | `Tue Oct 20 09:59:08 EDT 2026` · — · `5feacaff` |
+
+### STEP-4 (the outage)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Tue Oct 20 09:59:24 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.aset` | 0 | still loaded, `state = SIGTERMed`, pid 90910 |
+| 4.2 | `date` · `launchctl print gui/501/com.cobalt.aset` | 0 · 113 | `Tue Oct 20 09:59:32 EDT 2026` · `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · print | 0 · 113 | `Could not find service "com.cobalt.radar" in domain for user gui: 501` |
+| 4.2 ORPHAN-CLEAN | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | 0 | `orphan-clean: aset · none found` (clean, no kill) |
+| 4.2 agent | — | — | `com.cobalt.agent` not in `<restart set>`: no call |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `5feacaff` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/f5-checkpoints-fr2` | 0 | `Updating 5feacaff..25c51ca0` / `Fast-forward` (52 files) |
+| 4.4 | `COBALT_ENV=production uv run cobalt db migrate --allow-prod` | 0 | `-- applying 0001_schemas.sql` … `-- applying 0029_market_checkpoints.sql`; no `uv` sync line; proof table: every table `OK`, `market_checkpoints   system  - -> system                - -> 0 … CREATED`; `39 table(s) proven; … content UNCHANGED on every table.`; `proof cost: BEFORE 298.8 s + AFTER 293.0 s = total 591.8 s; slowest table radar_score (151.4 s before).`; `SLOTS ok`; `code: 25c51ca0`. No `CHANGED`; created objects EXACTLY the card's one table |
+| 4.4 `<RB>` | `COBALT_ENV=production uv run cobalt db query --side system --prod "SELECT count(*) AS m0029 …"` | 0 | `m0029` / `1` = card AFTER `1` → `migrations applied: all` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | no failing line; `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.5 Jobs | (same) | — | `Jobs (F17): 22 registered — 7 resident, 15 one-shot.` (was `<jobs0>` 18 / 7 / 11: the four checkpoint one-shots); `registry <-> ops/: 22 label(s), exact match.` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | — |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` | 0 | — |
+| 4.6 | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running`, `pid = 77363` (≠ 90910) |
+| 4.6 | `launchctl print gui/501/com.cobalt.radar` | 0 | `state = running`, `pid = 77373` (≠ 90926) |
+| 4.6 | `date` | 0 | `Tue Oct 20 10:10:05 EDT 2026` = `<t up>`; downtime 641 s |
+| 4.6L | — | — | `<launchd set>` empty: nothing. `LAUNCHD done: none` |
+
+### STEP-7 (close)
+| item | value |
+|---|---|
+| merge | `<pre-merge>` `5feacaff` → `<stack-final>` `25c51ca0` (`git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `25c51ca0`) |
+| tags | `pre-f5-checkpoints-fr2` → `5feacaff`; `deploy-2026-10-20-f5-checkpoints-fr2` → `25c51ca0` (set after the green smoke) |
+| outage | `<t down>` 09:59:24 · `<t up>` 10:10:05 · 641 s |
+| uv sync | 4.4: none printed. aset start (aset.err): `Resolved 267 packages in 3ms` · `Audited 257 packages in 4ms` |
+| proof cost | D1-M `total 310.7 s`; 4.4 `BEFORE 298.8 s + AFTER 293.0 s = total 591.8 s` |
+| migrations applied | all (0029) |
+| `<RB>` | before `0` · after `1` |
+| snapshot | ssd `3794eb40` (D2.4, 9499.0 MB dump) |
+| RESTARTS done | com.cobalt.aset com.cobalt.radar |
+| LAUNCHD done | none |
+| BOOTSTRAP OWED | com.cobalt.checkpoint-0715 · com.cobalt.checkpoint-0745 · com.cobalt.checkpoint-0815 · com.cobalt.checkpoint-0845 — each `X2, X3, X4, X5, X6, X7, X10, X12, X13, values card` |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 25c51ca0` — ONE revert of the main-into-gate merge; com.cobalt.aset and com.cobalt.radar booted out first, bootstrapped after; no `<launchd set>` label (the four checkpoint labels were never loaded).
+2. SCHEMA: only as a separate desk job on HIS word, after the code revert: `COBALT_ENV=production uv run cobalt db migrate --allow-prod --rollback --down-to 0028`.
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — `Reapply "Merge branch 'main' into deploy/f5-checkpoints-fr2"`.
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row has its `date` and quotes its output (## Smoke, 10:10:26 → 10:13:05).
+2. Tips re-read at P3 (`d910d45c`, `6f31552f`). `git -C /Users/cobalt/cobalt merge-base --is-ancestor d910d45c 25c51ca0` → exit 0; `… 6f31552f 25c51ca0` → exit 0.
+3. REVERT-READBACK shown at (h): `18 · 60 · 43 · 39` against `<rp_up>`… `18 · 60 · 43 · 39`. Every count, sha and line in this report was read from tool output in this run.
+4. No conflict marker: STEP-T ran clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/f5-checkpoints-fr2`.
+THE RELEASE: this run never held the lock (equal-tree clause; no `gate.sh` call); `ls -la <GATE>/.env` → `No such file or directory`.
+
 ## Smoke
+| row | `date` | command | exit | result |
+|---|---|---|---|---|
+| first calls | — | the four failure counts | 0 | `<rp_up>` `18` · `<rpr_up>` `60` · `<re_up>` `43` · `<lc_up>` `39` (= D1's) |
+| (a) | 10:10:26 | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running`, `pid = 77363` (NEW, ≠ 90910) |
+| (a) | 10:10:26 | `launchctl print gui/501/com.cobalt.radar` | 0 | `state = running`, `pid = 77373` (NEW, ≠ 90926) |
+| (a) | 10:10:26 | `/Users/cobalt/cobalt/cobalt.sh status` | 0 | `Cobalt is ONLINE (PID: 35845).` (agent not in the set: same pid) |
+| (b) | 10:10:31 | `grep -c "Started server process" …/aset.err` | 0 | `289` (> 288, ≤ 290) |
+| (b) | 10:10:31 | `tail -n 30 …/aset.err` | 0 | `Resolved 267 packages in 3ms` · `Audited 257 packages in 4ms` · `INFO:     Started server process [77363]` … `INFO:     Application startup complete.` · `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` |
+| (b) | 10:10:31 | `grep -c "Traceback"` aset.err · radar.err · `grep -c "TaxonomyConfigError"` radar.err | 0 · 1 · 1 | `217` · `0` · `0` (= baselines) |
+| (c) | 10:10:38 | `curl … https://cobalt.taild24291.ts.net/` · `/radar` · `/radar\?frame=phone` | 0 | `200` · `200` · `200` (first attempt each) |
+| (d) | 10:10:43 | the six `## MARKERS` greps | 0 each | `1` `1` `1` `1` `1` `1` (each its `after`) |
+| (e) 1 | 10:10:51 | `COBALT_ENV=production uv run cobalt heartbeat show` | 0 | `HEARTBEAT RED — 3 job(s) and 1 probe(s)  (2026-10-20 10:10:52 EDT)`: the same four REDs as `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay, com.cobalt.generated), no new one; `OK   com.cobalt.aset              running   loaded, pid 77363`; `OK   radar                    scanning (rth), members 50`; `OK   com.cobalt.radar             running   running 1 min, heartbeat fresh`; the four checkpoint labels read `OK … OWED (deferred bootstrap)` |
+| (f) | 10:10:58 | `COBALT_ENV=production uv run cobalt validate` | 0 | as 4.5: no failing line; `Jobs (F17): 22 registered — 7 resident, 15 one-shot.`; `registry <-> ops/: 22 label(s), exact match.` |
+| (f) | 10:10:58 | `COBALT_ENV=production uv run cobalt jobs restarts 5feacaff..25c51ca0` | 0 | `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar`; minus `com.cobalt.cos` (not loaded — skipped) = `com.cobalt.aset com.cobalt.radar` = `<restart set>`; no `UNCLASSIFIED` |
+| (g) | 10:11:04 | `<RB>` | 0 | `m0029` / `1` = AFTER |
+| (s) | — | `## SMOKE READS` | — | no read lines on the card; `<launchd set>` empty, no dry run. The live checkpoint dry run is the gate's live-note leg (`live-note 148/0`) |
+| (b) radar tail 1 | 10:11:39 (`<t up>` + 94 s) | `tail -n 12 /Users/cobalt/cobalt/logs/radar.err` | 0 | `2026-10-20 10:11:21.552 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792505401312`, stamped after `<t up>`. No `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback: settled GREEN |
+| (e) 2 | 10:12:41 (110 s after (e) 1) | `COBALT_ENV=production uv run cobalt heartbeat show` | 0 | `HEARTBEAT RED — 3 job(s) and 1 probe(s)  (2026-10-20 10:12:45 EDT)`: the same four REDs as `<hb0>`, none new; `OK   com.cobalt.radar             running   running 3 min, heartbeat fresh`; `OK   radar                    scanning (rth), members 50`; aset `pid 77363` |
+| (b) radar tail 2 | 10:13:05 (`<t up>` + 180 s) | `tail -n 12 …/radar.err` | 0 | last lines `… radar cycle: scanning scan_id=1792505401312` · `2026-10-20 10:11:42.232 | WARNING  | cobalt.strike.detector:_unwatchable_once:177 - strike: unwatchable: card 1014 (BRUN) — sequence trigger (3 steps) — price-cross only (Charter F9)`; no traceback, no FAILED line |
+| (h) | 10:13:05 | the four failure counts | 0 | `18` · `60` · `43` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none growing) |
+| (h) | 10:13:05 | `curl … /radar` | 0 | `200` |
+| (h) census | — | — | — | no `census` line on the card |
+
+THE CHAIN: every check committed (P2 `1937a479`) · the tips re-read (P3 `d910d45c`, `6f31552f`) · the merged tree `8eecfc55` (T) · RESTARTS derived `com.cobalt.aset com.cobalt.radar` (R) · three suites green on `8eecfc55` (G, equal-tree) · `<stack-final>` `25c51ca0` = `<m1>` + docs (D2.3) · the landed code `25c51ca0` (4.3) · markers `after` (d) · the migration read back `1` (g) · residents up on new pids after the merge (a) · radar cycling (b, e) · the set's reads: none on the card (s) · no new failure (h). The card surface cannot be read from here. The desk confirms it with him (L70).
+
+**smoke: GREEN**
 
 ## CONTINUE
-next: STEP-D2 (D1 baseline at 09:51:13)
+OUTAGE STARTING 09:59:08 — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+Outage ended 10:10:05, residents up. Smoke GREEN 10:13:05. Run closed at STEP-7. Nothing comes next from this hub.
 
 ## DECISIONS
+1. The set changes `DEPLOY-HUB.md`: one line in STEP-G (c) adds the skip of `test_dry_run_finds_the_heading_in_real_notes` (`tests/cobalt/test_checkpoints_live.py`, `COBALT_LIVE_VAULT_ROOT not set`) to the allowed set. It also changes `ops/desk/gate-lists.md` `## ALLOWED SKIPS`, which STEP-G names as the set's one home. Safe default taken (L68, "the gate on the merged hub text"): the check's SKIPPED lines were judged against the merged text, the equal-tree clause held, and the gate was not re-run whole. The skip's reason names the variable the live-note leg sets, and that leg ran `148/0`. Not his. The desk may confirm the reading.
 
 ## RECORDS
+- Downtime 641 s (09:59:24 → 10:10:05), over 300 s. The cause is the migration's proof, paid twice: `BEFORE 298.8 s + AFTER 293.0 s`.
+- `cobalt_dev: 0013 (F2 = F0)`, from the check's gate (`/Users/cobalt/cobalt-wt/.gate-logs/f5-checkpoints-fr2-all-20261020-085216.log`). This run made no dev-DB call and never took the lock.
+- BOOTSTRAP OWED: com.cobalt.checkpoint-0715 — X2, X3, X4, X5, X6, X7, X10, X12, X13, values card
+- BOOTSTRAP OWED: com.cobalt.checkpoint-0745 — X2, X3, X4, X5, X6, X7, X10, X12, X13, values card
+- BOOTSTRAP OWED: com.cobalt.checkpoint-0815 — X2, X3, X4, X5, X6, X7, X10, X12, X13, values card
+- BOOTSTRAP OWED: com.cobalt.checkpoint-0845 — X2, X3, X4, X5, X6, X7, X10, X12, X13, values card
+- The heartbeat's OWED rows for these four labels print a reload hint that names `~/Library/LaunchAgents/com.cobalt.checkpoint-*.plist`. The plists ship at `/Users/cobalt/cobalt/ops/com.cobalt.checkpoint-*.plist`, and 4.6L-BO bootstraps from `ops/`. A fact for the bootstrap-only deploy.
+- RETIRE OWED: none (no plist removed).
+- Carried REDs as read (D1, D2.5, (e) ×2). None is aset, sheet or radar, and no radar RED appeared: `archiver last run FAILED …`, `com.cobalt.archiver failed RuntimeError: 5 archiver failure(s): WBD/i1 … 400 Bad Request …`, `com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`, `com.cobalt.generated failed GeneratedCommitRefused: … a deploy hub is live … 79a459de deploy-hub-hub-cos-restart-fr1 …`.
+- Commands I added that no step names, outside the outage, none refused: `COBALT_ENV=production uv run cobalt heartbeat show radar` → exit 2, `cobalt: error: unrecognized arguments: radar` (a mistyped clock filler; read-only, no effect). `COBALT_ENV=production uv run cobalt backup status` as one clock filler, outside the date + heartbeat rule. `git -C /Users/cobalt/cobalt status --porcelain --untracked-files=no` (D0 MAIN; the untracked lines read from `--short`).
+- No `CONTINUE` message and no message from another session arrived.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-f5-checkpoints-fr2` and branch `deploy/f5-checkpoints-fr2`; the set's worktree `/Users/cobalt/cobalt-wt/f5-checkpoints-fr2` and branch `ops/f5-checkpoints-fr2`. The gate's `.venv` was created by STEP-R's `uv run`.
+- Token figure: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh 93c881df` (this job's id) → `context 217438 of 400000 — ok`.
+- L74: the session's attribution reminder asked for a `Claude-Session:` line on commits. Recorded once under `## L74`; not acted on.
+- Card `## RECORDS` (the desk's), copied:
+  - f5-checkpoints-fr2: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-checkpoints-fr2-check-2026-10-20.md` last line: CHECK DONE · job: f5-checkpoints-fr2 · pass: 1 · tip: d910d45c · house A: Grok FINDINGS: 0 · findings: 3 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8929/0 · with-DB 5828/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar · files opened: 10 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 235665
+  - f5-checkpoints-fr2: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f5-checkpoints-fr2` → `6f31552f`; code tip `d910d45c`
+  - house B: met by fr1's Gemini read (FINDINGS 0) on identical note-writing code, PROOF rows in `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-checkpoints-fr2-build-2026-10-20.md` (on `ops/f5-checkpoints-fr2`); fr2's delta is the migration number only (brain 2026-10-20 09:45, L79).
+  - written by deploy-card.sh at 2026-10-20 09:44 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-20-f5-checkpoints-fr2 25c51ca0 | set: f5-checkpoints | migrations: 0029 | gate: offline 8929/0 · with-DB 5828/0 · live-note 148/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 217438
