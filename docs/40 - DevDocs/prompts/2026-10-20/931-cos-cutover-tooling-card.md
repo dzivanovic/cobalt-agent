@@ -4,7 +4,7 @@ CLASS: K5
 INSTALL: none
 BRANCH: ops/cos-cutover-tooling
 WORKTREE: cos-cutover-tooling
-BASE: bd7bc0c9
+BASE: 4a9b60bd
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/cos-cutover-tooling/docs/40 - DevDocs/reports/cos-cutover-tooling-build-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-cutover-tooling-check-2026-10-20.md
