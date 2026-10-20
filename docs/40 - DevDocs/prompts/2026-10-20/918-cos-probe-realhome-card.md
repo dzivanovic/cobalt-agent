@@ -4,7 +4,7 @@ CLASS: K2
 INSTALL: none
 BRANCH: ops/cos-probe-fr2
 WORKTREE: cos-probe-fr2
-BASE: 56abaea2
+BASE: 27c35e37
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/cos-probe-fr2/docs/40 - DevDocs/reports/cos-probe-fr2-build-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-probe-fr2-check-2026-10-20.md
