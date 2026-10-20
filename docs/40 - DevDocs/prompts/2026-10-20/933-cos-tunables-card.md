@@ -11,7 +11,7 @@ CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-tunables-check-
 HOUSE B: as needed
 BAND: MID
 RESTARTS: com.cobalt.aset com.cobalt.radar
-RULINGS: 2026-10-20 brain 9b07db5a (L79)
+RULINGS: none
 DEFAULT cos.poll_interval_s: 10 — DEFAULT (brain; his word may change it)
 DEFAULT hitl.request_ttl_min: 30 — DEFAULT (brain; his word may change it)
 
