@@ -140,6 +140,3 @@ F20 C4d: `from cobalt.cos import cli as cos_cli`, `from cobalt.hitl import cli a
 
 ## 2026-10-19 — f21-genesis-1013
 `from cobalt.genesis import cli as genesis_cli` after the playbook import and `genesis_cli.add_parser(sub)` after `playbook_cli.add_parser(sub)` mount `cobalt genesis import <path>...` and `cobalt genesis search <question> --limit <n>` (card 468 G5; `genesis/cli.md`). The registration puts `src/cobalt/genesis/*` in `com.cobalt.radar`'s static import reach (`cobalt jobs restarts`).
-
-## 2026-10-19 — f16-close-1018
-`cobalt validate` builds the F23 playbook config and the F4 daily-refresh config and prints one line for each; a bad file fails loud.

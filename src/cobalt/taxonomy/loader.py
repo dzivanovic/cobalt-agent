@@ -82,15 +82,9 @@ def load_tunables(path: Path = TUNABLES_PATH) -> TunableRegistry:
             f"{path}: expected a YAML mapping, got {type(raw).__name__}"
         )
     try:
-        registry = TunableRegistry(**raw)
+        return TunableRegistry(**raw)
     except ValidationError as e:
         raise TaxonomyConfigError(f"{path}: invalid tunables registry:\n{e}") from e
-    keys = [row.key for row in registry.tunables if not any(name.strip() for name in row.consumers)]
-    if keys:
-        raise TaxonomyConfigError(
-            f"{path}: tunables row(s) with no consumer (F16): {keys}"
-        )
-    return registry
 
 
 def merge_tunables(
