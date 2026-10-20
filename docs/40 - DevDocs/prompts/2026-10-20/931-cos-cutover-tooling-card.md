@@ -12,7 +12,7 @@ HOUSE B: as needed
 BAND: HIGH
 DB: none
 RESTARTS: none
-RULINGS: none
+RULINGS: 2026-10-18 R1863
 
 ## ROWS
 
