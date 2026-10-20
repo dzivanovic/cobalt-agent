@@ -17,6 +17,11 @@ TICKERS: none
 |---|---|---|---|---|---|---|
 | 1 | `ops/f21-vectors-1013` | `c56817ec` | `c56817ec` | `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f21-vectors-check-r2-2026-10-19.md` | `held unfixed: 0` and `ready: YES` | |
 
+## READ-BACK
+`COBALT_ENV=production uv run cobalt db query --side user --prod "SELECT count(*) AS m0028 FROM information_schema.columns WHERE table_schema = 'user' AND table_name = 'genesis_chunk' AND column_name IN ('embedding','embed_model','embed_dim')"`
+- BEFORE `0` (the 0026 level: none of the three columns exists)
+- AFTER `3` (the three columns exist)
+
 ## MARKERS
 - `grep -c -F "openai_embeddings" /Users/cobalt/cobalt/configs/cobalt/modelaccess.yaml` · before `0` · after `1`
 - `ls /Users/cobalt/cobalt/src/cobalt/genesis/embed.py` · before `No such file or directory` · after the path
