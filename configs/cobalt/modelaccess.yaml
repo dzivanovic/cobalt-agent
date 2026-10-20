@@ -40,3 +40,25 @@ routes:
     # LM Studio needs no key today. If it ever does: a VaultManager NAME,
     # fetched at call time — never a value (L4).
     key_name: null
+  # F21 chunk 2 (card 469 V3; FINAL F-01, F-03, F-15): the embeddings kind,
+  # its own Route variant (EmbedRoute) — no chat keys, no fallback. Used by
+  # the one-shot `cobalt genesis embed`; never by the voice path.
+  local.embed:
+    lane: local
+    kind: openai_embeddings
+    # The same LM Studio server as local.plan.
+    api_base: http://127.0.0.1:1234/v1
+    # source: X2 and X8 (reports/f21-host-probe-r2-2026-10-13.md) — listed by
+    # /v1/models, returned as `model` on 130/130 calls. embed_sync refuses a
+    # reply naming any other model (X8: an unknown alias answered 200 with this one).
+    model: text-embedding-nomic-embed-text-v1.5
+    # source: X2 first call (JIT load plus answer in 7.5 s) against X8 loaded
+    # max 340 ms (reports/f21-host-probe-r2-2026-10-13.md), and X8 unloaded
+    # (JIT load plus 32 strings answered 200 in 0.86 s,
+    # reports/f21-x8-probe-2026-10-18.md); 30 s ≈ 4× the slowest seen.
+    timeout_s: 30
+    # source: X2 and X8 (reports/f21-host-probe-r2-2026-10-13.md) — dims=[768]
+    # on every vector, no zero vector. Checked against genesis_chunk.embedding's
+    # declared dimension at load (F-02).
+    dim: 768
+    key_name: null

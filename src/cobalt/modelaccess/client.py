@@ -6,14 +6,22 @@ rewritten here).
 ONE code path: `call()` is `call_sync()` under `asyncio.to_thread`, so the
 FastAPI route never blocks the loop (FINAL [F-04]) and the CLI / tests run
 the very same code.
+
+`embed_sync()` (F21 chunk 2, card 469 V2) is the embeddings kind's call:
+the same guard, error classification and call record, no think policy. It
+returns an `EmbedResult` whose vector is the route's `dim` long, from the
+route's own `model`, or raises (F-14).
 """
 
 from __future__ import annotations
 
 import asyncio
 import json
+import math
 import re
 import time
+import uuid
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -22,9 +30,9 @@ from loguru import logger
 from cobalt.redact import redact
 
 from .adapters import ADAPTERS, AdapterFailure
-from .config import ModelAccessConfig, Route, load_routes
+from .config import EmbedRoute, ModelAccessConfig, Route, load_routes
 from .guard import PromptRefused, refuse_if_secret_shaped
-from .models import ERROR_KINDS, ModelCallError, ModelRequest, ModelResult, Usage
+from .models import ERROR_KINDS, EmbedResult, ModelCallError, ModelRequest, ModelResult, Usage
 
 NO_THINK = "/no_think"
 _THINK = re.compile(r"^\s*<think>(?P<body>.*?)</think>\s*", re.S)
@@ -38,7 +46,7 @@ def _error(kind: str, req: ModelRequest, detail: str) -> ModelCallError:
 def _record(req: ModelRequest, route: Optional[Route], *, started: float, result: Optional[ModelResult],
             error: Optional[str], literal_guard: Optional[bool]) -> None:
     """THE call record (L57): one line, success or error, no message text."""
-    usage = result.usage if result else None
+    usage = getattr(result, "usage", None)
     line = (
         "modelaccess call route={} caller={} request_id={} lane={} kind={} model_returned={} "
         "latency_ms={} input_tokens={} output_tokens={} think_block={} literal_guard={} error={}"
@@ -49,7 +57,7 @@ def _record(req: ModelRequest, route: Optional[Route], *, started: float, result
         result.model_returned if result else "-",
         result.latency_ms if result else int((time.perf_counter() - started) * 1000),
         usage.input_tokens if usage else "-", usage.output_tokens if usage else "-",
-        result.think_block if result else "-",
+        getattr(result, "think_block", "-"),
         {True: "active", False: "INACTIVE", None: "-"}[literal_guard],
         error or "none",
     )
@@ -86,6 +94,8 @@ def call_sync(req: ModelRequest, *, config: Optional[ModelAccessConfig] = None) 
     try:
         if route is None:
             raise _error("route_unknown", req, f"no route named {req.route!r} in the registry")
+        if not isinstance(route, Route):
+            raise _error("route_unknown", req, f"{req.route!r} is a {route.kind} route, not a chat route")
         if req.max_output_tokens is not None and req.max_output_tokens > route.max_output_tokens:
             raise ValueError(
                 f"max_output_tokens {req.max_output_tokens} exceeds the route budget "
@@ -162,4 +172,66 @@ async def call(req: ModelRequest, *, config: Optional[ModelAccessConfig] = None)
     return await asyncio.to_thread(call_sync, req, config=config)
 
 
-__all__ = ["ERROR_KINDS", "NO_THINK", "call", "call_sync"]
+@dataclass(frozen=True)
+class _EmbedCall:
+    """What `_error` and `_record` read of a request: no text."""
+
+    route: str
+    caller: str
+    request_id: str
+
+
+def embed_sync(route: str, text: str, *, caller: str, config: Optional[ModelAccessConfig] = None) -> EmbedResult:
+    """One vector for `text` from the embeddings route named `route`, or `ModelCallError`.
+
+    Never a zero vector, `None` or `[]` (F-14): an HTTP error, a timeout, a
+    `model_returned` other than the route's `model` (the server answers an
+    unknown alias with another model's vector, X8) or a length other than
+    the route's `dim` raises, and nothing is returned."""
+    started = time.perf_counter()
+    req = _EmbedCall(route=route, caller=caller, request_id=uuid.uuid4().hex)
+    cfg = config or load_routes()
+    spec = cfg.routes.get(route)
+    literal_guard: Optional[bool] = None
+    try:
+        if spec is None:
+            raise _error("route_unknown", req, f"no route named {route!r} in the registry")
+        if not isinstance(spec, EmbedRoute):
+            raise _error("route_unknown", req, f"{route!r} is a {spec.kind} route, not an embeddings route")
+        try:
+            literal_guard = refuse_if_secret_shaped(text, where="input").literal_guard_active
+        except PromptRefused as e:
+            raise _error("prompt_refused", req, f"{e.where}: {', '.join(e.kinds)}")
+
+        api_key = None
+        if spec.key_name:
+            from cobalt.redact.secrets import read_secret
+
+            api_key = read_secret(spec.key_name)
+
+        try:
+            raw = ADAPTERS[spec.kind].embed(spec, text=text, timeout_s=spec.timeout_s, api_key=api_key)
+        except AdapterFailure as e:
+            raise _error(e.kind, req, e.detail)
+
+        if raw.model_returned != spec.model:
+            raise _error("bad_response", req,
+                         f"the server answered with model {raw.model_returned!r}, not the route's {spec.model!r}")
+        if len(raw.vector) != spec.dim:
+            raise _error("bad_response", req, f"a vector of length {len(raw.vector)}, not the route's dim {spec.dim}")
+        if not all(math.isfinite(x) for x in raw.vector):
+            raise _error("bad_response", req, "a vector with a non-finite value")
+        if not any(raw.vector):
+            raise _error("bad_response", req, "a zero vector")
+        result = EmbedResult(
+            route=route, model_returned=raw.model_returned, vector=raw.vector, dim=spec.dim,
+            latency_ms=int((time.perf_counter() - started) * 1000), request_id=req.request_id,
+        )
+    except ModelCallError as e:
+        _record(req, spec, started=started, result=None, error=e.kind, literal_guard=literal_guard)
+        raise e from None
+    _record(req, spec, started=started, result=result, error=None, literal_guard=literal_guard)
+    return result
+
+
+__all__ = ["ERROR_KINDS", "NO_THINK", "call", "call_sync", "embed_sync"]

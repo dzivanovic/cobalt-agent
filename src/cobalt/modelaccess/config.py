@@ -4,8 +4,11 @@ L10: Pydantic schema, `extra="forbid"`, a bad file crashes naming its line
 (YAML) or its key path (schema); L1: every key is REQUIRED — a missing key
 crashes the load, there is no default to fall back to.
 
-V1 accepts exactly one lane (`local`), one kind (`openai_compatible`) and
-one think policy (`forbid_nonempty`). A `lane: local` route must point at a
+V1 accepts exactly one lane (`local`), one chat kind (`openai_compatible`)
+and one think policy (`forbid_nonempty`). F21 chunk 2 (card 469 V1, FINAL
+F-01) adds the embeddings kind `openai_embeddings`: its own Route variant,
+`EmbedRoute`, with `dim` and none of the chat keys; `routes` is a
+discriminated union on `kind`. A `lane: local` route must point at a
 LOOPBACK host. There is NO `fallback` key anywhere: whether any lane
 carries a fallback is the routing lane's (L23 / L25, frozen — FINAL
 [F-23]); the day it rules, the fallback is configured here, never in a
@@ -18,7 +21,7 @@ from __future__ import annotations
 import ipaddress
 import re
 from pathlib import Path
-from typing import Literal, Optional
+from typing import Annotated, Literal, Optional, Union
 from urllib.parse import urlsplit
 
 import yaml
@@ -58,37 +61,78 @@ class Route(BaseModel):
     @field_validator("api_base")
     @classmethod
     def _loopback_only(cls, v: str) -> str:
-        parts = urlsplit(v)
-        if parts.scheme not in ("http", "https") or not parts.hostname:
-            raise ValueError(f"api_base must be an http(s) URL with a host, got {v!r}")
-        host = parts.hostname
-        if host in _LOOPBACK_NAMES:
-            return v
-        try:
-            ip = ipaddress.ip_address(host)
-        except ValueError:
-            ip = None
-        if ip is None or not ip.is_loopback:
-            raise ValueError(
-                f"lane local requires a loopback host (127.0.0.1, ::1, localhost); got {host!r}. "
-                "A non-local lane is the routing tribunal's to add (L23/L25 frozen)."
-            )
-        return v
+        return _loopback_only(v)
 
     @field_validator("key_name")
     @classmethod
     def _a_name_not_a_value(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and not _KEY_NAME.match(v):
-            raise ValueError(
-                "key_name must be a VaultManager key NAME (UPPER_SNAKE), never a value"
-            )
+        return _a_name_not_a_value(v)
+
+
+def _loopback_only(v: str) -> str:
+    parts = urlsplit(v)
+    if parts.scheme not in ("http", "https") or not parts.hostname:
+        raise ValueError(f"api_base must be an http(s) URL with a host, got {v!r}")
+    host = parts.hostname
+    if host in _LOOPBACK_NAMES:
         return v
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        ip = None
+    if ip is None or not ip.is_loopback:
+        raise ValueError(
+            f"lane local requires a loopback host (127.0.0.1, ::1, localhost); got {host!r}. "
+            "A non-local lane is the routing tribunal's to add (L23/L25 frozen)."
+        )
+    return v
+
+
+def _a_name_not_a_value(v: Optional[str]) -> Optional[str]:
+    if v is not None and not _KEY_NAME.match(v):
+        raise ValueError(
+            "key_name must be a VaultManager key NAME (UPPER_SNAKE), never a value"
+        )
+    return v
+
+
+class EmbedRoute(BaseModel):
+    """`kind: openai_embeddings` — an OpenAI-shaped `/embeddings` server (FINAL F-01).
+
+    No `no_think`, `think_policy`, `max_output_tokens` or `response_format`:
+    an embedding has no reply text. `dim` is the vector length the route
+    must return; the genesis store checks it against the column's declared
+    dimension at load (F-02)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    lane: Literal["local"]
+    kind: Literal["openai_embeddings"]
+    api_base: str
+    model: str = Field(min_length=1)
+    timeout_s: float = Field(gt=0)
+    dim: int = Field(gt=0)
+    key_name: Optional[str]
+
+    @field_validator("api_base")
+    @classmethod
+    def _loopback_only(cls, v: str) -> str:
+        return _loopback_only(v)
+
+    @field_validator("key_name")
+    @classmethod
+    def _a_name_not_a_value(cls, v: Optional[str]) -> Optional[str]:
+        return _a_name_not_a_value(v)
+
+
+#: One registry entry: the chat `Route` or the `EmbedRoute`, chosen by `kind`.
+AnyRoute = Annotated[Union[Route, EmbedRoute], Field(discriminator="kind")]
 
 
 class ModelAccessConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    routes: dict[str, Route] = Field(min_length=1)
+    routes: dict[str, AnyRoute] = Field(min_length=1)
 
 
 def _find_fallback(data, path="") -> Optional[str]:
@@ -131,4 +175,5 @@ def load_routes(path: Path = CONFIG_PATH) -> ModelAccessConfig:
         raise ModelAccessConfigError(f"{path}: invalid model-access registry:\n{e}") from None
 
 
-__all__ = ["CONFIG_PATH", "ModelAccessConfig", "ModelAccessConfigError", "Route", "load_routes"]
+__all__ = ["CONFIG_PATH", "AnyRoute", "EmbedRoute", "ModelAccessConfig", "ModelAccessConfigError", "Route",
+           "load_routes"]

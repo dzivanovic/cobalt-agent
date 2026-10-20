@@ -288,3 +288,6 @@ Check of dml-roles-1013 (O2): `test_dml_roles_offline.py::test_o4_…` pins each
 
 ## 2026-10-19 — f21-genesis-1013
 `FORWARD` gains `0026_genesis_chunk.sql` (last) and `REVERSE` its rollback (first), card 468 G1 (F21 chunk 1): `"user".genesis_chunk` — `source` (the path as given), `source_sha256`, `seq`, `line_start` / `line_end`, `body` (`CHECK (body <> '')`), `tsv` generated `to_tsvector('english', body)` STORED with the GIN index `genesis_chunk_tsv`, `UNIQUE (user_id, source, seq)`, `user_id` with the tenant GUC default and the `traders` FK, owned by `cobalt_user`. No vector column (chunk 2). The rollback drops that one table (its COST line). Every head pin in the suite moved one place out with a `# F21 genesis (0026)` comment.
+
+## 2026-10-19 — f21-vectors-1013
+`FORWARD` gains `0028_genesis_vectors.sql` (last) and `REVERSE` its rollback (first), card 469 V4 (F21 chunk 2): `CREATE EXTENSION IF NOT EXISTS vector` first, then `genesis_chunk.embedding vector(768)`, `embed_model TEXT`, `embed_dim INTEGER` and `CHECK genesis_chunk_embedding_stamped` (all three NULL or all set). The rollback drops the CHECK and the three columns (its COST line) and keeps the extension. 0027 is F5 card 731's. Every head pin moved one place out with a `# F21 vectors (0028)` comment.

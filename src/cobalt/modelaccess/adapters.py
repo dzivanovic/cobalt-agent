@@ -1,4 +1,5 @@
-"""ONE adapter per route `kind` (seam S1 §2.1). V1 ships `openai_compatible`.
+"""ONE adapter per route `kind` (seam S1 §2.1). V1 ships `openai_compatible`;
+F21 chunk 2 (card 469 V2) adds `openai_embeddings`, the same transport.
 
 THE TRANSPORT IS THE `openai` CLIENT (already pinned, S1-F2), NOT litellm —
 decided by measurement, recorded in the build report (C1):
@@ -30,7 +31,7 @@ from typing import Any, Optional
 import httpx
 import openai
 
-from .config import Route
+from .config import EmbedRoute, Route
 
 
 class AdapterFailure(RuntimeError):
@@ -50,6 +51,12 @@ class RawReply:
     finish_reason: Optional[str]
     input_tokens: Optional[int]
     output_tokens: Optional[int]
+
+
+@dataclass(frozen=True)
+class RawEmbedding:
+    vector: list[float]
+    model_returned: str
 
 
 def _classify(e: Exception) -> AdapterFailure:
@@ -120,6 +127,41 @@ class OpenAICompatibleAdapter:
             raise AdapterFailure("bad_response", type(e).__name__) from None
 
 
-ADAPTERS = {"openai_compatible": OpenAICompatibleAdapter()}
+class OpenAIEmbeddingsAdapter:
+    """`kind: openai_embeddings` — `POST {api_base}/embeddings`, one input, one vector."""
 
-__all__ = ["ADAPTERS", "AdapterFailure", "OpenAICompatibleAdapter", "RawReply"]
+    kind = "openai_embeddings"
+
+    def embed(self, route: EmbedRoute, *, text: str, timeout_s: float, api_key: Optional[str]) -> RawEmbedding:
+        with httpx.Client(trust_env=False, timeout=timeout_s) as http:
+            client = openai.OpenAI(
+                base_url=route.api_base,
+                api_key=api_key or "no-key-local-lane",
+                max_retries=0,
+                timeout=timeout_s,
+                http_client=http,
+            )
+            try:
+                # `float`: the client's default asks for base64, which the
+                # loopback server's floats need not honour.
+                resp = client.embeddings.create(model=route.model, input=text, encoding_format="float")
+            except Exception as e:  # noqa: BLE001 - classified, re-raised typed
+                raise _classify(e) from None
+        try:
+            if isinstance(resp, (str, bytes)):
+                raise TypeError("the server returned a non-JSON body")
+            data = resp.data or []
+            if len(data) != 1:
+                raise ValueError(f"expected one embedding, got {len(data)}")
+            vector = data[0].embedding
+            if not isinstance(vector, list):
+                raise TypeError("the embedding is not a list of floats")
+            return RawEmbedding(vector=[float(x) for x in vector], model_returned=str(resp.model or ""))
+        except Exception as e:  # noqa: BLE001 - an envelope we cannot read
+            raise AdapterFailure("bad_response", type(e).__name__) from None
+
+
+ADAPTERS = {"openai_compatible": OpenAICompatibleAdapter(), "openai_embeddings": OpenAIEmbeddingsAdapter()}
+
+__all__ = ["ADAPTERS", "AdapterFailure", "OpenAICompatibleAdapter", "OpenAIEmbeddingsAdapter", "RawEmbedding",
+           "RawReply"]

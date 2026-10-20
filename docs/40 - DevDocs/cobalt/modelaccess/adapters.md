@@ -23,3 +23,6 @@ unchanged. The interface did not change.
 `max_retries=0` (a failure is one typed failure) and an `httpx.Client`
 with `trust_env=False` (an environment proxy never reroutes a loopback
 call).
+
+## 2026-10-19 — f21-vectors-1013
+Card 469 V2: NEW `OpenAIEmbeddingsAdapter.embed()` (`POST {api_base}/embeddings`, `encoding_format="float"`, one input) → `RawEmbedding(vector, model_returned)`, registered in `ADAPTERS` as `openai_embeddings`; the same transport, `_classify` and zero retries. Not exactly one embedding, or a non-list one, is `bad_response`.

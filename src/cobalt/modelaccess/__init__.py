@@ -8,16 +8,18 @@ server. A caller names a ROUTE and gets a `ModelResult` or a
 `ModelCallError` — see `docs/30 - Design/VOICE-v3-SEAM-S1-2026-09-23.md`.
 """
 
-from .client import call, call_sync
+from .client import call, call_sync, embed_sync
 from .config import load_routes
-from .models import ModelCallError, ModelMessage, ModelRequest, ModelResult
+from .models import EmbedResult, ModelCallError, ModelMessage, ModelRequest, ModelResult
 
 __all__ = [
+    "EmbedResult",
     "ModelCallError",
     "ModelMessage",
     "ModelRequest",
     "ModelResult",
     "call",
     "call_sync",
+    "embed_sync",
     "load_routes",
 ]

@@ -112,6 +112,18 @@
                          one row per structural chunk of an imported markdown
                          source, a generated `tsv` and its GIN index. Additive.
 `0026_genesis_chunk.rollback.sql` — drops that one table (its COST line).
+`0028_genesis_vectors.sql` — F21 chunk 2 (card 469 V4): `CREATE EXTENSION
+                         vector`, then `genesis_chunk.embedding vector(768)`,
+                         `embed_model`, `embed_dim` and the CHECK that keeps
+                         them NULL or set together. Additive.
+`0028_genesis_vectors.rollback.sql` — drops the CHECK and the three columns
+                         (its COST line); the extension stays (the old tree's
+                         tables use it on cobalt_brain).
+
+0027 IS NOT A GAP BY ACCIDENT: it belongs to F5 card 731
+(`0027_market_checkpoints`, not yet merged), which deploys first by the
+card's seam; whichever lands later keeps both numbers, in numeric order, and
+moves the registry pins (card 469 V4).
 
 0012 AND 0016 ARE NOT GAPS BY ACCIDENT: 0012 belongs to the unmerged
 `bars/chunk-2-0920` (`0012_bars_partitioned_parent`) and 0016 to DRC D1
@@ -178,10 +190,12 @@ FORWARD = (
     MIGRATIONS_DIR / "0024_strike_alerts.sql",
     MIGRATIONS_DIR / "0025_dml_roles.sql",
     MIGRATIONS_DIR / "0026_genesis_chunk.sql",
+    MIGRATIONS_DIR / "0028_genesis_vectors.sql",
 )
 
 #: `--rollback`, newest first. 0001 is deliberately NOT reversed.
 REVERSE = (
+    MIGRATIONS_DIR / "0028_genesis_vectors.rollback.sql",
     MIGRATIONS_DIR / "0026_genesis_chunk.rollback.sql",
     MIGRATIONS_DIR / "0025_dml_roles.rollback.sql",
     MIGRATIONS_DIR / "0024_strike_alerts.rollback.sql",

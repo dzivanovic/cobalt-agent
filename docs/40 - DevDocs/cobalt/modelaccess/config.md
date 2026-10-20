@@ -23,3 +23,6 @@ into `ModelAccessConfig` / `Route` (seam S1 §2.3).
 Added beside the seam's keys to hold X-E4's evidence: whether the server
 honours an OpenAI `response_format` JSON schema. The caller validates the
 content with its own Pydantic model either way.
+
+## 2026-10-19 — f21-vectors-1013
+Card 469 V1 (FINAL F-01): `routes` is a discriminated union on `kind` (`AnyRoute`). The chat class `Route` keeps every key; NEW `EmbedRoute` (`openai_embeddings`: `lane`, `kind`, `api_base`, `model`, `timeout_s`, `dim > 0`, `key_name`, `extra="forbid"`, no chat key). The loopback and key-name checks are module functions both classes call; the fallback refusal is unchanged.

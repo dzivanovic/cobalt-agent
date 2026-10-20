@@ -17,3 +17,6 @@ The Pydantic contract of seam S1 §2.2: `ModelMessage`, `ModelRequest`,
   `bad_response`, `empty`, `think_leak`, `schema_refused`); `detail` has
   passed `redact()`. `empty` is an error — an empty string is never an
   answer (L1).
+
+## 2026-10-19 — f21-vectors-1013
+Card 469 V2: NEW `EmbedResult` (`route`, `model_returned`, `vector`, `dim`, `latency_ms`, `request_id`). `ModelResult.kind` stays chat-only. No new error kind: an embed failure uses the nine.

@@ -67,9 +67,10 @@ def test_the_pair_exists_and_is_registered_last():
     # every index is four places further out.  # S4-P2 (E4)
     # DML roles (0025): one place further out again.
     # F21 genesis (0026): one place further out again.
-    assert FORWARD[-11] == SQL and [p.name for p in FORWARD[-10:-8]] == [
+    # F21 vectors (0028): one place further out again.
+    assert FORWARD[-12] == SQL and [p.name for p in FORWARD[-11:-9]] == [
         "0017_voice_turns.sql", "0018_drc_stated_books.sql"]
-    assert REVERSE[10] == ROLLBACK and [p.name for p in REVERSE[8:10]] == [
+    assert REVERSE[11] == ROLLBACK and [p.name for p in REVERSE[9:11]] == [
         "0018_drc_stated_books.rollback.sql", "0017_voice_turns.rollback.sql"]
 
 
@@ -145,6 +146,7 @@ def test_the_rollback_drops_exactly_the_three_tables_children_first():
 
 def test_down_to_0011_on_this_tree_selects_only_this_rollback():
     assert [p.name for p in _rollback_paths("0011")] == [
+        "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
         "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)

@@ -26,17 +26,20 @@ def test_0022_is_registered_second_last_and_placed_user_side():
     # The price floor's 0023 (R692) now follows it, and S4-P2's 0024 that.  # S4-P2 (E4)
     # DML roles (0025): 0025 follows 0024; every index one place further out.
     # F21 genesis (0026): 0026 follows 0025; every index one place further out again.
-    assert FORWARD[-1].name == "0026_genesis_chunk.sql"
-    assert REVERSE[0].name == "0026_genesis_chunk.rollback.sql"
-    assert FORWARD[-2].name == "0025_dml_roles.sql"
-    assert REVERSE[1].name == "0025_dml_roles.rollback.sql"
-    assert FORWARD[-3].name == "0024_strike_alerts.sql"
-    assert REVERSE[2].name == "0024_strike_alerts.rollback.sql"
-    assert FORWARD[-4].name == "0023_radar_price_floor.sql"
-    assert REVERSE[3].name == "0023_radar_price_floor.rollback.sql"
-    assert FORWARD[-5].name == "0022_prediction_records.sql"
-    assert REVERSE[4].name == "0022_prediction_records.rollback.sql"
-    assert FORWARD[-5].exists() and REVERSE[4].exists()
+    # F21 vectors (0028): 0028 follows 0026; every index one place further out again.
+    assert FORWARD[-1].name == "0028_genesis_vectors.sql"
+    assert REVERSE[0].name == "0028_genesis_vectors.rollback.sql"
+    assert FORWARD[-2].name == "0026_genesis_chunk.sql"
+    assert REVERSE[1].name == "0026_genesis_chunk.rollback.sql"
+    assert FORWARD[-3].name == "0025_dml_roles.sql"
+    assert REVERSE[2].name == "0025_dml_roles.rollback.sql"
+    assert FORWARD[-4].name == "0024_strike_alerts.sql"
+    assert REVERSE[3].name == "0024_strike_alerts.rollback.sql"
+    assert FORWARD[-5].name == "0023_radar_price_floor.sql"
+    assert REVERSE[4].name == "0023_radar_price_floor.rollback.sql"
+    assert FORWARD[-6].name == "0022_prediction_records.sql"
+    assert REVERSE[5].name == "0022_prediction_records.rollback.sql"
+    assert FORWARD[-6].exists() and REVERSE[5].exists()
     assert CREATED_TABLES["prediction_records"] is Side.USER
     assert "prediction_records" not in DECLARED_TABLES, "built now: it leaves DECLARED"
 

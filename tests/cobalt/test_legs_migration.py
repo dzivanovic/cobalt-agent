@@ -30,7 +30,8 @@ def test_the_pair_is_registered_last_and_reversed_first():
     # reversed).  # S4-P2 (E4)
     # DML roles (0025): one place further out (fifth-last forward, fifth reversed).
     # F21 genesis (0026): one place further out again (sixth-last forward, sixth reversed).
-    assert FORWARD[-6] == SQL and REVERSE[5] == ROLLBACK
+    # F21 vectors (0028): one place further out again (seventh-last forward, seventh reversed).
+    assert FORWARD[-7] == SQL and REVERSE[6] == ROLLBACK
 
 
 def test_legs_and_its_view_are_user_side_and_fills_stays_declared():
