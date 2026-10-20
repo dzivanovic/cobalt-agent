@@ -1,0 +1,15 @@
+job=f16-close-fr3
+tip=1aea7418
+on=4aa0481d
+migration=none
+offline=4790/0
+with_db=0/0
+live_note=147/0
+cobalt_dev=not taken
+env=removed
+restarts=com.cobalt.aset com.cobalt.cos com.cobalt.radar
+rows=1 of 1 (PORT3; PROOF 5 of 5 byte-equal)
+self_check=3 of 3
+decisions=2
+for_dejan=0
+tokens=126090
