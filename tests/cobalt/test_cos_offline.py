@@ -291,7 +291,9 @@ def test_the_shipped_cos_rows():
     assert rows["cos.max_turns"].value == 30 and rows["cos.max_turns"].status.value == "proposed"
     assert rows["cos.turn_timeout_s"].value == 900
     for gap in ("cos.poll_interval_s", "hitl.request_ttl_min"):
-        assert rows[gap].value is None and rows[gap].status.value == "proposed", gap
+        value = rows[gap].value
+        assert (isinstance(value, int) and not isinstance(value, bool) and value > 0
+                and rows[gap].status.value == "proposed"), (gap, value)
 
 
 # ---------------------------------------------------------------------
