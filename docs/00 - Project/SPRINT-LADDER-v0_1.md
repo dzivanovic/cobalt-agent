@@ -1158,6 +1158,33 @@ OFF-LADDER work of 2026-10-18 (each with the ruling that ordered it):
 | Gemini grant (card `800`) | NOT STARTED (preflight YES) | HIS RULING R1942 (A). Build waits for 448 DEPLOYED (R1950). |
 | Gemini arm shadow builds LOW/MID/HIGH (717/718/719) | NOT STARTED | HIS RULING R1738; X1 LOW build FAILED, harness INCOMPLETE (R1853, R1855); MID/HIGH held until the grant card deploys. |
 
+### Status 2026-10-19
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1019` for 10-19 alone from `reports/cto-2026-10-19.md` rows R1958–R2111 (00:46 → 22:00 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-19*"` = `deploy-2026-10-19-cos-outage-attempt2`, `-f20-cos-attempt2`, `-f21-genesis-fr1`, `-gemini-grant`, `-gemini-read-grant-1019`. The 10-18 close ran (`CLOSE PUSHED 87ee3f55`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 | DONE-LIVE | Unchanged (see 10-08 to 10-18). |
+| S5 F4 prefill ownership flags (card `304`), F23 playbook (card `503`) | DONE-LIVE | Unchanged (see 10-18). |
+| S5 F20 (card `730`, port job `f20-cos-fr1`) | DONE-DARK | `deploy-2026-10-19-f20-cos-attempt2` `c268b9e2` (R1984); `com.cobalt.cos` not loaded: the bootstrap waits for the gate re-run and his three decisions (R2083, `cto-2026-10-19.md` §5 OWED). |
+| S5 F21 Genesis (card `468`, port job `f21-genesis-fr1`) | DONE-LIVE | `deploy-2026-10-19-f21-genesis-fr1` `bc990598`, migration 0026, smoke GREEN (R2038). |
+| S5 F21 vectors (card `469`) | BUILT-NOT-MERGED | Check r1 ready NO (O1, R2100); F1 fix round BUILT `11eb0d24` (R2106); scoped check `65e48822` running; deploys after F5 (migration 0028). |
+| S5 F16 close (card `790`, port job `f16-close-fr2`) | BUILT-NOT-MERGED | Port2 check ready YES tip `6fb73789` (R2063); deploy 867 hub `cc4aa3ba` FAILED at STEP-R on `com.cobalt.cos` (R2068); relaunches after the K5 deploy 885. |
+| S5 F5 (card `731`) | BUILDING (held) | Builder `94dfaa7c` held at FAILED W; FIX1 preflight YES (R2024); CONTINUE after F16 DEPLOYED. |
+
+**Stop date: 2026-10-28 (S5, day 5 of 14). S5: AT RISK.** Reason: F4, F23, F20 (dark) and F21 Genesis deployed; F21 469, F16 and F5 are not merged and F5 sits at W behind three queued deploys (K5 885, F16 867, 469). No ruling moved a date (`cto-2026-10-19.md` §0, day plan goals 2, 3 and 6 slipping at the 18:00 check-in, R2090).
+
+OFF-LADDER work of 2026-10-19 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Cos-outage attempt 2 (card `806`) | DONE-LIVE | Brain R1966. `deploy-2026-10-19-cos-outage-attempt2` `a5e07866`, smoke GREEN (R1968). |
+| Card 448 dml-roles | DONE-LIVE | Brain R1945, R1948. `deploy-2026-10-18-dml-roles` `cc2a509f`, smoke GREEN (R1961). |
+| Gemini grant (card `800`) | DONE-LIVE | HIS RULING R1942 (A). `deploy-2026-10-19-gemini-grant` `ca4ba0f4`, smoke GREEN (R2001). |
+| Gemini read grant (card `827`, job `gemini-read-grant-1019`) | DONE-LIVE | Brain R2005, R2015. `deploy-2026-10-19-gemini-read-grant-1019` `958ab78c`, smoke GREEN (R2040). |
+| Gemini arm shadow builds 717/718/719 | BUILT-NOT-MERGED | HIS RULING R1738. 717 `99158410`, 718 `ffc36179`, 719 `702e7d13` built (R2059, R2098); 717 graded AT LEVEL (R2110); 718, 719 grading checks running. |
+| K5 hub-cos-restart (card `885`, job `hub-cos-restart-fr1`) | BUILT-NOT-MERGED | Brain R2069, R2096. Port check ready YES `0bf28619` (R2104); deploy hub `d068c1ee` FAILED STEP-D0 on the backup window (R2108); relaunches from 22:30 ET. |
+| Cos probe (card `877`, job `cos-probe-1019`) | BUILT-NOT-MERGED | Brain R2081. Check ready YES `f8b2887b` (R2103); deploys after K5, F16, F5, 469. |
+| Cos gate-run (prompt `873`) | DONE-DARK | Brain R2075, R2079. GATES DONE ok 4, fail 1 (X13), not run 9 (R2083); re-run after the probe deploys. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

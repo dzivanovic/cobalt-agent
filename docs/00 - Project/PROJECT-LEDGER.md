@@ -4859,3 +4859,163 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-18*"` = `deploy-2026-10-18-agy-read`, `deploy-2026-10-18-checkin-install`, `deploy-2026-10-18-deploy-card-fixes`, `deploy-2026-10-18-f23-playbook`, `deploy-2026-10-18-f4-refresh-attempt2`, `deploy-2026-10-18-hub-deferred`, `deploy-2026-10-18-jev-keyed`, `deploy-2026-10-18-stop-guard-work`.
 - STOP LINE (L35), `reports/close-2026-10-17.md`: `CLOSE PUSHED 24c00696`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-18.md` `## 8`.
+
+### 2026-10-19 — cos outage and F20 cos deployed, Genesis and Gemini grant deployed, K5 port deploy 885 waits for 22:30
+
+- R1958 00:46 RECORD: day report opened; deploy 448 dml-roles hub `cbec857a` running (card 804).
+- R1959 00:55 DESK RECORD: check-in timer is a one-time install by his hand; NEEDS HIS HAND entry opened.
+- R1960 00:55 RECORD: JEV first keyed batch: 10 routing rows, 9 ok, 1 refused; about $0.002 of the $5 cap.
+- R1961 01:55 RECORD: deploy 448 dml-roles DEPLOYED `cc2a509f` (tag deploy-2026-10-18-dml-roles, smoke GREEN).
+- R1962 01:58 LAUNCHED: F20 builder `94689c99` CONTINUEd at W.
+- R1963 02:00 RECORD: desk `767edf79` took over from `15d38ca7`; R1942 applied card-scoped.
+- R1964 02:02 DESK RECORD: test_db_credentials.py joins F20 PORT as a seam file; drafter row 805.
+- R1965 01:58 LAUNCHED: deploy hub `eb1b5735` for card 798 relaunch; ended FAILED, recut owed.
+- R1966 02:01 DESK RECORD: deploy 798 relaunch FAILED; recut as card 806 cos-outage-attempt2.
+- R1967 02:01 LAUNCHED: deploy hub `2711c969` for card 806.
+- R1968 02:55 RECORD: deploy 806 DEPLOYED `a5e07866` (tag deploy-2026-10-19-cos-outage-attempt2, smoke GREEN).
+- R1969 03:00 LAUNCHED: Gemini grant build `f12091be` (card 800); F20 builder CONTINUEd at W.
+- R1970 03:50 LAUNCHED: F20 port BUILT `753094da`; scoped check `f2e7b9d5`.
+- R1971 04:14 LAUNCHED: Gemini grant BUILT `fd9f0cb6`; check `3ce1c7c4`.
+- R1972 05:14 DESK RECORD: Gemini grant check ready NO on G-2 only; builder fix round, no re-check.
+- R1973 05:25 LAUNCHED: Gemini grant G-2 fix round builder `ea029776`.
+- R1974 05:26 LAUNCHED: F20 port check ready YES; deploy card 808 and hub `a9683859`.
+- R1975 05:35 DESK RECORD: deploy 808 f20-cos FAILED at STEP-C (plist needs a ## LAUNCHD line); recut launched.
+- R1976 05:29 RECORD: RECUT f20-cos attempt 2 FAILED: C, ops/com.cobalt.cos.plist not on the list.
+- R1977 06:16 DESK RECORD: F21 468 build `9409a473` and F5 731 build `94dfaa7c` LAUNCHED; F16 790 refused (RULINGS none).
+- R1978 06:12 DESK RECORD: desk `1c767904` took over; F5 731 build FAILED at E2, kept.
+- R1979 06:16 DESK RECORD: F5 731 on a synthetic fixture; drafter 810, preflight, CONTINUE `94dfaa7c`.
+- R1980 06:14 LAUNCHED: preflight r3 `d8d614ca` on card 731.
+- R1981 06:16 LAUNCHED: drafter amend3 (prompt 812) for card 731.
+- R1982 06:17 LAUNCHED: preflight r4 (prompt 813) on card 731.
+- R1983 06:19 DESK RECORD: preflight r4 YES; CONTINUE E2 sent to `94dfaa7c`.
+- R1984 06:28 LAUNCHED: F20 cos port DEPLOYED `c268b9e2`; Gemini grant deploy hub `e50913ca` (card 809).
+- R1985 06:59 DESK RECORD: F5 two pin lines join cards K4 and K9; drafter prompt 814.
+- R1986 07:00 LAUNCHED: day-open typed in the Qwen pane w2:p5.
+- R1987 07:01 LAUNCHED: preflight r5 (prompt 815) on card 731.
+- R1988 07:02 DESK RECORD: preflight r5 YES; CONTINUE W sent to `94dfaa7c`.
+- R1989 07:06 LAUNCHED: Close gate F16 BUILT `f44c4b52`; drafter prompt 816.
+- R1990 07:08 LAUNCHED: preflight (prompt 818) on check card 817.
+- R1991 07:09 LAUNCHED: check `5dba4203` on card 817 for F16.
+- R1992 07:26 LAUNCHED: Genesis F21 BUILT `66439da6`; drafter prompt 819.
+- R1993 07:27 DESK RECORD: Genesis checks and deploys first; F5 K6 takes 0027.
+- R1994 07:29 LAUNCHED: preflight r6 (prompt 822) on card 731.
+- R1995 07:30 LAUNCHED: preflight (prompt 823) on Genesis check card 820; F5 preflight r6 `6c9d5008`.
+- R1996 07:31 DESK RECORD: preflight r6 on card 731 ready YES; CONTINUE after Genesis merges.
+- R1997 07:32 LAUNCHED: preflight `a0ebf4ba` ready NO (count 37 vs 42); drafter prompt 824.
+- R1998 07:34 LAUNCHED: preflight r2 (prompt 825) on card 820.
+- R1999 07:34 LAUNCHED: Genesis check `d8d9f23a` on card 820.
+- R2000 07:36 DESK RECORD: desk `512dcef2` took over from `1c767904`; six watches re-armed.
+- R2001 07:51 DESK RECORD: Gemini grant DEPLOYED `ca4ba0f4` (tag deploy-2026-10-19-gemini-grant, smoke GREEN); push owed.
+- R2002 07:53 LAUNCHED: Gemini 717 gate seat `6197b514` (shadow).
+- R2003 07:58 DESK RECORD: F20 cos bootstrap runs at 16:30 ET or later with no deploy hub live.
+- R2004 08:13 FAILED: Gemini 717 gate seat `6197b514` FAILED at X1; agy auto-denied reads.
+- R2005 08:15 DESK RECORD: one amend, job gemini-read-grant-1019; a third fail stops the arm.
+- R2006 08:24 LAUNCHED: card 827 gemini-read-grant-1019 DRAFTED; preflight 828.
+- R2007 08:27 DESK RECORD: 827 decision 3 = (b), X1 split to one agy launch per leg.
+- R2008 08:30 LAUNCHED: F16 check `5dba4203` ready NO (O1, O2 held); fix round row drafter 830.
+- R2009 08:40 LAUNCHED: F16 card 790 FIX1 DRAFTED; BAND MID to HIGH; preflight 831.
+- R2010 08:56 ASKED: card 827 amend DRAFTED; two findings put to the brain.
+- R2011 09:00 DESK RECORD: 827 drops the read twin; adds cwd pin and transcript copy; drafter 832.
+- R2012 09:12 LAUNCHED: card 827 second amend DRAFTED; preflight 833.
+- R2013 09:30 DESK RECORD: Genesis 468 conflicts with main: PORT route, job f21-genesis-fr1; drafter 835.
+- R2014 08:45 DESK RECORD: desk `fdfc6bd0` took over from `512dcef2`; day-open GREEN.
+- R2015 08:49 DESK RECORD: 827 option C, transcript copy in desk-launch.sh; drafter 836.
+- R2016 08:57 LAUNCHED: card 827 amend 3 DRAFTED; preflight 837.
+- R2017 08:58 LAUNCHED: preflight 837 `6cd5032f` ready NO (1 FAIL); drafter amend 4 (prompt 838).
+- R2018 09:02 DESK RECORD: F5 731 live-note skip goes in DEPLOY-HUB:104 and gate-lists; one drafter amend.
+- R2019 09:03 LAUNCHED: Genesis port draft DONE; preflight 839; F5 731 FAILED at W; drafter 840.
+- R2020 09:03 LAUNCHED: card 827 amend 4 DRAFTED; preflight 841; F16 FIX1 builder `a3115cc5`.
+- R2021 09:06 LAUNCHED: Genesis port preflight 839 (1 FAIL, blanked); HIGH PORT build.
+- R2022 09:06 LAUNCHED: Gemini 827 preflight r4 YES; builds `21d694d4` and `c9220ff5`.
+- R2023 09:07 LAUNCHED: F5 731 FIX1 row DRAFTED; preflight 842.
+- R2024 09:12 DESK RECORD: F5 FIX1 preflight 842 ready YES; CONTINUE held until Genesis merges.
+- R2025 09:46 LAUNCHED: Genesis PORT BUILT `2cd0219a`; scoped check `7139a2a3`.
+- R2026 09:52 DESK RECORD: day-open 10-19 accepted, VERDICT 6/6 GREEN; Qwen pane left alone.
+- R2027 09:56 ASKED: F16 FIX1 BUILT `be6fa7b7`; deploy-card.sh exit 3 CONFLICT cli.md.
+- R2028 09:58 DESK RECORD: F16 cli.md conflict: row SEAM, drafter 844.
+- R2029 10:00 LAUNCHED: card 790 row SEAM DRAFTED; preflight 845.
+- R2030 10:02 LAUNCHED: preflight 845 YES; F16 builder `f7fb2104`.
+- R2031 10:05 LAUNCHED: F16 SEAM BUILT `84c797f6`; trial merge still CONFLICTs; drafter 846 re-heads 790.
+- R2032 10:07 LAUNCHED: card 790 re-headed as f16-close-fr1; preflight 847.
+- R2033 10:09 LAUNCHED: preflight 847 `e7dda32e` (1 FAIL, blanked); HIGH PORT build.
+- R2034 10:14 RECORD: desk `db1e61ef` took over from `fdfc6bd0`; no commit of the scare.
+- R2035 10:14 LAUNCHED: Gemini 827 BUILT `ad4c8dfe`; check `201fee03`.
+- R2036 10:37 LAUNCHED: F16 port BUILT `c5eafaf1`; scoped check `d5c15c05`.
+- R2037 10:53 LAUNCHED: Genesis port check `7139a2a3` ready YES; deploy hub `6cca84e1`.
+- R2038 11:16 RECORD: Genesis port DEPLOYED `bc990598` (tag deploy-2026-10-19-f21-genesis-fr1, smoke GREEN, migration 0026).
+- R2039 11:17 RECORD: Gemini 827 check `201fee03` ready YES (tip 7e165648).
+- R2040 12:16 RECORD: Gemini grant 827 DEPLOYED `958ab78c` (tag deploy-2026-10-19-gemini-read-grant-1019, smoke GREEN).
+- R2041 12:17 RECORD: F16 port check `d5c15c05` ready YES (tip c5eafaf1).
+- R2042 12:22 DESK RECORD: F16 cli.md conflict again: row SEAM; F16 deploys next.
+- R2043 12:23 RECORD: 717 split-X1 gate `f278220d` FAILED PREFLIGHT head; worktree salvaged.
+- R2044 12:25 DESK RECORD: 717 kept branch blocks the relaunch; drafter re-point (prompt 854).
+- R2045 12:36 RECORD: desk `db1e61ef` refreshes at about 250k tokens; handover.
+- R2046 12:42 LAUNCHED: 469 builder `aa4b75c7`; 717 STEP 0 drafter `aa12df7c`; F16 SEAM BUILT `57e2278c`.
+- R2047 12:27 RECORD: desk `484fd8da` took over from `db1e61ef` (HANDOVER 12:24).
+- R2048 12:28 LAUNCHED: F16 card CONFLICTs; fresh PORT job f16-close-fr2; drafter `53abef4e`.
+- R2049 12:31 LAUNCHED: 717 shadow hub `aa4bf520` (BASE 8f4bbe28).
+- R2050 12:31 LAUNCHED: card 790 re-headed f16-close-fr2; preflight `aa4b22de`.
+- R2051 12:33 LAUNCHED: port2 preflight ready NO (X6 count); amend drafter `98c6634f`.
+- R2052 12:34 LAUNCHED: card 790 amend DRAFTED; r2 preflight `6472e15e`.
+- R2053 12:35 LAUNCHED: port2 r2 preflight YES; HIGH builder `4e89cec2`.
+- R2054 13:05 LAUNCHED: F16 port2 BUILT `6fb73789`; scoped check `625aa489`.
+- R2055 13:10 RECORD: 717 shadow hub `aa4bf520` FAILED at W (gate.sh refused BASE); brain asked.
+- R2056 13:12 DESK RECORD: 717 W route B for cards 855/718/719; drafter `36bd6b8c`.
+- R2057 13:13 LAUNCHED: old-BASE W row DRAFTED; preflight `34b780a8`.
+- R2058 13:14 RECORD: old-BASE W preflight ready NO on 719 only; CONTINUE sent to `aa4bf520`.
+- R2059 13:38 LAUNCHED: 717 SHADOW BUILT `99158410`; 718 hub `e48149db`.
+- R2060 13:39 LAUNCHED: 717 Opus check `c8f6428e`; 719 W-row amend drafter `c1dc9973`.
+- R2061 13:40 LAUNCHED: 719 W-row amend DRAFTED; r2 preflight `f2c3fcda`.
+- R2062 13:41 RECORD: 719 r2 preflight ready YES; 719 hub waits for 718.
+- R2063 14:10 RECORD: F16 port2 check ready YES (`6fb73789`); deploy card 867 cut.
+- R2064 14:11 RECORD: desk `484fd8da` refreshes at 250,000 tokens; handover.
+- R2065 14:13 RECORD: desk `6cf2ce55` took over from `484fd8da`; watches re-armed.
+- R2066 14:17 RECORD: 717 Opus check `c8f6428e` CHECK DONE (tip 99158410).
+- R2067 14:21 DESK RECORD: F16 deploy 867 waits for 469's cobalt_dev lock.
+- R2068 15:09 RECORD: F16 deploy hub `cc4aa3ba` FAILED at STEP-R (loader.py reaches com.cobalt.cos); 469 BUILT `c772a516`.
+- R2069 15:10 DESK RECORD: K5 first, then F16, 718 W, F5; drafter prompt 868 writes card 869.
+- R2070 15:16 DESK RECORD: K5 card 869 DRAFTED; preflight 870.
+- R2071 15:17 RECORD: card 869 preflight ready YES (25/0); build HIGH launches.
+- R2072 15:19 RECORD: K5 card 869 build `be0a5da3` launched on BASE bcbf08f9.
+- R2073 15:50 RECORD: K5 build `be0a5da3` FAILED E3; R60 returns launchctl strings to Dejan; re-cut to rows 1-2.
+- R2074 15:52 DESK RECORD: R60 read correct; card 869 re-cut to rows 1-2; drafter 871.
+- R2075 15:54 DESK RECORD: cos bootstrap = gate-run hub, deploy-card.sh, bootstrap deploy; drafter 872.
+- R2076 15:57 RECORD: card 869 re-cut DRAFTED; preflight 874.
+- R2077 16:00 RECORD: re-cut preflight 874 ready NO on one point; settled in the CONTINUE to `be0a5da3`.
+- R2078 16:02 RECORD: gate-run hub prompt 873 DRAFTED (11 decisions); brain asked 4 points.
+- R2079 16:03 DESK RECORD: 873 amended (drafter 875); null cos.poll_interval_s and hitl.request_ttl_min are his.
+- R2080 16:10 RECORD: 873 amended (9 decisions); several X items cannot run; K5 cos-probe card proposed.
+- R2081 16:12 DESK RECORD: launch gate hub 873; draft cos-probe card; deploys one at a time.
+- R2082 16:11 RECORD: gate-run hub `e4466ee1` launched; drafter 876 for card 877.
+- R2083 16:13 RECORD: gate-run hub `e4466ee1` GATES DONE: ok 4, fail 1 (X13), not run 9; HARNESS LIST opened.
+- R2084 16:17 RECORD: cos-probe card 877 DRAFTED; preflight 878.
+- R2085 16:20 RECORD: card 877 preflight ready YES (30/0); HIGH build launches.
+- R2086 16:21 RECORD: HIGH build `297dbfa8` of cos-probe-1019; 719 shadow hub `a6bf37c3`.
+- R2087 16:31 RECORD: K5 build hub-cos-restart-1019 BUILT `d59fac71`.
+- R2088 17:16 RECORD: K5 check ready YES (tip d59fac71).
+- R2089 17:25 RECORD: cos-probe-1019 BUILT `8f47d85b`; commit and check wait for the K5 deploy.
+- R2090 17:57 RECORD: 18:00 check-in sent; CLOSE WAIT armed to 22:00.
+- R2091 18:00 RECORD: desk `f3a3ff5e` took over from `6cf2ce55`.
+- R2092 18:00 DESK RECORD: cos gate X13 judged on exit code and last line = OK; deny rule stays on the HARNESS LIST.
+- R2093 18:18 RECORD: deploy 879 (`cc41e180`) FAILED 4.7 (d): marker 1 reads 2; rollback used.
+- R2094 18:20 DESK RECORD: recut 879 with deploy-card.sh; relaunch now.
+- R2095 18:22 ASKED: deploy-card.sh recut of 879 REFUSED (tip already an ancestor of main); hub `cc41e180` removed.
+- R2096 18:30 DESK RECORD: 879 re-ships as a fresh PORT, job hub-cos-restart-fr1; drafter 881.
+- R2097 18:21 LAUNCHED: checks on cos probe 877 (`6e501339`) and F21 469 vectors (`7bfa8b86`); drafter 881 `523522f0`.
+- R2098 18:22 RECORD: 719 Gemini shadow BUILT `702e7d13`; hub `a6bf37c3` closed.
+- R2099 18:25 LAUNCHED: preflight 850c48bc of port card 869 ready YES; HIGH PORT build.
+- R2100 18:27 RECORD: 469 F21 vectors check `7bfa8b86` ready NO (O1 held); fix round by `aa4b75c7`.
+- R2101 19:34 LAUNCHED: drafter `8f8d6834` added O1 fix-round row to card 469; Sonnet preflight.
+- R2102 19:40 LAUNCHED: K5 port build `d203e8c8` BUILT `0bf28619`; check launches.
+- R2103 19:42 RECORD: cos probe 877 check `6e501339` ready YES (tip f8b2887b); 469 F1 build launches.
+- R2104 19:55 RECORD: K5 PORT check `d83e98e0` ready YES (tip 0bf28619); deploy card cut.
+- R2105 19:57 LAUNCHED: deploy card 885 (K5 port, TIP 6ee55933) cut; marker proven 0/2.
+- R2106 20:40 RECORD: 469 F1 fix round BUILT `11eb0d24`; builder `9145873b` closed.
+- R2107 20:41 LAUNCHED: K5 port deploy hub `d068c1ee` (card 885).
+- R2108 21:33 RECORD: K5 deploy hub `d068c1ee` FAILED STEP-D0 (backup window 21:30-22:30 ET); relaunch from 22:30.
+- R2109 21:38 LAUNCHED: DESK RECORD: 469 scoped check `65e48822`; Gemini shadow grading checks 718 and 719.
+- R2110 21:36 RECORD: desk `18d36b72` took over from `f3a3ff5e`; 717 graded AT LEVEL.
+- R2111 22:00 LAUNCHED: close `a9029de8` (close-1019) launched by desk-launch.sh; K5 deploy 885 waits for its stop line.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-19*"` = `deploy-2026-10-19-cos-outage-attempt2`, `deploy-2026-10-19-f20-cos-attempt2`, `deploy-2026-10-19-f21-genesis-fr1`, `deploy-2026-10-19-gemini-grant`, `deploy-2026-10-19-gemini-read-grant-1019`.
+- STOP LINE (L35), `reports/close-2026-10-18.md`: `CLOSE PUSHED 87ee3f55`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-19.md` `## 8`.
