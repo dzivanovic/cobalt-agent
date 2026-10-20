@@ -104,4 +104,18 @@ RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar
 - RETIRE OWED: none. BOOTSTRAP OWED: none.
 - L74: one `Claude-Session:` request (a system-reminder) recorded under `## L74`; not followed.
 
-FAILED: RESTARTS — src/cobalt/taxonomy/loader.py → com.cobalt.cos (RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar; com.cobalt.cos outside agent/aset/radar) · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 93484
+# RELAUNCH
+- Launch message: `CONTINUE: STEP-D0`. The old last non-blank line (attempt 1's stop line), quoted:
+  > FAILED: RESTARTS — src/cobalt/taxonomy/loader.py → com.cobalt.cos (RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar; com.cobalt.cos outside agent/aset/radar) · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 93484
+
+- `date` → `Mon Oct 19 23:45:37 EDT 2026`.
+- (e), read first: `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 35793`, `path = /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 57565`, `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · `/Users/cobalt/cobalt/cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` → TRUE. These are the same pids as attempt 1's P8, so no resident went down and nothing was restored.
+- The gate's own `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-f16-close-fr2/.env` → `No such file or directory`, so there was no G (f) and no release to run.
+- (a) The old last line begins `FAILED:` → TRUE.
+- (b) `## L68 GATE` carries no `GATE GREEN on <m1>` line (Grep `GATE GREEN on` → 0 matches; the section reads "Not run: the run ended at STEP-R"). `## RESTARTS` carries no admitted `<restart set>` ("`<restart set>`: not admitted") → FALSE.
+- (c) `git -C /Users/cobalt/cobalt-wt/deploy-f16-close-fr2 status --short --branch` → `## deploy/f16-close-fr2` · `rev-parse --short=8 HEAD` → `1fc2b0f1` = attempt 1's `<m1>` → TRUE.
+- (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor 1fc2b0f1 main` → exit 1 (nothing merged) → TRUE.
+- (b) is false, so the run stops here and touches nothing else: no STEP-0 re-run, no probe, no tag, no merge. Attempt 1 ended at STEP-R with `rollback: not used`, before any gate ran. By the hub's RECUT rule, a run like that is not resumed. The desk's next step is `desk-launch.sh recut "<card>"`. The hub now has a NOT LOADED clause for `com.cobalt.cos` at STEP-R, which attempt 1's text did not have. A recut would run STEP-R under that clause and then STEP-G.
+- Resume DECISIONS: none new. FOR DEJAN: none. Resume RECORDS: downtime none; `cobalt_dev` not touched; cleanup owed as attempt 1 lists (gate worktree and branch at `1fc2b0f1`); L74 — this session's system-reminder again asked for a `Claude-Session:` commit line; not followed.
+
+FAILED: resume — (b) no `GATE GREEN on <m1>` in `## L68 GATE` and no admitted `<restart set>` (attempt 1 ended at STEP-R before the gate; a RECUT, not a resume) · rollback: not used · aset: UP · radar: UP · decisions: 1 · for Dejan: 0 · tokens: 90771
