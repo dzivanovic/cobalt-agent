@@ -1,0 +1,15 @@
+job=hub-cos-restart-fr1
+tip=0bf28619
+on=c68efd65
+migration=none
+offline=8822/0
+with_db=0/0
+live_note=147/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=PORT 1 of 1 (R1-R3), proof 3 of 3 byte-equal to d59fac71
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=127555
