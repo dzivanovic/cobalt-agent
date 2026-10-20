@@ -127,19 +127,20 @@ def _load_config() -> ProbeConfig:
 # ---------------------------------------------------------------------
 
 
-def _auth_exit() -> int:
-    """`claude auth status` under the probe's env; only its exit code is kept."""
+def _auth_exit(cwd: Path) -> int:
+    """`claude auth status` under the probe's env, in the scratch cwd (never the
+    repo's, check G2); only its exit code is kept."""
     try:
         return subprocess.run(list(AUTH_ARGV), capture_output=True, text=True, check=False,
-                              timeout=120).returncode
+                              timeout=120, cwd=str(cwd)).returncode
     except FileNotFoundError:
         return 127
 
 
-def _child_env_names(pid: int) -> list[str]:
+def _child_env_names(pid: int, cwd: Path) -> list[str]:
     """The NAMES in a process's env (`ps -E`), parsed in memory; values dropped."""
     out = subprocess.run(["ps", "-E", "-ww", "-o", "command=", "-p", str(pid)],
-                         capture_output=True, text=True, check=False).stdout
+                         capture_output=True, text=True, check=False, cwd=str(cwd)).stdout
     names = {m.group(1) for token in out.split() if (m := _ENV_NAME.match(token))}
     return sorted(names)
 
@@ -355,7 +356,7 @@ def _x12(root: Path, cfg: ProbeConfig) -> tuple[bool, str]:
 
     def read(watch: _Watch) -> None:
         pid = _cli_pid(watch.inner)
-        watch.seen["names"] = None if pid is None else _child_env_names(pid)
+        watch.seen["names"] = None if pid is None else _child_env_names(pid, root / "home" / "work")
 
     turn = _turn(root, cfg, READY_PROMPT, after_connect=read)
     reads = [w.seen["names"] for w in turn.watch if "names" in w.seen]
@@ -410,11 +411,12 @@ def _run_dms(root: Path, cfg: ProbeConfig, model: str) -> tuple[int, int, float]
 
 
 def _x14(root: Path, cfg: ProbeConfig) -> tuple[bool, str]:
-    """X14 (FINAL `:86`; ASK DESK default): 20 DMs on the `cos.yaml` model."""
+    """X14 (FINAL `:86`; ASK DESK default): 20 DMs on the `cos.yaml` model, all
+    `ok` and none past `cos.max_turns` (check G5)."""
     ok, max_turns, max_s = _run_dms(root, cfg, cfg.model)
     clause = (f"ok {ok}/{len(SYNTHETIC_DMS)} · max num_turns {max_turns} · max seconds {max_s:.1f} "
               f"(caps: max_turns {cfg.max_turns}, timeout {cfg.timeout_s}s)")
-    return ok == len(SYNTHETIC_DMS), clause
+    return ok == len(SYNTHETIC_DMS) and max_turns <= cfg.max_turns, clause
 
 
 def _x17(root: Path, cfg: ProbeConfig) -> tuple[bool, str]:
@@ -447,7 +449,7 @@ def _verdict(item: str) -> tuple[bool, str]:
         with _scratch() as root:
             extra = X12_DUMMIES if item == "X12" else {}
             with cos_session._scrubbed_environ(_probe_env(root / "home", extra)):
-                code = _auth_exit()
+                code = _auth_exit(root / "home" / "work")
                 if code != 0:
                     return False, f"auth: claude auth status exit {code} under the scratch HOME"
                 return ITEMS[item](root, cfg)

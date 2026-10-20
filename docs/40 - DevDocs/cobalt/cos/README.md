@@ -45,3 +45,6 @@ NEW `probe.py`, mounted by `cli.py` as `cobalt cos probe <item>` (card 877): one
 
 ## 2026-10-19 — cos-probe-1019 (check)
 `probe.py`: X2 / X10 FAIL when the stream holds no init message (a session that never ran proves no refusal); the resident's `cobalt.cos.session` log is disabled for the probe's run (a failed turn's reason carries exception text; the clause keeps the cut reason); the printed clause is folded to one line. Check O1, O2, O3, A2.
+
+## 2026-10-20 — cos-probe-fr1 (check)
+`probe.py`: `claude auth status` and `ps` run with `cwd` = the scratch `home/work`, never the repo's cwd; X14 FAILs when any DM's measured `num_turns` passes `cos.max_turns`. Check G2, G5.
