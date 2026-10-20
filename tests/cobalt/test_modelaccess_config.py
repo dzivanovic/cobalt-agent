@@ -68,7 +68,7 @@ def _with_embed(**over):
 
 def test_committed_registry_loads_with_local_plan_and_local_embed():
     cfg = load_routes(CONFIG_PATH)
-    assert list(cfg.routes) == ["local.plan", "local.embed"]
+    assert list(cfg.routes) == ["local.plan", "local.embed", "checkpoint.narrative"]  # F5 card 731 K4: the narrative route after local.embed
     r = cfg.routes["local.plan"]
     assert (r.lane, r.kind, r.model, r.no_think, r.think_policy) == (
         "local", "openai_compatible", "mainframe", True, "forbid_nonempty")

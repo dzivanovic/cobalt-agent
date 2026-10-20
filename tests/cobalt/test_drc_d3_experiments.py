@@ -46,7 +46,7 @@ def test_xk_drc_rows_refuses_a_build_kind_before_0020(migrated):
     from cobalt.db_migrations import MIGRATIONS_DIR
     from cobalt.db_migrations.cli import _apply
 
-    assert FORWARD[-8].name == "0020_drc_build_kinds.sql"  # 0021 (S3 exits C1), 0022 (F15 P1), 0023, 0024 follow it  # S4-P2 (E4); 0025 too  # DML roles (0025); 0026 too  # F21 genesis (0026); 0028 too  # F21 vectors (0028)
+    assert FORWARD[-9].name == "0020_drc_build_kinds.sql"  # 0021 (S3 exits C1), 0022 (F15 P1), 0023, 0024 follow it  # S4-P2 (E4); 0025 too  # DML roles (0025); 0026 too  # F21 genesis (0026); 0028 too  # F21 vectors (0028); 0029 too  # F5 card 731 K6: 0029 last, after 0028
     assert "build_day" in _kind_check(migrated) and "build_trade" in _kind_check(migrated)
     with DrcStore()._connect() as conn:
         conn.execute(INSERT, (D,))
@@ -81,18 +81,20 @@ def test_0020_is_registered_last_and_its_rollback_first():
     # DML roles (0025): one place further out, sixth-last.
     # F21 genesis (0026): one place further out again, seventh-last.
     # F21 vectors (0028): one place further out again, eighth-last.
-    assert FORWARD[-8] == MIGRATIONS_DIR / "0020_drc_build_kinds.sql"
-    assert FORWARD[-9].name == "0019_drc_events.sql"
-    assert REVERSE[7] == MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"
-    assert REVERSE[8].name == "0019_drc_events.rollback.sql"
+    # F5 card 731 K6: 0029 last, after 0028 — one place further out again, ninth-last.
+    assert FORWARD[-9] == MIGRATIONS_DIR / "0020_drc_build_kinds.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-10].name == "0019_drc_events.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[8] == MIGRATIONS_DIR / "0020_drc_build_kinds.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[9].name == "0019_drc_events.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
     assert [p.name for p in _rollback_paths("0019")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
         "0024_strike_alerts.rollback.sql",  # S4-P2 (E4)
         "0023_radar_price_floor.rollback.sql",
         "0022_prediction_records.rollback.sql", "0021_legs.rollback.sql", "0020_drc_build_kinds.rollback.sql"]
-    code = "\n".join(l for l in FORWARD[-8].read_text().splitlines() if not l.strip().startswith("--"))  # DML roles (0025)  # F21 genesis (0026)  # F21 vectors (0028)
+    code = "\n".join(l for l in FORWARD[-9].read_text().splitlines() if not l.strip().startswith("--"))  # DML roles (0025)  # F21 genesis (0026)  # F21 vectors (0028)  # F5 card 731 K6: 0029 last, after 0028
     assert "CREATE TABLE" not in code and "'build_trade', 'build_day'" in code
-    back = REVERSE[7].read_text()  # S4-P2 (E4)  # DML roles (0025)  # F21 genesis (0026)  # F21 vectors (0028)
+    back = REVERSE[8].read_text()  # S4-P2 (E4)  # DML roles (0025)  # F21 genesis (0026)  # F21 vectors (0028)  # F5 card 731 K6: 0029 last, after 0028
     assert "-- COST:" in back and "to_regclass('\"user\".drc_rows')" in back

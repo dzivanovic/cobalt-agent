@@ -124,6 +124,10 @@ CREATED_TABLES: dict[str, Side] = {
     # his ledger and vault history, chunked for recall. USER: one trader's
     # own text (L32).
     "genesis_chunk": Side.USER,
+    # db_migrations/0029_market_checkpoints.sql — F5 (card 731 K6): the four
+    # market-context checkpoints' stored figures. SYSTEM: public market
+    # figures, nothing of one trader's, no user_id.
+    "market_checkpoints": Side.SYSTEM,
 }
 
 #: VIEWS created by database-wide migrations. On a side like any table

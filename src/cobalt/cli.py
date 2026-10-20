@@ -88,6 +88,7 @@ from cobalt.cos import cli as cos_cli  # noqa: E402
 from cobalt.hitl import cli as hitl_cli  # noqa: E402
 from cobalt.agents import cli as agents_cli  # noqa: E402
 from cobalt.genesis import cli as genesis_cli  # noqa: E402
+from cobalt.prefill import checkpoints as checkpoints_cli  # noqa: E402
 from cobalt.archiver.quiet import QuietRefused  # noqa: E402
 from cobalt.archiver.store import ArchiveLockError  # noqa: E402
 
@@ -575,6 +576,7 @@ def main() -> None:
     agents_cli.add_parser(sub)
     hitl_cli.add_parser(sub)
     genesis_cli.add_parser(sub)
+    checkpoints_cli.add_parser(sub)
 
     validate = sub.add_parser(
         "validate", help="Validate every config family (F16 sweep gate)."

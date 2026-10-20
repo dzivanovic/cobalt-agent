@@ -20,11 +20,12 @@ def test_the_union_tail_is_0015_to_0021_and_reverse_mirrors_it():
     # S4-P2's 0024 above that.  # S4-P2 (E4)
     # DML roles' 0025 above that.  # DML roles (0025)
     # F21 genesis' 0026 above that.  # F21 genesis (0026)
-    # F21 vectors' 0028 above that (0027 is F5's).  # F21 vectors (0028)
-    assert [name[:4] for name in forward[-13:]] == [
-        "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0028"]
-    assert [name[:4] for name in reverse[:13]] == [
-        "0028", "0026", "0025", "0024", "0023", "0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
+    # F21 vectors' 0028 above that.  # F21 vectors (0028)
+    # F5's 0029 above that (the next free number at its port).  # F5 card 731 K6: 0029 last, after 0028
+    assert [name[:4] for name in forward[-14:]] == [  # F5 card 731 K6: 0029 last, after 0028
+        "0015", "0016", "0017", "0018", "0019", "0020", "0021", "0022", "0023", "0024", "0025", "0026", "0028", "0029"]
+    assert [name[:4] for name in reverse[:14]] == [  # F5 card 731 K6: 0029 last, after 0028
+        "0029", "0028", "0026", "0025", "0024", "0023", "0022", "0021", "0020", "0019", "0018", "0017", "0016", "0015"]
     assert all(p.exists() for p in (*FORWARD, *REVERSE))
 
 
@@ -34,7 +35,8 @@ def test_placement_carries_both_lanes_and_declares_neither_built_table():
     assert all(CREATED_TABLES[name] is Side.USER for name in (*drc, "legs"))
     # F15 P1's `prediction_records` (0022) follows `legs`; S4-P2's `strike_alerts` (0024) follows it.  # S4-P2 (E4)
     # F21 genesis' `genesis_chunk` (0026) follows it.  # F21 genesis (0026)
-    assert names[-4:] == ["legs", "prediction_records", "strike_alerts", "genesis_chunk"]
+    # F5's `market_checkpoints` (0029, SYSTEM) follows it.  # F5 card 731 K6: 0029 last, after 0028
+    assert names[-5:] == ["legs", "prediction_records", "strike_alerts", "genesis_chunk", "market_checkpoints"]  # F5 card 731 K6: 0029 last, after 0028
     assert max(names.index(name) for name in drc) < names.index("legs")
     assert CREATED_VIEWS["legs_current_v"] is Side.USER
     assert "legs" not in DECLARED_TABLES and "drc_rows" not in DECLARED_TABLES

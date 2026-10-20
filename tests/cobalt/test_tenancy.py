@@ -513,7 +513,8 @@ def test_down_to_0004_selects_0009_0008_0007_0006_then_0005_reverse():
 
     selected = [path.name for path in _rollback_paths("0004")]
     names = selected
-    assert selected[:17] == [  # DML roles (0025): one place further out; F21 genesis (0026) again; F21 vectors (0028) again
+    assert selected[:18] == [  # DML roles (0025): one place further out; F21 genesis (0026) again; F21 vectors (0028) again  # F5 card 731 K6: 0029 last, after 0028
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)

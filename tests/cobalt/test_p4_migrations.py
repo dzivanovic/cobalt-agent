@@ -100,6 +100,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     now reverses all four, newest first. P4's own bound is still pinned
     below it: nothing at or below the bound is ever selected."""
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
@@ -124,6 +125,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     above_0009 = [p.name for p in _rollback_paths("0009")]
     assert not [n for n in above_0009 if n.startswith(("0008", "0009"))], above_0009
     assert above_0009 == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
@@ -144,6 +146,7 @@ def test_rollback_down_to_0007_reverses_everything_above_p2_newest_first():
     ]
     # ...and at 0008 exactly 0009 and everything newer, 0008 itself excluded.
     assert [p.name for p in _rollback_paths("0008")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)

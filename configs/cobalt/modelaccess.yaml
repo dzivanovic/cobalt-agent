@@ -62,3 +62,21 @@ routes:
     # declared dimension at load (F-02).
     dim: 768
     key_name: null
+
+  # F5 (FINAL §2.5, §4, D1): the checkpoint narrative — ONE call per slot run,
+  # its input the filtered delta list only, its reply indexed phrases only
+  # ([F-08]); a timeout degrades the narrative, never the numbers. Same lane,
+  # server and model as local.plan; no fallback (L25).
+  checkpoint.narrative:
+    lane: local
+    kind: openai_compatible
+    api_base: http://127.0.0.1:1234/v1
+    model: mainframe
+    no_think: true
+    think_policy: forbid_nonempty
+    # source: UNMEASURED, provisional — X3 owed before load (card 731 DECISION 2). Never the voice route's 15 s.
+    timeout_s: 60
+    # source: UNMEASURED, provisional — X3 owed before load (card 731 DECISION 2).
+    max_output_tokens: 512
+    response_format: json_schema
+    key_name: null

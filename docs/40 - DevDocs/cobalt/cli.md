@@ -143,3 +143,6 @@ F20 C4d: `from cobalt.cos import cli as cos_cli`, `from cobalt.hitl import cli a
 
 ## 2026-10-19 — f16-close-1018
 `cobalt validate` builds the F23 playbook config and the F4 daily-refresh config and prints one line for each; a bad file fails loud.
+
+## 2026-10-19 — f5-checkpoints-1018
+`from cobalt.prefill import checkpoints as checkpoints_cli` after the genesis import, and `checkpoints_cli.add_parser(sub)` after `genesis_cli.add_parser(sub)`, mount `cobalt checkpoint run --slot HHMM [--dry-run]` (`prefill/checkpoints.md`). A window refusal exits 2 through `sys.exit` inside the command; every other failure takes this CLI's `FAILED:` path, exit 1. Ported onto main by f5-checkpoints-fr1 (card 731 PORT).

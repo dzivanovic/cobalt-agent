@@ -57,3 +57,6 @@ F4 [F-14]: `DailyRefreshConfig` (`extra="forbid"`) and
 `NO_SOURCE_FIELDS` (VIX, BTC) as `cobalt` is refused. Every refusal is a
 `PrefillConfigError` naming the key. The `prefill:` mapping and
 `PrefillPathsConfig` are unchanged.
+
+## 2026-10-19 — f5-checkpoints-1018
+F5 [F-09] (card 731 K1): `CheckpointsConfig` (`extra="forbid"`, every key required: `slots` + `source: ruling`, `indices`, `groups` (`CheckpointGroups`, `g: sector`, `v: 140`), `route`, `narrative_max_lines`, `section`, `heading`) and `load_checkpoints_config(path=PREFILL_CONFIG_PATH)` through `_load_yaml_mapping(…, "checkpoints")`, after F4's lines. `slots` must be distinct `HH:MM` in order and `heading` a markdown heading line. No `grace_min`. `prefill:` and `daily_refresh:` are unchanged.

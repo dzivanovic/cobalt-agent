@@ -166,8 +166,9 @@ def test_s1_12_the_pair_is_registered_last_and_first_and_placed_user_side():
     # DML roles (0025): one place further out, seventh-last.
     # F21 genesis (0026): one place further out again, eighth-last.
     # F21 vectors (0028): one place further out again, ninth-last.
-    assert FORWARD[-9] == SQL and FORWARD[-10].name == "0018_drc_stated_books.sql"
-    assert REVERSE[8] == ROLLBACK and REVERSE[9].name == "0018_drc_stated_books.rollback.sql"
+    # F5 card 731 K6: 0029 last, after 0028 — one place further out again, tenth-last.
+    assert FORWARD[-10] == SQL and FORWARD[-11].name == "0018_drc_stated_books.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[9] == ROLLBACK and REVERSE[10].name == "0018_drc_stated_books.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
     assert side_of("drc_events") is Side.USER and CREATED_TABLES["drc_events"] is Side.USER
     assert "drc_events" in store.TABLES
 
@@ -183,6 +184,7 @@ def test_s1_12_the_sql_is_the_seams_sketch_and_the_rollback_states_its_cost():
     assert "-- COST:" in back and 'DROP TABLE IF EXISTS "user".drc_events;' in back
     assert "to_regclass('\"user\".drc_imports')" in back
     assert [p.name for p in _rollback_paths("0018")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)

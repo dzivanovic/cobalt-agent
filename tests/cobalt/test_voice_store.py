@@ -60,8 +60,10 @@ def test_both_files_exist_and_are_registered_last_and_first():
     # DML roles (0025): one place further out.
     # F21 genesis (0026): one place further out again.
     # F21 vectors (0028): one place further out again.
-    assert FORWARD[-11] == SQL and REVERSE[10] == ROLLBACK
+    # F5 card 731 K6: 0029 last, after 0028 — one place further out again.
+    assert FORWARD[-12] == SQL and REVERSE[11] == ROLLBACK  # F5 card 731 K6: 0029 last, after 0028
     assert [p.name for p in _rollback_paths("0015")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)

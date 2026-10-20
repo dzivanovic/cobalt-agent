@@ -81,7 +81,7 @@ def test_forward_ends_0008_0009_0010_0011():
     """The tail after the P4 rebase: P4's pair, then this branch's pair,
     in numeric order. The invariant is unchanged — 0010 and 0011 are the
     LAST two registered, and nothing of this branch's was displaced."""
-    assert [p.name for p in FORWARD[-17:]] == [  # S4-P2 (E4): one place further out; DML roles (0025) again; F21 genesis (0026) again; F21 vectors (0028) again
+    assert [p.name for p in FORWARD[-18:]] == [  # S4-P2 (E4): one place further out; DML roles (0025) again; F21 genesis (0026) again; F21 vectors (0028) again  # F5 card 731 K6: 0029 last, after 0028
         "0010_archive_progress.sql",
         "0011_archive_incidents.sql",
         "0013_tunables_slug_nullable.sql",  # the setups one build (R2-3 = B); 0012 is bars/chunk-2-0920's
@@ -99,13 +99,15 @@ def test_forward_ends_0008_0009_0010_0011():
         "0025_dml_roles.sql",  # DML roles (0025)
         "0026_genesis_chunk.sql",  # F21 genesis (0026)
         "0028_genesis_vectors.sql",  # F21 vectors (0028)
+        "0029_market_checkpoints.sql",  # F5 card 731 K6: 0029 last, after 0028
     ]
 
 
 def test_reverse_begins_0011_0010_0009_0008():
     """The exact mirror of the tail above: this branch's pair reverses
     FIRST, then P4's."""
-    assert [p.name for p in REVERSE[:17]] == [  # DML roles (0025): one place further out; F21 genesis (0026) again; F21 vectors (0028) again
+    assert [p.name for p in REVERSE[:18]] == [  # DML roles (0025): one place further out; F21 genesis (0026) again; F21 vectors (0028) again  # F5 card 731 K6: 0029 last, after 0028
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
@@ -141,6 +143,7 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
     because selection is by numeric prefix and P4 now sits between.
     Both are pinned so neither can drift."""
     assert [p.name for p in _rollback_paths("0009")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
@@ -160,6 +163,7 @@ def test_rollback_down_to_0009_undoes_this_branch_alone_and_0007_also_reaches_p4
         "0010_archive_progress.rollback.sql",
     ]
     assert [p.name for p in _rollback_paths("0007")] == [
+        "0029_market_checkpoints.rollback.sql",  # F5 card 731 K6: 0029 last, after 0028
         "0028_genesis_vectors.rollback.sql",  # F21 vectors (0028)
         "0026_genesis_chunk.rollback.sql",  # F21 genesis (0026)
         "0025_dml_roles.rollback.sql",  # DML roles (0025)
@@ -204,10 +208,11 @@ def test_the_registry_is_an_explicit_contiguous_list_and_reverse_mirrors_it():
     # F15 P1 adds 0022 (FINAL `## SEAM`); the price floor adds 0023 (R692); S4-P2 adds 0024 (E4).
     # DML roles (0025) adds 0025 (card 448).
     # F21 genesis (0026) adds 0026 (card 468).
-    # F21 vectors (0028) adds 0028 (card 469); 0027 is F5 card 731's and closes the gap as it lands.
-    assert numbers == [*range(1, 12), *range(13, 27), 28], f"1…11, 13–26 then 28, got {numbers}"  # F21 vectors (0028)
-    assert numbers[-17:-15] == [10, 11], "this branch's pair is still in place"  # F21 vectors (0028)
-    assert numbers[-1] == 28, "F21 vectors' 0028 is the tail"  # F21 vectors (0028)
+    # F21 vectors (0028) adds 0028 (card 469).
+    # F5 (card 731 K6) adds 0029, the next free number at its port; the number between 0026 and 0028 stays unused.
+    assert numbers == [*range(1, 12), *range(13, 27), 28, 29], f"1…11, 13–26, 28 then 29, got {numbers}"  # F5 card 731 K6: 0029 last, after 0028
+    assert numbers[-18:-16] == [10, 11], "this branch's pair is still in place"  # F5 card 731 K6: 0029 last, after 0028
+    assert numbers[-1] == 29, "F5's 0029 is the tail"  # F5 card 731 K6: 0029 last, after 0028
     reverse_numbers = [int(p.name.split("_", 1)[0]) for p in REVERSE]
     assert reverse_numbers == sorted(reverse_numbers, reverse=True)
     assert reverse_numbers == [n for n in reversed(numbers) if n != 1], (
@@ -532,7 +537,9 @@ def test_rollback_down_to_0009_drops_this_branch_alone_and_0007_also_reaches_p4(
             and name not in DRC_D1_TABLES
             # S4-P2 (E4): 0024's strike_alerts likewise sits above both bounds.
             # F21 genesis (0026): 0026's genesis_chunk likewise sits above both bounds.
-            and name not in ("voice_turns", "legs", "prediction_records", "strike_alerts", "genesis_chunk")
+            # F5 card 731 K6: 0029 last, after 0028 — market_checkpoints likewise.
+            and name not in ("voice_turns", "legs", "prediction_records", "strike_alerts", "genesis_chunk",
+                             "market_checkpoints")
             and _regclass(conn, name)
         }
 

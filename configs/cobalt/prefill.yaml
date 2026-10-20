@@ -24,3 +24,18 @@ prefill:
 daily_refresh:
   units: [trading/market_table, market_calendar/market_calendar]
   fields: {SPY: cobalt, QQQ: cobalt, IWM: cobalt, VIX: manual, BTC: manual}
+
+# F5 (FINAL §4 Config, [F-09]): the four market-context checkpoints. Loaded
+# only by `CheckpointsConfig` (src/cobalt/prefill/config.py): every key
+# required, any other key refused. The slot times are his (Charter:50, M3);
+# jobs.yaml's four `at` values and the four plists must equal them
+# (tests/cobalt/test_checkpoints_registry.py).
+checkpoints:
+  slots: ["07:15", "07:45", "08:15", "08:45"]
+  source: ruling
+  indices: [SPY, QQQ, IWM]
+  groups: {g: sector, v: 140}
+  route: checkpoint.narrative
+  narrative_max_lines: 3
+  section: market_context
+  heading: "### Market Context:"

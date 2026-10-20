@@ -27,19 +27,22 @@ def test_0022_is_registered_second_last_and_placed_user_side():
     # DML roles (0025): 0025 follows 0024; every index one place further out.
     # F21 genesis (0026): 0026 follows 0025; every index one place further out again.
     # F21 vectors (0028): 0028 follows 0026; every index one place further out again.
-    assert FORWARD[-1].name == "0028_genesis_vectors.sql"
-    assert REVERSE[0].name == "0028_genesis_vectors.rollback.sql"
-    assert FORWARD[-2].name == "0026_genesis_chunk.sql"
-    assert REVERSE[1].name == "0026_genesis_chunk.rollback.sql"
-    assert FORWARD[-3].name == "0025_dml_roles.sql"
-    assert REVERSE[2].name == "0025_dml_roles.rollback.sql"
-    assert FORWARD[-4].name == "0024_strike_alerts.sql"
-    assert REVERSE[3].name == "0024_strike_alerts.rollback.sql"
-    assert FORWARD[-5].name == "0023_radar_price_floor.sql"
-    assert REVERSE[4].name == "0023_radar_price_floor.rollback.sql"
-    assert FORWARD[-6].name == "0022_prediction_records.sql"
-    assert REVERSE[5].name == "0022_prediction_records.rollback.sql"
-    assert FORWARD[-6].exists() and REVERSE[5].exists()
+    # F5 card 731 K6: 0029 last, after 0028 — 0029 is the head; every index below it one place further out.
+    assert FORWARD[-1].name == "0029_market_checkpoints.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[0].name == "0029_market_checkpoints.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-2].name == "0028_genesis_vectors.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[1].name == "0028_genesis_vectors.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-3].name == "0026_genesis_chunk.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[2].name == "0026_genesis_chunk.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-4].name == "0025_dml_roles.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[3].name == "0025_dml_roles.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-5].name == "0024_strike_alerts.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[4].name == "0024_strike_alerts.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-6].name == "0023_radar_price_floor.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[5].name == "0023_radar_price_floor.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-7].name == "0022_prediction_records.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert REVERSE[6].name == "0022_prediction_records.rollback.sql"  # F5 card 731 K6: 0029 last, after 0028
+    assert FORWARD[-7].exists() and REVERSE[6].exists()  # F5 card 731 K6: 0029 last, after 0028
     assert CREATED_TABLES["prediction_records"] is Side.USER
     assert "prediction_records" not in DECLARED_TABLES, "built now: it leaves DECLARED"
 

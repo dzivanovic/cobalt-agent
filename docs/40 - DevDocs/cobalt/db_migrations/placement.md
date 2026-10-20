@@ -90,3 +90,6 @@ One comment line for `0023_radar_price_floor`: no table; it widens `radar_member
 ## 2026-10-19 — f21-genesis-1013
 
 `CREATED_TABLES` gains `genesis_chunk: Side.USER` after `strike_alerts` (0026, F21 chunk 1, FINAL F-02 / F-15): his ledger and vault history chunked for recall (L32).
+
+## 2026-10-19 — f5-checkpoints-1018
+`CREATED_TABLES` gains `market_checkpoints: Side.SYSTEM` after `genesis_chunk` (0029, card 731 K6; ported onto main by f5-checkpoints-fr2): public market figures, no `user_id`.

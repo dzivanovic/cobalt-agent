@@ -116,6 +116,15 @@ class TestTheShippedRegistry:
                 f"{spec.label}: plist does not declare COBALT_ENV=production"
             )
 
+    def test_the_four_checkpoint_one_shots_are_registered_with_plists(self):
+        """F5 (card 731 K9): the four slot jobs, after F4's refresh row; the
+        generic parity tests above cover their plists."""
+        registry = load_job_registry()
+        for slot in ("0715", "0745", "0815", "0845"):
+            spec = registry.spec(f"com.cobalt.checkpoint-{slot}")
+            assert spec.kind is JobKind.ONE_SHOT and spec.supervisor is Supervisor.SELF
+            assert spec.schedule.at == f"{slot[:2]}:{slot[2:]}" and spec.plist_path.exists()
+
     def test_the_agent_is_registered_as_a_pidfile_resident(self):
         """com.cobalt.agent's plist runs `cobalt.sh start`, which spawns
         the old-tree agent detached and EXITS 0 — so launchd holds no PID
