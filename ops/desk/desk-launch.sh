@@ -2179,10 +2179,19 @@ deploy)
         grep -q '^## GATE RESULTS' "$card" || bo "no '## GATE RESULTS' section"
         [ -n "$(awk '/^## /{on = ($0 == "## GATE RESULTS"); next} on' "$card" | grep -F "GATE RESULT: $blab · " | grep -E '^GATE RESULT: [^ ]+ · .+ · .+')" ] \
             || bo "'## GATE RESULTS' holds no line 'GATE RESULT: $blab · <item> · <result>'"
-        other=$(grep '^GATE RESULT:' "$card" | grep -v -E '^GATE RESULT: [^ ]+ · .+ · .+' | sed -n '1p')
-        [ -z "$other" ] || bo "a GATE RESULT line is not 'GATE RESULT: $blab · <item> · <result>': $other"
-        other=$(grep '^GATE RESULT:' "$card" | grep -v -F "GATE RESULT: $blab · " | sed -n '1p')
-        [ -z "$other" ] || bo "a GATE RESULT line names another label than $blab: $other"
+        # every GATE RESULT line, bulleted or not: its label exactly $blab, its item and result
+        # not blank (check O2, A1, A2)
+        other=$(awk -v lab="$blab" '
+            { l = $0; sub(/^[[:space:]]*(- )?/, "", l) }
+            l !~ /^GATE RESULT:/ { next }
+            {
+                n = split(substr(l, 14), f, / · /)
+                if (n < 3 || f[2] !~ /[^[:space:]]/ || f[3] !~ /[^[:space:]]/) {
+                    print "is not GATE RESULT: " lab " · <item> · <result>: " $0; exit
+                }
+                if (f[1] != lab) { print "names another label than " lab ": " $0; exit }
+            }' "$card")
+        [ -z "$other" ] || bo "a GATE RESULT line $other"
         bonly=1
     fi
     [ -n "$bonly" ] || section SHIPS
@@ -2225,6 +2234,8 @@ EOF
     fi
     if [ -n "$step" ]; then
         [ "$step" = "STEP-D0" ] || refuse "a deploy resumes at STEP-D0 only, never '$step'"
+        # a bootstrap-only card has no gate worktree, whatever $WT holds (check O1)
+        [ -z "$bonly" ] || refuse "deploy: bootstrap-only card: a resume needs the gate worktree, and this card has none; STEP-D0 is refused"
         [ -d "$WT/$wt" ] || refuse "a resume needs the gate worktree $WT/$wt"
     else
         [ -n "$bonly" ] || [ ! -e "$WT/$wt" ] || refuse "the gate worktree $WT/$wt already exists: a relaunch is 'desk-launch.sh deploy <card> STEP-D0'"
