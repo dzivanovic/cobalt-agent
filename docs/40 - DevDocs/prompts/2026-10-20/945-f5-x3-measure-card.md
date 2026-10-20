@@ -1,0 +1,85 @@
+JOB: f5-x3-measure
+LADDER: OFF-LADDER — reports/cto-2026-10-20.md R2217
+CLASS: K2
+INSTALL: none
+BRANCH: ops/f5-x3-measure
+WORKTREE: f5-x3-measure
+BASE: 5347f90e
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/f5-x3-measure/docs/40 - DevDocs/reports/f5-x3-measure-2026-10-20.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-x3-measure-check-2026-10-20.md
+HOUSE B: as needed
+BAND: HIGH
+RESTARTS: none
+RULINGS: 2026-10-18 R1863
+
+## ROWS
+
+WHY: F5 is on main with its `checkpoint.narrative` route carrying UNMEASURED provisional values (`configs/cobalt/modelaccess.yaml:70-82` at BASE: `timeout_s: 60` (`:78`), `max_output_tokens: 512` (`:80`), each `# source: UNMEASURED, provisional — X3 owed before load (card 731 DECISION 2)`). X3 (`docs/30 - Design/F5-FINAL-2026-10-11.md:177`) owes 30 `checkpoint.narrative` calls on one frozen delta list; this card is the measurement and nothing else. No code change, no config change, no plist load, no production write, no database. Every `file:line` is `main` at BASE; re-find each by content (BUILD-HUB E3). The fixture is SYNTHETIC (card 731 DECISION 2; the X2 real capture, card 912, was dropped): the report says SYNTHETIC in its first line and under the table.
+
+TIME GATE (the hub checks it with `date` before R1 and again before the first call): the RUN step starts at 20:35 ET or later (the no-voice window) and must end before 07:00 ET. Before 20:35 or at/after 07:00 → do not run; `FAILED: X3 — outside the 20:35–07:00 window (<date output>)`. A call that would start after 07:00 is not made; the stop line is `FAILED: X3 — window closed after <n> of 30 calls`.
+
+| row | what | red first | files |
+|---|---|---|---|
+| R1 | RUN — asserts nothing. THE PROBE, one run of the staged calls script (`## RECORDS`, `ASK DESK` 1; staged OUTSIDE the worktree, never under `docs/` or `src/`, BUILD-HUB RUN rule). The script, in this order: (1) `date`-gate as above (the hub's own `date`, quoted); (2) THE FROZEN DELTA LIST, the same for all 30 calls: `figures_0745` = indices `IDX_0745` and sectors `parse_groups(<the fixture text with its `#` line dropped>)` read from `tests/cobalt/fixtures/checkpoints/groups_sector_v140.csv` (the committed synthetic-shape K2 fixture, on main at BASE); `figures_0815` = indices `IDX_0815` and the same sectors with the `Change` strings of the 11 names rotated one place in `SECTORS` order (a fixed rule, so rank moves exist); `IDX_0745` / `IDX_0815` are the constants at `tests/cobalt/test_checkpoints_offline.py:393-394`, copied into the script; the list is `compute_delta(figures_0815, figures_0745)["lines"]` (`src/cobalt/prefill/checkpoints.py:283-323`); the report quotes its line count and its first and last line; (3) THE ROUTE, LIFTED: `load_routes()` (`src/cobalt/modelaccess/config.py:150`), then a COPY of `checkpoint.narrative` with `timeout_s` 300 and everything else unchanged (`max_output_tokens` stays 512, `no_think`, `think_policy`, `response_format: json_schema`, api_base `http://127.0.0.1:1234/v1`, model `mainframe`), put into a new `ModelAccessConfig(routes={...})` and passed as `config=` to `call_sync` (`client.py:89`). A request may only LOWER the route's budget (`client.py:99-106`), so the lift is a config copy in the process; `configs/cobalt/modelaccess.yaml` is NOT edited; (4) 30 sequential calls (no concurrency, one at a time), each a `ModelRequest` built exactly as `narrate` builds it (`checkpoints.py:413-427`: `_SYSTEM`, the `{ref, phrase, text}` payload as the user message, `_response_schema(3)` — `narrative_max_lines: 3`, `configs/cobalt/prefill.yaml:39`; `caller` `prefill.checkpoint`, `request_id` `x3-01` … `x3-30`), through `call_sync`; (5) per call it records: latency (wall seconds around the call, and `ModelResult.latency_ms` when it returns), output tokens (`usage.output_tokens`, `-` on an error), `finish_reason`, `think_leak` (the call raised `ModelCallError` kind `think_leak`, `client.py:73-83`), `empty` (kind `empty`, `client.py:85`), and any other error kind (`timeout`, `unreachable`, `http_status`, `bad_response`) by name; it never retries and never stops on one error; (6) writes the REPORT: ONE table of 30 rows (`n · latency s · output tokens · finish_reason · think_leak · empty · other error`), then `p50`, `p95`, `max` latency (seconds, nearest-rank on the 30 wall values, the method named), `max output tokens`, `think_leak` count, `empty` count, `calls with another error` count. A call with another error counts in the latency stats at its wall time and is listed under the table by kind. No reply text is printed or quoted (the replies are constructed-sector text, but the report holds numbers only) | — (the report is the evidence; no test) | none (the script is staged outside the worktree; the report is the only file) |
+| V1 | RUN — asserts nothing. THE VALUES, computed in the report (not applied): `timeout_s` = max(2 × p95, max latency), rounded UP to a multiple of 5 s; if p95 ≥ 55 s the timeout is the measured value (FINAL `:177`: p95 near the 60–72 s Plan-queue figure → the route timeout is that measurement), same rounding; `max_output_tokens` = 2 × the max output tokens seen, rounded UP to a multiple of 64, floor 256; each line prints `<key>: <value>  # source: X3 reports/f5-x3-measure-2026-10-20.md`. If `think_leak` > 0 or `empty` > 0 → the report prints `HELD: the values card waits; facts to the brain` and the two counts; no value line is given. The values card (a separate card, not this one) writes `configs/cobalt/modelaccess.yaml` | — | none |
+| C1 | RUN — asserts nothing. CLEAN UP: the staged script and any file it wrote outside the worktree are gone before the stop line (BUILD-HUB RUN rule; `ASK DESK` 1 says who removes them); `git status` of the worktree shows only the REPORT; `git diff <BASE>..HEAD --stat` quoted. Then `uv run cobalt jobs restarts <BASE>..HEAD` WHOLE: expected `none` (docs only) | — (tool output quoted in the report) | none |
+
+ORDER: R1, V1, C1, then the suites and the stop line.
+
+STOP LINE: `X3 DONE · p95 <s> s · max <s> s · max_tokens <n> · think_leak <n> · empty <n>` or `FAILED: <why>`.
+
+## NOT IN THIS JOB
+- Any edit to `src/`, `configs/`, `tests/`, `ops/`, any plist, any migration, any `jobs.yaml` row; the `timeout_s` / `max_output_tokens` values are the values card's, owed only if `think_leak` and `empty` are both 0.
+- `git mv`, `git rm`, `rm`, `mv` of a tracked file; any database; any production command; any network call but the 30 to `127.0.0.1:1234`.
+- X5 (contention with voice): not tonight. No scripted voice call runs beside the probe; the window is the no-voice window.
+- X2 and its real capture; X4, X6, X7, X10, X12, X13.
+- A real capture, a real delta list or a real daily note: the input is constructed (L32).
+- Quoting any model reply text in the report.
+
+## READ
+- `docs/30 - Design/F5-FINAL-2026-10-11.md:177` (row X3), `:138` (mainframe contention), `:88`.
+- `configs/cobalt/modelaccess.yaml:70-82` (`checkpoint.narrative`), `:30-38` (the `local.plan` X-E4 `# source:` style).
+- `configs/cobalt/prefill.yaml:38-39` (`route`, `narrative_max_lines: 3`).
+- `src/cobalt/prefill/checkpoints.py:91` (`WRITER`), `:115` (`PHRASES`), `:190-221`, `:283-323`, `:394-439` (`_response_schema`, `_SYSTEM`, `narrate`).
+- `src/cobalt/modelaccess/client.py:60-160`, `config.py:41-60`, `:150`, `models.py:36-80`.
+- `tests/cobalt/test_checkpoints_offline.py:65-68` (`groups_csv`), `:393-394` (`IDX_*`), `:470-473` (`ENTRIES`).
+- `tests/cobalt/fixtures/checkpoints/groups_sector_v140.csv` (12 lines at BASE, line 1 `# synthetic shape — X2 real capture owed before load`).
+- `prompts/BUILD-HUB.md:14`, `:16`, `:72`.
+
+## CHECK ASKS
+- X1 NOTHING CHANGED: `git diff <BASE>..<tip> --stat` lists only the REPORT; `configs/cobalt/modelaccess.yaml` still reads `timeout_s: 60` and `max_output_tokens: 512` at the tip; no staged script under the worktree (Glob).
+- X2 TIME GATE: the report quotes `date` before the first call, at or after 20:35 ET, and the last call ended before 07:00 ET; or the stop line is `FAILED: X3 — outside…`.
+- X3 THE FIXTURE AND THE LIST: the report says SYNTHETIC; it quotes the delta list's line count and first and last line; the list is the same for all 30 calls; the fixture is the committed `groups_sector_v140.csv`, not an invented one.
+- X4 THE TABLE: 30 rows; the p50/p95/max are recomputable from the table by nearest-rank; the max output tokens equals the table's column max; the think_leak and empty counts equal the table's.
+- X5 THE LIFT: the report states the probe ran on a config COPY with `timeout_s` 300 and everything else the route's; no call is shown cut off at 60 s, or a `timeout` is listed by kind.
+- X6 THE VALUES: re-derive `timeout_s` and `max_output_tokens` from the report's numbers by the rule in V1; each carries `# source: X3 reports/f5-x3-measure-2026-10-20.md`; with `think_leak` or `empty` > 0 the values are absent and `HELD` is printed.
+- X7 NO REPLY TEXT in the report; no secret, no token.
+- X8 RESTARTS re-derived: `none`.
+
+## DEPLOY PROOF
+- None: nothing deploys (docs only; the report is committed with the build). The values card has its own proof.
+
+## DECISIONS
+1. ASK DESK: how does the probe script reach the builder's line? [18:15] Default: THE DESK stages the calls script before the build launches, as ONE Python file outside the worktree (`/tmp/f5-x3-measure-run/calls.py`), written from this card's R1, and the builder runs it as `uv run pytest /tmp/f5-x3-measure-run/test_x3_calls.py` (the script is a one-test pytest file whose single test makes the 30 calls and writes the REPORT with Python, so the only string used is `Bash(uv run pytest *)`, `BUILD-HUB.md:14`). Why: the builder's line admits no `uv run python`, no `curl`, no `cat`, no `mkdir`, no `rm` but the `.env` string (`BUILD-HUB.md:16`), and its `Edit(//Users/cobalt/cobalt-wt/**)` rule writes only inside the worktree, so the builder cannot stage or delete a file in `/tmp`. The pytest file needs `COBALT_ENV` unset or `dev`: it makes no database call. The REPORT path is inside the worktree, so the script writes it there. The script removes itself and its directory at the end of its test (`os.remove`, `os.rmdir`), so C1 only proves it is gone with `ls /tmp/f5-x3-measure-run` (the stated error is the proof). If the desk wants it in the worktree instead, `sh /Users/cobalt/cobalt/ops/desk/scratch-clean.sh "<path>"` removes it (`BUILD-HUB.md:72`), but BUILD-HUB E3's PLACEMENT tests then must pass. Alternative rejected: a new `ops/desk/` step script that makes model calls — it adds a model call to the builder's CLASS string (R39).
+2. ASK DESK: how long a lifted timeout? [18:15] Default: 300 s, so a 60–72 s Plan-queue-style tail is measured, with room (the window is 10 hours; 30 calls at 300 s is 2.5 hours at worst). A call over 300 s is listed as `timeout`.
+3. ASK DESK: is `max_output_tokens` lifted too? [18:15] Default: NO, 512 stays (the brief lifts the timeout only). A call with `finish_reason` `length` is listed in the table; if any, the values rule `2 × max` is computed on 512 and the report says the cap was hit, so the value is a floor, not a measure, and the facts go to the brain.
+4. ASK DESK: the 08:15 figures are constructed by rotating the 11 `Change` strings one place in `SECTORS` order, the indices from `IDX_0815`. [18:15] Default: as written, one list for all 30 calls; the brain (L79) said "one frozen delta list" and the committed fixture holds only the Groups body, not a delta list, so the list is derived from it by a fixed rule. If the desk would rather freeze a literal list, name it.
+5. ASK DESK: the model route's server state. [18:15] Default: the hub checks nothing about the server; if the first call is `unreachable`, the stop line is `FAILED: X3 — mainframe unreachable at 127.0.0.1:1234 (call 1)` and the desk checks LM Studio. The window is no-voice, so no voice call is displaced.
+6. ASK DESK: LADDER. [18:15] Default: `OFF-LADDER — reports/cto-2026-10-20.md R2217` (the only proved record; no `S5-P?` row was found for X3).
+
+## RECORDS
+- Drafter `draft-f5-x3-measure` (prompt 944), 2026-10-20 18:03–18:06 EDT (`date`: Tue Oct 20 18:03:40 EDT 2026 at the start, 18:05:47 at the card write). Reads only; no network, no production command, no git write; nothing committed. BASE `5347f90e` = `git rev-parse --short=8 main` at 18:03.
+- Read: `prompts/2026-10-20/912-f5-x2-card.md` whole (the K2 shape: header, ROWS with WHY, NOT IN THIS JOB, READ, CHECK ASKS, DEPLOY PROOF, DECISIONS, RECORDS); `reports/draft-f5-x2-probe-2026-10-20.md` whole (914 stopped on the launcher: `desk-launch.sh` kind `prompt` W6 refuses a `COBALT_ENV=production` string; this card uses no such string); `prompts/BUILD-HUB.md` lines 14, 16, 72 (the launch line, THE LIST, the RUN rule) and the RUN-related greps (`:19`, `:33`, `:70`, `:104`).
+- `git show main:docs/30 - Design/F5-FINAL-2026-10-11.md`: `:177` row X3 (30 calls on one frozen delta list, 07:45→08:15 fixture; p95, max output tokens, `think_leak`, `empty`; sets route `timeout_s`, `max_output_tokens`; "p95 near the 60–72 s Plan-queue figure → the route timeout is that measurement"), `:88` (each value carries its `source:` comment), `:138` (mainframe contention).
+- `git show main:configs/cobalt/modelaccess.yaml`: `checkpoint.narrative` `:70` (`timeout_s: 60` `:78` and `max_output_tokens: 512` `:80`, both `# source: UNMEASURED, provisional — X3 owed before load (card 731 DECISION 2)`; `api_base http://127.0.0.1:1234/v1`, `model mainframe`, `no_think: true`, `response_format: json_schema`).- `git show main:src/cobalt/modelaccess/client.py`: `call_sync` `:89-160`; the lowering rule `:99-106` (a request may only lower `max_output_tokens` and `timeout_s`, so the lift is a config copy); think policy `:70-86` (`think_leak` `:73`, `:79`, `:83`; `empty` `:85`); `Usage.output_tokens` at `:159`. `config.py:150` `load_routes`, `ModelAccessConfig` `:132`; `models.py:36-52` `ModelRequest`, `ERROR_KINDS` `:18-27`.
+- `git show main:src/cobalt/prefill/checkpoints.py`: `narrate` `:413-439` (a model error kind collapses into `Narrative.status`, so the probe calls `call_sync` itself to see latency and tokens), `_SYSTEM` `:405-410`, `_response_schema` `:394-402`, `compute_delta` `:283-323`, `parse_groups` `:200-221`, `WRITER` `:91`. `configs/cobalt/prefill.yaml:38-39` route and `narrative_max_lines: 3`.
+- Fixture: `git ls-tree -r main tests/cobalt/fixtures/checkpoints` → only `groups_sector_v140.csv`, on main, line 1 `# synthetic shape — X2 real capture owed before load` (`git grep` on main). No committed delta-list fixture exists; `tests/cobalt/test_checkpoints_offline.py:393-394` holds `IDX_0745` / `IDX_0815` and `:65-68` `groups_csv`.
+- How a probe reaches the route: `call_sync(req, config=…)` → `ADAPTERS["openai_compatible"].complete` (`adapters.py:86-124`, `httpx.Client(trust_env=False)`), loopback only (`config.py:72-90`). The builder's line has no tool to run it but `uv run pytest` (`BUILD-HUB.md:14`) — `DECISIONS` 1.
+- Admitted strings (`BUILD-HUB.md:14`, `:16`): `uv run pytest *`, `uv run cobalt jobs restarts *`, `git add *`, `git commit *`, `git diff *`, `git status*`, `git log*`, `git show*`, `ls *`, `grep *`, `tail *`, `wc *`, `date*`, `sh /Users/cobalt/cobalt/ops/desk/*`. Every command in this card (`date`, `uv run pytest /tmp/…`, `uv run cobalt jobs restarts`, `git diff`, `git status`, `ls`) is on that list. `uv run python`, `cat`, `mkdir`, `rm`, `curl` are not used.
+- RESTARTS: docs-only change (the report) → `none`, as card 912's R1 (`src/cobalt/jobs/restarts.py` `classify`, docs/tests rows).
+- BAND HIGH: the drafter's band (CARD.md: when unsure, the higher); a probe to a local model with an in-process config copy; L29 holds the build on Opus.
+- VALUES CARD RULE (so the values card needs no further ruling), brain 9b07db5a 2026-10-20, L79: `timeout_s` = max(2 × p95, max latency), rounded up to 5 s; if p95 ≥ 55 s the timeout is the measured value (FINAL `:177`); `max_output_tokens` = 2 × max tokens seen, rounded up to 64, floor 256; each value carries `# source: X3 reports/f5-x3-measure-2026-10-20.md`; `think_leak` > 0 or `empty` > 0 → the values card waits and the facts go to the brain. X5 is not tonight.
+- FOR THE CHECK: F5 X3 — 30 narrative calls on the synthetic K2 fixture in the 20:35–07:00 no-voice window, K2 Opus probe; values card timeout_s = max(2×p95, max) up 5 s, max_output_tokens = 2×max up 64 floor 256; think_leak or empty > 0 holds it — brain 9b07db5a 2026-10-20.
+- RULINGS: `2026-10-18 R1863` (as the 931 and 933 cards, `607bfd0e`).
+- TRACED: the fixture's location, the lift (config copy), how the probe reaches the route. NOT TRACED: whether the builder's `Edit(//Users/cobalt/cobalt-wt/**)` rule lets the builder write the REPORT only inside the worktree — assumed (it is the same path as every build report); the script's self-removal is the desk's staging, `DECISIONS` 1.
