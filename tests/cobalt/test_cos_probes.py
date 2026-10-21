@@ -114,17 +114,31 @@ def test_cos_probe_is_unknown_green_while_owed(monkeypatch):
     assert hitl.ok is True and "OWED" in hitl.detail
 
 
-def test_an_unreadable_owed_file_raises_through_both_probes(monkeypatch, tmp_path):
-    from cobalt.heartbeat import probes
+@pytest.mark.parametrize("text", ["{not json", "[]"], ids=["unreadable", "malformed"])
+def test_an_unreadable_owed_file_is_a_red_probe_never_a_raise(monkeypatch, tmp_path, text):
+    """FR-2 (check O1): BootstrapOwedError is a red `cos` and `hitl` with the error in
+    detail; `take_beat` never raises on it and the beat's other probes still land."""
+    from cobalt.heartbeat import probes, runner
     from cobalt.jobs import watchdog
 
     path = tmp_path / "bootstrap-owed.json"
-    path.write_text("[]")
+    path.write_text(text)
     monkeypatch.setattr(watchdog, "BOOTSTRAP_OWED_PATH", path)
-    with pytest.raises(watchdog.BootstrapOwedError):
-        probes.cos(NOW, enabled=True, job_store=_never_stamped(), cos_store=_turns(None))
-    with pytest.raises(watchdog.BootstrapOwedError):
-        probes.hitl(NOW, enabled=True, store=SimpleNamespace(probe_counts=_counts_raise))
+    cos = probes.cos(NOW, enabled=True, job_store=_never_stamped(), cos_store=_turns(None))
+    assert cos.ok is False and "unreadable" in cos.detail and str(path) in cos.detail
+    hitl = probes.hitl(NOW, enabled=True, store=SimpleNamespace(probe_counts=_counts_raise))
+    assert hitl.ok is False and "unreadable" in hitl.detail and str(path) in hitl.detail
+    for name in ("database", "sheet_http", "sheet_daymode", "obsidian", "mainframe", "herdr",
+                 "archiver_freshness", "seat_usage", "backup_freshness", "vaultwrite_blocks",
+                 "redactions", "radar"):
+        monkeypatch.setattr(probes, name, lambda *a, _n=name, **k: probes.Probe(_n, True, "faked"))
+    monkeypatch.setattr(runner, "sweep", lambda **k: [])
+    monkeypatch.setattr(probes, "_cos_enabled", lambda: True)
+    beat = runner.take_beat(now=NOW, probe=False)
+    by_name = {p.name: p for p in beat.probes}
+    assert "database" in by_name, list(by_name)
+    assert by_name["cos"].ok is False and str(path) in by_name["cos"].detail
+    assert by_name["hitl"].ok is False and str(path) in by_name["hitl"].detail
 
 
 def test_the_runner_path_reads_the_real_row_then_the_owed_file(monkeypatch):
