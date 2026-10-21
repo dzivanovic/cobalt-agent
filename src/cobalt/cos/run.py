@@ -27,6 +27,7 @@ import traceback
 from pathlib import Path
 from typing import Callable, Optional
 
+from dotenv import load_dotenv
 from loguru import logger
 
 JOB_LABEL = "com.cobalt.cos"
@@ -35,6 +36,8 @@ CHANNEL = "dm"
 AGENT_ID = "cos"
 #: The session's cwd: an empty scratch dir under the job state dir (§4).
 SCRATCH_DIR = Path(__file__).resolve().parents[3] / "data" / "cos" / "scratch"
+#: The repo `.env`, loaded at the top of `main()` (cos-env-load).
+ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 
 
 class CosRefused(RuntimeError):
@@ -129,6 +132,13 @@ def _build(job_store):
 
 
 def main(argv: Optional[list[str]] = None) -> int:
+    # launchd hands this process no Postgres settings (the plist sets PATH and
+    # COBALT_ENV only), start_cos.sh exports none, and no import chain in cos
+    # loads .env — card 929's first start died on DbConfigError. Load the repo
+    # .env deliberately, as aset/__main__.py does, before any registry or store
+    # read; the environment still wins. In main, not at import, so importing
+    # this module loads nothing.
+    load_dotenv(ENV_FILE)
     from cobalt.jobs import killswitch
     from cobalt.jobs.config import load_job_registry
     from cobalt.jobs.store import JobStore
