@@ -24,6 +24,9 @@ X6  four real-shape prompts through `narrate`, the guard inside `call_sync`
     rule D (DECISION 2).
 X4  twenty generations, the four prompts x 5, through the [F-08] schema
     (`:178`); below 15 valid or a number-word is FAIL, never a load block.
+    The sectors are a real Groups body read from disk (row (b)'s fixture,
+    else X6's kept capture), the indices constructed (card 989): 20 model
+    calls, no gate check, no GET.
 X13 the window rule refuses a late fire on every slot, in process (`:187`);
     the launchd leg is not run.
 X5, X7, X10 need his hand: NOT RUN, nothing called.
@@ -58,8 +61,13 @@ from cobalt.session import clock as clock_mod
 REPO_ROOT = Path(__file__).resolve().parents[3]
 #: G1: the one place a kept Groups body may be written.
 KEEP_ROOT = Path("/Users/cobalt/cobalt-wt/.f5-probe")
-#: X6 / X4: the slot the one gate check names (the 970 dry run's slot).
+#: X6: the slot the one gate check names (the 970 dry run's slot).
 GATE_SLOT = "07:45"
+#: X4's Groups body, the first present: card 973 row (b)'s fixture, then X6's `--keep-groups` capture. Read only.
+X4_GROUPS_FIXTURE = REPO_ROOT / "tests/cobalt/fixtures/checkpoints/groups_sector_v140_real.csv"
+X4_GROUPS_KEPT = KEEP_ROOT / "groups_sector_v140_real.csv"
+#: X4's indices (card 989, DECISION 3): constructed (price, change %), never fetched.
+X4_INDICES = {"SPY": ("500.00", "0.10"), "QQQ": ("430.00", "0.20"), "IWM": ("200.00", "-0.10")}
 #: Rule D (DECISION 2): per slot back, an index price falls 0.50 and its change % 0.10.
 PRICE_STEP, CHANGE_STEP = Decimal("0.50"), Decimal("0.10")
 #: X4 (FINAL :178): 4 prompts x 5 = 20 generations; 15 valid is the bar.
@@ -130,6 +138,19 @@ def _scratch():
         shutil.rmtree(root, ignore_errors=True)
 
 
+@contextmanager
+def _at_repo():
+    """The Finviz leg's cwd: the old tree resolves `configs/` and
+    `data/.cobalt_vault` against the cwd (`cobalt_agent/config.py:543`,
+    `security/vault.py:19`), which the scratch does not hold (card 989)."""
+    cwd = os.getcwd()
+    try:
+        os.chdir(REPO_ROOT)
+        yield REPO_ROOT
+    finally:
+        os.chdir(cwd)
+
+
 def _keep_target(item: str, raw: Optional[str]) -> Optional[Path]:
     """G1: `--keep-groups PATH`, X6 only, a new file under `KEEP_ROOT`."""
     if raw is None:
@@ -180,11 +201,13 @@ def _keep(path: Path, body: str, now: datetime) -> str:
 
 
 def _real_figures(cfg, keep: Optional[Callable[[str], None]]) -> dict:
-    """ONE gate check, then ONE `fetch_figures`: both sources ok, or NOT RUN."""
-    refusal = checkpoints.check_demand(GATE_SLOT)
-    if refusal is not None:
-        raise NotRun(f"Finviz gate: {refusal}")
-    figures, status = checkpoints.fetch_figures(cfg, keep=keep)
+    """ONE gate check, then ONE `fetch_figures`, both at the repo root: both
+    sources ok, or NOT RUN."""
+    with _at_repo():
+        refusal = checkpoints.check_demand(GATE_SLOT)
+        if refusal is not None:
+            raise NotRun(f"Finviz gate: {refusal}")
+        figures, status = checkpoints.fetch_figures(cfg, keep=keep)
     for source in (checkpoints.SCREENER, checkpoints.GROUPS):
         if status[source] != checkpoints.OK:
             raise NotRun(f"{source} degraded")
@@ -271,9 +294,30 @@ def _has_number_word(text: str) -> bool:
     return any(w in NUMBER_WORDS for w in _WORD_SPLIT.split(text.lower()))
 
 
+def _x4_figures(cfg) -> tuple[dict, str]:
+    """X4's figures and the Groups source's name: the sectors from the first
+    present real Groups body (its `#` lines dropped), the indices
+    `X4_INDICES`. No gate check, no token, no GET."""
+    for path, source in ((X4_GROUPS_FIXTURE, "row (b) fixture"), (X4_GROUPS_KEPT, "kept capture")):
+        if path.is_file():
+            break
+    else:
+        raise NotRun("no real Groups body (X6 --keep-groups capture or the row (b) fixture)")
+    text = path.read_text(encoding="utf-8")
+    try:
+        sectors = checkpoints.parse_groups("\n".join(line for line in text.split("\n") if not line.startswith("#")))
+    except checkpoints.GroupsShapeError:
+        raise NotRun("the Groups body is not the 11 sector rows") from None
+    lacking = [t for t in cfg.indices if t not in X4_INDICES]
+    if lacking:
+        raise NotRun(f"X4_INDICES lacks {lacking[0]}")
+    indices = {t: {"price": X4_INDICES[t][0], "change_pct": X4_INDICES[t][1]} for t in cfg.indices}
+    return {"indices": indices, "sectors": sectors}, source
+
+
 def _x4(cfg, _keep_path: Optional[Path]) -> tuple[str, str]:
     """X4 (FINAL :178): 20 generations; valid >= 15 of 20 and no number-word."""
-    real = _real_figures(cfg, None)
+    real, source = _x4_figures(cfg)
     routes = load_routes()
     total, valid, invalid, hits = 0, 0, Counter(), Counter()
     for slot, entries in _prompts(cfg, real):
@@ -297,6 +341,8 @@ def _x4(cfg, _keep_path: Optional[Path]) -> tuple[str, str]:
                 if any(_has_number_word(s) for s in checkpoints._strings(line)):
                     hits[line["phrase_id"]] += 1
     clause = " · ".join([
+        f"groups: {source}",
+        "indices: constructed",
         f"valid {valid}/{total}",
         "invalid kinds " + (", ".join(f"{k}={v}" for k, v in sorted(invalid.items())) or "none"),
         "number-word hits " + (", ".join(f"{k}={v}" for k, v in sorted(hits.items())) or "none"),

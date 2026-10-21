@@ -650,3 +650,13 @@ def test_fr3_a_short_body_is_not_run(world, x4_paths, monkeypatch, capsys):
     assert _probe(monkeypatch, capsys, "X4")[:2] == (
         3, "PROBE X4 NOT RUN — the Groups body is not the 11 sector rows\n")
     assert world.calls == []
+
+
+def test_fr3_an_index_x4_indices_lacks_is_not_run(world, x4_kept, monkeypatch, capsys):
+    from cobalt.prefill import checkpoint_probe
+
+    monkeypatch.setattr(checkpoint_probe, "X4_INDICES",
+                        {t: v for t, v in checkpoint_probe.X4_INDICES.items() if t != "IWM"})
+    _no_finviz(monkeypatch)
+    assert _probe(monkeypatch, capsys, "X4")[:2] == (3, "PROBE X4 NOT RUN — X4_INDICES lacks IWM\n")
+    assert world.calls == []
