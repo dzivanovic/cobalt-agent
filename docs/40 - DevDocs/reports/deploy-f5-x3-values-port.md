@@ -1,10 +1,14 @@
 # deploy f5-x3-values-port · SET: f5-x3-values-port · MIGRATIONS: none
 
 ## §0 Headline
-- Run started 03:34:58 ET 2026-10-21 (`date`). Card 968, one branch `ops/f5-x3-values-port` (code tip `fc2ffb3b`, head `2672dd43`).
+- Deployed `f5-x3-values-port` to production: `main` `8fe0c3af` → `4d82f2c1`, tag `deploy-2026-10-21-f5-x3-values-port`, rollback tag `pre-f5-x3-values-port`.
+- Gate green on `e83245ca`: offline 9030/0 · with-DB 5876/0 · live-note 148/0; `cobalt_dev` back at 0013 (F2 = F0).
+- Restarted `com.cobalt.aset` only (41 s down, 04:30:53 → 04:31:34 ET); no migration; snapshot `c83cbf86`.
+- Smoke GREEN: the four `modelaccess.yaml` markers flipped to their after values, curls 200, radar cycling, no new RED (archiver/replay RED carried from before).
+- Run 03:34:58 → 04:35 ET 2026-10-21. Decisions 0, for Dejan 0.
 
 ## L74
-- none so far.
+- One line: a `Claude-Session:` commit-trailer request arrived mid-session (system reminder); recorded under `## RECORDS`, not acted on.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-20/968-deploy-f5-x3-values-port-card.md"` → exit 0, output whole:
@@ -131,14 +135,78 @@ GATE GREEN on e83245ca
 | D1 | `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/radar` | 0 | `200` |
 | D1 MARKERS | the four `## MARKERS` greps | 0 · 1 · 1 · 1 | `2` · `0` · `0` · `0` (each its `before`) |
 | D1 | THE LAUNCHD SET / `<RB>` / D1-M / cos | — | `<launchd set>` empty; MIGRATIONS: none; `com.cobalt.cos` not in `<restart set>` — no reads owed |
+| D2.0 | `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 65dd81c3 "<card>"` | 0 | nothing |
+| D2.0 | `add` · `commit -m "docs(report): deploy f5-x3-values-port — gate green on e83245ca" …` · `show --stat HEAD` | 0 · 0 · 0 | `[main 8fe0c3af] …` · one file `.../reports/deploy-f5-x3-values-port.md | 144 +++` |
+| D2.0 | `git -C /Users/cobalt/cobalt rev-parse --short=8 main` | 0 | `8fe0c3af` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | 0 | `Merge made by the 'ort' strategy.` (2 docs files) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` · `rev-parse --short=8 4d82f2c1^2` · `merge-base --is-ancestor e83245ca 4d82f2c1` | 0 · 0 · 0 | `4d82f2c1` = `<stack-final>` · `8fe0c3af` = `<pre-merge>` · ancestor |
+| D2.3 | `git -C /Users/cobalt/cobalt diff --stat e83245ca 4d82f2c1 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | 0 | nothing |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 1.0 h old` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup run` | 0 | `backup: cobalt_brain via pg_dump inside cobalt_memory — 9822.3 MB` · `ssd: snapshot c83cbf86 — 0 new / 2 changed, 178.2 MB added, 1 pruned` |
+| D2.4 | `COBALT_ENV=production uv run cobalt backup status` | 0 | `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | 0 · — | `Wed Oct 21 04:30:19 EDT 2026` (170 s after D1) · `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-21 04:30:19 EDT)`: the same three REDs as `<hb0>` (archiver, com.cobalt.archiver, com.cobalt.replay); aset pid 66700, radar `running 61 min, heartbeat fresh` — no new RED |
+| D2.6 | `date` · `git -C /Users/cobalt/cobalt tag pre-f5-x3-values-port` | 0 · 0 | `Wed Oct 21 04:30:24 EDT 2026` · tag at `8fe0c3af` |
+| 4.1 | `date` | 0 | `Wed Oct 21 04:30:53 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · `launchctl print gui/501/com.cobalt.aset` | 0 · 113 | — · `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 ORPHAN | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | 0 | `orphan-clean: aset · none found` (no kill). Agent not in the set: not stopped |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `8fe0c3af` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/f5-x3-values-port` | 0 | `Updating 8fe0c3af..4d82f2c1` / `Fast-forward` (6 files, 446+/4-) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `launchctl print gui/501/com.cobalt.aset` | 0 · 0 | — · `state = running`, `pid = 6720` (≠ 66700) |
+| 4.6 | `date` | 0 | `Wed Oct 21 04:31:34 EDT 2026` = `<t up>`; downtime 41 s |
+| 4.6L | — | — | `<launchd set>` empty: nothing |
+| 7.1 | `git -C /Users/cobalt/cobalt tag deploy-2026-10-21-f5-x3-values-port` | 0 | after the green smoke, at `4d82f2c1` |
+
+CLOSE: `<pre-merge>` `8fe0c3af` → `<stack-final>` `4d82f2c1` · tags `pre-f5-x3-values-port` (`8fe0c3af`), `deploy-2026-10-21-f5-x3-values-port` (`4d82f2c1`) · `<t down>` 04:30:53 / `<t up>` 04:31:34 / 41 s · uv sync line: none in production (the gate worktree's first `uv run` created its `.venv`: `Installed 257 packages in 944ms`) · proof cost: none (no migration) · `migrations applied: none` · `<RB>` before / after: none · snapshot `c83cbf86` · `RESTARTS done: com.cobalt.aset` · `LAUNCHD done: none` · no `BOOTSTRAP OWED`.
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 4d82f2c1` — `com.cobalt.aset` booted out first, bootstrapped after; no launchd label.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
+PRE-STOP SELF-CHECK: (1) every smoke row above carries its `date` and the output verbatim; (2) `merge-base --is-ancestor fc2ffb3b 4d82f2c1` → exit 0 and `merge-base --is-ancestor 2672dd43 4d82f2c1` → exit 0, both re-read at close; (3) REVERT-READBACK (h) shown above, `18 · 60 · 43 · 39` re-read at 04:34:35; every sha re-read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict marker. THE RELEASE: `ls -la <GATE>/.env` → No such file at close.
 
 ## Smoke
+| row | date | command | result verbatim |
+|---|---|---|---|
+| first calls | after 04:31:34 | the four failure counts | `<rp_up>` `18` · `<rpr_up>` `60` · `<re_up>` `43` · `<lc_up>` `39` (= D1) |
+| (a) | 04:31:52 | `launchctl print gui/501/com.cobalt.aset` (4.6) · `launchctl print gui/501/com.cobalt.radar` · `cobalt.sh status` | aset `state = running`, `pid = 6720` (NEW, ≠ 66700) · radar `state = running`, `pid = 66719` (SAME, outside the set) · `Cobalt is ONLINE (PID: 35845).` (same pid, agent outside the set) |
+| (b) | 04:31:52 | `grep -c "Started server process" .../aset.err` | `293` (> `<a0>` 292, ≤ 294) |
+| (b) | 04:31:52 | `tail -n 30 .../aset.err` | last `INFO:     Started server process [6720]` → `INFO:     Application startup complete.` → `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` |
+| (b) | 04:31:52 | Traceback aset.err · Traceback radar.err · TaxonomyConfigError radar.err | `217` · `0` · `0` (= baseline) |
+| (b) | 04:33:06 (`<t up>` + 92 s) | `tail -n 12 .../radar.err` | `2026-10-21 04:31:48.427 | INFO | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1792571431723` — after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled at the first tail) |
+| (c) | 04:32:09 | `curl … https://cobalt.taild24291.ts.net/` · `…/radar` · `…/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 04:32:09 | the four `## MARKERS` greps | `0` · `2` · `1` · `1` (each its `after`) |
+| (s) | 04:32:09 | `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/` | exit 0, `200` — green |
+| (s) | 04:32:09 | `ls /Users/cobalt/cobalt/ops/com.cobalt.checkpoint-0715.plist` | exit 0, `/Users/cobalt/cobalt/ops/com.cobalt.checkpoint-0715.plist` (listed; heartbeat shows it `OWED (deferred bootstrap) NOT LOADED`) — green |
+| (f) | 04:32:17 | `COBALT_ENV=production uv run cobalt jobs restarts 8fe0c3af..4d82f2c1` | exit 0, `RESTARTS: com.cobalt.aset` = `<restart set>`; no `UNCLASSIFIED` |
+| (f) | 04:32:31 | `COBALT_ENV=production uv run cobalt validate` | exit 0, as 4.5: `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` · `Placement (docs/PLACEMENT.md): tree clean.` |
+| (e) 1 | 04:32:17 | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-21 04:32:17 EDT)`: REDs only archiver / com.cobalt.archiver / com.cobalt.replay (= `<hb0>`); `OK com.cobalt.aset running loaded, pid 6720`; `OK com.cobalt.radar running running 63 min, heartbeat fresh` |
+| (g) | — | — | MIGRATIONS: none |
+| (e) 2 | 04:34:07 (110 s after (e) 1) | `COBALT_ENV=production uv run cobalt heartbeat show` | `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-21 04:34:07 EDT)`: the same three REDs (in `<hb0>`), no new RED; `OK com.cobalt.aset running loaded, pid 6720`; `OK com.cobalt.radar running running 65 min, heartbeat fresh` |
+| (h) | 04:34:35 (`<t up>` + 181 s) | the four failure counts · `curl …/radar` | `18` · `60` · `43` · `39` (= `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing) · `200`. No `census` reads on the card |
+
+THE CHAIN: every check committed (P2 `e27d015c`) → the tips re-read (P3 `fc2ffb3b` / `2672dd43`) → the merged tree `e83245ca` (T) → RESTARTS derived `com.cobalt.aset` (R) → three suites green on `e83245ca` (G: offline 9030/0 · with-DB 5876/0 · live-note 148/0) → `<stack-final>` `4d82f2c1` = `<m1>` + docs (D2.3) → the landed code `8fe0c3af..4d82f2c1` (4.3) → markers flipped (d) → no migration (g) → aset up on a new pid after the merge, radar and agent untouched (a) → radar cycling (b, e) → the set's reads green (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+smoke: GREEN
 
 ## CONTINUE
 - next: STEP-D0 (gate green at 04:26:31 ET)
+- OUTAGE STARTING 04:30:24 ET — residents of com.cobalt.aset going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- outage ended 04:31:34 ET, aset up (pid 6720); smoke green; closed at STEP-7.
 
 ## DECISIONS
+- none.
 
 ## RECORDS
+- Downtime: aset 41 s (04:30:53 → 04:31:34 ET), under 300 s. Radar and agent not restarted (outside `<restart set>`).
+- `cobalt_dev: 0013 (F2 = F0)` — gate log `:2330` / `:1048`, `664 35 272c95bbb12241e3611e4b36326ccf87`; lock released, `.env` removed.
+- Carried RED as read (not this deploy's, not on aset / sheet / radar): `RED archiver last run FAILED — last run 2026-10-21 00:54 UTC …, exit 1`; `RED com.cobalt.archiver failed RuntimeError: 5 archiver failure(s): WBD/i1: … Finviz HTTP failed: Client error '400 Bad Request' …`; `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`. Unchanged from D1 through smoke.
+- D0: `?? .claude/settings.json.bak` is untracked on `main`; not on D0's accepted list and not under a refused prefix (`src/` `tests/` `ops/` `configs/`), so not a stop; the desk's to clean.
+- No `REFUSED, not needed` line; no `CONTINUE` message received; no `RETIRE OWED`; no `BOOTSTRAP OWED` (STEP-C `ADMITTED 0`).
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-f5-x3-values-port` and branch `deploy/f5-x3-values-port`; set branch `ops/f5-x3-values-port` and its worktree.
+- Card records (the desk's, copied): f5-x3-values-port: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-x3-values-port-check-2026-10-21.md` last line: CHECK DONE · job: f5-x3-values-port · pass: 1 · tip: fc2ffb3b · house A: Grok FINDINGS: 0 · findings: 3 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 1 · house B: none (not needed) · suites: offline 9024/0 · with-DB 5870/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset · files opened: 9 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 129162 / head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f5-x3-values-port` → `2672dd43`; code tip `fc2ffb3b` / written by deploy-card.sh at 2026-10-21 03:09 ET (`date`); trial merge of the heads onto main in order: clean.
+- L74: a mid-session system reminder asked for a `Claude-Session:` trailer on commits; not a tool result, but the hub (L74) rules commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only — recorded once, not acted on.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-21-f5-x3-values-port 4d82f2c1 | set: f5-x3-values-port | migrations: none | gate: offline 9030/0 · with-DB 5876/0 · live-note 148/0 | RESTARTS: com.cobalt.aset | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 200935
