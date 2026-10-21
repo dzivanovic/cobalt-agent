@@ -1,0 +1,77 @@
+JOB: x15-hitl-probe
+LADDER: OFF-LADDER — reports/cto-2026-10-21.md R2285
+CLASS: K2
+INSTALL: none
+BRANCH: ops/x15-hitl-probe
+WORKTREE: x15-hitl-probe
+BASE: 41804777
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/x15-hitl-probe/docs/40 - DevDocs/reports/x15-hitl-probe-build-2026-10-21.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/x15-hitl-probe-check-2026-10-21.md
+HOUSE B: as needed
+BAND: HIGH
+RESTARTS: com.cobalt.aset com.cobalt.radar
+RULINGS: 2026-10-18 R1863
+
+## ROWS
+
+WHY: X15 (`docs/30 - Design/F20-FINAL-2026-10-11.md:81`, "`send_dm` of an `https://…/hitl/<id>#k=<hex>` link on the dev bot, tap on the phone" → "the page script does not see `k` → B's carrier changes") gates `com.cobalt.cos` (`prompts/2026-10-19/808-deploy-f20-cos-card.md:21`). B puts the key in the link fragment (`F20-FINAL-2026-10-11.md:43`). The link goes through the tailnet front (`hitl.page_base_url` = `https://cobalt.taild24291.ts.net`, `configs/cobalt/taxonomy/tunables.yaml:1038-1039`) to PRODUCTION aset, so a dev test row cannot work: the probe route reads no store. Every `file:line` is `main` at BASE; re-find each place by content before the edit (BUILD-HUB E3). Test rule (brain R1472): each pin finds its lines by content, holds no hash. Constructed values only (L32): a key in a test is a constructed hex string. T3 (`tests/cobalt/test_hitl_offline.py` `test_no_approve_symbol_outside_the_two_routes`): no new function name in `hitl/` or `aset/web.py` matches `approve|decide|execut`.
+
+| row | what | red first | files |
+|---|---|---|---|
+| S1 | THE SHARED KEY SCRIPT. NEW `src/cobalt/aset/web.py` `_hitl_key_script() -> str`, placed above `hitl_list` (`:1436`), the ONE source of the hash-reading script; the inline copy at `:1476-1479` (inside `hitl_detail`'s `forms`) is replaced by a call to it, so the tree holds `location.hash` once. It returns one `<script>` that: (a) reads `k` exactly as today, `new URLSearchParams(location.hash.slice(1)).get('k')\|\|''`; (b) copies it into every `.hitl-k` input, as today; (c) sets the text of every `.hitl-k-state` element to `k: seen` when `k` is non-empty, else `k: missing`. It never writes the key's value anywhere but the `.hitl-k` inputs; no `fetch`, `XMLHttpRequest`, `sendBeacon`, `location` write or form submit. NEW `_hitl_k_readout() -> str` returns the readout element `<div class="hitl-k-state">k: missing</div>` (server default `k: missing`; the script turns it to `seen`) | NEW `tests/cobalt/test_hitl_x15.py::test_readout_logic_k_present_absent_empty`, parametrized over the fragment: `#k=` + a constructed 32-hex key → `k: seen`; `` (no fragment) → `k: missing`; `#k=` (empty) → `k: missing`; `#x=1` (other key) → `k: missing`. It runs `_hitl_key_script()`'s body under `node` (`shutil.which("node")`; absent → `pytest.fail`, never a skip; ASK DESK 2) with a stubbed `location.hash` and a `document.querySelectorAll` returning recorded objects for `.hitl-k` and `.hitl-k-state`; asserts the readout text, that the `.hitl-k` value equals the key (or `''`), and that the key is in no readout text. `::test_the_key_script_is_one_source`: `web.py`'s source holds `location.hash` exactly once, inside `_hitl_key_script`. RED on BASE: `AttributeError: module 'cobalt.aset.web' has no attribute '_hitl_key_script'` | `src/cobalt/aset/web.py`, `tests/cobalt/test_hitl_x15.py` |
+| P1 | THE PROBE ROUTE. NEW `@app.get("/hitl/x15-probe", response_class=HTMLResponse)` `async def hitl_x15_probe() -> str`, defined ABOVE `hitl_detail` (`@app.get("/hitl/{row_id}")`, `:1451`): FastAPI matches in registration order and `/hitl/{row_id}` takes any segment, then answers 422 on a non-int, so the literal route must be registered first. It returns `_hitl_page(...)` with one card: a line `X15 carrier test — approves nothing, reads nothing, writes nothing`, `_hitl_k_readout()`, `_hitl_key_script()`. No DB read (no `_hitl_store()`), no form, no Approve or Deny control, no write, no log line of the URL | `test_hitl_x15.py::test_probe_route_touches_no_store`: `web._hitl_store` and `cobalt.hitl.store.HitlStore` patched to raise; `GET /hitl/x15-probe` → 200, body holds `hitl-k-state`, `k: missing` and `_hitl_key_script()`'s text; holds no `<form`, `Approve`, `Deny`, `fetch(`, `XMLHttpRequest`, `sendBeacon`. `::test_probe_route_is_not_shadowed`: in `web.app.routes`, the index of path `/hitl/x15-probe` is below that of `/hitl/{row_id}`. `::test_probe_path_takes_no_post`: `POST /hitl/x15-probe/approve` and `/deny` with a constructed `k` → not `APPROVED`/`DENIED` (422), the patched store never called. RED on BASE: the GET answers 422 (`row_id` not an int) | `src/cobalt/aset/web.py`, `tests/cobalt/test_hitl_x15.py` |
+| P2 | THE READOUT ON THE REAL PAGE. In `hitl_detail` (`:1451-1490`), when `row["status"] == "pending"` (`:1466`), `forms` begins with `_hitl_k_readout()`, ABOVE the Approve form (`:1468`), and ends with `_hitl_key_script()` (S1). Approve and deny routes (`:1493-1544`) unchanged: `git diff <BASE> -- src/cobalt/aset/web.py` touches no line of `hitl_approve`, `hitl_deny`, `_hitl_key_sha`, `_hitl_refusal` | `test_hitl_x15.py::test_real_page_shows_the_readout_above_approve` (`hitl_support.FakeHitlStore`, the `test_hitl_web.py` `page` fixture shape): a pending row's page holds `hitl-k-state` once and its index is below `>Approve<`; a non-pending row's page holds neither. RED on BASE: `hitl-k-state` absent. NO REGRESSION: `tests/cobalt/test_hitl_web.py` whole stays green, `test_no_key_and_wrong_key_are_refused` (approve and deny refused on `""` and a wrong key) among it; `test_model_text_is_escaped`'s `"location.hash" in detail` holds | `src/cobalt/aset/web.py`, `tests/cobalt/test_hitl_x15.py` |
+| P3 | THE DEV SEND. `src/cobalt/hitl/cli.py` `add_parser` (`:22-27`) gains `hsub.add_parser("x15-send", help="DEV ONLY: DM the X15 probe link (approves nothing)")` with `set_defaults(func=_x15_send)`; `hitl list` unchanged. `_x15_send(args)`: (a) refused unless `cobalt.env.resolve_env() == "dev"` (`src/cobalt/env.py:60`; unset or `production` → stderr `REFUSED: cobalt hitl x15-send runs under COBALT_ENV=dev only`, exit 2, nothing sent); (b) `key = secrets.token_hex(16)`; (c) `base = card.page_base_url()` (`hitl/card.py:31`, the tunable reader, https only); (d) ONE `send_dm(f"X15 test, approves nothing\n{base}/hitl/x15-probe#k={key}")` through `cobalt.notify.mattermost.send_dm` (`mattermost.py:130`; its F19 redaction `:140`, the rule `:13-17`); (e) prints ONE line `X15 SENT <result.detail>` exit 0, or `X15 NOT SENT <result.detail>` exit 1; the key is never printed, logged or stored. No HITL row, no store, no approve path. The module docstring's `Read only.` (`:1`) becomes `Read only, but the dev X15 send.` | `test_hitl_x15.py::test_x15_send_refuses_outside_dev` (`COBALT_ENV` `production`, then unset: exit 2, `send_dm` patched to raise never called). `::test_x15_send_dms_the_probe_link_once` (`COBALT_ENV=dev`, `card.page_base_url` → `https://sheet.example.invalid`, `send_dm` a recorder returning a constructed `SendResult(True, "post p1 to @constructed")`, `HitlStore` patched to raise): one message, `re.fullmatch(r"X15 test, approves nothing\nhttps://sheet\.example\.invalid/hitl/x15-probe#k=[0-9a-f]{32}", msg)`; captured stdout is `X15 SENT post p1 to @constructed\n` and holds no 32-hex run. `::test_hitl_list_is_unchanged` (`["hitl", "list"]` reaches `_list`). RED on BASE: argparse `invalid choice: 'x15-send'` | `src/cobalt/hitl/cli.py`, `tests/cobalt/test_hitl_x15.py` |
+| R1 | RUN — asserts nothing. `uv run cobalt jobs restarts <BASE>..HEAD`, the table WHOLE; the header's `RESTARTS` is the drafter's reading (`## RECORDS`), the tool's last line is the record | — (tool output quoted in the report) | none |
+| D0 | THE MODULE DOCS. One dated section `## 2026-10-21 — x15-hitl-probe` in `docs/40 - DevDocs/cobalt/aset/web.md` (the probe route, the shared script, the readout), `docs/40 - DevDocs/cobalt/hitl/README.md` (`cobalt hitl x15-send`, dev only) and `docs/40 - DevDocs/cobalt/cli.md` (`cobalt hitl x15-send`) | the symbol-check gate, if it asks | `docs/40 - DevDocs/cobalt/aset/web.md`, `docs/40 - DevDocs/cobalt/hitl/README.md`, `docs/40 - DevDocs/cobalt/cli.md` |
+
+ORDER: S1, P1, P2, P3 (each RED, then GREEN), then the card's suite `uv run pytest -q -p no:cacheprovider --color=no tests/cobalt/test_hitl_x15.py tests/cobalt/test_hitl_web.py tests/cobalt/test_hitl_offline.py` (whole, quoted, `0 failed`), D0, the commit, R1, the `## DEPLOY PROOF` marker reads on the tree, the three suites (BUILD-HUB `## W`), the stop line. No live send in this job.
+
+## NOT IN THIS JOB
+- Running `cobalt hitl x15-send` outside a test; any DM; any `curl`; the X15 tap itself: the gate seat's, after the deploy (`## GATE`).
+- `hitl_approve`, `hitl_deny`, `_hitl_key_sha`, `_hitl_refusal`, `hitl_list`; `src/cobalt/hitl/card.py`, `store.py`, `actions.py`, `executor.py`; `src/cobalt/notify/*`; `src/cobalt/redact/*`; `configs/cobalt/redact.yaml`; `configs/cobalt/taxonomy/tunables.yaml` (`hitl.page_base_url` is read, never edited); `configs/cobalt/notify.yaml`.
+- A HITL row, a `cobalt_hitl_requests` read or write from the probe; a test row in `cobalt_dev` or production.
+- Loading, bootstrapping or kickstarting `com.cobalt.cos`; any `launchctl`; any migration.
+- A red outside these rows: a `## DECISIONS` item, UNPROVEN (L70), with its output; never fixed here.
+
+## READ
+- `docs/30 - Design/F20-FINAL-2026-10-11.md:43` (B), `:81` (X15), `:82` (X20).
+- `src/cobalt/aset/web.py:1383-1544` (the HITL page, `hitl_detail`, the script `:1476-1479`, the two routes).
+- `src/cobalt/hitl/cli.py` whole; `src/cobalt/hitl/card.py:31-53`; `src/cobalt/notify/mattermost.py:13-17`, `:130-170`; `src/cobalt/env.py:60-75`.
+- `tests/cobalt/test_hitl_web.py` whole (the `page` fixture); `tests/cobalt/test_hitl_offline.py` `test_no_approve_symbol_outside_the_two_routes`.
+
+## CHECK ASKS
+- X1 Does `GET /hitl/x15-probe` touch any store, read or write any row, or log the URL? Is it registered before `/hitl/{row_id}`, and does a POST under it reach no store?
+- X2 Is `_hitl_key_script()` the ONE source of the hash read (the tree holds `location.hash` once), used by both the probe and `hitl_detail`, and does the script send the key nowhere (no request, no navigation, no readout text carrying it)?
+- X3 Are `hitl_approve` and `hitl_deny` byte-unchanged, and does approve still refuse an empty or wrong `k` (`test_hitl_web.py` green)?
+- X4 Does `cobalt hitl x15-send` refuse unless `COBALT_ENV=dev`, send exactly one DM through `send_dm`, and never print, log or store the key?
+- X5 Is the readout test run under `node` for k present, absent and empty, and is it red under a mutation of the `seen`/`missing` rule?
+- X6 Is the `## DEPLOY PROOF` smoke line the admitted https form (`DEPLOY-HUB.md:11`), with no `http://127.0.0.1:5010/` read and no `uv run` line?
+
+## DEPLOY PROOF
+- `grep -c -F "def _hitl_key_script" /Users/cobalt/cobalt/src/cobalt/aset/web.py` · before `0` · after `1`
+- `grep -c -F '@app.get("/hitl/x15-probe"' /Users/cobalt/cobalt/src/cobalt/aset/web.py` · before `0` · after `1`
+- `grep -c -F 'add_parser("x15-send"' /Users/cobalt/cobalt/src/cobalt/hitl/cli.py` · before `0` · after `1`
+- the probe page answers after the aset restart · `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/hitl/x15-probe` · exit 0, `200` (before the deploy it answers `422`, by reading `web.py:1451-1452`)
+- the sheet answers after the aset restart · `curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/` · exit 0, `200`
+
+## GATE
+- The deploy runs after 16:00 ET, outside his trading hours.
+- After the deploy, the X15 run is a gate seat's (the cos probe precedent, `prompts/2026-10-19/873-cos-gate-run.md:1`). Its launch line admits exactly `"Bash(COBALT_ENV=dev uv run cobalt hitl x15-send)"`. The seat runs it once and quotes the `X15 SENT …` line; he taps the DM link on his phone.
+- DONE: the page reads `k: seen` → `GATE RESULT: com.cobalt.cos · X15 · OK`. `k: missing` → X15 fails, B's carrier changes (`F20-FINAL-2026-10-11.md:81`).
+
+## RECORDS
+- X15 card — /hitl/x15-probe (no DB, shared hash script, k seen/missing readout), the readout also on /hitl/<id>, dev cobalt hitl x15-send DM; BAND HIGH; deploy after 16:00 — brain 9b07db5a 2026-10-21
+- Drafter `draft-x15-hitl-probe` (prompt 976), 2026-10-21 12:16–12:20 EDT (`date`). Reads only; nothing run, no git write, nothing committed. `git -C /Users/cobalt/cobalt rev-parse --short=8 main` → `41804777` (BASE; the desk resets it at launch). `ls /Users/cobalt/cobalt-wt/` → no `x15-hitl-probe` (fresh). `git diff --stat main --` over `src/cobalt`, `tests/cobalt`, `tunables.yaml`, `notify.yaml`, `jobs.yaml`, the FINAL, `CARD.md`, `BUILD-HUB.md`, `DEPLOY-HUB.md`, `deploy-smoke.sh` → nothing: the on-disk lines are main's.
+- F20 FINAL (`git show main:`): B is `:43` (the prompt's `:42` is the line above, item 4 the card DM); X15 `:81`; X20 `:82`.
+- `web.py` (`git show main:`): `_hitl_store` `:1395`, `_hitl_page` `:1401`, `_hitl_key_sha` `:1412`, `_hitl_refusal` `:1419`, `hitl_list` `:1436`, `hitl_detail` `:1451-1490` (pending branch `:1466`, Approve form `:1468-1471`, the script `:1476-1479`), `hitl_approve` `:1493-1521`, `hitl_deny` `:1524-1544`. `hitl_detail(row_id: int)` takes `/hitl/{row_id}` with no path convertor: a non-int segment matches, then answers 422.
+- `hitl/cli.py`: docstring `:1` `Read only.`, `_list` `:10`, `add_parser` `:22-27`; mounted at `src/cobalt/cli.py:88` (import), `:577` (`hitl_cli.add_parser(sub)`). `hitl/card.py`: `page_base_url` `:31`, `card_text` `:46`. `mattermost.py`: rule `:13-17`, `send_dm` `:130`, `redact` call `:140`. `env.py`: `resolve_env` `:60`, `is_production` `:73`. `redact/guard.py:159`: `_record` (a DB row) runs only on a hit.
+- `tunables.yaml:1038-1039`: `hitl.page_base_url` = `"https://cobalt.taild24291.ts.net"` (his ruling R2232, `PROJECT-LEDGER.md:5131`).
+- RESTARTS (K10), by reading `jobs.yaml`: `aset/web.py` → `com.cobalt.aset` (`imports: [cobalt.aset.__main__, cobalt.aset.web]`, `:99`); `hitl/cli.py` → `com.cobalt.radar` (`imports: [cobalt.cli]`, `:203`; `cli.py:88` imports `cobalt.hitl.cli`); `com.cobalt.cos` (`imports: [cobalt.cos.run]`, `:226`) not reached by either by reading; `tests/` → no resident; `docs/` → DOCS. Not run by the drafter; row R1 is the record.
+- `test_hitl_offline.py` T3: `_VERB = approve|decide|execut` over function names in `hitl/`, `cos/`, `agents/`, `aset/web.py`; the new names `_hitl_key_script`, `_hitl_k_readout`, `hitl_x15_probe`, `_x15_send` pass it.
+- Node: `ls /opt/homebrew/bin/node` → listed; no test on main runs JavaScript (`git grep` over `tests` for a `node` call: none).
+- Admission precedent: `873-cos-gate-run.md:1` admits `"Bash(uv run cobalt cos probe X11)"` and its siblings, one string per item.
+- SMOKE: `DEPLOY-HUB.md:11` admits `Bash(curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/*)`; `ops/desk/deploy-smoke.sh:135-136` maps `http://127.0.0.1:5010/*` only (`curl reads http://127.0.0.1:5010/ only`).
+- Notify: `configs/cobalt/notify.yaml` names one bot, `vault_key: MATTERMOST_CREDS`, `dm_username: dejan_z`, `enabled: true`; `configs/dev` holds no notify file (`git grep` none).
+- RULINGS: `cto-2026-10-18.md:90` R1863 `HIS RULING · APPROVED` (brain, L79). The card: `cto-2026-10-21.md:12` R2285 DESK RECORD (brain, L79).
