@@ -1006,7 +1006,7 @@ tunables:
                 "configs/cobalt/jobs.yaml com.cobalt.cos timeout_s (> this + one poll)"]
 
   - key: cos.poll_interval_s
-    value: 10  # DEFAULT (brain; his word may change it)
+    value: 10  # source: Dejan 2026-10-20 (brain relay)
     unit: duration
     scope: global
     dynamic: false
@@ -1024,7 +1024,7 @@ tunables:
     consumers: ["cobalt.cos (daily session rotation, FINAL C8 — no reader until a value is ruled)"]
 
   - key: hitl.request_ttl_min
-    value: 30  # DEFAULT (brain; his word may change it)
+    value: 30  # source: Dejan 2026-10-20 (brain relay)
     unit: min
     scope: global
     dynamic: false
@@ -1033,10 +1033,10 @@ tunables:
     consumers: ["cobalt.hitl.actions (expires_at = now + this)", "cobalt.heartbeat.probes.hitl"]
 
   # The /hitl page's https base URL for the card link (`<base>/hitl/<id>#k=<key>`).
-  # The tailnet front's name is not in the repo: null until ruled; the card
-  # refuses to send while it is (cobalt.hitl.card.page_base_url).
+  # The value is his (ruled, Dejan, 2026-10-20): https, no trailing slash. The
+  # card refuses to send only if it is null again (cobalt.hitl.card.page_base_url).
   - key: hitl.page_base_url
-    value: null
+    value: "https://cobalt.taild24291.ts.net"
     unit: label
     scope: global
     dynamic: false
