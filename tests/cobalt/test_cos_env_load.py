@@ -18,6 +18,15 @@ from pathlib import Path
 
 import pytest
 
+from cobalt import db
+
+#: The unpatched factory, bound at import. With the Postgres settings present
+#: `dev_db_tx` (`tests/cobalt/conftest.py`) swaps `db.connect` for its guarded
+#: savepoint fake, so `JobStore` would never compose a DSN. These tests are
+#: about the DSN `db._open` composes from the environment; `psycopg.connect`
+#: is a recorder that raises before any socket, so nothing is reached.
+FACTORY = db.connect
+
 DB_NAMES = ("POSTGRES_HOST", "COBALT_DB_USER", "COBALT_DB_PASSWORD")
 CLEARED_PREFIXES = ("PG", "POSTGRES_", "COBALT_")
 DECOY = {
@@ -33,7 +42,6 @@ class Reached(Exception):
 
 
 def _launchd_start(monkeypatch, tmp_path, *, decoy: bool):
-    from cobalt import db
     from cobalt.cos import run
 
     import cobalt.jobs.config  # noqa: F401 — main's local imports, imported before the clear
@@ -69,6 +77,7 @@ def _launchd_start(monkeypatch, tmp_path, *, decoy: bool):
 
     monkeypatch.setattr(run, "refuse_if_agent_alive", refuse_if_agent_alive)
     monkeypatch.setattr(db.psycopg, "connect", connect)
+    monkeypatch.setattr(db, "connect", FACTORY)
     return run, seen, dsns
 
 
