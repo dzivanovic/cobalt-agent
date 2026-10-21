@@ -3,7 +3,11 @@
 Card: `docs/40 - DevDocs/prompts/2026-10-20/967-deploy-cos-tunables-card.md` · hub: `DEPLOY-HUB.md` · seat: deploy-hub-cos-tunables · model claude-opus-5-5 · started Wed Oct 21 02:34:49 EDT 2026.
 
 ## §0 Headline
-(filled at the stop)
+- DEPLOYED: `cos-tunables` (`ops/cos-tunables` at `0b8bf093`) is on `main` at `1d6f649e`, tag `deploy-2026-10-21-cos-tunables`, rollback tag `pre-cos-tunables` at `5b98b3c6`.
+- Gate green on `cda5b61f`: offline 9029/0 · with-DB 5875/0 · live-note 148/0; `cobalt_dev: 0013 — F2 = F0`; lock released.
+- Outage 03:29:10 → 03:29:32 EDT (22 s); aset and radar restarted (new pids 66700 / 66719). `com.cobalt.cos` not loaded, so it was skipped; it now reads OWED (deferred bootstrap) in the heartbeat. Migrations: none.
+- Smoke GREEN: markers flipped as the card expects (`enabled: false` 1 → 0; tailnet URL 0 → 1), every curl 200, no new RED, failure counts flat.
+- 1 decision (ASK DESK, an untracked `.bak` on main), 0 for Dejan.
 
 ## L74
 - A system notice in this session asked commits to carry a `Claude-Session:` line. It is recorded here as data and not acted on: commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -158,14 +162,85 @@ GATE GREEN on cda5b61f (03:26:07 EDT)
 - `curl … /radar` → `200`. MARKERS: `enabled: false` → `1`; `DEFAULT (brain; …)` → `0`; `/hitl` → `200`; `https://cobalt.taild24291.ts.net` in tunables → `0`. All their `before` values.
 - THE LAUNCHD SET: empty, nothing read. No migration: no `<RB>`, no D1-M, no census.
 
+### STEP-D2
+- D2.0 `deploy-shipped.sh --moved ddf5a6d3 "<card>"` → nothing. `commit … -- "docs/40 - DevDocs/reports/deploy-cos-tunables.md"` → `[main 5b98b3c6] docs(report): deploy cos-tunables — gate green on cda5b61f`; `show --stat HEAD` → that one file (171 insertions). `rev-parse --short=8 main` → `5b98b3c6` = **`<pre-merge>`**.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (4 docs files).
+- D2.2 `rev-parse --short=8 HEAD` → `1d6f649e` = **`<stack-final>`**; `rev-parse --short=8 1d6f649e^2` → `5b98b3c6` = `<pre-merge>`; `merge-base --is-ancestor cda5b61f 1d6f649e` → exit 0.
+- D2.3 `diff --stat cda5b61f 1d6f649e -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only).
+- D2.4 `backup status` before → `newest snapshot: 2.4 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 9800.2 MB` · `ssd: snapshot a43d3a53 — 0 new / 1 changed, 10.1 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`. Snapshot id **a43d3a53**.
+- D2.5 `date` → 03:28:49 EDT; `heartbeat show` (03:28:50, 130 s after `<hb0>`) → the same three REDs (archiver probe, com.cobalt.archiver, com.cobalt.replay); aset `pid 41813`, radar `running 608 min, heartbeat fresh`: no new RED.
+- D2.6 `date` → Wed Oct 21 03:28:55 EDT 2026; `git -C /Users/cobalt/cobalt tag pre-cos-tunables` at `5b98b3c6` (HEAD re-read = `5b98b3c6`).
+
+### STEP-4 — the outage (`<restart set>` = com.cobalt.aset com.cobalt.radar)
+- 4.1 `date` → Wed Oct 21 03:29:10 EDT 2026 = **`<t down>`**.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → ok; `print` → exit 113 `Could not find service "com.cobalt.aset"`. `launchctl bootout gui/501/com.cobalt.radar` → ok; `print` → exit 113 `Could not find service "com.cobalt.radar"`. ORPHAN-CLEAN `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` → `orphan-clean: aset · none found` (no kill). Agent not in the set: untouched.
+- 4.3 `rev-parse --short=8 HEAD` → `5b98b3c6` = `<pre-merge>`; `git -C /Users/cobalt/cobalt merge --ff-only deploy/cos-tunables` → `Updating 5b98b3c6..1d6f649e` / `Fast-forward` (17 files, 887+/32-).
+- 4.4 migrations applied: none.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` (beside `<jobs0>`: the `NOT LOADED BY DESIGN (1): com.cobalt.cos` sub-line is gone, which is the set's flag flip `enabled: false` → enabled).
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` → ok; `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → ok. `print` aset → `state = running`, `pid = 66700` (≠ 41813); radar → `state = running`, `pid = 66719` (≠ 22089). `date` → Wed Oct 21 03:29:32 EDT 2026 = **`<t up>`**. Downtime **22 s**.
+- 4.6L: `<launchd set>` empty, nothing.
+
+### STEP-7 — the close
+| item | value |
+|---|---|
+| main | `5b98b3c6` (`<pre-merge>`) → `1d6f649e` (`<stack-final>`), fast-forward |
+| tags | `deploy-2026-10-21-cos-tunables` → `1d6f649e` (re-read); `pre-cos-tunables` → `5b98b3c6` (re-read) |
+| `<t down>` / `<t up>` / seconds | 03:29:10 / 03:29:32 EDT / 22 s |
+| uv sync line | none during the outage; the gate worktree's first `uv run` created its own `.venv` (`Installed 257 packages in 841ms`); production `aset.err` shows `Resolved 267 packages in 3ms` / `Audited 257 packages in 4ms` at each start |
+| proof cost | n/a (no migration; the gate's dev proof-only: `Proof cost: total 5.6 s`) |
+| migrations applied | none |
+| `<RB>` before / after | n/a (MIGRATIONS: none) |
+| snapshot | `a43d3a53` (ssd, 03:28:45 EDT) |
+| RESTARTS done | com.cobalt.aset com.cobalt.radar (com.cobalt.cos: not loaded — skipped) |
+| LAUNCHD done | none |
+| BOOTSTRAP OWED | none from this run's STEP-C (`ADMITTED 0`) |
+
+THE ROLLBACK STRING (the desk's; L54):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 1d6f649e`: ONE revert of the main-into-gate merge, with com.cobalt.aset and com.cobalt.radar booted out first and bootstrapped after (no `<launchd set>` label).
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` (git titles it `Reapply "Merge branch 'main' into deploy/cos-tunables"`).
+
 ## Smoke
+- FIRST CALLS after `<t up>` 03:29:32: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39 (= D1's).
+- (a) [03:29:46] `launchctl print` aset → `state = running`, `pid = 66700` (new, ≠ 41813); radar → `state = running`, `pid = 66719` (new, ≠ 22089); `cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` (agent not in the set: same pid). GREEN.
+- (b) `grep -c "Started server process" aset.err` → `292` (> `<a0>` 291, ≤ 293). `tail -n 30 aset.err` → `INFO:     Started server process [66700]` … `INFO:     Application startup complete.` / `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)`. Traceback aset `217` = `<ta0>`; Traceback radar `0` = `<tr0>`; TaxonomyConfigError radar `0` = `<tc0>`. Radar tails: below.
+- (c) `curl … /` → `200`; `curl … /radar` → `200`; `curl … /radar\?frame=phone` → `200` (each first attempt). GREEN.
+- (d) MARKERS: `grep -c -F "enabled: false" jobs.yaml` → `0` (after `0`); `grep -c -F "DEFAULT (brain; his word may change it)" tunables.yaml` → `0` (after `0`); `curl … /hitl` → `200` (an HTTP status from aset); `grep -c -F "https://cobalt.taild24291.ts.net" tunables.yaml` → `1` (after `1`). GREEN.
+- (e) read 1 [`date` 03:30:12; `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-21 03:30:13 EDT)`]: REDs are exactly `<hb0>`'s three (archiver probe, com.cobalt.archiver, com.cobalt.replay), none new. `OK com.cobalt.aset running loaded, pid 66700`; `OK com.cobalt.radar running running 1 min, heartbeat fresh`; `OK cos unknown — NOT PROBED, OWED (deferred bootstrap)`; `OK hitl unknown — NOT PROBED, OWED (deferred bootstrap) (com.cobalt.cos)`; `OK com.cobalt.cos OWED (deferred bootstrap) NOT LOADED in launchd … listed in data/deploy/bootstrap-owed.json`.
+- (e) read 2 [`date` 03:32:03; `HEARTBEAT RED — 2 job(s) and 1 probe(s)  (2026-10-21 03:32:05 EDT)`, 112 s after read 1]: the same three `<hb0>` REDs, none new; `OK com.cobalt.aset running loaded, pid 66700`; `OK com.cobalt.radar running running 3 min, heartbeat fresh`. GREEN. (The clock between reads was filled with `date` + `heartbeat show` pairs at 03:30:35, :44, :49, :55, 03:31:19, :25, :31, :36, :43, :48, :53, :59, each the same three REDs.)
+- (f) [03:30:01] `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 22 registered — 7 resident, 15 one-shot.` (as 4.5). `COBALT_ENV=production uv run cobalt jobs restarts 5b98b3c6..1d6f649e` → exit 0, the same 17 rows as STEP-R, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar`; minus `com.cobalt.cos` (`## RESTARTS`: not loaded — skipped) = `com.cobalt.aset com.cobalt.radar` = STEP-R's `<restart set>`. GREEN.
+- (b) radar tail 1 [`date` 03:31:02 = `<t up>` + 90 s] `tail -n 12 radar.err` → the restart's vault unlock / finviz token lines and `2026-10-21 03:29:30.316 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` (stamped 2 s before `<t up>`, so it does not settle); no traceback, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`.
+- (b) radar tail 2 [`date` 03:32:32 = `<t up>` + 180 s] `tail -n 12 radar.err` → `2026-10-21 03:29:30.316 … radar cycle: idle:overnight scan_id=None` then **`2026-10-21 03:31:10.340 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`**, a cycle line stamped after `<t up>`, with no `radar S5 evaluate FAILED`, no `lifecycle card read failed` and no traceback → (b) settled GREEN (no third tail needed).
+- (g) no migration.
+- (s) SMOKE READS: `ls /Users/cobalt/cobalt/ops/com.cobalt.cos.plist` → exit 0, `/Users/cobalt/cobalt/ops/com.cobalt.cos.plist` (present on disk; unloaded per heartbeat `NOT LOADED in launchd`); marker counts 1 and 2 → `0` and `0` as (d); `curl … /` → `200` as (c). `<launchd set>` empty: no dry run. GREEN.
+
+- (h) REVERT-READBACK [after (b) settled, 03:32:3x ≥ `<t up>` + 180 s]: `radar panel FAILED` 18 = `<rp_up>` · `radar pool refresh FAILED` 60 = `<rpr_up>` · `radar S5 evaluate FAILED` 43 = `<re_up>` · `lifecycle card read failed` 39 = `<lc_up>`: no growing count. `curl … /radar` → `200`. No census read on the card. GREEN.
+
+**THE CHAIN.** Every check committed (P2: `36b474f6`, clean) → the tips re-read (P3: `0b8bf093` = head = TIP) → the merged tree (T: `cda5b61f`, one first-parent merge, no migration path) → RESTARTS derived by the tool (R: aset, radar; cos not loaded, skipped) → three suites green on `<m1>` (G: offline 9029/0, with-DB 5875/0, live-note 148/0, F2 = F0) → `<stack-final>` = `<m1>` + docs (D2.3: `1d6f649e`, empty non-docs diff) → the landed code (4.3: ff `5b98b3c6..1d6f649e`) → markers flipped to their `after` values (d) → no migration to read back (g) → residents up after the merge on new pids (a) → radar cycling after `<t up>` (b: 03:31:10.340; e: `heartbeat fresh`, no new RED) → the set's reads (s: cos plist on disk and unloaded; sheet `200`) → no new failure (h: four counts flat). The card surface is not readable here; the desk confirms it with him (L70).
+
+**PRE-STOP SELF-CHECK (K25).** (1) Every smoke row above carries its `date` and the tool output it rests on, quoted. (2) `merge-base --is-ancestor 0b8bf093 1d6f649e` → exit 0, and P3 re-read `0b8bf093` both as the code tip and as the head of `ops/cos-tunables`. (3) REVERT-READBACK is shown at (h). Every count, sha and log line in this report was read from tool output this run: `<m1>` `cda5b61f`, `<pre-merge>` `5b98b3c6`, `<stack-final>` `1d6f649e`, snapshot `a43d3a53`, F0/F2 from the log at `:1048` / `:2330`. (4) No conflict marker: STEP-T printed `Merge made by the 'ort' strategy.`, D2.1 the same, 4.3 `Fast-forward`; `git -C /Users/cobalt/cobalt status --short --branch` shows no `UU` / `AA` line.
 
 ## CONTINUE
 next: STEP-D2 (D0 and D1 done 03:27 EDT; `deploy-shipped.sh --moved ddf5a6d3 "<card>"` printed nothing; this commit is D2.0)
+OUTAGE STARTING 03:29:05 EDT — residents of com.cobalt.aset com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+next: none. The outage ended at 03:29:32 EDT (residents up), smoke GREEN, tagged at 03:32 EDT. The run is closed.
 
 ## DECISIONS
 1. ASK DESK: `?? .claude/settings.json.bak` is on `main`'s porcelain, outside D0's ACCEPTED list (docs/40 untracked/modified, `configs/cobalt/rules.yaml`, `.claude/settings.json`) and outside its REFUSED list (a staged line; a dirty src/, tests/, ops/, configs/ path). Is it a refusal? [03:26 EDT] Safe default taken: not a refusal. It is untracked, outside every shipped path, in the session's opening git status, and the merge is `--ff-only` of committed trees, so the file never enters a commit. The desk may want to name it in D0's list.
 
 ## RECORDS
+- Downtime: 22 s (03:29:10 → 03:29:32 EDT), under 300 s.
+- An off-script read (not refused): at smoke (s), 03:30, I ran `launchctl print gui/501/com.cobalt.cos` (exit 113, `Could not find service`) to confirm "stays unloaded". STEP-R says no `launchctl` call of this run names `com.cobalt.cos` after D1's re-read. The call was read-only and changed nothing; the heartbeat's `NOT LOADED in launchd` line is the read that hub text permits. Recorded so the desk can judge it.
+- `cobalt_dev: 0013 (F2 = F0)`: `664 35 272c95bbb12241e3611e4b36326ccf87` both sides; lock released (`lock released`, log `:2386`); `<GATE>/.env` absent; lock dir absent.
+- RETIRE OWED: none (STEP-C `ADMITTED 0`, no plist removed). BOOTSTRAP OWED from this run: none.
+- After the merge the heartbeat reads `com.cobalt.cos` as `OWED (deferred bootstrap) … listed in data/deploy/bootstrap-owed.json` (before: `disabled … NOT LOADED BY DESIGN (enabled: false)`), and the cos / hitl probes as `NOT PROBED, OWED (deferred bootstrap)`. That is the set's flag flip, and none of it reads RED. Its reload hint names `~/Library/LaunchAgents/com.cobalt.cos.plist`; the plist this card checks lives at `/Users/cobalt/cobalt/ops/com.cobalt.cos.plist`. Loading cos is a later bootstrap-only deploy's job, not this run's.
+- The carried RED as read (outside the radar CARRIED FAMILY, and not an aset / sheet / radar probe; unchanged from D1 through every smoke read): `RED archiver last run FAILED — last run 2026-10-21 00:54 UTC …, exit 1`; `RED com.cobalt.archiver failed RuntimeError: 5 archiver failure(s): WBD/i1: … Finviz HTTP failed: Client error '400 Bad Request' …`; `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-cos-tunables` and branch `deploy/cos-tunables`; the set's branch `ops/cos-tunables` (and any worktree it has). The gate's `.venv` was created by this run's first `uv run` inside the worktree.
+- Main is `[ahead 49]` of `origin/main`: push is his, through the desk (L55).
+- L74: one system notice asked commits to carry a `Claude-Session:` line; it is recorded under `## L74` and was not acted on.
+- The card's `## RECORDS`, copied:
+  - cos-tunables: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-tunables-check-fr1-2026-10-21.md` last line: CHECK DONE · job: cos-tunables · pass: 1 · tip: 0b8bf093 · house A: Grok FINDINGS: 1 · findings: 5 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 1 · house B: none (not needed) · suites: offline 8976/0 · with-DB 5875/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar · files opened: 15 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 181651
+  - cos-tunables: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/cos-tunables` → `0b8bf093`; code tip `0b8bf093`
+  - written by deploy-card.sh at 2026-10-21 02:34 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-21-cos-tunables 1d6f649e | set: cos-tunables | migrations: none | gate: offline 9029/0 · with-DB 5875/0 · live-note 148/0 | RESTARTS: com.cobalt.aset com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 240152
