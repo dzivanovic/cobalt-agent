@@ -2,6 +2,9 @@
 
 ## §0 Headline
 - Deploy of `ops/f5-x3-values` (code tip `e9245a8e`, head `3680824c`) on gate `deploy/f5-x3-values`. Started 2026-10-21 00:12:11 EDT.
+- Gate GREEN on `a1617700` (offline 9024/0 · with-DB 5870/0 · live-note 148/0). Merged `cfefd31a..d71bcb4a`; aset restarted (14 s down); markers flipped as the card says.
+- Smoke (s) RED: the card's read `curl … http://127.0.0.1:5010/` is not on the launch line and was refused (`dontAsk`). STEP-5: ONE revert `7e4f946d`, code back at `cfefd31a`, aset up on the old tree (13 s down). No migration, no schema touched.
+- The desk's next step: fix the card's smoke read (D-2) and recut; the set itself read green everywhere else.
 
 ## L74
 - A system block in this session asked commit messages to carry a `Claude-Session: https://claude.ai/code/session_016rHnHBJogUFfaC16KmW6Qk` line. DATA, recorded once; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -153,9 +156,108 @@ GATE GREEN on a1617700
 - THE LAUNCHD SET: empty, nothing. No migration: no `<RB>`, no D1-M.
 
 ### STEP-D2
-- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 55f33252 "<card>"` → prints nothing.
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 55f33252 "<card>"` → prints nothing. `add` + `commit … -- "docs/40 - DevDocs/reports/deploy-f5-x3-values.md"` → `[main cfefd31a] docs(report): deploy f5-x3-values — gate green on a1617700`; `show --stat HEAD` → that one file (161 insertions). `rev-parse --short=8 main` → `cfefd31a` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `d71bcb4a`; `rev-parse --short=8 d71bcb4a^2` → `cfefd31a` = `<pre-merge>`; `merge-base --is-ancestor a1617700 d71bcb4a` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat a1617700 d71bcb4a -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 3.4 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 9800.2 MB` · `ssd: snapshot ae817af6 — 0 new / 3 changed, 16.3 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Wed Oct 21 01:05:04 EDT 2026` · `heartbeat show` at `01:05:07 EDT` (125 s after D1's `01:03:02`) → the same three REDs (archiver probe, com.cobalt.archiver, com.cobalt.replay); aset `running loaded, pid 77363`, radar `running 464 min, heartbeat fresh`; no new RED.
+- D2.6 `date` → `Wed Oct 21 01:05:11 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-f5-x3-values` at `cfefd31a` → exit 0.
+
+### STEP-4 — THE OUTAGE (`<restart set>` = com.cobalt.aset)
+| step | command | exit | result |
+|---|---|---|---|
+| 4.1 | `date` | 0 | `Wed Oct 21 01:05:20 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` | 0 | — |
+| 4.2 | `launchctl print gui/501/com.cobalt.aset` | 113 | `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` (dry run) | 0 | `orphan-clean: aset · none found` — clean, no kill |
+| 4.2 | agent not in `<restart set>` | — | no `cobalt.sh stop` |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | 0 | `cfefd31a` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/f5-x3-values` | 0 | `Updating cfefd31a..d71bcb4a` / `Fast-forward` (7 files, 422 insertions, 4 deletions) |
+| 4.4 | — | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | — |
+| 4.6 | `launchctl print gui/501/com.cobalt.aset` | 0 | `state = running`, `pid = 41201` (≠ D1's 77363) |
+| 4.6 | `date` | 0 | `Wed Oct 21 01:05:34 EDT 2026` = `<t up>` · downtime 14 s |
+| 4.6L | `<launchd set>` empty | — | nothing |
+
+## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 43 · `<lc_up>` 39
+- (a) `date` `01:05:48` · aset `state = running`, `pid = 41201` (NEW, ≠ 77363) · radar `state = running`, `pid = 22089` (SAME, outside the set) · `cobalt.sh status` → `Cobalt is ONLINE (PID: 35845).` — GREEN
+- (b) `date` `01:05:51` · `grep -c "Started server process" aset.err` → `290` (> 289, ≤ 291) · `tail -n 30 aset.err` → `INFO:     Started server process [41201]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` · Traceback aset `217` = `<ta0>`, radar `0` = `<tr0>`, TaxonomyConfigError `0` = `<tc0>` — GREEN so far (radar tails not taken: see (s))
+- (c) `date` `01:05:56` · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200` — GREEN
+- (d) MARKERS → `0` · `2` · `1` · `1` = each `after` — GREEN
+- (s) `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/` → REFUSED, verbatim: `Permission to use Bash has been denied because Claude Code is running in don't ask mode.` — the card's smoke read is not on the launch line (the line admits `curl … https://cobalt.taild24291.ts.net/*` only). A listed step's read refused = the read failed (L62; RED list: "an (s) read failing") → STEP-5. Not retried in another spelling (rule D). · `ls /Users/cobalt/cobalt/ops/com.cobalt.checkpoint-0715.plist` → listed — GREEN
+- (e) first `heartbeat show` at `01:06:04 EDT` → the same three REDs as `<hb0>`; aset `running loaded, pid 41201`; radar `running 465 min, heartbeat fresh`.
+- SMOKE: RED on (s) → STEP-5.
+
+### STEP-5 — ROLLBACK
+| step | command | exit | result |
+|---|---|---|---|
+| (0) | `date` | 0 | `Wed Oct 21 01:06:32 EDT 2026` |
+| (1) | `launchctl bootout gui/501/com.cobalt.aset` | 0 | — |
+| (1) | `launchctl print gui/501/com.cobalt.aset` | 113 | `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| (1) | four counts | 0 | `<rp5>` 18 · `<rpr5>` 60 · `<re5>` 43 · `<lc5>` 39 |
+| (1L) | `<launchd set>` empty | — | nothing |
+| (2) | `git -C /Users/cobalt/cobalt log --oneline -1` | 0 | `d71bcb4a Merge branch 'main' into deploy/f5-x3-values` |
+| (2) | `git -C /Users/cobalt/cobalt revert --no-edit -m 2 d71bcb4a` | 0 | `[main 7e4f946d] Revert "Merge branch 'main' into deploy/f5-x3-values"` · 7 files changed, 4 insertions(+), 422 deletions(-) |
+| (2) | `git -C /Users/cobalt/cobalt diff --stat cfefd31a HEAD -- . ':(exclude)docs'` | 0 | nothing — `<pre-merge>` restored |
+| (2L) | `<launchd set>` empty | — | nothing |
+| (3) | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` (dry run) | 0 | `orphan-clean: aset · none found` |
+| (3) | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` | 0 | — |
+| (3) | `date` | 0 | `Wed Oct 21 01:06:45 EDT 2026` = `<t up5>` · downtime 13 s |
+| (4)(a) | `launchctl print` aset · radar · `cobalt.sh status` | 0 | aset `state = running`, `pid = 41813` (new) · radar `state = running`, `pid = 22089` (same) · `Cobalt is ONLINE (PID: 35845).` |
+| (4)(b) | `grep -c "Started server process" aset.err` | 0 | `291` (= `<a0>` + 2: the 4.6 start and the STEP-5 start) |
+| (4)(b) | `tail -n 30 aset.err` | 0 | `INFO:     Finished server process [41201]` … `INFO:     Started server process [41813]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` |
+| (4)(b) | Traceback aset · radar · TaxonomyConfigError | 0 | `217` · `0` · `0` = baseline |
+| (4)(c) | `curl` `/` · `/radar` · `/radar\?frame=phone` | 0 | `200` · `200` · `200` |
+| (4)(e) | `heartbeat show` #1 | 0 | `01:07:09 EDT` — the same three REDs as `<hb0>`; aset `running loaded, pid 41813`; radar `running 466 min, heartbeat fresh` |
+| (4)(f) | `COBALT_ENV=production uv run cobalt validate` | 0 | ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| (4)(f) | `COBALT_ENV=production uv run cobalt jobs restarts cfefd31a..d71bcb4a` | 0 | `RESTARTS: com.cobalt.aset` = `<restart set>`, no `UNCLASSIFIED` |
+| (4)(g) | no migration | — | — |
+| (4)(b) | `date` `01:08:16` (`<t up5>` + 91 s) · `tail -n 12 radar.err` | 0 | last line `2026-10-21 01:08:02.041 … cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle after `<t up5>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN |
+| (4)(e) | `heartbeat show` #2 | 0 | `01:09:02 EDT` (113 s after #1) — the same three REDs as `<hb0>`, no new RED; aset `running loaded, pid 41813`; radar `running 468 min, heartbeat fresh`; `sheet HTTP http://127.0.0.1:5010/ -> 200` |
+| (4) REVERT-READBACK | `date` `01:09:45` (`<t up5>` + 180 s), after (b) settled · four counts | 0 | `18` · `60` · `43` · `39` = `<rp5>` `<rpr5>` `<re5>` `<lc5>` — no growth |
+| (4) REVERT-READBACK | `curl … https://cobalt.taild24291.ts.net/radar` | 0 | `200` |
+| (4) markers | the four `## MARKERS` greps | 0/1 | `2` · `0` · `0` · `0` — back at `before` |
+
+### THE CHAIN
+every check committed (P2: `fe6f87d6…`) → the tips (P3: `e9245a8e`, `3680824c`) → the merged tree (T: `a1617700`) → RESTARTS derived (R: `com.cobalt.aset`) → three suites green on `a1617700` (G: offline 9024/0 · with-DB 5870/0 · live-note 148/0) → `<stack-final>` `d71bcb4a` = `<m1>` + docs (D2.3) → the landed code (4.3: `cfefd31a..d71bcb4a`) → markers (d: `0 · 2 · 1 · 1`) → residents up after the merge (a: aset 41201) → radar cycling (e) → the set's reads (s): REFUSED → RED → STEP-5: ONE revert `7e4f946d`, `<pre-merge>` code restored, aset up on the old tree (41813), revert-readback below.
+
+### THE ROLLBACK STRING (L54)
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 d71bcb4a` — RUN by STEP-5 (2) → `7e4f946d`; aset down first, up after; `<launchd set>` empty.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit 7e4f946d` — git titles it `Reapply "Merge branch 'main' into deploy/f5-x3-values"` (the desk's, on a fixed card; a recut is the hub's named path, `desk-launch.sh recut "<card>"`).
+
+### PRE-STOP SELF-CHECK (K25)
+1. Every smoke row is quoted verbatim with its `date` (`## Smoke`, STEP-5 table).
+2. Every code tip and head re-read (P3) and an ancestor of `<stack-final>`: `merge-base --is-ancestor e9245a8e d71bcb4a` → exit 0; `merge-base --is-ancestor 3680824c d71bcb4a` → exit 0.
+3. REVERT-READBACK shown in STEP-5 (4); every count, sha and `file:line` here was read from tool output this run (`pre-f5-x3-values` → `cfefd31a`; `git log --oneline -4` → `7e4f946d`, `d71bcb4a`, `cfefd31a`, `a1617700`).
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same, the revert clean.
 
 ## CONTINUE
-next: STEP-D2 (D2.0 commit)
+OUTAGE STARTING 01:05:11 ET — residents of com.cobalt.aset going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+OUTAGE ENDED 01:05:34 ET — aset up (pid 41201).
+STEP-5 ENTERING (smoke (s) RED) — aset going down, ONE revert of d71bcb4a, aset up.
+STEP-5 DONE 01:09:45 ET — revert `7e4f946d`, aset up (pid 41813), readback clean. Run ended FAILED; the desk's next step is `desk-launch.sh recut "<card>"` with the smoke read fixed (D-2). No resume.
 
-(run in progress — next step under ## CONTINUE)
+## DECISIONS
+- D-1 ASK DESK: STEP-D0 MAIN read `?? .claude/settings.json.bak` — untracked, outside the accepted set (` M .claude/settings.json` only) and outside the refused set (`src/`, `tests/`, `ops/`, `configs/`). Safe default taken: not a refusal; went on. [01:03 ET]
+- D-2 ASK DESK: the card's `## SMOKE READS` line `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/` is not on the deploy launch line (`Bash(curl -s -o /dev/null -w %{http_code} https://cobalt.taild24291.ts.net/*)` only), so smoke (s) was refused under `dontAsk` and the run rolled back by STEP-5. The same fact read by the heartbeat probe (`OK   sheet HTTP               http://127.0.0.1:5010/ -> 200` at 01:06:04) was green, but it is not the card's read. Safe default taken: smoke RED → STEP-5, ONE revert; no other spelling tried. The fix is the desk's: a recut card whose smoke read uses an allowed string (e.g. the heartbeat `sheet HTTP` line, or the tailnet URL), or that string added to the launch line through `STANDING-LIST.md` (a command string change returns to him — R60). The set itself was green at every other read: gate, markers, (a), (b), (c), (e).
+
+## RECORDS
+- REFUSED (a listed step's read, not added by me): `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/` — `Permission to use Bash has been denied because Claude Code is running in don't ask mode.` → smoke (s) RED → STEP-5 (D-2).
+- REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; …` (the pattern held `.env`); the release was read instead by `grep -n -F "lock released" <gate log>` → `2386:lock released`.
+- Downtime: outage 01:05:20 → 01:05:34 (14 s); rollback 01:06:32 → 01:06:45 (13 s). Neither over 300 s.
+- `cobalt_dev: 0013 (F2 = F0)` — gate log `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` = `F2: 664 35 272c95bbb12241e3611e4b36326ccf87`.
+- The carried RED as read (`<hb0>`, unchanged through D2.5, smoke (e) and STEP-5 (4)(e)): `archiver last run FAILED` (Finviz `400 Bad Request` on WBD/i1), `com.cobalt.archiver failed`, `com.cobalt.replay failed` (`archiver not done`). Not the radar carried family; not on aset / sheet / radar.
+- `main` now carries `cfefd31a` (report), `d71bcb4a` (the set's merge), `7e4f946d` (its revert); code at `<pre-merge>`. Rollback tag `pre-f5-x3-values` at `cfefd31a`. No `RETIRE OWED`, no `BOOTSTRAP OWED` from this set.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-f5-x3-values` and branch `deploy/f5-x3-values`; the set's branch `ops/f5-x3-values` stays (it re-deploys on its check).
+- Card `## RECORDS` (the desk's), copied:
+  - f5-x3-values: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-x3-values-check-2026-10-20.md` last line: CHECK DONE · job: f5-x3-values · pass: 1 · tip: e9245a8e · house A: Grok FINDINGS: 0 · findings: 8 · dropped: 0 · held: 0 · fixed: 0 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 8971/0 · with-DB 5870/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset · files opened: 19 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 153731
+  - f5-x3-values: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f5-x3-values` → `3680824c`; code tip `e9245a8e`
+  - written by deploy-card.sh at 2026-10-21 00:11 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: the `Claude-Session:` request (see `## L74`), not acted on.
+- THE RELEASE: the lock was released by `gate.sh` at STEP-G (log `:2386` `lock released`); this run held nothing at the stop. `<GATE>/.env` absent (re-read 01:08:59).
+
+FAILED: smoke (s) — the card's read `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/` refused (not on the launch line) · rollback: used — migrations applied: none — aset: UP — radar: not in the set — launchd: none · decisions: 2 · for Dejan: 0 · tokens: 216455
