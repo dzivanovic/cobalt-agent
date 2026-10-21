@@ -1,0 +1,15 @@
+job=cos-tunables
+tip=875d18e6
+on=e69d5ab8
+migration=none
+offline=4902/0
+with_db=5874/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset com.cobalt.cos com.cobalt.radar
+rows=1 of 1 (FR1: FR-1, FR-2; FR-3 deferred by the desk)
+self_check=3 of 3
+decisions=2
+for_dejan=0
+tokens=185819
