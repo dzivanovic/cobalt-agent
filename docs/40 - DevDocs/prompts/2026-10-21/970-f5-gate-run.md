@@ -3,6 +3,8 @@ CLASS: K2
 LADDER: S5-P2 · F5
 RULINGS: 2026-10-18 R1863
 
+LAUNCH MODE (desk, 2026-10-21, the CONTINUE-3 launch): passes 1 and 2 are DONE and recorded in `reports/f5-gate-run-2026-10-21.md` (read it first). Run ONLY `## THIRD PASS`; run no step of `## STEPS`, and write no other section. If that report is missing, the last line is `FAILED: no pass-1 report`.
+
 # Gate run: F5 `com.cobalt.checkpoint-0715/-0745/-0815/-0845` (deferred), before load
 CARD: `prompts/2026-10-20/909-deploy-f5-checkpoints-fr2-card.md` `## LAUNCHD` · items `X2, X3, X4, X5, X6, X7, X10, X12, X13, values card` (`data/deploy/bootstrap-owed.json:5-8`) · definitions `docs/30 - Design/F5-FINAL-2026-10-11.md` `## First-gate experiments` (`:176-187`) · code `src/cobalt/prefill/checkpoints.py` · X2 as redefined 2026-10-21 (R2279).
 WRITE only `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-gate-run-2026-10-21.md` and step 0a's placeholder file, with the Write tool. The dry run writes no note, no row, no DM, no job row; pytest writes only its `tmp_path`; delete nothing.
