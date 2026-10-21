@@ -1,0 +1,15 @@
+job=f5-probe-x4-fix
+tip=b5911aed
+on=9a0fff94
+migration=none
+offline=4951/0
+with_db=5923/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.radar
+rows=5 of 5
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=184062
