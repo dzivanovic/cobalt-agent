@@ -472,17 +472,17 @@ def test_each_item_prints_one_line_and_exits_by_verdict(world, monkeypatch, caps
 # ===========================================================================
 
 
-def test_undoing_rule_d_price_steps_leaves_x6_green(world, monkeypatch, capsys):
-    from decimal import Decimal
-
-    from cobalt.prefill import checkpoint_probe
-
-    monkeypatch.setattr(checkpoint_probe, "PRICE_STEP", Decimal("0"))
-    monkeypatch.setattr(checkpoint_probe, "CHANGE_STEP", Decimal("0"))
+def test_x6_rule_d_steps_the_indices_and_rotates_the_sectors(world, monkeypatch, capsys):
+    """Check A5: rule D's values, not only its phrases. The `cp` SPY is
+    500.00 / 0.10 (= S3); k slots back is k x 0.50 and k x 0.10 lower, and
+    each sector takes the Change of the sector k places on in SECTORS."""
     code, out, _ = _probe(monkeypatch, capsys, "X6")
-    phrases = [{e["phrase"] for e in _sent(r)} for r in world.calls]
     assert code == 0, out
-    assert "1 real fetch + 3 derived by rule D" in out
-    assert "prior_close" in phrases[0]
-    assert {"index_move", "rank_move"} <= phrases[1]
-    raise AssertionError("stayed green with PRICE_STEP and CHANGE_STEP at 0")
+    texts = [[e["text"] for e in _sent(r)] for r in world.calls]
+    assert "SPY 498.50 (-0.20% vs prior close)" in texts[0]
+    assert "SPY 498.50 → 499.00 (+0.50), change -0.20% → -0.10%" in texts[1]
+    assert "SPY 499.50 → 500.00 (+0.50), change +0.00% → +0.10%" in texts[3]
+    top = max(DISTINCT, key=lambda n: float(DISTINCT[n]))
+    rotated = SECTORS[(SECTORS.index(top) - 3) % len(SECTORS)]
+    assert f"leader: {rotated} (+{DISTINCT[top]}%)" in texts[0]
+    assert f"leader: {top} (+{DISTINCT[top]}%)" in texts[3]
