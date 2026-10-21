@@ -24,7 +24,6 @@ TICKERS: none
 - `grep -c -F "cold load 8.67 s from the mainframe log (proxy, not a live cold call)" "/Users/cobalt/cobalt/configs/cobalt/modelaccess.yaml"` · before `0` · after `1`
 
 ## SMOKE READS
-- the sheet answers after the aset restart · `curl -s -o /dev/null -w %{http_code} http://127.0.0.1:5010/` · exit 0, `200`
 - checkpoint plists stay on disk, unloaded · `ls /Users/cobalt/cobalt/ops/com.cobalt.checkpoint-0715.plist` · exit 0, listed
 
 ## RECORDS
