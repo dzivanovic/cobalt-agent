@@ -302,6 +302,12 @@ His words: "1) https://cobalt.taild24291.ts.net/ 2) Yes replace the old agent. T
 - `hitl.page_base_url` = `https://cobalt.taild24291.ts.net` (the trailing slash is dropped because the card builds `<base>/hitl/<id>`). It rides on the 933 fix round as one row, with a read-only GET of `<base>/hitl` from the Mac as proof that the tailnet front serves aset.
 - OWED (brain → him, by day): the status of the Grok news-desk briefing design and of a Scribe and memory-layer redesign, found by a read-only drafter survey. Nothing waits on it.
 
+## RULED 2026-10-20 ~21:30 ET — the analyst desk is redone around his Grokbot (his words, brain session)
+His words, after the brain found the 09-14 trading-desk analyst tribunal (`reports/tribunal-analyst-2026-09-14.md`; design of record `Think/0 - Inbox/tribunal-analyst-2026-09-14/grok/MERGED.md`; his rulings `Memory/areas/cobalt-houses.md:44-47`; S3-P0, not built beyond migration 0006's tables): "we may need to go over that again, and we may need to implement everything I've implemented within a Grok bot already."
+- It is his request (work first; his requests go ahead of tool work). It does not displace the cos cutover that is already running.
+- Input owed from him: what his Grokbot does today (its current instructions, the files and feeds he gives it, one sample morning output). `docs/90 - References/GROKBOT_CHIEF_OF_STAFF_INSTRUCTIONS.md` v1.2 is from 09-13 and may be stale.
+- Then a design refresh (L67): proposal → tribunal, inputs = the 09-14 design of record and his rulings, his Grokbot as built, and today's code (F5 checkpoints, F20 cos, F21 memory, F23). The question for the houses: what of his Grokbot moves into Cobalt as-is, what the 09-14 design still adds, and what is dropped. His rulings of 09-14 stand until the refresh's answer replaces them.
+
 ## PLAN ROWS ADDED 2026-10-09 night (brain judge answers; follow-ups, not his rulings)
 - Launcher card (with the owed "accept held items the fix report names fixed" row): `deploy-card.sh --fix-report "<path>"` per job card emits the CARD.md :48 fix-round SHIPS row, instead of refusing "adds paths outside docs/" (card 156, R771).
 - Archiver defect card (drafter, R685): bounded 429 retry with `Retry-After` inside the L53 bucket, and retried targets named in the run report. First 429s in history, 10-09 20:35–20:41, radar paused, strike not yet deployed (R808).
