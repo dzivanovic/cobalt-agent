@@ -2158,7 +2158,43 @@ check)
     ;;
 deploy)
     need TIP TAG MIGRATIONS SET
-    section SHIPS
+    # card 931 T2: a BOOTSTRAP-ONLY card (DEPLOY-HUB.md 4.6L-BO) is TIP, BRANCH and WORKTREE
+    # `none`, no `## SHIPS`, MIGRATIONS `none`, ONE `## LAUNCHD` line of mode `add`, and a
+    # `## GATE RESULTS` whose column-0 `GATE RESULT:` lines all name that label; it has no code
+    # tip, no SHIPS row and no gate worktree, so those reads are skipped and nothing is cut. A card
+    # holding some of the form is refused; every other check runs as for any deploy card.
+    bonly=""
+    if [ "$tip" = none ] || [ "$branch" = none ] || [ "$wt" = none ]; then
+        bo() { refuse "deploy: bootstrap-only card: $*"; }
+        [ "$tip" = none ] && [ "$branch" = none ] && [ "$wt" = none ] \
+            || bo "TIP, BRANCH and WORKTREE are each 'none' (TIP '$tip', BRANCH '$branch', WORKTREE '$wt')"
+        ! grep -q '^## SHIPS' "$card" || bo "it holds a '## SHIPS' section"
+        [ "$(field MIGRATIONS)" = none ] || bo "MIGRATIONS is '$(field MIGRATIONS)', not 'none'"
+        bl=$(awk '/^## /{on = ($0 == "## LAUNCHD"); next} on && NF' "$card")
+        [ "$(printf '%s\n' "$bl" | sed '/^$/d' | wc -l | tr -d ' ')" -eq 1 ] \
+            || bo "'## LAUNCHD' holds $(printf '%s\n' "$bl" | sed '/^$/d' | wc -l | tr -d ' ') lines, not one"
+        bl=${bl#- }
+        blab=$(printf '%s\n' "$bl" | awk -F ' · ' '{print $1}')
+        [ "$(printf '%s\n' "$bl" | awk -F ' · ' '{print $2}')" = add ] || bo "the '## LAUNCHD' line's mode is not 'add': $bl"
+        grep -q '^## GATE RESULTS' "$card" || bo "no '## GATE RESULTS' section"
+        [ -n "$(awk '/^## /{on = ($0 == "## GATE RESULTS"); next} on' "$card" | grep -F "GATE RESULT: $blab · " | grep -E '^GATE RESULT: [^ ]+ · .+ · .+')" ] \
+            || bo "'## GATE RESULTS' holds no line 'GATE RESULT: $blab · <item> · <result>'"
+        # every GATE RESULT line, bulleted or not: its label exactly $blab, its item and result
+        # not blank (check O2, A1, A2)
+        other=$(awk -v lab="$blab" '
+            { l = $0; sub(/^[[:space:]]*(- )?/, "", l) }
+            l !~ /^GATE RESULT:/ { next }
+            {
+                n = split(substr(l, 14), f, / · /)
+                if (n < 3 || f[2] !~ /[^[:space:]]/ || f[3] !~ /[^[:space:]]/) {
+                    print "is not GATE RESULT: " lab " · <item> · <result>: " $0; exit
+                }
+                if (f[1] != lab) { print "names another label than " lab ": " $0; exit }
+            }' "$card")
+        [ -z "$other" ] || bo "a GATE RESULT line $other"
+        bonly=1
+    fi
+    [ -n "$bonly" ] || section SHIPS
     section MARKERS
     section "SMOKE READS"
     [ "$base" = "main" ] || refuse "incomplete card: a deploy card's BASE is the literal 'main'"
@@ -2169,7 +2205,7 @@ deploy)
     case "$tag" in
         *[!A-Za-z0-9._-]*) refuse "incomplete card: TAG '$tag' is not a plain tag name" ;;
     esac
-    for h in $tip; do
+    [ -n "$bonly" ] || for h in $tip; do
         hex8 TIP "$h"
         commit_exists TIP "$h"
         merges="$merges \"Bash(git -C $WT/$wt merge --no-edit $h)\""
@@ -2198,12 +2234,14 @@ EOF
     fi
     if [ -n "$step" ]; then
         [ "$step" = "STEP-D0" ] || refuse "a deploy resumes at STEP-D0 only, never '$step'"
+        # a bootstrap-only card has no gate worktree, whatever $WT holds (check O1)
+        [ -z "$bonly" ] || refuse "deploy: bootstrap-only card: a resume needs the gate worktree, and this card has none; STEP-D0 is refused"
         [ -d "$WT/$wt" ] || refuse "a resume needs the gate worktree $WT/$wt"
     else
-        [ ! -e "$WT/$wt" ] || refuse "the gate worktree $WT/$wt already exists: a relaunch is 'desk-launch.sh deploy <card> STEP-D0'"
+        [ -n "$bonly" ] || [ ! -e "$WT/$wt" ] || refuse "the gate worktree $WT/$wt already exists: a relaunch is 'desk-launch.sh deploy <card> STEP-D0'"
         [ ! -e "$report" ] || refuse "the deploy report already exists: $report"
         # not on a STEP-D0 resume: P2 and P3, before the gate worktree is added
-        ships_checked
+        [ -n "$bonly" ] || ships_checked
     fi
     lock_free
     lock_dir_free
@@ -2667,7 +2705,7 @@ check)
     note="reminder: one Grok hub at a time (L15); no other house hub running; the check takes the cobalt_dev lock only at its with-DB steps and waits for it there (L76, R20); measure the session at its stop line (desk-context.sh)"
     ;;
 deploy)
-    [ -n "$step" ] || add="git -C $REPO worktree add -b $branch $WT/$wt main"
+    [ -n "$step" ] || [ -n "${bonly:-}" ] || add="git -C $REPO worktree add -b $branch $WT/$wt main"
     dir="$REPO"
     note="reminder: no desk commit on main until the stop line; builds and checks may launch, their with-DB steps wait for the lock the gate holds to its stop line (L76, R20); a hub hung after its first bootout: stop it and at once run this script again with STEP-D0"
     ;;

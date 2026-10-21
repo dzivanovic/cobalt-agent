@@ -2,16 +2,20 @@
 # deploy-outage.sh [--dry-run] "<deploy card>" <restart set> <MERGED|NOT MERGED>
 # The outage of DEPLOY-HUB.md STEP-4 as ONE script (card 20 deploy-steps, row D2), on the labels
 # of <restart set> only (comma-separated: com.cobalt.aset, com.cobalt.radar, com.cobalt.agent, com.cobalt.cos).
+# THE RETIREMENT RECORD (card 931 T1): $REPO/ops/desk/retired-labels, one label per line, a desk
+# commit on main; a line `com.cobalt.agent` = the agent is retired. Absent, every line runs as before.
 # The merge is NOT here: the hub merged before it calls this script and gives the state as the
 # third argument; `NOT MERGED` is refused with no call made.
 #
 # Before anything goes down (each failure: `REFUSED: <reason>` on stderr, exit 1, nothing down):
-#   the arguments (a label outside the three, an empty or repeated label, any other state);
+#   the arguments (a label outside the three, an empty or repeated label, any other state, the
+#   agent when the record names it retired);
 #   the window again: `deploy-step0.sh --window "<card>"` (P1, one implementation);
 #   every label proven restorable (rule E): aset, radar and cos `launchctl print gui/501/<label>` →
 #   `state = running` and `path = ` EXACTLY the plist this script bootstraps
 #   ($REPO/ops/com.cobalt.aset.plist, $REPO/ops/com.cobalt.cos.plist, $LAUNCHAGENTS/com.cobalt.radar.plist), the plist present;
-#   the agent `cobalt.sh status` → ONLINE. The pid of each is recorded as `pid before`.
+#   the agent `cobalt.sh status` → ONLINE. The pid of each is recorded as `pid before`. A retired
+#   agent is never in the set, so it is never stopped, kickstarted or brought up by the trap.
 # Then, in order (STEP-4 4.2, 4.6):
 #   1. each label down: aset / radar `launchctl bootout gui/501/<label>`, then `launchctl print`
 #      must answer `Could not find service` (one more read after DEPLOY_SETTLE seconds); the agent
@@ -24,7 +28,7 @@
 #      while a later label came up) is brought up again by step 2's calls, with the line
 #      `<label> · not running at the final read (<state>): brought up again`; then
 #      `cobalt.sh status` → ONLINE (the agent in the set and not ONLINE here is down again: the
-#      trap kickstarts it).
+#      trap kickstarts it); a retired agent → OFFLINE, and ONLINE or any other answer fails.
 # THE TRAP, on EXIT, INT, TERM, HUP, QUIT, USR1, USR2 and ALRM: every label booted out (or whose
 # bootout began) and not yet up is brought up by step 2's calls (a label found running counts as
 # up); the trap ignores those signals while it restores. When it brought every one up it prints
@@ -36,7 +40,8 @@
 # $WT/.deploy-logs/<JOB>-outage-<timestamp>.log. It never touches a label outside the set.
 # --dry-run: prints every command it WOULD run, in order (`WOULD RUN: …`), runs none (`launchctl`,
 # `cobalt.sh`, `date` never called), writes no log; the arguments are still checked (NOT MERGED is
-# refused); last line `DRY RUN — nothing run: <n> commands`.
+# refused, and so is a retired agent; the final status read is listed either way); last line
+# `DRY RUN — nothing run: <n> commands`.
 # THE DESK'S DRY RUN, typed once before the first real use:
 #   sh /Users/cobalt/cobalt/ops/desk/deploy-outage.sh --dry-run "<deploy card>" com.cobalt.aset,com.cobalt.radar MERGED
 #
@@ -84,8 +89,13 @@ esac
 case "$set_arg" in
     ""|,*|*,|*,,*) refuse "the restart set '$set_arg' is not <label>[,<label>…]" ;;
 esac
+agent_retired=""
+! grep -q -x -F com.cobalt.agent "$REPO/ops/desk/retired-labels" 2>/dev/null || agent_retired=1
 labels=""
 for l in $(printf '%s' "$set_arg" | tr ',' ' '); do
+    if [ "$l" = com.cobalt.agent ] && [ -n "$agent_retired" ]; then
+        refuse "com.cobalt.agent is retired; a retired label is never restarted; nothing is down"
+    fi
     case "$l" in
         com.cobalt.aset|com.cobalt.radar|com.cobalt.agent|com.cobalt.cos) ;;
         *) refuse "'$l' is not a resident this script restores (com.cobalt.aset, com.cobalt.radar, com.cobalt.agent, com.cobalt.cos)" ;;
@@ -428,7 +438,14 @@ for l in $labels; do
 done
 cur=com.cobalt.agent
 agent_pid
-if [ -z "$apid" ]; then
+if [ -n "$agent_retired" ]; then
+    # the retired agent is read, never brought up: OFFLINE passes, anything else fails
+    [ -z "$apid" ] || fail com.cobalt.agent "retired but ONLINE: $(first "$out")"
+    case "$out" in
+        *"Cobalt is OFFLINE."*) ;;
+        *) fail com.cobalt.agent "retired, and cobalt.sh status is neither OFFLINE nor ONLINE: $(first "$out")" ;;
+    esac
+elif [ -z "$apid" ]; then
     # the agent of the set dropped after its start: down again, so the trap kickstarts it
     case " $labels " in
         *" com.cobalt.agent "*) down="${down:+$down }com.cobalt.agent" ;;

@@ -606,3 +606,80 @@ def test_k1_the_three_residents_print_the_same_lines(box):
         f"WOULD RUN: {sh} status",
         "DRY RUN — nothing run: 21 commands",
     ]
+
+
+# ---- T1b: a retired agent is never restarted (card 2026-10-20/931) -----------------------------
+
+
+def retire_agent(box: Box) -> None:
+    """The retirement record, in the tmp repo only, and the agent OFFLINE."""
+    (box.repo / "ops" / "desk").mkdir(parents=True, exist_ok=True)
+    (box.repo / "ops" / "desk" / "retired-labels").write_text(f"{AGENT}\n")
+    st = box.launchd()
+    st["agent"] = None
+    box.save(st)
+
+
+def test_t1_a_retired_agent_offline_passes_the_final_read(box):
+    """RED on BASE: FAILED OUTAGE: com.cobalt.agent — cobalt.sh status is not ONLINE."""
+    retire_agent(box)
+    done = box.run(labels=ASET)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "OUTAGE DONE 0s"
+    assert ["kickstart", f"gui/501/{AGENT}"] not in box.launchctl_calls()
+    calls = [(c["name"], c["argv"]) for c in box.calls_list()]
+    assert calls[-1] == ("cobalt.sh", ["status"])
+    assert ("cobalt.sh", ["stop"]) not in calls
+    assert box.launchd()["agent"] is None
+
+
+def test_t1_a_retired_agent_in_the_set_is_refused_before_anything_goes_down(box):
+    """RED on BASE: the outage runs (the agent is stopped and kickstarted)."""
+    retire_agent(box)
+    st = box.launchd()
+    st["agent"] = 503
+    box.save(st)
+    done = box.run(labels=f"{ASET},{AGENT}")
+    assert done.returncode == 1, done.stdout + done.stderr
+    assert done.stderr == (
+        f"REFUSED: {AGENT} is retired; a retired label is never restarted; nothing is down\n"
+    )
+    assert box.calls_list() == []
+    dry = box.run(f"{ASET},{AGENT}", "MERGED", "--dry-run")
+    assert dry.returncode == 1 and f"{AGENT} is retired" in dry.stderr, dry.stdout + dry.stderr
+    assert box.calls_list() == []
+
+
+def test_t1_a_retired_agent_online_fails_the_final_read(box):
+    """RED on BASE: the outage ends OUTAGE DONE (ONLINE passes)."""
+    retire_agent(box)
+    st = box.launchd()
+    st["agent"] = 503
+    box.save(st)
+    done = box.run(labels=ASET)
+    assert done.returncode == 1, done.stdout + done.stderr
+    last = last_line(done)
+    assert last.startswith(f"FAILED OUTAGE: {AGENT} — retired but ONLINE: "), last
+    assert last.endswith(f"· residents: up: {ASET} · down: none"), last
+    assert ["kickstart", f"gui/501/{AGENT}"] not in box.launchctl_calls()
+
+
+def test_t1_a_retired_agent_whose_status_is_neither_fails_the_final_read(box):
+    """RED on BASE: the BASE message is `cobalt.sh status is not ONLINE`, not the retired one."""
+    retire_agent(box)
+    stub(box.repo / "cobalt.sh", "cobalt.sh", 'print("cobalt.sh: no such pid file")\nsys.exit(2)\n')
+    done = box.run(labels=ASET)
+    assert done.returncode == 1, done.stdout + done.stderr
+    last = last_line(done)
+    assert last.startswith(f"FAILED OUTAGE: {AGENT} — retired, and cobalt.sh status is neither"), last
+    assert ["kickstart", f"gui/501/{AGENT}"] not in box.launchctl_calls()
+
+
+def test_t1_dry_run_with_a_retired_agent_still_reads_the_status(box):
+    """CONTROL, green on BASE and after: the dry run's commands are unchanged by the record."""
+    plain = box.run(ASET, "MERGED", "--dry-run")
+    retire_agent(box)
+    dry = box.run(ASET, "MERGED", "--dry-run")
+    assert dry.returncode == 0, dry.stdout + dry.stderr
+    assert dry.stdout == plain.stdout
+    assert dry.stdout.splitlines()[-2] == f"WOULD RUN: {box.repo / 'cobalt.sh'} status"

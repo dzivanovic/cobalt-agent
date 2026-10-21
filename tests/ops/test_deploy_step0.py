@@ -1042,3 +1042,52 @@ def test_k2_the_three_residents_rows_are_unchanged(desk):
         ) in lines
     rules = [r for r in rule_column(done) if r != "P8 census com.cobalt.cos"]
     assert rules == list(K2_RULES_WITHOUT_COS)
+
+
+# ---- T1a: a retired agent is recorded retired, never printed (card 2026-10-20/931) -------------
+
+AGENT_PRINT = ["print", "gui/501/com.cobalt.agent"]
+
+
+def retire_agent(desk: Desk) -> None:
+    """The retirement record, in the tmp repo only: one label per line."""
+    (desk.repo / "ops" / "desk").mkdir(parents=True, exist_ok=True)
+    (desk.repo / "ops" / "desk" / "retired-labels").write_text("com.cobalt.agent\n")
+
+
+def test_t1_a_retired_agent_is_recorded_retired_with_no_print(desk):
+    """RED on BASE: the agent row reads `pid 4103 · state running` and its print is logged."""
+    retire_agent(desk)
+    done = desk.run()
+    assert done.returncode == 0, done.stdout + done.stderr
+    (row,) = [ln for ln in done.stdout.splitlines() if ln.startswith("P8 census com.cobalt.agent · ")]
+    assert row.endswith(" · 0 · retired (recorded)"), row
+    assert AGENT_PRINT not in desk.calls_of("launchctl")
+    assert ["print", "gui/501/com.cobalt.aset"] in desk.calls_of("launchctl")
+    assert last_line(done) == "STEP-0 OK — window: (iii)"
+
+
+def test_t1_dry_run_names_no_print_of_a_retired_agent(desk):
+    """RED on BASE: WOULD RUN: launchctl print gui/501/com.cobalt.agent is listed."""
+    for name in ("git", "curl", "uv"):
+        stub(desk.bin, name, PLAIN)
+    retire_agent(desk)
+    done = desk.run("--dry-run")
+    assert done.returncode == 0, done.stdout + done.stderr
+    would = [ln for ln in done.stdout.splitlines() if ln.startswith("WOULD RUN: ")]
+    assert "WOULD RUN: launchctl print gui/501/com.cobalt.agent" not in would
+    radar = "WOULD RUN: launchctl print gui/501/com.cobalt.radar"
+    assert would[would.index(radar) + 1] == "WOULD RUN: launchctl print gui/501/com.cobalt.cos"
+
+
+def test_t1_a_record_without_the_agent_line_changes_nothing(desk):
+    """CONTROL, green on BASE and after: a record naming another label leaves the agent row."""
+    (desk.repo / "ops" / "desk").mkdir(parents=True, exist_ok=True)
+    (desk.repo / "ops" / "desk" / "retired-labels").write_text("com.cobalt.other\n")
+    done = desk.run()
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert (
+        "P8 census com.cobalt.agent · launchctl print gui/501/com.cobalt.agent"
+        " · 0 · pid 4103 · state running (recorded)"
+    ) in done.stdout.splitlines()
+    assert AGENT_PRINT in desk.calls_of("launchctl")
