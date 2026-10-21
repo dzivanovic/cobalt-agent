@@ -296,6 +296,15 @@ def test_the_shipped_cos_rows():
                 and rows[gap].status.value == "proposed"), (gap, value)
 
 
+def test_the_shipped_hitl_page_base_url():
+    from cobalt.taxonomy.loader import load_tunables
+
+    row = load_tunables().by_key["hitl.page_base_url"]
+    assert row.value == "https://cobalt.taild24291.ts.net", row.value  # his ruled value (R2232)
+    assert not row.value.endswith("/")
+    assert row.status.value == "proposed"
+
+
 # ---------------------------------------------------------------------
 # C4d — the commands, read and dry-run only (L10)
 # ---------------------------------------------------------------------
