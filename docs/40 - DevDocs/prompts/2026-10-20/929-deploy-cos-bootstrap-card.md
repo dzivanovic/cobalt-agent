@@ -6,7 +6,7 @@ BASE: main
 TIP: none
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-cos-bootstrap.md
 RULINGS: 2026-10-11 R1112, 2026-10-18 R1854, 2026-10-20 R2232
-TAG: «FILL: deploy-<run date>-cos-bootstrap»
+TAG: deploy-2026-10-21-cos-bootstrap
 MIGRATIONS: none
 SET: cos
 TICKERS: none
@@ -17,7 +17,7 @@ com.cobalt.cos · add · prompts/2026-10-18/730-f20-card.md:C4a · dry run: none
 
 ## GATE RESULTS
 GATE RESULT: com.cobalt.cos · D14 · his — row R2232 (2026-10-20 ~20:30 ET): Mattermost listener MOVED to com.cobalt.cos; scheduler/morning briefing RETIRED (unused); Scribe RETIRED (redevelop later); memory layer RETIRED (redevelop on F21); he said "Yes replace the old agent" (words: reports/cto-2026-10-20-words.md R2232)
-GATE RESULT: com.cobalt.cos · agent stopped · «FILL: his — retire yes/no, from his ruling's R row»
+GATE RESULT: com.cobalt.cos · agent stopped · YES — his row R2232 (retire yes); cobalt.sh stop 2026-10-21 16:00 ET, bootout gui/501/com.cobalt.agent and rm of the installed ~/Library/LaunchAgents/com.cobalt.agent.plist typed by him ~16:1x ET; reads: cobalt.sh status OFFLINE, launchctl print "Could not find service", plist ls "No such file" (desk, 17:10 ET); ops/desk/retired-labels holds com.cobalt.agent (brain 9b07db5a)
 GATE RESULT: com.cobalt.cos · X1 · OK (shell, not under a LaunchAgent) — the LaunchAgent login is proven by this run's smoke (s)
 GATE RESULT: com.cobalt.cos · X13 · PASS — answer line OK; the settings warning recorded (brain, R2197)
 GATE RESULT: com.cobalt.cos · X2 · OK — no process, file, contents or tool call (0 allowlisted tool calls; turn ok=True)
@@ -26,7 +26,7 @@ GATE RESULT: com.cobalt.cos · X3 · OK — cap: turn stopped at max turns; kill
 GATE RESULT: com.cobalt.cos · X14 · OK — ok 20/20 · max num_turns 6 · max seconds 7.4 (caps: max_turns 30, timeout 900s)
 GATE RESULT: com.cobalt.cos · X11 · OK — init tools 7, all mcp__cobalt__* allowlisted (planted server started: no)
 GATE RESULT: com.cobalt.cos · X12 · OK — neither dummy in the child
-GATE RESULT: com.cobalt.cos · X15 · «FILL: his — his phone result row»
+GATE RESULT: X15 · DEFERRED by his word ("Ok so we can try after it deploys", 2026-10-21, brain relay) — his four legs run after the 994 port deploys; a lost k only refuses approvals (fails safe, F20-FINAL :43); brain 9b07db5a R2322
 GATE RESULT: com.cobalt.cos · X17 · OK — sonnet ok 20/20 · opus ok 20/20
 GATE RESULT: com.cobalt.cos · X18 · OK — median 28.5 s; the max, 641 s, was F5's migration deploy (0029, card 909)
 GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
