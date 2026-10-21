@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/x15-hitl-probe-port
 WORKTREE: x15-hitl-probe-port
 BASE: fb9c8963
-TIP:
+TIP: 304d5f3b
 REPORT: /Users/cobalt/cobalt-wt/x15-hitl-probe-port/docs/40 - DevDocs/reports/x15-hitl-probe-port-build-2026-10-21.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/x15-hitl-probe-port-check-2026-10-21.md
 HOUSE B: as needed
