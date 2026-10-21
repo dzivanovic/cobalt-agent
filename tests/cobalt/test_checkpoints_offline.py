@@ -338,6 +338,22 @@ class TestNumbers:
         assert url == "https://elite.finviz.com/export/groups"
         assert params == {"g": "sector", "v": "140", "auth": "constructed-token"}
 
+    def test_keep_gets_the_body_before_the_parse(self, groups_http):
+        """f5-probe G1: `keep` sees the body as sent, before the parse; the
+        result is the no-`keep` call's."""
+        import asyncio
+
+        from cobalt.prefill.checkpoints import fetch_groups
+
+        kept: list = []
+        with_keep = asyncio.run(fetch_groups(_cfg().groups, keep=kept.append))
+        assert kept == [groups_http.body]
+        assert with_keep == asyncio.run(fetch_groups(_cfg().groups))
+        groups_http.body = "\n".join(line for line in groups_csv().split("\n") if '"Utilities"' not in line)
+        with pytest.raises(PrefillFetchError, match="11 sector"):
+            asyncio.run(fetch_groups(_cfg().groups, keep=kept.append))
+        assert kept[-1] == groups_http.body, "a body the parse refuses still reached keep first"
+
     def test_ten_row_body_is_a_degraded_groups_source(self, groups_http):
         import asyncio
 
