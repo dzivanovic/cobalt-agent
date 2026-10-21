@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/x15-hitl-probe
 WORKTREE: x15-hitl-probe
 BASE: 41804777
-TIP:
+TIP: ca39b027
 REPORT: /Users/cobalt/cobalt-wt/x15-hitl-probe/docs/40 - DevDocs/reports/x15-hitl-probe-build-2026-10-21.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/x15-hitl-probe-check-2026-10-21.md
 HOUSE B: as needed
