@@ -69,6 +69,3 @@ Created (card 731 K2–K8): the module, its store and its command.
 
 ## 2026-10-20 — f5-checkpoints-fr1
 Check O1: `run_checkpoint` now refuses a `checkpoints.route` that names an embeddings route (card 469's `EmbedRoute`) with `PrefillConfigError`, before any fetch.
-
-## 2026-10-20 — f5-x3-values
-`timeout_s` and `max_output_tokens` on `checkpoint.narrative` are measured by X3, superseding the UNMEASURED sentence in the config block.

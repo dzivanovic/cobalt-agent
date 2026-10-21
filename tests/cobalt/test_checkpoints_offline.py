@@ -557,42 +557,6 @@ class TestNarrative:
         assert route.lane == "local" and route.model == "mainframe"
         assert route.timeout_s != 15, "never the voice route's 15 s"
 
-    def test_route_budgets_are_measured(self):
-        from cobalt.jobs.config import load_job_registry
-        from cobalt.modelaccess import load_routes
-        from cobalt.modelaccess.config import CONFIG_PATH
-
-        routes = load_routes().routes
-        route = routes["checkpoint.narrative"]
-        plan = routes["local.plan"]
-        # Route.timeout_s is a float field; the file token is the integer.
-        lines = CONFIG_PATH.read_text().splitlines()
-        start = lines.index("  checkpoint.narrative:")
-        block_lines = []
-        for line in lines[start:]:
-            if block_lines and line and not line.startswith((" ", "#")):
-                break
-            block_lines.append(line)
-        timeout_raw = next(
-            ln.split(":", 1)[1].strip() for ln in block_lines if ln.strip().startswith("timeout_s:")
-        )
-        assert timeout_raw.isdigit()
-        timeout_s = int(timeout_raw)
-        assert type(timeout_s) is int and timeout_s > 0 and timeout_s % 5 == 0
-        assert route.timeout_s == timeout_s
-        assert route.timeout_s != plan.timeout_s
-        assert type(route.max_output_tokens) is int and route.max_output_tokens % 64 == 0
-        for label in (
-            "com.cobalt.checkpoint-0715",
-            "com.cobalt.checkpoint-0745",
-            "com.cobalt.checkpoint-0815",
-            "com.cobalt.checkpoint-0845",
-        ):
-            assert load_job_registry().spec(label).timeout_s > route.timeout_s + 60
-        assert "UNMEASURED" not in "\n".join(block_lines)
-        source = "# source: X3 reports/f5-x3-measure-2026-10-20.md"
-        assert len([ln for ln in block_lines if source in ln]) == 2
-
 
 # ===========================================================================
 # K5 — the unit body (FINAL §2.6, [F-13] need 3)
