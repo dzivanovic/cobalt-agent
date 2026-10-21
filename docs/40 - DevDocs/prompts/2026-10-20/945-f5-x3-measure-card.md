@@ -4,7 +4,7 @@ CLASS: K2
 INSTALL: none
 BRANCH: ops/f5-x3-measure
 WORKTREE: f5-x3-measure
-BASE: 5347f90e
+BASE: de976722
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f5-x3-measure/docs/40 - DevDocs/reports/f5-x3-measure-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-x3-measure-check-2026-10-20.md
