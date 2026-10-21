@@ -5,7 +5,7 @@ WORKTREE: none
 BASE: main
 TIP: none
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-cos-bootstrap.md
-RULINGS: 2026-10-11 R1112, 2026-10-18 R1854, «FILL: his D14 / agent-stopped ruling row, <date> R<n>»
+RULINGS: 2026-10-11 R1112, 2026-10-18 R1854, 2026-10-20 R2232
 TAG: «FILL: deploy-<run date>-cos-bootstrap»
 MIGRATIONS: none
 SET: cos
@@ -16,7 +16,7 @@ WAITS: cos-cutover-tooling DEPLOYED, cos-tunables DEPLOYED, agent retired, hitl.
 com.cobalt.cos · add · prompts/2026-10-18/730-f20-card.md:C4a · dry run: none
 
 ## GATE RESULTS
-GATE RESULT: com.cobalt.cos · D14 · «FILL: his — the D14 checklist, from his ruling's R row»
+GATE RESULT: com.cobalt.cos · D14 · his — row R2232 (2026-10-20 ~20:30 ET): Mattermost listener MOVED to com.cobalt.cos; scheduler/morning briefing RETIRED (unused); Scribe RETIRED (redevelop later); memory layer RETIRED (redevelop on F21); he said "Yes replace the old agent" (words: reports/cto-2026-10-20-words.md R2232)
 GATE RESULT: com.cobalt.cos · agent stopped · «FILL: his — retire yes/no, from his ruling's R row»
 GATE RESULT: com.cobalt.cos · X1 · OK (shell, not under a LaunchAgent) — the LaunchAgent login is proven by this run's smoke (s)
 GATE RESULT: com.cobalt.cos · X13 · PASS — answer line OK; the settings warning recorded (brain, R2197)
