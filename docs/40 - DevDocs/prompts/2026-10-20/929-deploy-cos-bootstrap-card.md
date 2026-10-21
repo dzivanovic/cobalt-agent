@@ -26,7 +26,7 @@ GATE RESULT: com.cobalt.cos · X3 · OK — cap: turn stopped at max turns; kill
 GATE RESULT: com.cobalt.cos · X14 · OK — ok 20/20 · max num_turns 6 · max seconds 7.4 (caps: max_turns 30, timeout 900s)
 GATE RESULT: com.cobalt.cos · X11 · OK — init tools 7, all mcp__cobalt__* allowlisted (planted server started: no)
 GATE RESULT: com.cobalt.cos · X12 · OK — neither dummy in the child
-GATE RESULT: X15 · DEFERRED by his word ("Ok so we can try after it deploys", 2026-10-21, brain relay) — his four legs run after the 994 port deploys; a lost k only refuses approvals (fails safe, F20-FINAL :43); brain 9b07db5a R2322
+GATE RESULT: com.cobalt.cos · X15 · DEFERRED by his word ("Ok so we can try after it deploys", 2026-10-21, brain relay) — his four legs run after the 994 port deploys; a lost k only refuses approvals (fails safe, F20-FINAL :43); brain 9b07db5a R2322
 GATE RESULT: com.cobalt.cos · X17 · OK — sonnet ok 20/20 · opus ok 20/20
 GATE RESULT: com.cobalt.cos · X18 · OK — median 28.5 s; the max, 641 s, was F5's migration deploy (0029, card 909)
 GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
