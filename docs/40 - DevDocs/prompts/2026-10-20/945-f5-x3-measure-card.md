@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/f5-x3-measure
 WORKTREE: f5-x3-measure
 BASE: de976722
-TIP:
+TIP: de976722
 REPORT: /Users/cobalt/cobalt-wt/f5-x3-measure/docs/40 - DevDocs/reports/f5-x3-measure-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-x3-measure-check-2026-10-20.md
 HOUSE B: as needed
