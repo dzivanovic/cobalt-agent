@@ -62,7 +62,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 import httpx
 from loguru import logger
@@ -221,9 +221,11 @@ def parse_groups(text: str) -> dict[str, dict[str, str]]:
     return out
 
 
-async def fetch_groups(groups) -> dict[str, dict[str, str]]:
+async def fetch_groups(groups, *, keep: Optional[Callable[[str], None]] = None) -> dict[str, dict[str, str]]:
     """ONE Groups GET (`g=sector&v=140`). The token and the scrub are
-    aset.prefill's, as `prefill/market.py` uses them (one Finviz-auth path)."""
+    aset.prefill's, as `prefill/market.py` uses them (one Finviz-auth path).
+    `keep` gets the body as sent, before the parse: the probe's X6 only
+    (f5-probe G1); the run path passes none."""
     token = await resolve_token()
     params = {"g": groups.g, "v": str(groups.v), "auth": token}
     try:
@@ -232,15 +234,19 @@ async def fetch_groups(groups) -> dict[str, dict[str, str]]:
             response.raise_for_status()
     except Exception as e:
         raise PrefillFetchError(f"Finviz groups fetch failed: {scrub(str(e))}") from e
+    if keep is not None:
+        keep(response.text)
     return parse_groups(response.text)
 
 
-def fetch_figures(cfg: CheckpointsConfig) -> tuple[dict, dict[str, str]]:
-    """Both sources, each failing alone. Returns (figures, source_status)."""
+def fetch_figures(cfg: CheckpointsConfig, *, keep: Optional[Callable[[str], None]] = None
+                  ) -> tuple[dict, dict[str, str]]:
+    """Both sources, each failing alone. Returns (figures, source_status).
+    `keep` is passed on to `fetch_groups` (f5-probe G1)."""
 
     async def _both():
-        return await asyncio.gather(fetch_market_table(tuple(cfg.indices)), fetch_groups(cfg.groups),
-                                    return_exceptions=True)
+        groups = fetch_groups(cfg.groups) if keep is None else fetch_groups(cfg.groups, keep=keep)
+        return await asyncio.gather(fetch_market_table(tuple(cfg.indices)), groups, return_exceptions=True)
 
     market, sectors = asyncio.run(_both())
     figures: dict[str, Any] = {"indices": None, "sectors": None}
@@ -834,6 +840,15 @@ def cmd_run(args: argparse.Namespace) -> None:
             raise CheckpointNotClean(result.summary())
 
 
+def cmd_probe(args: argparse.Namespace) -> None:
+    from cobalt.prefill.checkpoint_probe import main
+
+    raise SystemExit(main(args.item, keep_groups=args.keep_groups))
+
+
+PROBE_ITEMS = ("X4", "X5", "X6", "X7", "X10", "X13")
+
+
 def add_parser(sub) -> None:
     checkpoint = sub.add_parser("checkpoint", help="The 07:15-08:45 market-context checkpoints (F5).")
     csub = checkpoint.add_subparsers(dest="command", required=True)
@@ -842,6 +857,13 @@ def add_parser(sub) -> None:
     run.add_argument("--dry-run", action="store_true",
                      help="Ignore the slot window; show the diff; write nothing (note, rows, DM).")
     run.set_defaults(func=cmd_run)
+    probe = csub.add_parser("probe", help="Run one F5 first-gate item in dev (prints one "
+                                          "PROBE <item> OK|FAIL|NOT RUN line; checkpoint_probe.py).")
+    probe.add_argument("item", choices=PROBE_ITEMS)
+    probe.add_argument("--keep-groups", metavar="PATH",
+                       help="X6 only: keep the real Groups body (header and 11 rows) at PATH, a new file "
+                            "under /Users/cobalt/cobalt-wt/.f5-probe/.")
+    probe.set_defaults(func=cmd_probe)
 
 
 __all__ = [

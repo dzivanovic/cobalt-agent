@@ -149,3 +149,6 @@ F20 C4d: `from cobalt.cos import cli as cos_cli`, `from cobalt.hitl import cli a
 
 ## 2026-10-19 — cos-probe-1019
 `cos_cli.add_parser(sub)` now also mounts `cobalt cos probe <item>` (`item` one of X2, X10, X11, X12, X3, X14, X17; anything else exits 2), after `cobalt cos run`, which is unchanged. The handler imports `cobalt.cos.probe` inside the command (card 877; `cos/README.md`).
+
+## 2026-10-21 — f5-probe
+`checkpoints_cli.add_parser(sub)` now also mounts `cobalt checkpoint probe <item> [--keep-groups PATH]` (`item` one of X4, X5, X6, X7, X10, X13; anything else exits 2), after `cobalt checkpoint run`, which is unchanged. The handler imports `cobalt.prefill.checkpoint_probe` inside the command and exits with its code: 0 OK, 1 FAIL, 3 NOT RUN (card 973; `prefill/checkpoints.md`).
