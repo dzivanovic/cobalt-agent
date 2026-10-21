@@ -143,7 +143,11 @@ def cos(now: datetime, *, enabled: bool | None = None, job_store=None, cos_store
         return Probe("cos", True, "unknown — NOT PROBED, registry enabled: false")
     from cobalt.jobs import watchdog
 
-    if COS_LABEL in watchdog.bootstrap_owed():
+    try:
+        owed = watchdog.bootstrap_owed()
+    except watchdog.BootstrapOwedError as e:
+        return Probe("cos", False, f"bootstrap-owed.json unreadable: {e}")
+    if COS_LABEL in owed:
         return Probe("cos", True, "unknown — NOT PROBED, OWED (deferred bootstrap)")
     from cobalt.jobs.config import load_job_registry
 
@@ -178,7 +182,11 @@ def hitl(now: datetime, *, enabled: bool | None = None, store=None) -> Probe:
         return Probe("hitl", True, "unknown — NOT PROBED, registry enabled: false (com.cobalt.cos)")
     from cobalt.jobs import watchdog
 
-    if COS_LABEL in watchdog.bootstrap_owed():
+    try:
+        owed = watchdog.bootstrap_owed()
+    except watchdog.BootstrapOwedError as e:
+        return Probe("hitl", False, f"bootstrap-owed.json unreadable: {e}")
+    if COS_LABEL in owed:
         return Probe("hitl", True, "unknown — NOT PROBED, OWED (deferred bootstrap) (com.cobalt.cos)")
     if store is None:
         from cobalt.hitl.store import HitlStore

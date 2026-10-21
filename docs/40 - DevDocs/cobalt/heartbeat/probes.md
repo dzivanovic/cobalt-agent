@@ -150,3 +150,6 @@ F20 C4b (F-27): `cos(now)` — RED on a missing or stale `com.cobalt.cos` heartb
 
 ## 2026-10-20 — cos-tunables check
 Two tests pin P1 (check O2, O4): `test_an_unreadable_owed_file_raises_through_both_probes` and `test_the_runner_path_reads_the_real_row_then_the_owed_file` (the `enabled=None` call the runner makes). No code change.
+
+## 2026-10-20 — cos-tunables fr1
+An unreadable or malformed owed file (`BootstrapOwedError`) now makes `cos` and `hitl` RED, `ok=False` with detail `bootstrap-owed.json unreadable: <error>`, never a raise out of `take_beat`, so the beat's other probes still land (check O1). This supersedes the "`BootstrapOwedError` is not caught" line of the cos-tunables section; `test_an_unreadable_owed_file_is_a_red_probe_never_a_raise` replaces the raise test.
