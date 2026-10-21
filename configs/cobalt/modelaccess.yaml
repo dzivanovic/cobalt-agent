@@ -74,9 +74,9 @@ routes:
     model: mainframe
     no_think: true
     think_policy: forbid_nonempty
-    # source: UNMEASURED, provisional — X3 owed before load (card 731 DECISION 2). Never the voice route's 15 s.
-    timeout_s: 60
-    # source: UNMEASURED, provisional — X3 owed before load (card 731 DECISION 2).
-    max_output_tokens: 512
+    # source: X3 reports/f5-x3-measure-2026-10-20.md warm p95 3.53 s / max 4.97 s + cold load 8.67 s from the mainframe log (proxy, not a live cold call); rule max(2×p95, cold×1.5) up 5 s
+    timeout_s: 25
+    # source: X3 reports/f5-x3-measure-2026-10-20.md (warm model)
+    max_output_tokens: 256
     response_format: json_schema
     key_name: null
