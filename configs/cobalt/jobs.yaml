@@ -206,14 +206,14 @@ jobs:
   - label: com.cobalt.cos
     kind: resident
     supervisor: self
-    # F20: BUILT, REGISTERED, NOT HANDED OVER (card 730 DECISION 6;
-    # BOOTSTRAP deferred). It refuses to start while com.cobalt.agent's
-    # pidfile is alive (F-14), and its deploy waits for the D14 checklist,
-    # T10 and X1. `self`: the LOOP stamps heartbeat_at at the top of every
-    # iteration (cos/run.py, no beater thread), so a hung poll goes ZOMBIE.
-    enabled: false
-    # > cos.turn_timeout_s (900) + one cos.poll_interval_s (no value yet;
-    # 60 s UNMEASURED stand-in, DECISION 7): a turn in flight is never ZOMBIE.
+    # F20: registered and enabled. Bootstrap is OWED (card 929); the plist
+    # stays unloaded until that card. It refuses to start while
+    # com.cobalt.agent's pidfile is alive (F-14). `self`: the LOOP stamps
+    # heartbeat_at at the top of every iteration (cos/run.py, no beater
+    # thread), so a hung poll goes ZOMBIE.
+    enabled: true
+    # > cos.turn_timeout_s (900) + one cos.poll_interval_s (it has a DEFAULT
+    # value): a turn in flight is never ZOMBIE.
     timeout_s: 1200
     reads:
       - "configs/cobalt/agents/cos.yaml"           # agents/registry.py:93 (load_entry), called from cos/run.py:87 (_build) at the start: model + charter held for the life of the process

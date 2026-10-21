@@ -31,3 +31,6 @@ Tests: `test_hitl_offline.py`, `test_hitl_web.py`, `test_hitl_executor.py`, `tes
 
 ## 2026-10-18 — f20-cos-1018 (check r2)
 `executor.py`: `agents.deactivate` writes the after-bytes to a hidden sibling and renames it over the file, so a failed write leaves the untouched prior file (X3). Check r2 A1.
+
+## 2026-10-20 — cos-tunables fr3
+`hitl.page_base_url` is set to his value (ruled, Dejan, 2026-10-20): `https://cobalt.taild24291.ts.net`, https, no trailing slash; the card links `<base>/hitl/<id>#k=<key>`. `hitl.request_ttl_min` is 30 (his word, 2026-10-20). The `### Tunables` sentence above ("null, no value set — a request refuses") is superseded; the card refuses only if the value is null again.

@@ -135,12 +135,20 @@ def _cos_enabled() -> bool:
 def cos(now: datetime, *, enabled: bool | None = None, job_store=None, cos_store=None) -> Probe:
     """F20: the CoS loop's own stamp is fresh and its last turn did not fail.
 
-    RED is `ok=False` (there is no AMBER). While the registry row ships
-    `enabled: false` nothing runs, so the answer is unknown — never red."""
+    RED is `ok=False` (there is no AMBER). While the registry row is
+    disabled or OWED, nothing is probed, so the answer is unknown — never red."""
     if enabled is None:
         enabled = _cos_enabled()
     if not enabled:
         return Probe("cos", True, "unknown — NOT PROBED, registry enabled: false")
+    from cobalt.jobs import watchdog
+
+    try:
+        owed = watchdog.bootstrap_owed()
+    except watchdog.BootstrapOwedError as e:
+        return Probe("cos", False, f"bootstrap-owed.json unreadable: {e}")
+    if COS_LABEL in owed:
+        return Probe("cos", True, "unknown — NOT PROBED, OWED (deferred bootstrap)")
     from cobalt.jobs.config import load_job_registry
 
     if job_store is None:
@@ -167,11 +175,19 @@ def cos(now: datetime, *, enabled: bool | None = None, job_store=None, cos_store
 def hitl(now: datetime, *, enabled: bool | None = None, store=None) -> Probe:
     """F20: no `pending` request past its TTL that the sweeper missed, and no
     `failed` execution. RED is `ok=False`; unknown while the CoS row is
-    `enabled: false` (no executor or sweeper runs)."""
+    disabled or OWED (no executor or sweeper runs)."""
     if enabled is None:
         enabled = _cos_enabled()
     if not enabled:
         return Probe("hitl", True, "unknown — NOT PROBED, registry enabled: false (com.cobalt.cos)")
+    from cobalt.jobs import watchdog
+
+    try:
+        owed = watchdog.bootstrap_owed()
+    except watchdog.BootstrapOwedError as e:
+        return Probe("hitl", False, f"bootstrap-owed.json unreadable: {e}")
+    if COS_LABEL in owed:
+        return Probe("hitl", True, "unknown — NOT PROBED, OWED (deferred bootstrap) (com.cobalt.cos)")
     if store is None:
         from cobalt.hitl.store import HitlStore
 

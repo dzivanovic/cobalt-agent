@@ -291,7 +291,18 @@ def test_the_shipped_cos_rows():
     assert rows["cos.max_turns"].value == 30 and rows["cos.max_turns"].status.value == "proposed"
     assert rows["cos.turn_timeout_s"].value == 900
     for gap in ("cos.poll_interval_s", "hitl.request_ttl_min"):
-        assert rows[gap].value is None and rows[gap].status.value == "proposed", gap
+        value = rows[gap].value
+        assert (isinstance(value, int) and not isinstance(value, bool) and value > 0
+                and rows[gap].status.value == "proposed"), (gap, value)
+
+
+def test_the_shipped_hitl_page_base_url():
+    from cobalt.taxonomy.loader import load_tunables
+
+    row = load_tunables().by_key["hitl.page_base_url"]
+    assert row.value == "https://cobalt.taild24291.ts.net", row.value  # his ruled value (R2232)
+    assert not row.value.endswith("/")
+    assert row.status.value == "proposed"
 
 
 # ---------------------------------------------------------------------

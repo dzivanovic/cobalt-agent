@@ -180,6 +180,10 @@ class TestItIsWiredIntoTheBeat:
             # radar reads Postgres inside a scanning session; unstubbed,
             # this test failed whenever the suite ran premarket–aftermarket.
             "radar",
+            # cos and hitl read the registry and, once the row is enabled
+            # and not OWED, a real store. The owed file is gitignored desk
+            # state, so this test must not depend on it.
+            "cos", "hitl",
         ):
             monkeypatch.setattr(probes, name, record(name))
         monkeypatch.setattr(runner, "sweep", lambda **k: [])
