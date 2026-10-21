@@ -94,4 +94,4 @@ next: PREFLIGHT (rerun `preflight.sh build` on the wip commit, then the remainin
 - `.env`: never present (`ls` → No such file, 20:22). No lock taken.
 - Stopped 20:23 EDT (`date`).
 
-FAILED PREFLIGHT: status — preflight.sh build rejects the untracked FR1 report and the non-wip HEAD ace7a92a — "FAILED PREFLIGHT: status"
+RESUMED: PREFLIGHT 22:58
