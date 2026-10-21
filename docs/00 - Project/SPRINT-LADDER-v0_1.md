@@ -1185,6 +1185,33 @@ OFF-LADDER work of 2026-10-19 (each with the ruling that ordered it):
 | Cos probe (card `877`, job `cos-probe-1019`) | BUILT-NOT-MERGED | Brain R2081. Check ready YES `f8b2887b` (R2103); deploys after K5, F16, F5, 469. |
 | Cos gate-run (prompt `873`) | DONE-DARK | Brain R2075, R2079. GATES DONE ok 4, fail 1 (X13), not run 9 (R2083); re-run after the probe deploys. |
 
+### Status 2026-10-20
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1020` for 10-20 alone from `reports/cto-2026-10-20.md` rows R2126–R2258 (00:01 → 22:02 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-20*"` = `deploy-2026-10-20-cos-cutover-tooling`, `-cos-probe-fr1`, `-cos-probe-fr2b`, `-f16-close-fr3`, `-f21-vectors-1013`, `-f5-checkpoints-fr2`; `deploy-2026-10-19-hub-cos-restart-fr1` (K5, `cd8a92a7`, 10-19 23:44 per `cto-2026-10-20.md` §0) also exists. The 10-19 close ran (`CLOSE PUSHED af65e764`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4-P1 · S4-P2 · S4 B5 · S5 F4, F23 | DONE-LIVE | Unchanged (see 10-08 to 10-19). |
+| S5 F21 Genesis (card `468`) | DONE-LIVE | Unchanged (`deploy-2026-10-19-f21-genesis-fr1`). |
+| S5 F21 vectors (card `469`) | DONE-LIVE | `deploy-2026-10-20-f21-vectors-1013` `0e3d45e6`, migration 0028, downtime 606 s (R2131); `genesis embed --help` UNPROVEN (L70). |
+| S5 F16 close (card `790`, port job `f16-close-fr3`) | DONE-LIVE | `deploy-2026-10-20-f16-close-fr3` `6a970c51`, smoke GREEN with bare validate (R2135); attempt2 FAILED at smoke and rolled back (R2129). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) | DONE-DARK | `deploy-2026-10-20-f5-checkpoints-fr2` `25c51ca0`, migration 0029, smoke GREEN, downtime 641 s (R2162); the four checkpoint plists stay unloaded until X2/X3 and the values card 958 (preflight r2 YES, R2257). |
+| S5 F20 (card `730`) | DONE-DARK | `com.cobalt.cos` not loaded (`enabled: false`); bootstrap card `929` preflight r2 YES (R2210), launches after 933 FR-3 DEPLOYED and the agent retirement (R2232), earliest 10-21 16:00 ET. |
+
+**Stop date: 2026-10-28 (S5, day 6 of 14). S5: AT RISK.** Reason: F4, F23, F21 (Genesis, vectors) and F16 DONE-LIVE, F5 and F20 DONE-DARK; F5 stays unloaded until X3 values and X2 (read 07:20 ET 10-21, R2172) and F20's resident is not live (bootstrap waits on 933 FR-3, his X15 four legs and the agent retirement). No ruling moved a date (`cto-2026-10-20.md` §0 and DAY PLAN).
+
+OFF-LADDER work of 2026-10-20 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Cos-probe fr1 (card `877`) | DONE-LIVE | Brain R2136. `deploy-2026-10-20-cos-probe-fr1` `7e7bee6b`, smoke GREEN (R2168). |
+| Cos-probe fr2 / fr2b (cards `918`, `923`) | DONE-LIVE | Brain R2177, R2186. fr2 deploy FAILED at smoke (R2184); fr2b `deploy-2026-10-20-cos-probe-fr2b` `f3e092fe`, smoke GREEN (R2194). |
+| Cos gate re-run (prompt `873`) | DONE-DARK | Brain R2195. GATES DONE ok 10, fail 1 (X13, judged PASS by the brain, R2197), not run 3; 3 his decisions (R2196). |
+| Cos cutover tooling (card `931`) | DONE-LIVE | Brain R2201. `deploy-2026-10-20-cos-cutover-tooling` `23e72289`, smoke GREEN (R2255). |
+| Cos tunables (card `933`, job `cos-tunables`) | BUILDING | Brain R2201; HIS RULINGS R2237 (poll 10), R2239 (ttl 30). Built `17f45d80`, check ready NO (R2226); FR1 fix round build `33c513b9` running, FR-3 fresh build and check job `cos-tunables-fr1` follow (R2234). |
+| F5 X3 measure (card `945`) | BUILT-NOT-MERGED | Brain R2217. BUILT `fae4fa4c` tip `de976722` (R2247); check `abd73ba5` running. |
+| F5 X3 values (card `958`) | NOT STARTED (preflight YES) | Brain R2248, R2251. Builds after the 945 check says ready YES (R2257). |
+| Cos bootstrap (card `929`) | NOT STARTED (preflight YES) | Brain R2198; HIS RULINGS R2232 (D14, page URL), R2240 (R60 strings). Waits per the F20 row above. |
+| Stale-session cleanup | DONE | HIS REQUEST R2143. 460 removed, 0 refused (R2147). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

@@ -5019,3 +5019,142 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-19*"` = `deploy-2026-10-19-cos-outage-attempt2`, `deploy-2026-10-19-f20-cos-attempt2`, `deploy-2026-10-19-f21-genesis-fr1`, `deploy-2026-10-19-gemini-grant`, `deploy-2026-10-19-gemini-read-grant-1019`.
 - STOP LINE (L35), `reports/close-2026-10-18.md`: `CLOSE PUSHED 87ee3f55`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-19.md` `## 8`.
+
+### 2026-10-20 — F5 fr2, cos-probe fr1/fr2b, F16 fr3, 469 vectors and cos-cutover-tooling deployed; cos tunables and X3 values cards built
+
+- R2126 00:01 RECORD: day report opened; F5 card 731 amend drafter `8ec39583` running.
+- R2127 00:04 LAUNCHED: desk `9003ca63` took over; card 731 DRAFTED; round-2 preflight `904aa27d`.
+- R2128 00:05 RECORD: F5 port card preflight r2 ready YES (31/0); build waits for F16 and 469.
+- R2129 00:45 RECORD: F16 attempt2 deploy FAILED at smoke (`validate --no-db` refused); rolled back.
+- R2130 00:46 LAUNCHED: DESK RECORD (brain): 469 first, then F16 fresh port f16-close-fr3; hub `995342f0`.
+- R2131 01:59 RECORD: 469 vectors DEPLOYED `0e3d45e6` (migration 0028, downtime 606 s).
+- R2132 02:04 LAUNCHED: F16 fr3 DRAFTED, preflight `7f3dd0f2` YES; build hub `ddb58e2b`.
+- R2133 02:34 LAUNCHED: F16 fr3 BUILT `1aea7418`; check hub `f942579d`.
+- R2134 03:37 LAUNCHED: F16 fr3 check ready YES; deploy card 895; deploy hub `709cb2dd`.
+- R2135 03:47 RECORD: F16 fr3 DEPLOYED `6a970c51` (smoke GREEN, bare validate).
+- R2136 03:49 LAUNCHED: F5 build hub `bc83edc0`; cos-probe fresh port cos-probe-fr1, drafter `9f6b98a0`.
+- R2137 03:52 RECORD: desk `f7dde652` took over; cos-probe-fr1 preflight `a0a58e9a` YES.
+- R2138 05:05 LAUNCHED: F5 fr1 BUILT `e29cad00` (migration 0027); PORT check `6f1c0479`.
+- R2139 06:06 RECORD: 06:00 check-in sent to the brain.
+- R2140 06:06 DESK RECORD: DAY PLAN 10-20 written (5 goals); S5 AT RISK.
+- R2141 06:09 LAUNCHED: F5 fr1 check ready YES tip `3c96ad2e`; deploy hub `55cef884`.
+- R2142 06:13 DESK RECORD: F5 deploy FAILED at STEP-T (0027 below prod 0028); renumber as FIX1; drafter 900.
+- R2143 06:17 LAUNCHED: HIS REQUEST: clean stale sessions; helper `b69dffec`; ~460 sessions.
+- R2144 06:18 LAUNCHED: F5 row FIX2 DRAFTED; preflight `b2e78cc0`.
+- R2145 06:22 RECORD: HIS CATCH: live helpers had no herdr tab; tabs opened.
+- R2146 06:20 LAUNCHED: F5 FIX2 preflight YES; builder `9054405f`.
+- R2147 06:26 RECORD: stale-session cleanup CLEANED: 460 removed, 0 refused.
+- R2148 06:28 RECORD: F5 FIX2 builder `9054405f` FAILED: `git mv` denied; brain asked.
+- R2149 06:31 DESK RECORD: F5 as fresh PORT f5-checkpoints-fr2; drafter 903.
+- R2150 06:37 LAUNCHED: F5 fr2 card DRAFTED; preflight `52af8d2b`.
+- R2151 06:41 LAUNCHED: preflight ready NO (3 fails); amend drafter 905.
+- R2152 06:44 RECORD: desk `04cc4d2b` took over.
+- R2153 07:12 LAUNCHED: F5 fr2 card AMENDED; re-preflight (prompt 906).
+- R2154 07:16 LAUNCHED: re-preflight `187b4e16` ready NO; amend drafter 2 (prompt 907).
+- R2155 07:18 LAUNCHED: card amended again; preflight r3 (prompt 908).
+- R2156 07:19 RECORD: preflight r3 `0388662e` YES (22/0).
+- R2157 07:19 LAUNCHED: F5 fr2 build `ebc79eaa` (Opus HIGH); failed builders removed.
+- R2158 08:14 RECORD: day-open 10-20 OVERALL AMBER, archiver C5 only.
+- R2159 08:39 LAUNCHED: F5 fr2 BUILT `d910d45c` (migration 0029); PORT check.
+- R2160 09:44 RECORD: F5 fr2 CHECK DONE `8989ec95` ready YES; brain: deploy now.
+- R2161 09:50 LAUNCHED: F5 fr2 deploy card 909 and hub.
+- R2162 10:16 RECORD: F5 fr2 DEPLOYED `25c51ca0` (migration 0029, downtime 641 s); cos-probe card 877 build.
+- R2163 10:47 LAUNCHED: cos-probe-fr1 BUILT `78b93da3`; PORT check.
+- R2164 11:59 RECORD: cos-probe-fr1 CHECK DONE `fb625806` ready YES tip `da47500a`.
+- R2165 12:02 LAUNCHED: cos-probe-fr1 deploy card 910 and deploy.
+- R2166 12:03 RECORD: 12:00 check-in sent to the brain.
+- R2167 12:08 RECORD: brain: X2 runs this afternoon; F5 deploy facts; X2 drafter prompt 911.
+- R2168 12:12 RECORD: cos-probe-fr1 DEPLOYED `7e7bee6b` (smoke GREEN).
+- R2169 12:14 RECORD: desk `759331db` took over.
+- R2170 12:17 DESK RECORD: X2 option C; drafter `d27803ea`.
+- R2171 12:23 RECORD: probe 914 DRAFTED; K5 admit card proposed to the brain.
+- R2172 12:26 DESK RECORD: X2 option B; X2 = first live 07:15 run, read 07:20 ET 10-21.
+- R2173 12:23 LAUNCHED: cos gate re-run drafter `5e52f45d`.
+- R2174 12:27 LAUNCHED: gate drafter DRAFTED; preflight `17b68501`.
+- R2175 12:30 LAUNCHED: gate preflight YES; cos gate re-run hub (873).
+- R2176 12:31 RECORD: cos gate re-run `f44f154a` ok 5, fail 6, not run 3.
+- R2177 12:35 DESK RECORD: probe under the real HOME; drafter 917.
+- R2178 12:36 LAUNCHED: card 918 cos-probe-fr2 DRAFTED; preflight `62b377e8`.
+- R2179 12:40 LAUNCHED: preflight YES; build `918`.
+- R2180 13:41 LAUNCHED: cos-probe-fr2 BUILT `74169800`; PORT check.
+- R2181 13:42 LAUNCHED: cos-probe-fr2 PORT check `f16e784f`.
+- R2182 14:48 RECORD: cos-probe-fr2 CHECK DONE ready YES tip `dfea631a`; deploy card 920.
+- R2183 14:49 LAUNCHED: cos-probe-fr2 deploy hub `029ae67d`.
+- R2184 14:58 RECORD: cos-probe-fr2 deploy FAILED at smoke (d); rolled back.
+- R2185 15:05 RECORD: deploy-card.sh refuses attempt2 (tip already merged); options C/D to the brain.
+- R2186 15:10 DESK RECORD: C, fresh port cos-probe-fr2b; drafter 922.
+- R2187 15:03 RECORD: desk `d9beb82c` took over.
+- R2188 15:12 LAUNCHED: card 923 DRAFTED; preflight `40c1cd24`.
+- R2189 15:04 RECORD: preflight r1 of card 923: 1 fail; amend drafter `0770a3a4`.
+- R2190 15:05 LAUNCHED: card 923 amend DRAFTED; preflight r2 `366fc707`.
+- R2191 15:07 LAUNCHED: preflight r2 YES; build `0d40d24d`.
+- R2192 16:13 LAUNCHED: cos-probe-fr2b BUILT `9b912c83`; check `04698d1d`.
+- R2193 15:17 RECORD: check ready YES; deploy card 927.
+- R2194 17:25 RECORD: cos-probe-fr2b DEPLOYED `f3e092fe` (smoke GREEN).
+- R2195 17:26 DESK RECORD: relaunch 873 unchanged; gate hub `41ed74d2`.
+- R2196 17:33 RECORD: cos gate re-run GATES DONE: ok 10, fail 1 (X13), not run 3.
+- R2197 17:35 DESK RECORD: X13 PASS; gate re-run `7de50210` 11 OK plus 3 his decisions.
+- R2198 17:36 DESK RECORD: bootstrap card cos alone after 16:30; tunables K5 card first.
+- R2199 17:37 LAUNCHED: drafter `a4d50ceb` (card 929); brain replaced by `9b07db5a`.
+- R2200 17:42 RECORD: card 929 DRAFTED `ffcc707f` (9 decisions); five findings to the brain.
+- R2201 17:44 DESK RECORD: agent retires first; cutover-tooling and tunables cards deploy before 929.
+- R2202 17:46 LAUNCHED: drafters `fc896cb5`, `6ac2f5eb`, `19443274`.
+- R2203 17:45 RECORD: desk `3aa4695a` took over; card 929 DRAFTED; preflight (prompt 935).
+- R2204 17:47 LAUNCHED: card 933 tunables DRAFTED; preflight (prompt 936).
+- R2205 17:49 DESK RECORD: 933 keeps P1; page_base_url joins 929 WAITS.
+- R2206 17:49 LAUNCHED: card 929 preflight `4251be8e` NO; amend drafter 937.
+- R2207 17:49 LAUNCHED: card 929 amend2 DRAFTED; preflight r2 (prompt 938).
+- R2208 17:50 LAUNCHED: card 931 cutover-tooling DRAFTED; preflight (prompt 939).
+- R2209 17:50 LAUNCHED: card 933 preflight `882f34bd` NO; amend drafter (prompt 940).
+- R2210 17:51 RECORD: card 929 preflight r2 `e1def849` YES.
+- R2211 17:52 LAUNCHED: card 933 amend DRAFTED; preflight r2 (prompt 941).
+- R2212 17:53 LAUNCHED: card 933 preflight r2 `7a5c42bb` YES; Grok MID build `933`.
+- R2213 17:54 LAUNCHED: card 931 preflight `8decc52c` NO; amend drafter (prompt 942).
+- R2214 17:55 LAUNCHED: card 931 amend DRAFTED; preflight r2 (prompt 943).
+- R2215 17:57 LAUNCHED: card 931 preflight r2 `eb5efd2f` YES; Opus HIGH build `931`.
+- R2216 18:02 RECORD: 18:00 check-in sent to the brain.
+- R2217 18:04 DESK RECORD: X3 = K2 probe, 30 calls, 20:35-07:00 window.
+- R2218 18:04 LAUNCHED: drafter (prompt 944) for card 945 f5-x3-measure.
+- R2219 18:06 LAUNCHED: card 945 DRAFTED `559c6842`; preflight (prompt 946).
+- R2220 18:08 LAUNCHED: card 945 preflight `caaa89a4` NO; amend drafter (prompt 947).
+- R2221 18:10 RECORD: desk `b047ac4b` took over.
+- R2222 18:12 LAUNCHED: card 945 amend DRAFTED `b77bcd5f`; preflight r2 (prompt 948).
+- R2223 18:13 RECORD: card 945 preflight r2 `277520fb` YES; X3 build waits for 20:35.
+- R2224 19:11 LAUNCHED: card 933 BUILT `17f45d80`; Opus check `4f20a063`.
+- R2225 19:31 LAUNCHED: card 931 BUILT `96728174`; Opus check `453b2c9b`.
+- R2226 20:17 RECORD: card 933 check `4f20a063` ready NO (2 for Dejan); brain asked A/B.
+- R2227 20:17 DESK RECORD: card 933 fix round FR1, BAND HIGH; drafter 949.
+- R2228 20:20 LAUNCHED: card 933 FR1 DRAFTED `05e49774`; preflight `5609e216`.
+- R2229 20:22 LAUNCHED: FR1 preflight YES; Opus build `33c513b9`.
+- R2230 20:26 LAUNCHED: card 931 check ready YES; deploy card 951; deploy hub `f5caa814`.
+- R2231 20:35 LAUNCHED: X3 build `fae4fa4c` (card 945).
+- R2232 20:50 HIS RULING: D14 YES (replace the old agent); hitl.page_base_url https://cobalt.taild24291.ts.net; APPROVED — pending fold.
+- R2233 20:51 DESK RECORD: D14 yes; FR-3 (page_base_url) added to 933 FR1; drafter 952.
+- R2234 20:52 DESK RECORD: FR-3 is a fresh build step, never a CONTINUE of `33c513b9`.
+- R2235 20:53 LAUNCHED: FR-3 amend DRAFTED `30424821`; preflight (prompt 953).
+- R2236 20:54 RECORD: FR-3 amend preflight `8181ed56` YES.
+- R2237 20:56 HIS RULING: cos.poll_interval_s = 10; APPROVED.
+- R2238 20:57 DESK RECORD: source comment goes on card 933 by one-line drafter amend.
+- R2239 20:57 HIS RULING: hitl.request_ttl_min = 30; APPROVED.
+- R2240 20:57 HIS RULING: R60 launchctl restart strings for com.cobalt.cos; APPROVED.
+- R2241 20:58 RECORD: drafter `d467dcc1` DRAFTED the 933 source-comment amend; second amend owed.
+- R2242 21:01 RECORD: desk `dda382de` took over; drafter `1459e480` (prompt 955).
+- R2243 21:02 DESK RECORD: X15 widened to four legs; tomorrow by day on his "ready".
+- R2244 21:02 LAUNCHED: 933 second source amend DRAFTED; preflight r3 (prompt 956).
+- R2245 21:03 RECORD: 933 preflight r3 `11b79164` YES.
+- R2246 21:04 DESK RECORD: analyst desk redesign waits on his Grokbot input; nothing launches.
+- R2247 21:10 RECORD: X3 BUILT `fae4fa4c` (card 945, tip `de976722`): 30/30 calls; timeout_s 10, max_output_tokens 256.
+- R2248 21:10 DESK RECORD: defaults kept; check on 945 in parallel with a values card.
+- R2249 21:10 LAUNCHED: check `abd73ba5` on card 945.
+- R2250 21:15 RECORD: card 958 f5-x3-values DRAFTED (5 decisions); cold-leg decision asked of the brain.
+- R2251 21:17 DESK RECORD: card 958 option C, timeout_s 25, no unload string.
+- R2252 21:17 LAUNCHED: drafter (prompt 959) applies option C to card 958.
+- R2253 21:17 LAUNCHED: card 958 option C DRAFTED `3a728b47`; preflight `663176bd`.
+- R2254 21:20 RECORD: card 958 preflight `663176bd` NO (2 fails); fix prompt 961.
+- R2255 21:22 RECORD: 931 cos-cutover-tooling DEPLOYED `23e72289` (smoke GREEN).
+- R2256 21:27 LAUNCHED: card 958 fixes DRAFTED `b4ca6a6b`; preflight r2 (prompt 962).
+- R2257 21:28 RECORD: card 958 preflight r2 `a9064377` YES, committed `61416357`.
+- R2258 22:02 LAUNCHED: nightly close hub `d765294a` (close-1020) by desk-launch.sh close 2026-10-20.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-20*"` = `deploy-2026-10-20-cos-cutover-tooling`, `deploy-2026-10-20-cos-probe-fr1`, `deploy-2026-10-20-cos-probe-fr2b`, `deploy-2026-10-20-f16-close-fr3`, `deploy-2026-10-20-f21-vectors-1013`, `deploy-2026-10-20-f5-checkpoints-fr2`.
+- STOP LINE (L35), `reports/close-2026-10-19.md`: `CLOSE PUSHED af65e764`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-20.md` `## 8`.
