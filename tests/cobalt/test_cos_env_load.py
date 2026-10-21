@@ -97,6 +97,55 @@ def test_e1_a_launchd_start_reads_the_repo_env_file(monkeypatch, tmp_path):
     assert "@decoy-host.invalid:5999/cobalt_dev" in dsns[0]
 
 
+def test_e1_the_load_runs_before_the_registry_read(monkeypatch, tmp_path):
+    """Check O1: `main` loads `ENV_FILE` before `load_job_registry()`."""
+    import cobalt.jobs.config as config
+
+    run, seen, dsns = _launchd_start(monkeypatch, tmp_path, decoy=True)
+    real = config.load_job_registry
+    at_registry: list[dict] = []
+
+    def load_job_registry(*args, **kwargs):
+        at_registry.append({name: os.environ.get(name) for name in DB_NAMES})
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(config, "load_job_registry", load_job_registry)
+
+    with pytest.raises(Reached):
+        run.main([])
+
+    assert at_registry[0] == {
+        "POSTGRES_HOST": "decoy-host.invalid",
+        "COBALT_DB_USER": "decoy_user",
+        "COBALT_DB_PASSWORD": "decoy-pass",
+    }
+
+
+def test_e1_the_load_is_main_first_statement_and_never_at_import():
+    """Check O2: `load_dotenv` is called once in `run.py`, as the first
+    statement of `main`; no module-level statement calls it, so importing
+    the module loads nothing. Found by content in the syntax tree."""
+    import ast
+
+    from cobalt.cos import run
+
+    tree = ast.parse(Path(run.__file__).read_text())
+
+    def calls(node):
+        return [
+            n for n in ast.walk(node)
+            if isinstance(n, ast.Call) and isinstance(n.func, ast.Name) and n.func.id == "load_dotenv"
+        ]
+
+    main = next(s for s in tree.body if isinstance(s, ast.FunctionDef) and s.name == "main")
+    outside = [s for s in tree.body if not isinstance(s, (ast.FunctionDef, ast.ClassDef))]
+    assert [c for s in outside for c in calls(s)] == []
+    assert len(calls(tree)) == 1
+    first = main.body[0]
+    assert isinstance(first, ast.Expr) and calls(first) and first.value.args[0].id == "ENV_FILE"
+    assert first.value.keywords == []
+
+
 def test_e1_the_env_file_is_the_repo_one():
     from cobalt.cos import run
 
