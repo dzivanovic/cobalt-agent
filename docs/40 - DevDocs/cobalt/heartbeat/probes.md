@@ -153,3 +153,6 @@ Two tests pin P1 (check O2, O4): `test_an_unreadable_owed_file_raises_through_bo
 
 ## 2026-10-20 — cos-tunables fr1
 An unreadable or malformed owed file (`BootstrapOwedError`) now makes `cos` and `hitl` RED, `ok=False` with detail `bootstrap-owed.json unreadable: <error>`, never a raise out of `take_beat`, so the beat's other probes still land (check O1). This supersedes the "`BootstrapOwedError` is not caught" line of the cos-tunables section; `test_an_unreadable_owed_file_is_a_red_probe_never_a_raise` replaces the raise test.
+
+## 2026-10-21 — cos-tunables fr1 check
+`test_an_unreadable_owed_file_is_a_red_probe_never_a_raise` now also asserts the `BootstrapOwedError` reason (`not JSON` / `not a JSON object keyed by label`) in each red detail, so a detail without the error text fails (check A1). No code change.
