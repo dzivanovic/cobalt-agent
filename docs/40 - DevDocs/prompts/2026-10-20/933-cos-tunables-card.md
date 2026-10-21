@@ -5,9 +5,9 @@ INSTALL: none
 BRANCH: ops/cos-tunables
 WORKTREE: cos-tunables
 BASE: e69d5ab8
-TIP: 17f45d80
+TIP: f2899be6
 REPORT: /Users/cobalt/cobalt-wt/cos-tunables/docs/40 - DevDocs/reports/cos-tunables-build-2026-10-20.md
-CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-tunables-check-2026-10-20.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-tunables-check-fr1-2026-10-21.md
 HOUSE B: as needed
 BAND: HIGH
 RESTARTS: com.cobalt.aset com.cobalt.radar
