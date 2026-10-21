@@ -4,7 +4,7 @@ CLASS: K2
 INSTALL: none
 BRANCH: ops/f5-x3-values-port
 WORKTREE: f5-x3-values-port
-BASE: bac9b683
+BASE: b105271c
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f5-x3-values-port/docs/40 - DevDocs/reports/f5-x3-values-port-build-2026-10-21.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-x3-values-port-check-2026-10-21.md
