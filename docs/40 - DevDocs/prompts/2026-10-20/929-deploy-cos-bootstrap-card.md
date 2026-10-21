@@ -36,7 +36,7 @@ GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
 - Any `launchctl` on `com.cobalt.agent`, any `cobalt.sh stop`: the agent's retirement is a separate desk job after this card's green stop line, on bootout strings he approves (RETIRE OWED, `DEPLOY-HUB.md:89`).
 - The tunables `cos.poll_interval_s` and `hitl.request_ttl_min`: set by the K5 config card, deployed before this card.
 - The R60 restart strings of a loaded cos: later restarts only.
-- Any GATE RESULT written `«FILL: his …»`: his rows; no seat fills them.
+- Any unfilled GATE RESULT placeholder: his rows; no seat fills them.
 
 ## MARKERS
 - `ls /Users/cobalt/cobalt/logs/cos.err` · before `No such file or directory` · after `listed`
@@ -60,7 +60,7 @@ GATE RESULT: com.cobalt.cos · X20 · OK — 1 passed
 ## RECORDS
 - MIGRATIONS: none; the first start CREATEs cobalt_cos_sessions, cobalt_cos_turns, cobalt_hitl_requests IF NOT EXISTS plus the jobs row (run.py:105, :109, :150, :155): additive, the rollback leaves them.
 - PREREQUISITE: the K5 config card sets `cos.poll_interval_s` (`configs/cobalt/taxonomy/tunables.yaml:1008-1009`, `value: null`) and `hitl.request_ttl_min` (`:1026-1027`, `value: null`) with his values and is DEPLOYED before this card. `tunable_int` raises `CosConfigError` on a null (`src/cobalt/cos/session.py:76-85`), called at the start (`src/cobalt/cos/run.py:99`); `request_ttl_min` raises on a null (`src/cobalt/hitl/actions.py:62-71`).
-- HIS INPUTS: GATE RESULT D14 and agent stopped = his ruling's R row (retire yes/no); X15 = his phone result row. Each stays `«FILL: his …»` until the desk writes it from his row.
+- HIS INPUTS: GATE RESULT D14 and agent stopped = his ruling's R row (retire yes/no); X15 = his phone result row. Each stays an unfilled GATE RESULT placeholder until the desk writes it from his row.
 - ORDER: `sh /Users/cobalt/cobalt/ops/desk/deploy-step-c.sh --bootstrap-only "<card>" com.cobalt.cos` → `ADMITTED: com.cobalt.cos · bootstrap-only` → 4.6L `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.cos.plist`, `launchctl print gui/501/com.cobalt.cos` (found, `path = ` that plist) → smoke (s) → `sh /Users/cobalt/cobalt/ops/desk/deploy-step-c.sh --owed-clear "<card>" com.cobalt.cos` → `OWED CLEARED: com.cobalt.cos`. `com.cobalt.agent` is not touched.
 - FILES AND OBJECTS IT TOUCHES: launchd label `com.cobalt.cos` (loaded); `/Users/cobalt/cobalt/logs/cos.log`, `/Users/cobalt/cobalt/logs/cos.err` (new, `ops/com.cobalt.cos.plist:33`, `:35`); `/Users/cobalt/cobalt/data/deploy/bootstrap-owed.json` (the cos entry removed); `/Users/cobalt/cobalt/data/cos/scratch/` (emptied and made, `src/cobalt/cos/run.py:103`); production DB at cos's first start: the jobs row of `com.cobalt.cos` (`run.py:150`, `:155`), `cobalt_cos_sessions`, `cobalt_cos_turns` (`src/cobalt/cos/migrations/0001_cobalt_cos.sql:14`, `:28`) and `cobalt_hitl_requests` (`src/cobalt/hitl/migrations/0001_cobalt_hitl.sql:20`), each `CREATE … IF NOT EXISTS` (`run.py:105`, `:109`).
 - ROLLBACK (returns the old state): `launchctl bootout gui/501/com.cobalt.cos`, then `launchctl print gui/501/com.cobalt.cos` → `Could not find service` (STEP-5 (1L); an `add` label stays out, (2L)). With `--owed-clear` run last, a red smoke (s) leaves the owed entry in place. No revert: nothing merged. The log files, the scratch dir and the `IF NOT EXISTS` tables stay.
