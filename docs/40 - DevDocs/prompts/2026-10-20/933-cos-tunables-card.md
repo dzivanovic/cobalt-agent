@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/cos-tunables
 WORKTREE: cos-tunables
 BASE: e69d5ab8
-TIP: f2899be6
+TIP: 0b8bf093
 REPORT: /Users/cobalt/cobalt-wt/cos-tunables/docs/40 - DevDocs/reports/cos-tunables-build-fr3-2026-10-20.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-tunables-check-fr1-2026-10-21.md
 HOUSE B: as needed
