@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/f5-probe-x4-fix
 WORKTREE: f5-probe-x4-fix
 BASE: 9a0fff94
-TIP:
+TIP: b5911aed
 REPORT: /Users/cobalt/cobalt-wt/f5-probe-x4-fix/docs/40 - DevDocs/reports/f5-probe-x4-fix-build-2026-10-21.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-probe-x4-fix-check-2026-10-21.md
 HOUSE B: as needed
