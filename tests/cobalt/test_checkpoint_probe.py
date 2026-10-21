@@ -465,3 +465,24 @@ def test_each_item_prints_one_line_and_exits_by_verdict(world, monkeypatch, caps
     m = LINE.match(lines[0])
     assert m and m.group(1) == item and m.group(2) == verdict
     assert got == code
+
+
+# ===========================================================================
+# CHECK findings (f5-probe check, 2026-10-21) — judged by running
+# ===========================================================================
+
+
+def test_undoing_rule_d_price_steps_leaves_x6_green(world, monkeypatch, capsys):
+    from decimal import Decimal
+
+    from cobalt.prefill import checkpoint_probe
+
+    monkeypatch.setattr(checkpoint_probe, "PRICE_STEP", Decimal("0"))
+    monkeypatch.setattr(checkpoint_probe, "CHANGE_STEP", Decimal("0"))
+    code, out, _ = _probe(monkeypatch, capsys, "X6")
+    phrases = [{e["phrase"] for e in _sent(r)} for r in world.calls]
+    assert code == 0, out
+    assert "1 real fetch + 3 derived by rule D" in out
+    assert "prior_close" in phrases[0]
+    assert {"index_move", "rank_move"} <= phrases[1]
+    raise AssertionError("stayed green with PRICE_STEP and CHANGE_STEP at 0")
