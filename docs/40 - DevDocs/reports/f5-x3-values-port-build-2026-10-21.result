@@ -1,0 +1,15 @@
+job=f5-x3-values-port
+tip=fc2ffb3b
+on=b105271c
+migration=none
+offline=4898/0
+with_db=5870/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset
+rows=6 of 6
+self_check=3 of 3
+decisions=1
+for_dejan=0
+tokens=153998
