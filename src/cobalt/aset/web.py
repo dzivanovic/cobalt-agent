@@ -1433,6 +1433,26 @@ def _hitl_refusal(row: dict | None, *, reviewed: str = "", key_sha: str = "") ->
     return "the request changed underneath the page"
 
 
+def _hitl_key_script() -> str:
+    """The ONE reader of the link fragment (X15, card 977).
+
+    The key is in the link FRAGMENT, which the browser never sends: the page
+    copies it into every `.hitl-k` form field and shows only whether it was
+    seen. The key goes nowhere else — no request, no navigation, no text.
+    """
+    return (
+        "<script>const k=new URLSearchParams(location.hash.slice(1)).get('k')||'';"
+        "document.querySelectorAll('.hitl-k').forEach(i=>{i.value=k;});"
+        "document.querySelectorAll('.hitl-k-state').forEach(s=>{s.textContent=k?'k: seen':'k: missing';});"
+        "</script>"
+    )
+
+
+def _hitl_k_readout() -> str:
+    """Server default `k: missing`; the key script turns it to `seen`."""
+    return '<div class="hitl-k-state">k: missing</div>'
+
+
 @app.get("/hitl", response_class=HTMLResponse)
 async def hitl_list() -> str:
     e = html.escape
@@ -1446,6 +1466,17 @@ async def hitl_list() -> str:
         for r in rows
     ) or '<tr><td colspan="4">No requests.</td></tr>'
     return _hitl_page(f'<div class="card"><table>{items}</table></div>')
+
+
+# Registered BEFORE `/hitl/{row_id}`: routes match in order, and that one
+# takes any segment, then answers 422 on a non-int.
+@app.get("/hitl/x15-probe", response_class=HTMLResponse)
+async def hitl_x15_probe() -> str:
+    """X15: does the page script on his phone see `k`? No store, no form."""
+    return _hitl_page(
+        '<div class="card"><div>X15 carrier test — approves nothing, reads nothing, writes nothing</div>'
+        f"{_hitl_k_readout()}{_hitl_key_script()}</div>"
+    )
 
 
 @app.get("/hitl/{row_id}", response_class=HTMLResponse)
@@ -1465,6 +1496,7 @@ async def hitl_detail(row_id: int) -> str:
     forms = ""
     if row["status"] == "pending":
         forms = (
+            f"{_hitl_k_readout()}"
             f'<form method="post" action="/hitl/{int(row["id"])}/approve">'
             f'<input type="hidden" name="sha256" value="{e(row["sha256"])}">'
             '<input type="hidden" name="k" class="hitl-k" value="">'
@@ -1473,10 +1505,7 @@ async def hitl_detail(row_id: int) -> str:
             '<input type="hidden" name="k" class="hitl-k" value="">'
             '<label>Deny reason (optional)</label><input name="reason" value="">'
             '<button type="submit">Deny</button></form>'
-            # The key is in the link FRAGMENT, which the browser never sends:
-            # the page copies it into the two forms.
-            "<script>const k=new URLSearchParams(location.hash.slice(1)).get('k')||'';"
-            "document.querySelectorAll('.hitl-k').forEach(i=>{i.value=k;});</script>"
+            f"{_hitl_key_script()}"
         )
     return _hitl_page(
         f'<div class="card"><label>Request {e(row["short_id"])} · {e(row["status"])}</label>'
