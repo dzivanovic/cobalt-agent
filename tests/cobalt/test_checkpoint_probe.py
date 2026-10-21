@@ -594,6 +594,23 @@ def test_fr2_the_scratch_holds_everything_but_the_fetch(world, monkeypatch, caps
     assert Path.cwd() == here, "the cwd is restored on an exception"
 
 
+def test_x4_model_calls_run_in_the_scratch(world, x4_kept, monkeypatch, capsys, tmp_path):
+    """Check O1: X4 reaches no Finviz, so none of its steps may leave the scratch."""
+    from cobalt.prefill import checkpoint_probe
+
+    monkeypatch.chdir(tmp_path)
+    here = Path.cwd()
+    seen = []
+    world.on_call = lambda req: seen.append(Path.cwd())
+    code, out, _ = _probe(monkeypatch, capsys, "X4")
+    assert code == 0, out
+    assert len(seen) == 20
+    for cwd in seen:
+        assert cwd.name.startswith("f5-probe-") and cwd != checkpoint_probe.REPO_ROOT, f"an X4 call ran at {cwd}"
+        assert not cwd.exists(), "the scratch dir is gone"
+    assert Path.cwd() == here
+
+
 def _no_finviz(monkeypatch):
     """Every Finviz seam X4 could reach raises."""
     import httpx
