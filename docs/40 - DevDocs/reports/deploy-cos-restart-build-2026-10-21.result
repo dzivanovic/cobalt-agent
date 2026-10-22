@@ -1,0 +1,15 @@
+job=deploy-cos-restart
+tip=af0f86bc
+on=0e2b5b54
+migration=none
+offline=9092/0
+with_db=0/0
+live_note=148/0
+cobalt_dev=not taken
+env=removed
+restarts=none
+rows=6 of 6
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=187734
