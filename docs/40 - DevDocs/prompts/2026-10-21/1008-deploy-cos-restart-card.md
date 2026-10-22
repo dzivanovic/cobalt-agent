@@ -4,7 +4,7 @@ CLASS: K5 serving K4
 BRANCH: ops/deploy-cos-restart
 WORKTREE: deploy-cos-restart
 BASE: 0e2b5b54
-TIP: af0f86bc
+TIP: 3770387d
 REPORT: /Users/cobalt/cobalt-wt/deploy-cos-restart/docs/40 - DevDocs/reports/deploy-cos-restart-build-2026-10-21.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-cos-restart-check-2026-10-21.md
 HOUSE B: as needed
