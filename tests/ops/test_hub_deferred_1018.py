@@ -102,7 +102,7 @@ def test_d2_the_three_residents_strings_stand():
     assert launch.count("<launchd strings>") == 1
     for s in RESIDENT_STRINGS:
         assert launch.count(s) == 1, s
-    assert COS not in launch
+    assert launch.count(COS) == 3
     model = one("MODEL: ")
     assert "the labels of `<launchd set>`" in model
     assert DEFERRED not in model
