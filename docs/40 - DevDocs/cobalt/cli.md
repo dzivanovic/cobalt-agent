@@ -152,3 +152,6 @@ F20 C4d: `from cobalt.cos import cli as cos_cli`, `from cobalt.hitl import cli a
 
 ## 2026-10-21 — f5-probe
 `checkpoints_cli.add_parser(sub)` now also mounts `cobalt checkpoint probe <item> [--keep-groups PATH]` (`item` one of X4, X5, X6, X7, X10, X13; anything else exits 2), after `cobalt checkpoint run`, which is unchanged. The handler imports `cobalt.prefill.checkpoint_probe` inside the command and exits with its code: 0 OK, 1 FAIL, 3 NOT RUN (card 973; `prefill/checkpoints.md`).
+
+## 2026-10-21 — x15-hitl-probe
+`hitl_cli.add_parser(sub)` now also mounts `cobalt hitl x15-send` (DEV ONLY: one DM of the X15 probe link; refused with exit 2 unless `COBALT_ENV=dev`; card 977, `hitl/README.md`). `cobalt hitl list` is unchanged. This file's registration lines are unchanged.
