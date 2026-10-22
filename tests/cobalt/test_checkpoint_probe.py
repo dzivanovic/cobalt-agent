@@ -81,6 +81,52 @@ def _sent(req) -> list[dict]:
     return json.loads(req.messages[-1].content)
 
 
+#: A kept capture's marker line (`_keep`'s shape), on the constructed day.
+KEPT_MARKER = "# real capture 2026-09-03 07:40 ET, dev probe X6, header and 11 rows only (L45)"
+
+
+def _groups_body(changes: dict[str, str], *, drop: int = 0) -> str:
+    """`groups_csv()` with each sector's Change set from `changes`; `drop` rows cut from the end."""
+    import csv
+    import io
+
+    header, *rows = [r for r in csv.reader(io.StringIO(groups_csv())) if r]
+    name, change = header.index("Name"), header.index("Change")
+    out = io.StringIO()
+    writer = csv.writer(out, quoting=csv.QUOTE_ALL, lineterminator="\n")
+    writer.writerow(header)
+    for row in rows[:len(rows) - drop]:
+        writer.writerow([f"{changes[row[name]]}%" if i == change else c for i, c in enumerate(row)])
+    return out.getvalue()
+
+
+def _write_body(path: Path, changes: dict[str, str], *, drop: int = 0) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(KEPT_MARKER + "\n" + _groups_body(changes, drop=drop), encoding="utf-8")
+
+
+@pytest.fixture
+def x4_paths(monkeypatch, tmp_path):
+    """X4's two Groups sources moved into `tmp_path`; neither written yet."""
+    from cobalt.prefill import checkpoint_probe
+
+    keep_root = tmp_path / "keep-root"
+    keep_root.mkdir()
+    paths = SimpleNamespace(kept=keep_root / "groups_sector_v140_real.csv",
+                            fixture=tmp_path / "fixtures" / "groups_sector_v140_real.csv")
+    monkeypatch.setattr(checkpoint_probe, "KEEP_ROOT", keep_root)
+    monkeypatch.setattr(checkpoint_probe, "X4_GROUPS_KEPT", paths.kept, raising=False)
+    monkeypatch.setattr(checkpoint_probe, "X4_GROUPS_FIXTURE", paths.fixture, raising=False)
+    return paths
+
+
+@pytest.fixture
+def x4_kept(x4_paths):
+    """X4's Groups body: a kept capture of DISTINCT (constructed)."""
+    _write_body(x4_paths.kept, DISTINCT)
+    return x4_paths
+
+
 # ===========================================================================
 # P1 — the subcommand
 # ===========================================================================
@@ -109,7 +155,7 @@ def test_production_and_unset_env_are_refused(world, monkeypatch, capsys, item):
     assert world.gets == 0 and world.calls == [], "nothing fetched, nothing called"
 
 
-def test_no_write_no_dm_no_db_no_launchctl(world, monkeypatch, capsys):
+def test_no_write_no_dm_no_db_no_launchctl(world, x4_kept, monkeypatch, capsys):
     from cobalt.prefill import checkpoints
 
     def forbidden(name):
@@ -323,23 +369,26 @@ def _valid_then_invalid(world, n_valid):
     world.on_call = on_call
 
 
-def test_x4_fifteen_valid_is_ok_fourteen_fails(world, monkeypatch, capsys):
+X4_SOURCES = "groups: kept capture · indices: constructed · "
+
+
+def test_x4_fifteen_valid_is_ok_fourteen_fails(world, x4_kept, monkeypatch, capsys):
     _valid_then_invalid(world, 15)
     code, out, _ = _probe(monkeypatch, capsys, "X4")
     assert code == 0, out
-    assert out.startswith("PROBE X4 OK valid 15/20 · invalid kinds UnsourcedFigure=5 · number-word hits none")
+    assert out.startswith(f"PROBE X4 OK {X4_SOURCES}valid 15/20 · invalid kinds UnsourcedFigure=5 · number-word hits none")
     assert "degraded-by-default" not in out and "plist load not blocked" not in out
     assert len(world.calls) == 20
 
     _valid_then_invalid(world, 14)
     code, out, _ = _probe(monkeypatch, capsys, "X4")
     assert code == 1
-    assert out.startswith("PROBE X4 FAIL valid 14/20 · invalid kinds UnsourcedFigure=6")
+    assert out.startswith(f"PROBE X4 FAIL {X4_SOURCES}valid 14/20 · invalid kinds UnsourcedFigure=6")
     assert "→ narrative degraded-by-default (FINAL :178)" in out
     assert out.rstrip("\n").endswith("; plist load not blocked by X4")
 
 
-def test_x4_a_number_word_fails_and_names_the_phrase(world, monkeypatch, capsys):
+def test_x4_a_number_word_fails_and_names_the_phrase(world, x4_kept, monkeypatch, capsys):
     from cobalt.prefill import checkpoints
 
     assert _probe(monkeypatch, capsys, "X4")[0] == 0
@@ -365,14 +414,14 @@ def test_x4_a_number_word_fails_and_names_the_phrase(world, monkeypatch, capsys)
     assert out.rstrip("\n").endswith("; plist load not blocked by X4")
 
 
-def test_x4_request_equals_narrates(world, monkeypatch, capsys):
+def test_x4_request_equals_narrates(world, x4_kept, monkeypatch, capsys):
     assert _probe(monkeypatch, capsys, "X4")[0] == 0
     assert len(world.calls) == 20
     from cobalt.prefill import checkpoint_probe, checkpoints
 
     cfg = _cfg()
     entries = checkpoints.compute_delta(
-        {"indices": {"SPY": {"price": "500.00", "change_pct": "0.10"}},
+        {"indices": {t: {"price": p, "change_pct": c} for t, (p, c) in checkpoint_probe.X4_INDICES.items()},
          "sectors": {n: {"change": c, "rel_volume": "1.00", "perf_week": "0.50"} for n, c in DISTINCT.items()}},
         None)["lines"]
     narrative = checkpoints.narrate(cfg, entries, request_id="x4-pin")
@@ -381,11 +430,11 @@ def test_x4_request_equals_narrates(world, monkeypatch, capsys):
     assert sha == narrative.prompt_sha256
 
 
-def test_x4_clause_holds_no_reply_text(world, monkeypatch, capsys):
+def test_x4_clause_holds_no_reply_text(world, x4_kept, monkeypatch, capsys):
     marker = "constructed reply words"
     world.reply = json.dumps({"lines": [{"phrase_id": "leader", "refs": [0]}], "note": marker})
     code, out, err = _probe(monkeypatch, capsys, "X4")
-    assert code == 1 and out.startswith("PROBE X4 FAIL valid 0/20 · invalid kinds UnsourcedFigure=20")
+    assert code == 1 and out.startswith(f"PROBE X4 FAIL {X4_SOURCES}valid 0/20 · invalid kinds UnsourcedFigure=20")
     assert marker not in out and marker not in err
     assert re.search(r"\d\.\d", out) is None, "no figure in the line"
 
@@ -457,7 +506,8 @@ def _setup(world, monkeypatch, how):
     ("X13", "OK", 0, None), ("X13", "FAIL", 1, "window_open"),
     ("X5", "NOT RUN", 3, None), ("X7", "NOT RUN", 3, None), ("X10", "NOT RUN", 3, None),
 ])
-def test_each_item_prints_one_line_and_exits_by_verdict(world, monkeypatch, capsys, item, verdict, code, how):
+def test_each_item_prints_one_line_and_exits_by_verdict(world, x4_kept, monkeypatch, capsys, item, verdict, code,
+                                                         how):
     _setup(world, monkeypatch, how)
     got, out, _ = _probe(monkeypatch, capsys, item)
     lines = out.split("\n")
@@ -486,3 +536,144 @@ def test_x6_rule_d_steps_the_indices_and_rotates_the_sectors(world, monkeypatch,
     rotated = SECTORS[(SECTORS.index(top) - 3) % len(SECTORS)]
     assert f"leader: {rotated} (+{DISTINCT[top]}%)" in texts[0]
     assert f"leader: {top} (+{DISTINCT[top]}%)" in texts[3]
+
+
+# ===========================================================================
+# f5-probe-x4-fix (card 989) — the Finviz leg at the repo root; X4 needs no Finviz
+# ===========================================================================
+
+
+def test_fr1_the_finviz_leg_runs_at_the_repo_root(world, monkeypatch, capsys, tmp_path):
+    """The old tree resolves `configs/` and `data/.cobalt_vault` against the
+    cwd (`cobalt_agent/config.py:543`, `security/vault.py:19`): the gate check
+    and the fetch must see the repo root, never the scratch. A path compare
+    only; the vault file is never opened."""
+    from cobalt.prefill import checkpoint_probe, checkpoints
+
+    monkeypatch.chdir(tmp_path)
+    seen = []
+
+    def recorder(name, inner):
+        def record(*a, **kw):
+            seen.append((name, Path.cwd(), Path("data/.cobalt_vault").resolve()))
+            return inner(*a, **kw)
+
+        return record
+
+    for name in ("check_demand", "fetch_figures"):
+        monkeypatch.setattr(checkpoints, name, recorder(name, getattr(checkpoints, name)))
+    code, out, _ = _probe(monkeypatch, capsys, "X6")
+    assert code == 0, out
+    assert [name for name, *_ in seen] == ["check_demand", "fetch_figures"]
+    root = checkpoint_probe.REPO_ROOT
+    for name, cwd, vault in seen:
+        assert cwd == root, f"{name} ran at {cwd}, where cobalt_agent/config.py:543 finds no configs/"
+        assert (cwd / "configs").is_dir()
+        assert vault == root / "data" / ".cobalt_vault"
+
+
+def test_fr2_the_scratch_holds_everything_but_the_fetch(world, monkeypatch, capsys, tmp_path):
+    from cobalt.prefill import checkpoint_probe
+
+    monkeypatch.chdir(tmp_path)
+    here = Path.cwd()
+    seen = []
+    world.on_call = lambda req: seen.append(Path.cwd())
+    code, out, _ = _probe(monkeypatch, capsys, "X6")
+    assert code == 0, out
+    assert len(seen) == 4
+    for cwd in seen:
+        assert cwd.name.startswith("f5-probe-") and cwd != checkpoint_probe.REPO_ROOT
+        assert not cwd.exists(), "the scratch dir is gone"
+    assert Path.cwd() == here
+
+    with pytest.raises(RuntimeError, match="constructed failure"):
+        with checkpoint_probe._at_repo():
+            assert Path.cwd() == checkpoint_probe.REPO_ROOT
+            raise RuntimeError("constructed failure inside the fetch")
+    assert Path.cwd() == here, "the cwd is restored on an exception"
+
+
+def test_x4_model_calls_run_in_the_scratch(world, x4_kept, monkeypatch, capsys, tmp_path):
+    """Check O1: X4 reaches no Finviz, so none of its steps may leave the scratch."""
+    from cobalt.prefill import checkpoint_probe
+
+    monkeypatch.chdir(tmp_path)
+    here = Path.cwd()
+    seen = []
+    world.on_call = lambda req: seen.append(Path.cwd())
+    code, out, _ = _probe(monkeypatch, capsys, "X4")
+    assert code == 0, out
+    assert len(seen) == 20
+    for cwd in seen:
+        assert cwd.name.startswith("f5-probe-") and cwd != checkpoint_probe.REPO_ROOT, f"an X4 call ran at {cwd}"
+        assert not cwd.exists(), "the scratch dir is gone"
+    assert Path.cwd() == here
+
+
+def _no_finviz(monkeypatch):
+    """Every Finviz seam X4 could reach raises."""
+    import httpx
+
+    import cobalt.aset.prefill
+    from cobalt.prefill import checkpoints, market
+
+    def boom(name):
+        def reached(*a, **kw):
+            raise AssertionError(f"{name} reached")
+
+        return reached
+
+    for name in ("check_demand", "fetch_figures", "fetch_groups", "fetch_market_table", "resolve_token"):
+        monkeypatch.setattr(checkpoints, name, boom(name))
+    monkeypatch.setattr(cobalt.aset.prefill, "resolve_token", boom("resolve_token"))
+    monkeypatch.setattr(market, "resolve_token", boom("resolve_token"))
+    monkeypatch.setattr(httpx, "AsyncClient", boom("httpx"))
+
+
+def test_fr3_x4_reaches_no_finviz(world, x4_kept, monkeypatch, capsys):
+    _no_finviz(monkeypatch)
+    code, out, _ = _probe(monkeypatch, capsys, "X4")
+    assert code == 0, out
+    assert out.startswith("PROBE X4 OK groups: kept capture · indices: constructed · valid 20/20")
+    assert len(world.calls) == 20
+    assert world.gets == 0 and world.groups_gets == 0
+
+
+def test_fr3_x4_without_a_body_is_not_run(world, x4_paths, monkeypatch, capsys):
+    _no_finviz(monkeypatch)
+    assert _probe(monkeypatch, capsys, "X4")[:2] == (
+        3, "PROBE X4 NOT RUN — no real Groups body (X6 --keep-groups capture or the row (b) fixture)\n")
+    assert world.calls == []
+
+
+def test_fr3_the_fixture_wins_over_the_kept_capture(world, x4_paths, monkeypatch, capsys):
+    fixture = {n: f"{float(c) + 0.05:.2f}" for n, c in DISTINCT.items()}  # eleven Changes, none of DISTINCT's
+    assert not set(fixture.values()) & set(DISTINCT.values())
+    _write_body(x4_paths.kept, DISTINCT)
+    _write_body(x4_paths.fixture, fixture)
+    _no_finviz(monkeypatch)
+    code, out, _ = _probe(monkeypatch, capsys, "X4")
+    assert code == 0, out
+    assert out.startswith("PROBE X4 OK groups: row (b) fixture · indices: constructed · ")
+    first = " ".join(e["text"] for e in _sent(world.calls[0]))
+    assert f"(+{max(fixture.values(), key=float)}%)" in first
+    assert f"(+{max(DISTINCT.values(), key=float)}%)" not in first
+
+
+def test_fr3_a_short_body_is_not_run(world, x4_paths, monkeypatch, capsys):
+    _write_body(x4_paths.kept, DISTINCT, drop=1)
+    _no_finviz(monkeypatch)
+    assert _probe(monkeypatch, capsys, "X4")[:2] == (
+        3, "PROBE X4 NOT RUN — the Groups body is not the 11 sector rows\n")
+    assert world.calls == []
+
+
+def test_fr3_an_index_x4_indices_lacks_is_not_run(world, x4_kept, monkeypatch, capsys):
+    from cobalt.prefill import checkpoint_probe
+
+    monkeypatch.setattr(checkpoint_probe, "X4_INDICES",
+                        {t: v for t, v in checkpoint_probe.X4_INDICES.items() if t != "IWM"})
+    _no_finviz(monkeypatch)
+    assert _probe(monkeypatch, capsys, "X4")[:2] == (3, "PROBE X4 NOT RUN — X4_INDICES lacks IWM\n")
+    assert world.calls == []
