@@ -139,3 +139,29 @@ def test_c_a_cos_outside_the_set_reads_and_prints_as_today():
 def test_f4_the_stop_line_and_rule_f_carry_the_cos_field():
     assert "`com.cobalt.cos` in `<restart set>` adds `— cos: <UP|DOWN>` after the aset field" in one(STOP5)
     assert "and `cos: DOWN` when `com.cobalt.cos` is in `<restart set>`" in one(RULE_F)
+
+
+# ---- check A4, A5: the clauses F1 (b), (c) and F2 (f) name, each pinned -----------------------
+
+def test_a4_the_standing_list_rows_say_three_and_the_heading_counts_the_line():
+    import re
+    s3 = LIST.read_text(encoding="utf-8").split("\n## 3. ", 1)[1].split("\n## 4. ", 1)[0]
+    for s in TWINS:
+        (row,) = [ln for ln in s3.splitlines() if s in ln]
+        assert "those three services" in row, row
+    line = one("claude --bg ")
+    for token in (" <tip merges>", " <prod migrate strings>", " <launchd strings>"):
+        line = line.replace(token, "", 1)
+    literal = tools(line, "--allowedTools")
+    (head,) = [ln for ln in lines(LIST) if ln.startswith("## 3. ")]
+    m = re.search(r"— (\d+) allow with one head and a migration \((\d+) without a migration", head)
+    assert m, head
+    # one head merge, and the three migrate strings with a migration
+    assert (int(m.group(1)), int(m.group(2))) == (len(literal) + 1 + 3, len(literal) + 1), head
+
+
+def test_a5_the_harmless_variant_row_names_three_of_each():
+    (row,) = [ln for ln in lines() if "NO HARMLESS VARIANT, strings with no wildcard" in ln]
+    for verb in ("bootout", "bootstrap", "kickstart -k"):
+        assert f"the three `{verb}`" in row, verb
+        assert f"the two `{verb}`" not in row, verb
