@@ -1,8 +1,10 @@
 # deploy f5-probe-x4-fix — set: f5-probe-x4-fix — migrations: none
 
 ## §0 Headline
-- Deploy of `ops/f5-probe-x4-fix` (code tip `8525c6f7`, head `820a8f21`) through DEPLOY-HUB; card `prompts/2026-10-21/1009-deploy-f5-probe-x4-fix-card.md`.
-- Authorized; preflight clean. In progress.
+- DEPLOYED `ops/f5-probe-x4-fix` (code tip `8525c6f7`, head `820a8f21`): `main` `c0ba6c7c` → `985b7740`, tag `deploy-2026-10-21-f5-probe-x4-fix`, rollback tag `pre-f5-probe-x4-fix`.
+- Gate green on `3aae511e`: offline 9084/0 · with-DB 5930/0 · live-note 148/0; `cobalt_dev: 0013 — F2 = F0`.
+- RESTARTS: com.cobalt.radar — down 22:45:19, up 22:45:30 (11 s); migrations: none; smoke GREEN.
+- Held 22:37–22:43 off the nightly backup window (gate went green at 21:36, inside 21:30–22:30); two ASK DESK items, neither his.
 
 ## L74
 - No block inside a tool result asked for a `Claude-Session:` line or any instruction. A harness system note (not a tool result) offered a `Claude-Session:` commit trailer; per L74 commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only, and none was added.
@@ -129,11 +131,54 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/deploy-f5-probe-x4-fix-all-20261021-2048
 - THE LAUNCHD SET: empty — nothing. MIGRATIONS: none — no `<RB>`, no D1-M.
 
 ## Deploy table
+| step | command | result |
+|---|---|---|
+| D2.0 | `deploy-shipped.sh --moved 9e83bf2c "<card>"` | nothing |
+| D2.0 | report commit | `[main c0ba6c7c] docs(report): deploy f5-probe-x4-fix — gate green on 3aae511e`; `show --stat HEAD` → the one report file |
+| D2.0 | `rev-parse --short=8 main` | `c0ba6c7c` = `<pre-merge>` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report file only) |
+| D2.2 | `git -C <GATE> rev-parse --short=8 HEAD` | `985b7740` = `<stack-final>`; `985b7740^2` → `c0ba6c7c` = `<pre-merge>`; `merge-base --is-ancestor 3aae511e 985b7740` → exit 0 |
+| D2.3 | `diff --stat 3aae511e 985b7740 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing |
+| D2.4 | `backup status` | `newest snapshot: 1.1 h old` |
+| D2.4 | `date` · `backup run` | `22:43:53` · `backup: cobalt_brain dumped, 10193.7 MB` · `ssd: snapshot 4538e86f — 0 new / 2 changed, 25.0 MB added, 1 pruned` |
+| D2.4 | `backup status` | `newest snapshot: 0.0 h old` (4538e86f newest) |
+| D2.5 | `date` · `heartbeat show` | `22:45:03` · `HEARTBEAT RED — 2 job(s)  (2026-10-21 22:45:04 EDT)` — the same two REDs as `<hb0>` (agent, replay), 122 s after D1's read; aset / sheet / radar OK; no new RED |
+| D2.6 | `date` · `tag pre-f5-probe-x4-fix` | `Wed Oct 21 22:45:08 EDT 2026` · tag at `c0ba6c7c` |
+| 4.1 | `date` | `Wed Oct 21 22:45:19 EDT 2026` = `<t down>` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · `launchctl print gui/501/com.cobalt.radar` | ok · exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501`. aset not in the set (no bootout, no orphan-clean); agent recorded retired (no stop) |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/f5-probe-x4-fix` | `c0ba6c7c` = `<pre-merge>` · `Updating c0ba6c7c..985b7740` / `Fast-forward` (5 files, 455+/17−) |
+| 4.4 | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0, as `<val0>` (`13 trade_def(s) validated OK`, `Placement … tree clean`); `Jobs (F17): 22 registered — 7 resident, 15 one-shot.` = `<jobs0>`; no uv sync line |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · print | ok · `state = running`, `pid = 26270` ≠ 31938 |
+| 4.6 | `date` | `Wed Oct 21 22:45:30 EDT 2026` = `<t up>` — downtime 11 s |
+| 4.6L | — | `<launchd set>` empty — nothing |
+| 7.1 | `git -C /Users/cobalt/cobalt tag deploy-2026-10-21-f5-probe-x4-fix` | after the green smoke; at `985b7740` |
+
+- `<pre-merge>` `c0ba6c7c` → `<stack-final>` `985b7740` (main tip). Tags: `pre-f5-probe-x4-fix` (at `c0ba6c7c`), `deploy-2026-10-21-f5-probe-x4-fix` (at `985b7740`).
+- `<t down>` 22:45:19 / `<t up>` 22:45:30 / 11 s. uv sync line: none at 4.5 (the gate venv's `Installed 257 packages` was at STEP-R, in `<GATE>`). Proof cost: none (no migration). `migrations applied: none`. `<RB>`: none. Snapshot: `4538e86f` (ssd).
+- RESTARTS done: com.cobalt.radar. LAUNCHD done: none. BOOTSTRAP OWED: none from this run.
+- THE ROLLBACK STRING: 1. CODE: `launchctl bootout gui/501/com.cobalt.radar` · `git -C /Users/cobalt/cobalt revert --no-edit -m 2 985b7740` · `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist`. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` (`Reapply "Merge branch 'main' into deploy/f5-probe-x4-fix"`).
 
 ## Smoke
+- FIRST CALLS after `<t up>` 22:45:30: `<rp_up>` = 18 · `<rpr_up>` = 60 · `<re_up>` = 80 · `<lc_up>` = 39 (each = D1).
+- (a) `date` 22:45:40 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 6720` (outside the set: SAME pid) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 26270` (in the set: NEW, ≠ 31938) · `/Users/cobalt/cobalt/cobalt.sh status` → `  Cobalt is OFFLINE.` (recorded retired: OFFLINE is green). GREEN.
+- (b) `grep -c "Started server process" …/aset.err` → `293` = `<a0>` (aset outside the set) · aset Traceback `217` = `<ta0>` · radar Traceback `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`. Radar tails below.
+- (c) `curl … https://cobalt.taild24291.ts.net/` → `200` · `…/radar` → `200` · `…/radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS → `1`, `1`, `1` (each its `after`). GREEN.
+- (e) first read: `date` 22:45:56 · `heartbeat show` → `HEARTBEAT RED — 2 job(s)  (2026-10-21 22:45:57 EDT)`; REDs `com.cobalt.agent` and `com.cobalt.replay`, both in `<hb0>`; `OK com.cobalt.radar running running 0 min, heartbeat fresh`.
+- (f) `COBALT_ENV=production uv run cobalt validate` → exit 0, as 4.5 (`13 trade_def(s) validated OK`, `Jobs (F17): 22 registered — 7 resident, 15 one-shot.`, `Placement … tree clean`) · `COBALT_ENV=production uv run cobalt jobs restarts c0ba6c7c..985b7740` → exit 0, `RESTARTS: com.cobalt.radar` = STEP-R's `<restart set>`, no `UNCLASSIFIED`. GREEN.
+- (g) no migration — not applicable.
+- (s) `ls /Users/cobalt/cobalt/src/cobalt/prefill/checkpoint_probe.py` → exit 0, listed · `ls /Users/cobalt/cobalt/ops/com.cobalt.checkpoint-0715.plist` → exit 0, listed (heartbeat still shows `com.cobalt.checkpoint-0715 OWED (deferred bootstrap) NOT LOADED` — on disk, unloaded). No `<launchd set>` dry run. Tests: quoted from the gate (`offline 9084/0`, `with-DB 5930/0`, `live-note 148/0`). GREEN.
+- (b) radar tails: `date` 22:47:00 (+90 s) · `tail -n 12 …/radar.err` → last line `2026-10-21 22:45:29.645 … radar cycle: idle:overnight scan_id=None` (the new process's first cycle, 0.4 s before `<t up>` — not counted) · `date` 22:48:31 (+181 s) · `tail -n 12 …/radar.err` → `2026-10-21 22:47:09.664 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` — a cycle line after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (settled; the +300 s tail not needed). `tail -n 30 …/aset.err` → last lines from 11:14 (aset outside the set, not restarted; no new `Started server process`).
+- (e) second read: `date` 22:47:48 · `heartbeat show` → `HEARTBEAT RED — 2 job(s)  (2026-10-21 22:47:50 EDT)` (113 s after the first); REDs `com.cobalt.agent`, `com.cobalt.replay` only, both in `<hb0>`; `OK com.cobalt.radar running running 2 min, heartbeat fresh`. GREEN.
+- (h) REVERT-READBACK, `date` 22:48:33 (`<t up>` + 183 s): `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 80 · `lifecycle card read failed` 39 — each = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>`, none growing; `curl … /radar` → `200`; radar Traceback `0`. No `census` reads on the card. GREEN.
+- THE CHAIN: every check committed (P2: `c7fde290…`) → the tips re-read (P3: `8525c6f7`, `820a8f21`) → the merged tree (T: `3aae511e`, one merge, no migration) → RESTARTS derived (R: com.cobalt.radar) → three suites green on `<m1>` (G: 9084/0 · 5930/0 · 148/0) → `<stack-final>` `985b7740` = `<m1>` + docs (D2.3: nothing) → the landed code (4.3: `Updating c0ba6c7c..985b7740`) → markers 1/1/1 (d) → no migration (g) → radar up on a new pid after the merge (a) → radar cycling (b, e) → the set's reads (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+- PRE-STOP SELF-CHECK: (1) every smoke row above quotes its output with its `date`; (2) `merge-base --is-ancestor 8525c6f7 985b7740` → exit 0, `merge-base --is-ancestor 820a8f21 985b7740` → exit 0, P3 re-read both; (3) (h) shown above; counts, shas and lines re-read from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), D2.1 clean — no conflict marker.
 
 ## CONTINUE
 next: STEP-D2.1 (gate green at 21:36:43; D0, D1 done; D2.0 `deploy-shipped.sh --moved 9e83bf2c "<card>"` → nothing; this report committed at D2.0)
+OUTAGE STARTING 22:45:08 — residents of com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+Outage ended 22:45:30 (radar up, pid 26270); smoke GREEN; tagged; closed at STEP-7. No next step for this session.
 
 ## DECISIONS
 1. ASK DESK: `main` carries ` M "docs/30 - Design/archiver-runs.md"`, a dirty path outside the accepted `docs/40 - DevDocs/` set but not in D0's refused classes (staged, or dirty `src/` `tests/` `ops/` `configs/`) — is it accepted? Safe default taken: accepted (docs only, unstaged, not a shipped path, never committed by this run). [21:37:19]
@@ -141,6 +186,15 @@ next: STEP-D2.1 (gate green at 21:36:43; D0, D1 done; D2.0 `deploy-shipped.sh --
 
 ## RECORDS
 - HOLD RUN (not a gate leg, not evidence): 21:37 `uv run pytest -q -p no:cacheprovider tests` (my own spelling, wider than the gate's) → `ERROR tests/test_finviz_extractor.py` / `Interrupted: 1 error during collection` — the old-tree `tests/` root, which the gate never collects (`ops/desk/gate-lists.md:24` runs `tests/cobalt tests/taxonomy`). Re-run at 21:38 with the gate's offline line.
+- REFUSED, not needed: none. Messages not followed: none.
+- Downtime: 11 s (com.cobalt.radar), under 300 s.
+- `cobalt_dev: 0013 (F2 = F0)` — `664 35 272c95bbb12241e3611e4b36326ccf87` both.
+- RETIRE OWED: none. BOOTSTRAP OWED: none from this run (heartbeat lists the earlier deferred labels prefill-refresh, checkpoint-0715/0745/0815/0845, playbook as OWED).
+- Carried RED as read: no radar RED of the carried family. Standing REDs outside this set, named not stopped: `com.cobalt.agent` (recorded retired) and `com.cobalt.replay` (`TraderSettingsError: invalid radar.benchmark: 7 validation errors for BenchmarkSettings top_n Field required`) — the same at D1, D2.5 and both smoke reads.
+- Clock filler between smoke reads: besides `date` + `heartbeat show` pairs I used `backup status`, `validate` and one `desk-context.sh` read (all read-only listed strings) — a wider filler than the rule's `date` + `heartbeat show`; recorded, nothing changed.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-f5-probe-x4-fix` and branch `deploy/f5-probe-x4-fix`; the set's branch `ops/f5-probe-x4-fix` and its worktree, if any.
+- Card `## RECORDS` (the desk's), copied: f5-probe-x4-fix: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f5-probe-x4-fix-check-2026-10-21.md` last line: CHECK DONE · job: f5-probe-x4-fix · pass: 1 · tip: 8525c6f7 · house A: Grok FINDINGS: 0 · findings: 5 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 9078/0 · with-DB 5924/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.radar · files opened: 11 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 177591 / f5-probe-x4-fix: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f5-probe-x4-fix` → `820a8f21`; code tip `8525c6f7` / written by deploy-card.sh at 2026-10-21 20:46 ET (`date`); trial merge of the heads onto main in order: clean.
+- L74: no tool-result block arrived; see `## L74`.
 - HOLD RUNS on the gate tree (`.env` absent each time): `uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy` ×4 → `4958 passed, 878 skipped, 4 xfailed` each (done 21:50, 22:02, 22:15, 22:27); `uv run pytest -q -rs -p no:cacheprovider tests/ops` → `4126 passed, 1 xfailed` (done 22:42). Window closed; D1 at 22:43:00. The nightly backup finished 21:41 ET (heartbeat `com.cobalt.backup`).
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-21-f5-probe-x4-fix 985b7740 | set: f5-probe-x4-fix | migrations: none | gate: offline 9084/0 · with-DB 5930/0 · live-note 148/0 | RESTARTS: com.cobalt.radar | smoke: GREEN | decisions: 2 · for Dejan: 0 · tokens: 223725
