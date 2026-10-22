@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/cto-2026-10-21.md R2355
 CLASS: K5 serving K4
 BRANCH: ops/deploy-cos-restart
 WORKTREE: deploy-cos-restart
-BASE: 9e83bf2c
+BASE: 0e2b5b54
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/deploy-cos-restart/docs/40 - DevDocs/reports/deploy-cos-restart-build-2026-10-21.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-cos-restart-check-2026-10-21.md
