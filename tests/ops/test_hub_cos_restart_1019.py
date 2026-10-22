@@ -4,7 +4,6 @@ Read on the real DEPLOY-HUB.md, in the form of tests/ops/test_hub_deferred_1018.
 only the lines its row changes, found by their own text (no whole-line pin, no BASE hash).
 R1: STEP-R's set check admits `com.cobalt.cos`: the restartable set is agent, aset, cos, radar.
 R2: a restart-set label that is not loaded is skipped and acts on nothing.
-R3: a loaded cos in the restart set stops the run at STEP-R; no cos allow string is added (R60).
 """
 
 from __future__ import annotations
@@ -20,10 +19,6 @@ SKIPPED = "com.cobalt.cos: not loaded — skipped"
 ANYTHING_ELSE = (
     "Anything else (an `UNCLASSIFIED` row, `com.cobalt.herdr` / `com.cobalt.mainframe` / "
     "`com.cobalt.obsidian`, a non-zero exit)"
-)
-REFUSED = (
-    "FAILED: RESTARTS — com.cobalt.cos is loaded; its bootout and bootstrap strings are not on "
-    "the deploy list (R60), they are asked of Dejan · rollback: not used"
 )
 
 AGENT, ASET, COS, RADAR = (f"com.cobalt.{n}" for n in ("agent", "aset", "cos", "radar"))
@@ -81,13 +76,3 @@ def test_r2_a_not_loaded_cos_is_skipped_and_acts_on_nothing():
     assert "com.cobalt.cos loaded since STEP-R" in d1
     smoke_f = one("- (f) `COBALT_ENV=production uv run cobalt validate`")
     assert "not loaded — skipped" in smoke_f
-
-
-# ---- R3: a loaded cos still stops the run at STEP-R -------------------------------------------
-
-def test_c3_a_loaded_cos_still_refuses():
-    at = [ln for ln in lines() if ln.startswith(NOT_LOADED)]
-    assert len(at) == 1, "no `- NOT LOADED` line"
-    assert REFUSED in at[0]
-    assert "com.cobalt.cos loaded <state or path>" not in at[0]
-    assert COS not in one("claude --bg ")

@@ -20,6 +20,11 @@ SMOKE = "Bash(COBALT_ENV=production uv run cobalt smoke *)"
 HEARTBEAT = "Bash(COBALT_ENV=production uv run cobalt heartbeat show*)"
 BACKUP_RUN = "Bash(COBALT_ENV=production uv run cobalt backup run*)"
 PROD = "Bash(COBALT_ENV=production"
+COS_STRINGS = (
+    "Bash(launchctl bootout gui/501/com.cobalt.cos)",
+    "Bash(launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.cos.plist)",
+    "Bash(launchctl kickstart -k gui/501/com.cobalt.cos)",
+)
 
 
 def hub_line(name: str) -> str:
@@ -73,9 +78,13 @@ def test_s1_the_deploy_line_allows_cobalt_smoke_once():
 def test_s1_no_other_allow_or_deny_string_changes():
     line = hub_line("DEPLOY-HUB.md")
     then = base_hub_line("DEPLOY-HUB.md")
-    assert [s for s in tools(line, "--allowedTools") if s != SMOKE] == tools(then, "--allowedTools")
+    # card 2026-10-21/1008 F1 (his 2026-10-20 R2240): the three cos strings are set aside as SMOKE is
+    aside = (SMOKE, *COS_STRINGS)
+    assert [s for s in tools(line, "--allowedTools") if s not in aside] == tools(then, "--allowedTools")
     assert tools(line, "--disallowedTools") == tools(then, "--disallowedTools")
-    assert line.replace(f'"{SMOKE}" ', "", 1) == then
+    for s in aside:
+        line = line.replace(f'"{s}" ', "", 1)
+    assert line == then
 
 
 # ---- S2: STANDING-LIST.md ## 3. --------------------------------------------------------------
