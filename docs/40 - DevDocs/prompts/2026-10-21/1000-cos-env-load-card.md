@@ -3,7 +3,7 @@ LADDER: S5-P3 · F20
 BRANCH: ops/cos-env-load
 WORKTREE: cos-env-load
 BASE: 7f89b98f
-TIP: 9293c759
+TIP: 5b813fa4
 REPORT: /Users/cobalt/cobalt-wt/cos-env-load/docs/40 - DevDocs/reports/cos-env-load-build-2026-10-21.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-env-load-check-2026-10-21.md
 HOUSE B: as needed
