@@ -1,12 +1,12 @@
 JOB: x15-hitl-probe-port
 LADDER: OFF-LADDER — reports/cto-2026-10-21.md R2285
-BRANCH: deploy/x15-hitl-probe-port
-WORKTREE: deploy-x15-hitl-probe-port
+BRANCH: deploy/x15-hitl-probe-port-attempt2
+WORKTREE: deploy-x15-hitl-probe-port-attempt2
 BASE: main
 TIP: c062baf7
-REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-x15-hitl-probe-port.md
+REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/deploy-x15-hitl-probe-port-attempt2.md
 RULINGS: 2026-10-18 R1863
-TAG: deploy-2026-10-21-x15-hitl-probe-port
+TAG: deploy-2026-10-21-x15-hitl-probe-port-attempt2
 MIGRATIONS: none
 SET: x15-hitl-probe-port
 TICKERS: none
