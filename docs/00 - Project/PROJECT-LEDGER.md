@@ -5158,3 +5158,104 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-20*"` = `deploy-2026-10-20-cos-cutover-tooling`, `deploy-2026-10-20-cos-probe-fr1`, `deploy-2026-10-20-cos-probe-fr2b`, `deploy-2026-10-20-f16-close-fr3`, `deploy-2026-10-20-f21-vectors-1013`, `deploy-2026-10-20-f5-checkpoints-fr2`.
 - STOP LINE (L35), `reports/close-2026-10-19.md`: `CLOSE PUSHED af65e764`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-20.md` `## 8`.
+
+### 2026-10-21 — Six deploys land (x3-values port, cos-tunables, f5-probe, cos-env-load, cos-bootstrap-2, f5-probe-x4-fix); 929 and 994 failed and rolled back; agent retired; WBD removed
+
+- R2265 00:01 RECORD: day report opened; OWED carried from the 10-20 §5.
+- R2266 00:12 LAUNCHED: 958 check ready YES; deploy hub `9fdcae40`; 933 FR-3 build `5acf255d`.
+- R2267 01:11 DESK RECORD: 958 deploy FAILED smoke (s), rolled back `7e4f946d`; fresh port f5-x3-values-port.
+- R2268 01:16 LAUNCHED: card 965 DRAFTED `a786484a`; preflight `3f1f0241`.
+- R2269 01:17 LAUNCHED: 965 preflight YES; port build `c3906ba8`.
+- R2270 01:24 LAUNCHED: 933 FR-3 BUILT `f2899be6`; check `c726e862`.
+- R2271 02:11 LAUNCHED: 958 port BUILT `fc2ffb3b`; check `a5992457`.
+- R2272 02:34 LAUNCHED: 933 FR1 check ready YES tip `0b8bf093`; deploy hub `8b367ee9`.
+- R2273 03:09 RECORD: 958 port check ready YES tip `fc2ffb3b`; deploy card 968.
+- R2274 03:37 LAUNCHED: 933 cos-tunables DEPLOYED `1d6f649e`; 958 port deploy hub `6fab1255`.
+- R2275 03:42 RECORD: desk `818d62f5` took over from `18d8abaa`.
+- R2276 03:50 RECORD: 958 f5-x3-values-port DEPLOYED `4d82f2c1`.
+- R2277 06:05 DESK RECORD: agent-retirement row rewritten, at 16:00 ET 10-21.
+- R2278 07:01 LAUNCHED: day-open 10-21 launched 07:00.
+- R2279 07:30 DESK RECORD: X2 runs inside an F5 gate run; plists stay unloaded.
+- R2280 07:36 LAUNCHED: day-open AMBER (C5 only); gate-run drafter `af0bb941`; DAY PLAN 10-21 written.
+- R2281 07:50 LAUNCHED: 970 DRAFTED; preflight `9a8a7c2d`.
+- R2282 07:58 DESK RECORD: 970 decisions ruled; f5-probe K2 card; drafter prompt 972.
+- R2283 08:05 RECORD: 970 preflight YES; f5-probe drafter `3984d203`.
+- R2284 07:42 DESK RECORD: card 973 DRAFTED (7 decisions); preflight prompt 974.
+- R2285 12:15 DESK RECORD: X15 card GO (/hitl/x15-probe); 973 preflight NO; amend drafter `6a814a1c`.
+- R2286 12:20 LAUNCHED: 973 preflight r2 YES; build `cf5a0353`.
+- R2287 12:21 DESK RECORD: Scribe survey; old Scribe retires with the agent; X15 card 977 DRAFTED.
+- R2288 12:30 LAUNCHED: 977 preflight r2 YES; build `26959f7e`.
+- R2289 13:05 LAUNCHED: X15 build `26959f7e` FAILED at W; files-amend drafter `12f585bb`.
+- R2290 13:14 RECORD: f5-probe 973 BUILT `c2565a9f`.
+- R2291 13:16 LAUNCHED: desk REFRESH; f5-probe check `fb4cdbc3`.
+- R2292 13:17 RECORD: desk `7b3706cd` took over from `818d62f5`.
+- R2293 13:40 RECORD: x15-hitl-probe 977 BUILT `ca39b027`.
+- R2294 13:41 LAUNCHED: 977 check `fe0c09af`.
+- R2295 14:26 DESK RECORD: f5-probe check, four ASK DESKs kept; check `fb4cdbc3` closed.
+- R2296 14:27 RECORD: f5-probe deploy card 984 `1c2da55f`.
+- R2297 14:27 LAUNCHED: f5-probe deploy hub `dec40645`.
+- R2298 14:37 RECORD: f5-probe DEPLOYED `41be0e80`.
+- R2299 14:38 LAUNCHED: gate-probe amend drafter (prompt 985).
+- R2300 14:40 RECORD: 970 amended `bff47b81`.
+- R2301 14:41 LAUNCHED: preflight r2 of 970 `600bbc40`.
+- R2302 14:42 RECORD: 970 preflight r2 YES.
+- R2303 14:43 LAUNCHED: F5 gate hub `a140107f`.
+- R2304 14:45 RECORD: gate pass 1 ok 1 fail 0 not run 9.
+- R2305 14:47 LAUNCHED: CONTINUE sent to `a140107f` for X2, X6, X4.
+- R2306 14:53 RECORD: 977 CHECK DONE ready YES tip `c1b4b785`.
+- R2307 14:54 RECORD: gate pass 2 ok 1, not run 9; brain asked.
+- R2308 14:55 DESK RECORD: F5 gate pass 2 rulings; 977 deploys first.
+- R2309 14:55 LAUNCHED: drafters 987 (X4 fix card 989) and 988 (gate pass 3).
+- R2310 14:59 RECORD: 970 pass 3 DRAFTED `e36b1881`.
+- R2311 15:00 LAUNCHED: preflight r3 of 970 `070514de`.
+- R2312 15:01 LAUNCHED: card 989 DRAFTED `63354cf2`; preflight `43e5cc8e`.
+- R2313 15:02 LAUNCHED: gate pass 3 hub `62eb0abd`.
+- R2314 15:03 LAUNCHED: C5 archiver cause survey `56e9d3e7`.
+- R2315 15:04 LAUNCHED: 989 preflight YES; X4 fix build `0c2872f8`.
+- R2316 15:04 RECORD: C5 cause named (Finviz 400 on WBD).
+- R2317 15:05 RECORD: gate pass 3 ok 2 fail 0 not run 8; WBD removal is his word.
+- R2318 15:05 RECORD: desk REFRESH; NOW updated.
+- R2319 15:07 RECORD: desk `354a2834` took over from `7b3706cd`.
+- R2320 15:56 LAUNCHED: 989 BUILT `b5911aed`; check `25ce4b3b`.
+- R2321 15:59 RECORD: 16:00 timer fired; 977 refused on cli.md conflict.
+- R2322 15:59 DESK RECORD: fresh port 994 (HIGH); agent retirement then 929.
+- R2323 16:00 LAUNCHED: drafter `83a5eb3f` (prompt 993) for x15-hitl-probe-port.
+- R2324 16:01 DESK RECORD: agent retirement strings 1-5; step 2 bootout denied by the classifier; NEEDS HIS HAND.
+- R2325 16:04 LAUNCHED: card 994 DRAFTED; preflight (prompt 995).
+- R2326 16:05 LAUNCHED: 994 preflight YES; build `b1b529dd`.
+- R2327 16:58 LAUNCHED: 994 BUILT `304d5f3b`; check `be4462a6`.
+- R2328 17:10 DESK RECORD: agent bootout and plist removal typed by him ~16:1x ET; retired-labels committed.
+- R2329 17:12 DESK RECORD: 929 X15 gate row deferred on his relayed word.
+- R2330 17:14 LAUNCHED: 929 deploy refused by desk-launch (FILL token in prose); drafter `6d767493`.
+- R2331 17:12 LAUNCHED: 929 wording amend DRAFTED; preflight `f2551841`.
+- R2332 17:13 LAUNCHED: preflight r1 1 FAIL; row fixed `971dd96f`; r2 `62eac9a6`.
+- R2333 17:20 LAUNCHED: 989 check ready YES tip `8525c6f7`; 929 deploy hub `20d26af5`.
+- R2334 17:26 RECORD: 929 cos-bootstrap deploy FAILED smoke (s), rolled back; no listener runs.
+- R2335 17:27 DESK RECORD: job cos-env-load HIGH, then cos-bootstrap-2; lock order cos-env-load, 994, 989.
+- R2336 17:27 LAUNCHED: drafter `3fd48290` (prompt 999) for cos-env-load.
+- R2337 17:32 LAUNCHED: card 1000 DRAFTED; preflight `9c4b23c9`.
+- R2338 17:35 LAUNCHED: 1000 preflight YES; cos-env-load build `5c9cb1ee`.
+- R2339 17:38 RECORD: desk `7af670a0` took over from `354a2834`.
+- R2340 17:38 DESK RECORD: his word "proceed with fix, no old agent"; agent stays retired.
+- R2341 18:03 RECORD: 994 CHECK DONE ready YES tip `304d5f3b`.
+- R2342 18:05 DESK RECORD: 18:00 states added under DAY PLAN 10-21.
+- R2343 18:11 DESK RECORD: his word removes WBD from all lists and radar reads; Radar Lists.md:238 edited.
+- R2344 18:13 DESK RECORD: no WBD production read; 10-22 day-open watches for a WBD poll failure.
+- R2345 18:56 LAUNCHED: cos-env-load BUILT `9293c759`; check `0a2fc9ad`.
+- R2346 20:08 LAUNCHED: cos-env-load check ready YES tip `5b813fa4`; deploy hub `ee88eaf1`.
+- R2347 20:17 RECORD: cos-env-load DEPLOYED `ea7f7727`.
+- R2348 20:16 LAUNCHED: drafter `4e9e61ea` (prompt 1003) for cos-bootstrap-2.
+- R2349 20:21 LAUNCHED: card 1004 DRAFTED `5afae482`; preflight `dd52faf5`.
+- R2350 20:24 RECORD: 1004 preflight YES; deploy launch held to 20:35.
+- R2351 20:35 LAUNCHED: cos-bootstrap-2 deploy hub `b5ef76d0`.
+- R2352 20:43 RECORD: cos-bootstrap-2 DEPLOYED `009db8b5`; com.cobalt.cos loaded pid 40998.
+- R2353 20:43 LAUNCHED: 994 deploy hub `7a4ed320` (card 1006).
+- R2354 20:46 RECORD: 994 deploy FAILED at STEP-R, production untouched `9f3e99ed`.
+- R2355 20:47 DESK RECORD: K5 card deploy-cos-restart (BAND HIGH); drafter prompt 1007.
+- R2356 20:46 LAUNCHED: drafter `511353e2` (prompt 1007); 989 deploy hub `b1f4b12f` (card 1009).
+- R2357 20:53 DESK RECORD: 1008 scope; preflight prompt 1010.
+- R2358 22:00 RECORD: archiver 20:30 run DONE 20:54, 209 tickers, 0 failures; close held for the 989 hub.
+- R2359 22:50 RECORD: 989 f5-probe-x4-fix DEPLOYED `985b7740`; close launches.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-21*"` = `deploy-2026-10-21-cos-bootstrap-2`, `deploy-2026-10-21-cos-env-load`, `deploy-2026-10-21-cos-tunables`, `deploy-2026-10-21-f5-probe`, `deploy-2026-10-21-f5-probe-x4-fix`, `deploy-2026-10-21-f5-x3-values-port`.
+- STOP LINE (L35), `reports/close-2026-10-20.md`: `CLOSE PUSHED 679b69a2`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-21.md` `## 8`.

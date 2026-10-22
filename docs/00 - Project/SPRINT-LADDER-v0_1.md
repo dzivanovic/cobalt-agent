@@ -1212,6 +1212,28 @@ OFF-LADDER work of 2026-10-20 (each with the ruling that ordered it):
 | Cos bootstrap (card `929`) | NOT STARTED (preflight YES) | Brain R2198; HIS RULINGS R2232 (D14, page URL), R2240 (R60 strings). Waits per the F20 row above. |
 | Stale-session cleanup | DONE | HIS REQUEST R2143. 460 removed, 0 refused (R2147). |
 
+### Status 2026-10-21
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1021` for 10-21 alone from `reports/cto-2026-10-21.md` rows R2265–R2359 (00:01 → 22:50 ET); tags re-verified (L35): `git tag --list "deploy-2026-10-21*"` = `deploy-2026-10-21-cos-bootstrap-2`, `-cos-env-load`, `-cos-tunables`, `-f5-probe`, `-f5-probe-x4-fix`, `-f5-x3-values-port`. The 10-20 close ran (`CLOSE PUSHED 679b69a2`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F4, F23, F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-20). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) | DONE-DARK | Plists stay unloaded. Gate passes 1-3 ran (R2304, R2307, R2317): X13 and X2 OK, X6 NOT RUN. `deploy-2026-10-21-f5-probe` `41be0e80` (R2298), `-f5-probe-x4-fix` `985b7740` (R2359). Owed: pass 4 (X6 only), then his X5/X7/X10/X12. |
+| S5 F5 X3 values (card `958`, port card `965`) | DONE-DARK | First deploy FAILED smoke (s), rolled back `7e4f946d` (R2267); fresh port `deploy-2026-10-21-f5-x3-values-port` `4d82f2c1` (R2276). |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | 929 FAILED smoke (s), rolled back (R2334); `deploy-2026-10-21-cos-env-load` `ea7f7727` (R2347), `-cos-bootstrap-2` `009db8b5`, `com.cobalt.cos` loaded pid 40998 (R2352). Owed: his one DM turn (LaunchAgent auth proof) and X15 four legs. |
+
+**Stop date: 2026-10-28 (S5, day 7 of 14). S5: AT RISK.** Reason: F5 is dark until gate pass 4 (X6) and his four legs X5/X7/X10/X12 pass; X15 port 994 FAILED deploy at STEP-R (R2354) and waits on K5 card deploy-cos-restart (card `1008` DRAFTED, preflight prompt `1010`). No ruling moved a date (`cto-2026-10-21.md` §0 and DAY PLAN).
+
+OFF-LADDER work of 2026-10-21 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Cos tunables (card `933`) | DONE-LIVE | Brain R2201. `deploy-2026-10-21-cos-tunables` `1d6f649e`, smoke green (R2274). |
+| X15 HITL probe port (card `994`) | BUILT-NOT-MERGED | Brain R2322. Port `304d5f3b`, CHECK DONE ready YES (R2341); deploy FAILED at STEP-R, production untouched (R2354). |
+| Deploy-cos-restart (K5 card `1008`) | NOT STARTED (DRAFTED) | Brain R2355, scope R2357. Preflight prompt `1010` launches after the close; then build, check, deploy, 994 recut. |
+| Agent retirement | DONE | Brain R2324; bootout and plist removal typed by him (R2328); his word R2340, no rollback. |
+| WBD removal | DONE | His word via the brain (R2343): Radar Lists.md:238; archiver 20:30 run 0 failures (R2358). |
+| Scribe survey (979), C5 cause survey | DONE | Brain R2287; R2316. |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
