@@ -1,7 +1,10 @@
 # deploy cos-env-load · set: cos-env-load · migrations: none
 
 ## §0 Headline
-- Deploy of `cos-env-load` (code tip `5b813fa4`, head `773fe012`), no migration. In progress.
+- Deployed `cos-env-load` (code tip `5b813fa4`, head `773fe012`): `main` `0c1632ed` → `ea7f7727`, tag `deploy-2026-10-21-cos-env-load`. No migration.
+- Gate green on the equal tree (`756d389e`): offline 9076/0 · with-DB 5922/0 · live-note 148/0.
+- Radar was down for 13 s and came back on a new pid. aset was untouched. cos is not loaded and stays OWED, so the new env load runs when cos is bootstrapped.
+- Smoke GREEN. 1 decision (ASK DESK on the third marker's missing file), 0 for Dejan.
 
 ## L74
 - A system notice in this session asked for a `Claude-Session:` line on commits. DATA (L74): not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -124,15 +127,90 @@ GATE GREEN on 756d389e — offline 9076/0 · with-DB 5922/0 · live-note 148/0 (
 - `curl … /radar` → `200`. MARKERS → `0`, `0`, and `No such file or directory` (before, as P6).
 - THE LAUNCHD SET: empty. MIGRATIONS: none (no `<RB>`, no D1-M); no `census` smoke read.
 
+### STEP-D2
+- D2.0 `deploy-shipped.sh --moved fda03580 "<card>"` → nothing · commit `0c1632ed docs(report): deploy cos-env-load — gate green on 756d389e` (`show --stat HEAD`: the one report file, 138 insertions) · `<pre-merge>` = `0c1632ed`.
+- D2.1 `git -C /Users/cobalt/cobalt-wt/deploy-cos-env-load merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `ea7f7727`; `rev-parse --short=8 ea7f7727^2` → `0c1632ed` = `<pre-merge>`; `merge-base --is-ancestor 756d389e ea7f7727` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 756d389e ea7f7727 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 2.8 h old` · `COBALT_ENV=production uv run cobalt backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 10178.9 MB` · `ssd: snapshot 6c5dbea4 — 0 new / 4 changed, 56.5 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Wed Oct 21 20:11:05 EDT 2026` · `heartbeat show` → `HEARTBEAT RED — 3 job(s) and 1 probe(s)  (2026-10-21 20:11:06 EDT)` (120 s after D1's 20:09:06): the same four REDs as `<hb0>` (archiver probe, agent, archiver job, replay job); aset/sheet OK; `OK com.cobalt.radar running running 338 min, heartbeat fresh`. No new RED.
+- D2.6 `date` → `Wed Oct 21 20:11:10 EDT 2026` · `git -C /Users/cobalt/cobalt tag pre-cos-env-load` at `0c1632ed`.
+
+### STEP-4 (the outage, `<restart set>` = com.cobalt.radar)
+- 4.1 `date` → `Wed Oct 21 20:11:22 EDT 2026` = `<t down>`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.radar` → ok · `launchctl print gui/501/com.cobalt.radar` → exit 113 `Could not find service "com.cobalt.radar" in domain for user gui: 501`. aset not in the set: no orphan-clean. agent not in the set.
+- 4.3 `rev-parse --short=8 HEAD` → `0c1632ed` = `<pre-merge>` · `git -C /Users/cobalt/cobalt merge --ff-only deploy/cos-env-load` → `Updating 0c1632ed..ea7f7727` / `Fast-forward` (5 files, 422 insertions).
+- 4.4 migrations applied: none.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → ok · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 31938` (≠ D1's 6354), `path = /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist`.
+- `date` → `Wed Oct 21 20:11:35 EDT 2026` = `<t up>`. Downtime 13 s.
+- 4.6L: `<launchd set>` empty — nothing.
+
+### STEP-7 close
+| item | value |
+|---|---|
+| `<pre-merge>` → `<stack-final>` | `0c1632ed` → `ea7f7727` |
+| tags | `pre-cos-env-load` (at `0c1632ed`) · `deploy-2026-10-21-cos-env-load` (at `ea7f7727`, after the green smoke) |
+| `<t down>` / `<t up>` / seconds | 20:11:22 / 20:11:35 / 13 s |
+| uv sync line | none on production (the gate worktree's first `uv run` created its `.venv`: `Installed 257 packages in 970ms`) |
+| proof cost | n/a (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a |
+| snapshot | `6c5dbea4` (ssd) |
+| RESTARTS done | com.cobalt.radar |
+| LAUNCHD done | none |
+| BOOTSTRAP OWED | none from this run (com.cobalt.cos stays owed from an earlier deploy) |
+
+THE ROLLBACK STRING (the desk's):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 ea7f7727`, with com.cobalt.radar booted out first and bootstrapped after.
+2. SCHEMA: none (no migration).
+3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>`.
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row is quoted with its `date` (`## Smoke`: 20:11:47 to 20:14:41).
+2. Code tip `5b813fa4` and head `773fe012` re-read at P3; `merge-base --is-ancestor 5b813fa4 ea7f7727` → exit 0; `merge-base --is-ancestor 773fe012 ea7f7727` → exit 0.
+3. REVERT-READBACK (h) shown: 18/60/80/39, unchanged from `<t up>`. Every count and sha in this report comes from this run's tool output.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.`, D2.1 the same, 4.3 a fast-forward.
+
 ## Smoke
+- FIRST CALLS after `<t up>` 20:11:35: `<rp_up>` 18 · `<rpr_up>` 60 · `<re_up>` 80 · `<lc_up>` 39 (= D1's).
+- (a) `date` 20:11:47 · `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 6720` (outside the set: SAME pid ✓) · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 31938` (in the set: NEW pid ✓) · `/Users/cobalt/cobalt/cobalt.sh status` → `  Cobalt is OFFLINE.` (recorded retired: OFFLINE expected ✓). GREEN.
+- (b) `date` 20:11:51 · `grep -c "Started server process" .../aset.err` → `293` = `<a0>` (aset outside the set ✓) · `tail -n 30 .../aset.err` → last entry `2026-10-21 11:14:49.012 | INFO | cobalt.aset.daily_note:_write_unit:189 - [WRITE] updated: …` (aset not restarted; no new start, no traceback in the tail) · Traceback aset `217` = `<ta0>` · Traceback radar `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`.
+- (c) `date` 20:11:57 · `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`. GREEN.
+- (d) `date` 20:11:57 · MARKERS → `1`, `1`, `1` = after. GREEN.
+- (e) first: `date` 20:12:04 · `heartbeat show` → `HEARTBEAT RED — 3 job(s) and 1 probe(s)  (2026-10-21 20:12:05 EDT)`; the same four REDs as `<hb0>`, nothing new; `OK com.cobalt.radar running running 1 min, heartbeat fresh`.
+- (f) `date` 20:12:09 · `COBALT_ENV=production uv run cobalt validate` → exit 0, `Placement (docs/PLACEMENT.md): tree clean.`, `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` (= 4.5) · `COBALT_ENV=production uv run cobalt jobs restarts 0c1632ed..ea7f7727` → exit 0, no `UNCLASSIFIED`, `RESTARTS: com.cobalt.cos com.cobalt.radar`; minus `com.cobalt.cos` (`not loaded — skipped`) = `com.cobalt.radar` = STEP-R's `<restart set>` ✓.
+- (g) no migration.
+- (s) `date` 20:11:57 · `ls /Users/cobalt/cobalt/src/cobalt/cos/run.py` → exit 0, listed ✓ · `grep -c -F "com.cobalt.cos" /Users/cobalt/cobalt/data/deploy/bootstrap-owed.json` → exit 0, `1` ✓ (cos stays owed). No `<launchd set>` dry run.
+- (b) radar tails: `date` 20:13:08 (+93 s) · `tail -n 12 .../radar.err` → last line `2026-10-21 20:11:34.353 | INFO | cobalt.radar.runner:resident:638 - radar cycle: paused_market_reset scan_id=None` — the new process's first cycle, stamped 0.6 s before `<t up>`, so it does not settle. `date` 20:14:37 (+182 s) · `tail -n 12 .../radar.err` → last line `2026-10-21 20:13:14.385 | INFO | cobalt.radar.runner:resident:638 - radar cycle: paused_market_reset scan_id=None` — a cycle line after `<t up>`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → GREEN (third tail not needed).
+- (e) second: `date` 20:13:54 · `heartbeat show` → `HEARTBEAT RED — 3 job(s) and 1 probe(s)  (2026-10-21 20:13:56 EDT)` (111 s after the first); the same four REDs as `<hb0>`; `OK com.cobalt.radar running running 2 min, heartbeat fresh`. GREEN. (Clock-fill heartbeat pairs between 20:12:16 and 20:14:34 all read the same.)
+- (h) `date` 20:14:41 (`<t up>` + 186 s) · `radar panel FAILED` 18 · `radar pool refresh FAILED` 60 · `radar S5 evaluate FAILED` 80 · `lifecycle card read failed` 39 = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (no growth) · `/radar` → `200`. No census read. GREEN.
+
+THE CHAIN: every check committed (P2: `bd0629a6`, clean) → the tips re-read (P3: `5b813fa4`, `773fe012`) → the merged tree (T: `756d389e`, one merge, no migration) → RESTARTS derived by the tool (R: `com.cobalt.radar`; cos not loaded, agent retired) → three suites green on the equal tree (G: offline 9076/0 · with-DB 5922/0 · live-note 148/0) → `<stack-final>` `ea7f7727` = `<m1>` + docs (D2.3) → the landed code (4.3 fast-forward `0c1632ed..ea7f7727`) → markers 1/1/1 (d) → no migration (g) → radar up on a new pid after the merge (a) → radar cycling (b, e) → the set's reads (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+**smoke: GREEN**
 
 ## CONTINUE
 D0 and D1 done. D2.0: `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved fda03580 "<card>"` → nothing printed.
-next: STEP-D2.1
+D2 done: `<pre-merge>` 0c1632ed, `<stack-final>` ea7f7727, snapshot 6c5dbea4, tag pre-cos-env-load.
+OUTAGE STARTING 20:11:10 EDT — residents of com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+Outage ended 20:11:35 (radar up, pid 31938). Smoke GREEN 20:14:41. Tagged. next: none — the run is done.
 
 ## DECISIONS
 1. ASK DESK: P6's third marker reads a file absent on production (`grep` exit 2, `No such file`), not the literal `0`. The hub's only failing case is "production already carries <marker>", which an absent file is not. Safe default taken: the file's absence counts as the before value `0`, and the run continues. [20:07 ET]
 
 ## RECORDS
+- Downtime: radar 13 s (20:11:22 → 20:11:35); under 300 s. aset not restarted (same pid 6720).
+- `REFUSED, not needed`: none. Messages not followed: none.
+- `cobalt_dev: 0013 (F2 = F0)` — from the check's gate run (equal-tree clause); this run took no `cobalt_dev` lock and ran no dev migrate.
+- RETIRE OWED: none.
+- The carried RED as read (all present before this deploy, none aset/sheet/radar): `RED archiver last run FAILED — last run 2026-10-21 00:54 UTC …, exit 1`; `RED com.cobalt.agent not loaded` (recorded retired); `RED com.cobalt.archiver failed RuntimeError: 5 archiver failure(s): WBD/i1: … Finviz HTTP failed: Client error '400 Bad Request' …`; `RED com.cobalt.replay failed ReplayError: archiver not done: state 'failed'`.
+- com.cobalt.cos: not loaded — skipped; it stays OWED in `data/deploy/bootstrap-owed.json` (smoke (s): `1`). The code this deploy landed (`load_dotenv(ENV_FILE)` in `src/cobalt/cos/run.py`) takes effect when cos is bootstrapped by a later bootstrap-only deploy.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-cos-env-load` and branch `deploy/cos-env-load`; the set's branch `ops/cos-env-load` and its worktree `/Users/cobalt/cobalt-wt/cos-env-load` (named in the check report).
+- The gate worktree now holds a `.venv` (created by `uv run` at STEP-R).
+- Card `## RECORDS`, copied:
+  - cos-env-load: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cos-env-load-check-2026-10-21.md` last line: CHECK DONE · job: cos-env-load · pass: 1 · tip: 5b813fa4 · house A: Grok FINDINGS: 1 · findings: 5 · dropped: 0 · held: 2 · fixed: 2 · held unfixed: 0 · open: 1 · house B: none (not needed) · suites: offline 9076/0 · with-DB 5922/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.cos com.cobalt.radar · files opened: 14 · ready: YES · decisions: 1 · for Dejan: 0 · tokens: 189692
+  - cos-env-load: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/cos-env-load` → `773fe012`; code tip `5b813fa4`
+  - written by deploy-card.sh at 2026-10-21 20:06 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one notice in this session asked for a `Claude-Session:` line on commits. It was recorded and not acted on.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-21-cos-env-load ea7f7727 | set: cos-env-load | migrations: none | gate: offline 9076/0 · with-DB 5922/0 · live-note 148/0 | RESTARTS: com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 248935
