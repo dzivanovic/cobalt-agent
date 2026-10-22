@@ -54,3 +54,9 @@ NEW `probe.py`, mounted by `cli.py` as `cobalt cos probe <item>` (card 877): one
 
 ## 2026-10-20 — cos-probe-fr2 (check)
 `probe.py`: an auth-quote value must match `[a-z0-9._-]+` whole (a trailing newline is `unread`); X2 / X10 count a write over the planted `.mcp.json` as a written file (the before-set holds each entry's bytes); `_x11`'s docstring names the plant project-scope. Check O1, O2, O3.
+
+## 2026-10-21 — cos-env-load
+`run.py` (card 1000): card 929's launchd start died twice on `DbConfigError: Missing Postgres settings for the APP credential` at `store.ensure_schema()`: the plist hands the process only `PATH` and `COBALT_ENV`, `start_cos.sh` exports no Postgres setting, and nothing in `cos` loaded `.env`. NEW module constant `ENV_FILE` (the repo root's `.env`, beside `SCRATCH_DIR`); `main()` calls `load_dotenv(ENV_FILE)` as its first statement, before the registry read, `refuse_if_agent_alive` and the first store, as `aset/__main__.py` does. `override` stays `False`: a name already in the environment wins. The load runs in `main`, not at import (importing `cobalt.cos.run` loads nothing); with no file and no environment the start still fails loud. `ops/start_cos.sh` and the plist are unchanged. Tests: `test_cos_env_load.py` (E1, E2; a decoy `.env` under `tmp_path`, the real one never opened).
+
+## 2026-10-21 — cos-env-load (check)
+`test_cos_env_load.py`: two more pins on `run.py`'s load, no code change. The load runs before `load_job_registry()` (a recorder at the registry read sees the decoy names), and `load_dotenv` is called once, as `main`'s first statement and at no module level (read from the syntax tree). Check O1, O2.

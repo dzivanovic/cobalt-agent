@@ -1,0 +1,15 @@
+job=cos-env-load
+tip=9293c759
+on=7f89b98f
+migration=none
+offline=4948/0
+with_db=5920/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.cos com.cobalt.radar
+rows=4 of 4
+self_check=3 of 3
+decisions=2
+for_dejan=0
+tokens=187139
