@@ -1,0 +1,15 @@
+job=radar-mirror-scope
+tip=5bb80b36
+on=11ed17b8
+migration=none
+offline=4983/0
+with_db=5955/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset com.cobalt.cos com.cobalt.radar
+rows=7 of 7
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=169990
