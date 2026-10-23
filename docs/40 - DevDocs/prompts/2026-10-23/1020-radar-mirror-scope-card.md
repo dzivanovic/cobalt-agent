@@ -2,7 +2,7 @@ JOB: radar-mirror-scope
 LADDER: OFF-LADDER — reports/survey-settings-writer-2026-10-23.md R2389
 BRANCH: ops/radar-mirror-scope
 WORKTREE: radar-mirror-scope
-BASE: 7487bb56
+BASE: 11ed17b8
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/radar-mirror-scope/docs/40 - DevDocs/reports/radar-mirror-scope-build-2026-10-23.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-mirror-scope-check-2026-10-23.md
