@@ -92,3 +92,7 @@ Out-of-process Finviz callers (the 05:15 and 15:40 ET prefill jobs) are not in t
   (`_changed_note_hash`). Before this, a Lists edit carried the unchanged
   Screens hash.
 - Pinned by `tests/cobalt/test_radar_mirror_scope.py` (M1–M4).
+- 2026-10-23 check (A1): `test_radar_replay.py` `ReplaySettingsStore`, the
+  fake `scan_command` builds through the patched `TraderSettingsStore`, gains
+  `rows()`; without it the mirror stage failed inside the replay tests and
+  the runner stamped it as a mirror failure.
