@@ -60,6 +60,9 @@ class MirrorStore:
     def __init__(self):
         self.sent = None
 
+    def rows(self):
+        return []
+
     def values(self):
         return {}
 
@@ -272,6 +275,10 @@ def test_mirror_replaces_old_block_with_parse_failed_status(tmp_path):
     class Store:
         def __init__(self):
             self.sent = None
+        def rows(self):
+            # a key the mirror wrote, so it is the mirror's to tombstone
+            return [{"key": "radar.screen.old", "value": {"note_sha256": "old", "status": "ok"},
+                     "source": "vault:radar-notes@" + "0" * 12, "updated_at": None}]
         def values(self):
             return {"radar.screen.old": {"note_sha256": "old", "status": "ok"}}
         def put(self, rows, *, source, before_commit=None):

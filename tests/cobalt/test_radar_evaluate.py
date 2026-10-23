@@ -519,6 +519,7 @@ class _Pool:
 
 
 class _Settings:
+    def rows(self): return []
     def values(self): return {}
     def put(self, _rows, *, source, before_commit=None):
         before_commit()
