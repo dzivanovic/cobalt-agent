@@ -1234,6 +1234,24 @@ OFF-LADDER work of 2026-10-21 (each with the ruling that ordered it):
 | WBD removal | DONE | His word via the brain (R2343): Radar Lists.md:238; archiver 20:30 run 0 failures (R2358). |
 | Scribe survey (979), C5 cause survey | DONE | Brain R2287; R2316. |
 
+### Status 2026-10-22
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1022` for 10-22 alone from `reports/cto-2026-10-22.md` rows R2369–R2380 (00:20 → 03:36 ET; the desk wrote no row after 03:36); tag re-verified (L35): `git tag --list "deploy-2026-10-22*"` = `deploy-2026-10-22-deploy-cos-restart`. The 10-21 close ran (`CLOSE PUSHED c87a0134`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F4, F23, F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-21). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) | DONE-DARK | Plists stay unloaded. Gate pass 4 done: X6 OK, X4 OK (20/20 valid), ok 6 fail 0 not run 4 (R2379, R2380). Owed: his legs X5, X7, X10, X12. |
+| S5 F5 X3 values (card `958`, port card `965`) | DONE-DARK | Gate X3 and values rows written OK from records (R2380). |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | Unchanged. Owed: his one DM turn (LaunchAgent auth proof) and X15 four legs (994 deployed, R2375). |
+
+**Stop date: 2026-10-28 (S5, day 8 of 14). S5: AT RISK.** Reason: F5 stays dark until his four legs X5/X7/X10/X12 pass or are ruled; X15 four legs wait on his ready. No ruling moved a date (`cto-2026-10-22.md` §0).
+
+OFF-LADDER work of 2026-10-22 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Deploy-cos-restart (K5 card `1008`) | DONE-LIVE | Brain R2355, scope R2357. `deploy-2026-10-22-deploy-cos-restart` `fdf478a5`, smoke GREEN, RESTARTS none (R2373). |
+| X15 HITL probe port (card `994`), attempt 2 | DONE-LIVE | Brain R2322. Attempt 2 FAILED at RESTARTS (R2374), then DEPLOYED `b9906932`, smoke GREEN, downtime 21 s (R2375). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

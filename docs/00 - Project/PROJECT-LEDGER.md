@@ -5259,3 +5259,21 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-21*"` = `deploy-2026-10-21-cos-bootstrap-2`, `deploy-2026-10-21-cos-env-load`, `deploy-2026-10-21-cos-tunables`, `deploy-2026-10-21-f5-probe`, `deploy-2026-10-21-f5-probe-x4-fix`, `deploy-2026-10-21-f5-x3-values-port`.
 - STOP LINE (L35), `reports/close-2026-10-20.md`: `CLOSE PUSHED 679b69a2`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-21.md` `## 8`.
+
+### 2026-10-22 — Deploy-cos-restart (1008) and x15-hitl-probe-port attempt 2 deployed; F5 gate pass 4 done (X6, X4 OK); four of his legs remain
+
+- R2369 00:20 RECORD: 1008 deploy-cos-restart BUILT `af0f86bc`; check next.
+- R2370 00:21 LAUNCHED: 1008 check `1b8c4246`.
+- R2371 01:26 RECORD: 1008 CHECK DONE ready YES tip `3770387d`.
+- R2372 01:26 LAUNCHED: deploy hub `ce85cedb` on card 1013.
+- R2373 02:25 DEPLOYED: deploy-cos-restart `fdf478a5`, smoke GREEN, RESTARTS none.
+- R2374 02:25 RECORD: x15-hitl-probe-port attempt 2 FAILED at RESTARTS (cos bootout and bootstrap strings not on the list); asked of Dejan.
+- R2375 03:25 DEPLOYED: x15-hitl-probe-port attempt 2 `b9906932`, smoke GREEN, downtime 21 s.
+- R2376 03:25 DESK RECORD: F5 gate pass 4 = X6 + X4; drafter prompt 1014.
+- R2377 03:28 LAUNCHED: pass-4 drafter DRAFTED; preflight `582f2b49`.
+- R2378 03:29 LAUNCHED: preflight YES; gate hub `f95c07c3` (970 FOURTH PASS).
+- R2379 03:34 RECORD: gate pass 4 ok 4 fail 0 not run 6 (X6, X4 OK).
+- R2380 03:36 DESK RECORD: gate X3 and values rows written; ok 6 fail 0 not run 4 (his X5 X7 X10 X12).
+- DEPLOY (L35): `git tag --list "deploy-2026-10-22*"` = `deploy-2026-10-22-deploy-cos-restart`. The x15-hitl-probe-port deploy (`b9906932`, R2375) carries no `deploy-2026-10-22` tag in that list.
+- STOP LINE (L35), `reports/close-2026-10-21.md`: `CLOSE PUSHED c87a0134`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-22.md` `## 8`.
