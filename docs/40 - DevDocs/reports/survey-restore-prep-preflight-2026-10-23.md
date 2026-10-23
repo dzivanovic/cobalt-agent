@@ -1,0 +1,23 @@
+# Survey prompt 1022 — preflight (read-only), main 8cc9c8ef
+
+## CHECKS
+| # | command | output | OK/FAIL |
+|---|---|---|---|
+| 1 | `Read` 1022 line 1; `desk-launch.sh:753-860` (prompt kind); `git log` on 1022 | One launch line (`grep -c 'claude --bg "Read '` = 1), read by absolute path, `--permission-mode auto`, `--remote-control`+`--name` set, `AskUserQuestion`,`EnterWorktree` denied, no `<`/`>`, `cd /Users/cobalt/cobalt` named. `--allowedTools` holds exactly one production string `Bash(COBALT_ENV=production uv run cobalt db query *)` (the only string `judge` lets pass, `:815`); no `$`, backtick or `\` in the allow list; no `git add/commit/merge`, no `Bash(git *)`, no `launchctl`; the `COBALT_ENV=dev`/`=production settings*`/`uv run` strings sit in `--disallowedTools` only (`tool_list` mode `deny`, not scanned). No `awk` in the allow list (denied). `grep -c '^RULINGS:'` = 1 (line 2: `RULINGS: 2026-10-08 R686`); `main:reports/cto-2026-10-08.md:39` is `\| R686 \| … HIS RULING … APPROVED … production reads`. File committed in `8cc9c8ef`, `git diff main` on it empty | OK |
+| 2 | `grep -n -E "shasum\|hash"` on 1022 | `shasum` still in the BODY at line 34 (`no hashing command: \`shasum\` is NOT allowed, brain R2392; …`). Not in the launch line or allow list. Hashing wording also on line 24 (`no hashing command is allowed`) and line 13 (`hashed to 945e42f8…`, a drafter finding). `hashlib` at lines 9, 34 is a cite of `card.py:244`/`cli.py:167`, not a command | FAIL |
+| 3 | `git ls-tree` + `git grep` + `git diff --stat main` on cited paths | On `main`, unchanged in tree: `cli.py` (defs `:150,207,249,333,365`), `card.py` (`:240` `load_card_file`, `:244` `hashlib.sha256(raw)`, `:279` `cmd_load_card`, `:324` `source=f"card:{path.name}@sha256:{digest}"`, `:28-29` whole-set/delete text), `cli.py:167` digest, `models.py:225-251` (`top_n`, `min_move_pct`), `ops/desk/authorize.sh:57-66` (`PRODWRITE-HUB.md` at `:63`), `prompts/PRODWRITE-HUB.md`, `p2-dark-settings.yaml`, `p2-live-settings.yaml` (`23-packet`), `radar-benchmark.yaml` (`01-packet`), `98-evening.md`, `cards-htf-apply-2026-09-20.md`, `radar-benchmark-load-2026-09-22.md`, `survey-settings-writer-2026-10-23.md`, `1017-survey-settings-writer.md`. `data/backups/…` named as ignored (`.gitignore:6`) | OK |
+| 4 | Q1-Q6 against allowed reads | Q1/Q2 = P1+P2 + `Grep`/`git log -S`/`git grep` + `Read` of reports; Q3 = `git show main:<yaml>` + `Read`; Q4 = `Read` of `card.py`/`cli.py` + P1/P2; Q5 = `Read` of `authorize.sh`, `PRODWRITE-HUB.md`; Q6 = `Grep`. P1/P2 are one SELECT each, no `%` (`strpos`), no refused word/function (`jsonb_typeof`, `AT TIME ZONE`, `IN` not on `db_query.py:20-27`). None needs a write, the loader or a hash command | OK |
+| 5 | `Read` 1022 lines 44-51 | `Write` touches the report only (`reports/survey-restore-prep-2026-10-23.md`, absent today: `ls` exit 1); stop line is `SURVEYED · files: <n> · decisions: <n>` or `FAILED: <reason>` | OK |
+| 6 | prompt text | `.env` is never named as a read; "Never read or print a secret; never open `.env`"; no allowed read targets it. P1/P2 print no value | OK |
+| 7 | prompt text | "no database write, no restore, no `settings load`, no migrate … no launch (L36)"; the loader and the restore are text only (Q5 "never run") | OK |
+
+## ISSUES
+- FAIL (check 2): `shasum` remains at 1022 line 34. Remove "`shasum` is NOT allowed, brain R2392; " so it reads "(no hashing command; the K3 load re-proves the digest itself)". Lines 13 and 24 hold only "hashed"/"hashing command" wording; drop them too if the brain's L79 NO covers the wording. Then re-commit (the launcher needs the prompt committed and unchanged, `desk-launch.sh:752`). `desk-launch.sh` itself would pass 1022 as it stands: it has no `shasum` rule for kind `prompt`.
+- NOTE: working-tree `reports/cto-2026-10-08.md` differs from `main` (one deleted OWED line, not R686). The launcher reads the committed row (R686 at `main:…cto-2026-10-08.md:39`); only the legacy `PROD-READ:` stamp path checks the tree (`:886`), and it does not gate the launch.
+- NOTE: `Write`, `grep *`, `cut *` cannot be path-scoped in `--allowedTools`; the report-only and no-`.env` limits rest on the prompt text, as in 1017.
+- NOTE: the prompt cites `models.py:226-247` for the model; the class is `:225-233` and the reader runs to `:251`. Harmless. `cli.py:218,220,237-239` not individually re-proved.
+- NOTE: Q5 quotes `authorize.sh:57-66` (a `case` that names the hub), so the seat reads `PRODWRITE-HUB.md` from there as the prompt says.
+
+Blocks the launch: the `shasum` string at line 34 (one-phrase edit and re-commit). The launcher itself would not refuse.
+
+PREFLIGHT DONE · prompt: 1022 · checks: 7 · fails: 1 · ready: NO
