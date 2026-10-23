@@ -136,6 +136,11 @@ class ReplaySettingsStore:
         return {key: "created" for key in rows}
 
 
+def test_f1_replay_settings_store_rows_is_callable():
+    store = ReplaySettingsStore()
+    assert store.rows() == []
+
+
 class RecordingReplayCollector(ReplayCollector):
     calls = []
 
