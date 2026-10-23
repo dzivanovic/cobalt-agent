@@ -2,7 +2,7 @@ MODEL: Opus 5.5 (`claude-opus-5-5`) — SURVEY seat, read-only, production reads
 RULINGS: 2026-10-08 R686
 
 # SURVEY: WHO BROKE "user".trader_settings ON 2026-10-21 ABOUT 18:13 ET?
-RULINGS: 2026-10-23 DESK RECORD (brain 9b07db5a, L79).
+Direction: 2026-10-23 DESK RECORD (brain 9b07db5a, L79).
 
 ## FACTS (brain, 2026-10-23)
 - `logs/radar.err` since 2026-10-21 18:13:55 ET, every cycle: `radar S5 evaluate FAILED: CardSettingsError: invalid card settings: radar.cards_enabled: Input should be a valid boolean`. First hit `radar.err:90820`. Scans run; no card evaluates.
