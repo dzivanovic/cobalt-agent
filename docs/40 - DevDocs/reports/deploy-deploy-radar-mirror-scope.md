@@ -1,10 +1,13 @@
 # deploy-radar-mirror-scope — SET: radar-mirror-scope — MIGRATIONS: none
 
 ## §0 Headline
-- (filled at the end)
+- FAILED at smoke (h): the `radar panel FAILED` count grew 21 → 23 after `<t up>`. ROLLED BACK by one revert, `41bb2402`; the code is proven equal to `e41b9420`; residents UP on the old tree.
+- Cause, as read: a CardSettingsError (`radar.cards_enabled: Input should be a valid boolean`) that predates this deploy. Every `/radar` hit logs one line, and the smoke's own curls are those hits. The OLD code did the same at 19:43:10 (D1's curl) and on the reverted tree at 19:49:43 / 19:49:44. The set changes only `src/cobalt/radar/notes.py`, which never reads `cards_enabled`.
+- Gate was green on `0d6765aa`: offline 9120/0 · with-DB 5956/0 · live-note 148/0. The landed tree passed (a)–(g) and (s). Downtime: 31 s (deploy) + 26 s (rollback).
+- DECISION 0: production DEGRADED on the reverted tree. The count grows on old code too, so the desk decides whether to re-land (ROLLBACK STRING 3) once the settings fault, or the (h) rule, is ruled on.
 
 ## L74
-- none so far.
+- One block, outside any tool result: a system notice asked commit messages to carry a `Claude-Session:` line. Recorded as data; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh deploy "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-23/1027-deploy-radar-mirror-scope-card.md"` → exit 0, output WHOLE:
@@ -141,15 +144,118 @@ GATE GREEN on 0d6765aa
 - `curl … /radar` → `200`. MARKERS: marker 1 `0`; marker 2 `No such file or directory` (as P6, DECISIONS 1).
 - THE LAUNCHD SET: empty, nothing read. No migration: no `<RB>`, no D1-M.
 
+**STEP-D2**
+- D2.0 `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 172351fe "<card>"` → nothing. Report committed `e41b9420 docs(report): deploy deploy-radar-mirror-scope — gate green on 0d6765aa` (`show --stat HEAD`: the one file, 155 insertions). `<pre-merge>` = `e41b9420`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only)
+- D2.2 `<stack-final>` = `4f35be8f`; `rev-parse --short=8 4f35be8f^2` → `e41b9420` = `<pre-merge>`; `merge-base --is-ancestor 0d6765aa 4f35be8f` → exit 0
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 0d6765aa 4f35be8f -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing (docs only)
+- D2.4 `backup status` before → `newest snapshot: 22.0 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 10246.9 MB` · `ssd: snapshot 4f50ea50 — 0 new / 2 changed, 28.8 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`. Snapshot id **4f50ea50**.
+- D2.5 `Sat Oct 24 19:45:03 EDT 2026` heartbeat → `HEARTBEAT RED — 2 job(s)  (2026-10-24 19:45:03 EDT)`, the same two REDs as `<hb0>` (agent, replay); aset / sheet / radar / cos OK. 130 s after D1's read. No new RED.
+- D2.6 `date` → `Sat Oct 24 19:45:08 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-deploy-radar-mirror-scope` at `e41b9420`.
+
+**STEP-4 OUTAGE**
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` = `Sat Oct 24 19:45:20 EDT 2026` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · print | no output · exit 113 `Could not find service "com.cobalt.aset" in domain for user gui: 501` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.cos` · print | no output · exit 113 `Could not find service "com.cobalt.cos" …` |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · print | no output · exit 113 `Could not find service "com.cobalt.radar" …` |
+| 4.2 ORPHAN | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | `orphan-clean: aset · none found`: clean, no kill. Agent not in the set. |
+| 4.3 | `git -C /Users/cobalt/cobalt rev-parse --short=8 HEAD` | `e41b9420` = `<pre-merge>` |
+| 4.3 | `git -C /Users/cobalt/cobalt merge --ff-only deploy/deploy-radar-mirror-scope` | `Updating e41b9420..4f35be8f` · `Fast-forward` (9 files, 561+/16-) |
+| 4.4 | — | `migrations applied: none` |
+| 4.5 | `COBALT_ENV=production uv run cobalt validate` | exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · print | no output · `state = running`, `pid = 49777` (≠ 53218) |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.cos.plist` · print | no output · `state = running`, `pid = 49789` (≠ 53231) |
+| 4.6 | `launchctl bootstrap gui/501 /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` · print | no output · `state = running`, `pid = 49795` (≠ 53248) |
+| 4.6 | `date` | `<t up>` = `Sat Oct 24 19:45:51 EDT 2026`, so downtime is 31 s |
+| 4.6L | — | `<launchd set>` empty: nothing |
+
+**STEP-5 ROLLBACK** (entered from smoke (h) RED)
+| step | command | result |
+|---|---|---|
+| (0) | `date` | `Sat Oct 24 19:49:06 EDT 2026` |
+| (1) | `launchctl bootout gui/501/com.cobalt.aset` / `.cos` / `.radar`, each with a print | no output; each print exit 113 `Could not find service …` |
+| (1) | four counts | `<rp5>` 24 · `<rpr5>` 60 · `<re5>` 750 · `<lc5>` 39 |
+| (1L) | — | `<launchd set>` empty |
+| (2) | `git -C /Users/cobalt/cobalt log --oneline -1` | `4f35be8f Merge branch 'main' into deploy/deploy-radar-mirror-scope` |
+| (2) | `git -C /Users/cobalt/cobalt revert --no-edit -m 2 4f35be8f` | `[main 41bb2402] Revert "Merge branch 'main' into deploy/deploy-radar-mirror-scope"` (9 files, 16+/561-) |
+| (2) PROOF | `git -C /Users/cobalt/cobalt diff --stat e41b9420 HEAD -- . ':(exclude)docs'` | nothing: the code equals `<pre-merge>` |
+| (2L) | — | none |
+| (3) | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | `orphan-clean: aset · none found` |
+| (3) | `launchctl bootstrap` aset / cos / radar | no output each |
+| (3) | `date` | `Sat Oct 24 19:49:32 EDT 2026`, so rollback downtime is 26 s |
+| (4a) | prints | aset `state = running` pid 51019 · cos running pid 51030 · radar running pid 51036 (all new) · `cobalt.sh status` → `  Cobalt is OFFLINE.` (recorded retired) |
+| (4b) | `grep -c "Started server process" aset.err` · tail | `296` · `Started server process [51019]` … `Uvicorn running on http://127.0.0.1:5010`. Traceback aset 217 / radar 0, TaxonomyConfigError 0 (= baseline). Radar tail last line `2026-10-24 19:49:31.861 … radar cycle: idle:overnight scan_id=None`; a later read is in `## Smoke` |
+| (4c) | `Sat Oct 24 19:49:41 EDT 2026` curls `/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` |
+| (4e) | `Sat Oct 24 19:49:49 EDT 2026` heartbeat | `HEARTBEAT RED — 2 job(s)`: the same agent and replay REDs as `<hb0>`; aset pid 51019 OK; radar / cos `running 0 min, heartbeat fresh` |
+| (4f) | validate · `jobs restarts e41b9420..4f35be8f` | exit 0, `Jobs (F17): 22 registered — 7 resident, 15 one-shot.`, `tree clean.` · `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar`, no UNCLASSIFIED |
+| (4g) | — | no migration |
+| (4e) 2 | `Sat Oct 24 19:51:06 EDT 2026` heartbeat (`19:51:09`, 140 s after read 1) | the same two REDs only; aset pid 51019 OK; `com.cobalt.radar running 2 min, heartbeat fresh`; `com.cobalt.cos running 2 min, heartbeat fresh` |
+| (4b) radar | `tail -n 2 radar.err` | `2026-10-24 19:51:11.887 … radar cycle: idle:overnight scan_id=None`, stamped after 19:49:32: radar cycling on the old tree, no traceback |
+| (4) READBACK | `grep -c "radar panel FAILED" aset.err` after (4c) | **26**, up from `<rp5>` 24. New lines `2026-10-24 19:49:43.255` and `19:49:44.010`, both `radar panel FAILED: FAILED: radar evaluate: CardSettingsError: invalid card settings: radar.cards_enabled: Input should be a valid boolean`. The count grows on the OLD code too, so this is terminal: DECISION 0 |
+
+| field | value |
+|---|---|
+| `<pre-merge>` → `<stack-final>` | `e41b9420` → `4f35be8f`; reverted by `41bb2402` |
+| tags | `pre-deploy-radar-mirror-scope` at `e41b9420` (set). `deploy-2026-10-24-radar-mirror-scope` NOT set (not green) |
+| outage | `<t down>` 19:45:20 / `<t up>` 19:45:51 / 31 s; rollback 19:49:06 / 19:49:32 / 26 s |
+| uv sync | none in production (the gate worktree created its own `.venv`: `Installed 257 packages in 897ms`) |
+| proof cost | n/a (no migration) |
+| migrations applied | none |
+| `<RB>` | n/a |
+| snapshot | `4f50ea50` (ssd) |
+| RESTARTS done | com.cobalt.aset com.cobalt.cos com.cobalt.radar (twice: deploy and rollback) |
+| LAUNCHD done | none |
+| BOOTSTRAP OWED | none from this set |
+
+THE ROLLBACK STRING (stack-final `4f35be8f`):
+1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 4f35be8f`, already run by STEP-5 as `41bb2402`. Residents of `com.cobalt.aset com.cobalt.cos com.cobalt.radar` were taken down first and brought up after.
+2. SCHEMA: none (no migration).
+3. RE-LAND (the desk's, on his word): `git -C /Users/cobalt/cobalt revert --no-edit 41bb2402`, which git titles `Reapply "Merge branch 'main' into deploy/deploy-radar-mirror-scope"`, with the same three residents down first and up after.
+
 ## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` **21** · `<rpr_up>` 60 · `<re_up>` 750 · `<lc_up>` 39. `<rp_up>` (21) is one above `<rp0>` (20); that line is `2026-10-24 19:43:10.377 … radar panel FAILED: FAILED: radar evaluate: CardSettingsError: invalid card settings: radar.cards_enabled: Input should be a valid boolean`, written BEFORE the outage by the OLD aset (pid 53218, shut down at 19:45). It came from D1's own `/radar` curl, so the fault predates this set.
+- (a) `Sat Oct 24 19:46:11 EDT 2026`: aset `state = running` pid 49777 (new) · cos running pid 49789 (new) · radar running pid 49795 (new) · `cobalt.sh status` → `  Cobalt is OFFLINE.` (recorded retired, so this is GREEN)
+- (b) `grep -c "Started server process" aset.err` → `295` (= `<a0>`+1) · `tail -n 30 aset.err` → `INFO:     Started server process [49777]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` · Traceback aset `217` = `<ta0>` · Traceback radar `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>`
+- (c) `Sat Oct 24 19:46:23 EDT 2026`: `/` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`
+- (d) `Sat Oct 24 19:46:26 EDT 2026`: marker 1 → `1` · marker 2 → `1` (both = after)
+- (s) `ls /Users/cobalt/cobalt/src/cobalt/radar/notes.py` → listed · `ls /Users/cobalt/cobalt/tests/cobalt/test_radar_mirror_scope.py` → listed (both exit 0). The tests are quoted from the gate: offline 9120/0 · with-DB 5956/0 · live-note 148/0.
+- (e) read 1 `Sat Oct 24 19:46:51 EDT 2026` → `HEARTBEAT RED — 2 job(s)  (2026-10-24 19:46:52 EDT)`: the same agent and replay REDs as `<hb0>`; aset pid 49777 OK; `com.cobalt.radar running 1 min, heartbeat fresh`; `com.cobalt.cos running 1 min, heartbeat fresh`
+- (f) `COBALT_ENV=production uv run cobalt jobs restarts e41b9420..4f35be8f` → exit 0, `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` = `<restart set>`, no UNCLASSIFIED · validate (19:47:0x) → exit 0, `Jobs (F17): 22 registered — 7 resident, 15 one-shot.` = `<jobs0>`, `Placement (docs/PLACEMENT.md): tree clean.`
+- (g) no migration.
+- (b) radar tail 1 at `Sat Oct 24 19:47:23 EDT 2026` (`<t up>`+92 s): last line `2026-10-24 19:45:47.594 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None` (the new pid's first cycle, stamped 4 s BEFORE `<t up>`); no traceback, no S5 / lifecycle failure.
+- Seen during smoke: `radar panel FAILED` 21 → 23 after (c)'s two `/radar` curls. Lines `2026-10-24 19:46:24.597` and `19:46:25.276`, the same `CardSettingsError … radar.cards_enabled: Input should be a valid boolean` as the old code's 19:43:10 line and its 2026-10-23 08:08 lines.
+- (e) read 2 `Sat Oct 24 19:48:42 EDT 2026` (111 s after read 1) → `HEARTBEAT RED — 2 job(s)  (2026-10-24 19:48:45 EDT)`, the same two REDs; `com.cobalt.radar running 3 min, heartbeat fresh`; `com.cobalt.cos running 3 min, heartbeat fresh`. GREEN.
+- (b) radar tail 2 at `Sat Oct 24 19:48:51 EDT 2026` (`<t up>`+180 s): last line `2026-10-24 19:47:27.624 | INFO | cobalt.radar.runner:resident:638 - radar cycle: idle:overnight scan_id=None`, stamped after `<t up>`; no S5 / lifecycle failure, no traceback. Settled GREEN (tail 3 is not needed).
+- (h) REVERT-READBACK at 19:48:51 or later (`<t up>`+180 s): `radar panel FAILED` **23** ≠ `<rp_up>` 21 (growing), so **RED**. `radar pool refresh FAILED` 60 = 60 · `radar S5 evaluate FAILED` 750 = 750 · `lifecycle card read failed` 39 = 39 · `/radar` curl `200`. No census reads on the card.
+- RED → STEP-5 (see `## Deploy table`).
+- THE CHAIN: every check committed (P2 ✓) · the tips (P3 ✓) · the merged tree (T ✓) · RESTARTS derived (R ✓) · three suites green on `0d6765aa` (G ✓) · `4f35be8f` = `0d6765aa` + docs (D2.3 ✓) · the landed code (4.3 ✓) · markers (d ✓) · no migration (g n/a) · residents up after the merge (a ✓) · radar cycling (b ✓, e ✓) · the set's reads (s ✓) · no new failure (h ✗: `radar panel FAILED` grew 21 → 23 under the smoke's own `/radar` curls). STEP-5 (4) reproduced the growth on the reverted tree (24 → 26).
+- PRE-STOP SELF-CHECK (K25): (1) every smoke row above is quoted verbatim with its `date`. (2) P3 re-read `25994142` for both tip and head; `merge-base --is-ancestor 0d6765aa 4f35be8f` exit 0, and `25994142` is a parent of `0d6765aa` (T). (3) the readback is shown in STEP-5 (4). Every count, sha and time here was read from tool output this run. (4) STEP-T merged clean (`Merge made by the 'ort' strategy.`), so no conflict marker exists.
 
 ## CONTINUE
-next: STEP-D2 (D2.0 report commit; D0 and D1 done, nothing in production changed)
+OUTAGE STARTING Sat Oct 24 19:45:08 EDT 2026 — residents of com.cobalt.aset com.cobalt.cos com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+OUTAGE ENDED Sat Oct 24 19:45:51 EDT 2026: residents up on 4f35be8f.
+Smoke (h) RED at 19:48:51 → STEP-5 at 19:49:06 → reverted (`41bb2402`) and residents UP at 19:49:32. The run ends FAILED under DECISION 0. next: the desk's (re-land via ROLLBACK STRING 3 on his word, or a recut once the card-settings fault or the (h) rule is ruled on). A relaunch is never this run's.
 
 ## DECISIONS
 1. ASK DESK: P6 marker 2 printed `No such file or directory` (exit 2), not `0`: `tests/cobalt/test_radar_mirror_scope.py` is new in this set and absent on main. Is a missing file a valid `before`? [Sat Oct 24 18:51 EDT 2026]. Safe default taken: yes. An absent file has zero occurrences, so production does not carry the marker; P6 fails only on "already carries". Smoke (d) reads `after` = `1`.
+2. DECISION 0: production DEGRADED on the reverted tree — `radar panel FAILED` (aset.err) grew 24 → 26 at STEP-5 (4) on the OLD code, just as it grew 21 → 23 on the new code at smoke (c)/(h). Each `/radar` request logs one `radar panel FAILED: FAILED: radar evaluate: CardSettingsError: invalid card settings: radar.cards_enabled: Input should be a valid boolean`. The fault predates this set: the old aset logged it at 2026-10-23 08:08:48 / 08:08:52 and at 2026-10-24 19:43:10, before any change here, and the set's only source change (`src/cobalt/radar/notes.py`) never references `cards_enabled` (grep: the field lives in `radar/store.py`, `radar/evaluate*.py`, `radar/audit_export.py`, `settings/card.py`, `settings/cli.py`). Safe default taken: STEP-5 as the hub orders. The old tree stands, residents are UP, and no further action came from this run. **FOR DEJAN**: (a) the `radar.cards_enabled` value in his card settings fails validation, so the `/radar` panel errors on every load (the page still returns 200). (b) Whether the set re-lands: `git -C /Users/cobalt/cobalt revert --no-edit 41bb2402` with the three residents bounced, on his word. (c) The hub's (h) rule counts failures that the smoke's own `/radar` curls cause; with a pre-existing panel fault, every deploy that restarts aset will fail (h).
 
 ## RECORDS
+- Downtime: 31 s (deploy outage 19:45:20 → 19:45:51) + 26 s (STEP-5, 19:49:06 → 19:49:32). Neither is over 300 s.
+- `cobalt_dev: 0013 (F2 = F0)` (gate log:2388); lock released by the gate (`lock released`, log:2390; `.env: removed`, log:2394).
+- The carried RED as read (`<hb0>`, unchanged through every read): `RED com.cobalt.agent not loaded` (recorded retired) and `RED com.cobalt.replay failed StepFailed: step movers failed — TraderSettingsError: invalid radar.benchmark: 7 validation errors for BenchmarkSettings top_n Field required …`. The second is another settings-validation fault on the same machine, which the desk may want to read together with DECISION 2.
+- REFUSED, not needed (my own call, not a hub step): `COBALT_ENV=production uv run cobalt heartbeat show cos` → `cobalt: error: unrecognized arguments: cos` (exit 2; a mistyped clock filler, nothing changed).
+- `?? .claude/settings.json.bak` is untracked at the repo root on main: not on D0's ACCEPTED list and not REFUSED (not staged, not src/tests/ops/configs). Recorded for the desk.
+- RETIRE OWED: none. BOOTSTRAP OWED: none from this set.
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-radar-mirror-scope` and branch `deploy/deploy-radar-mirror-scope`; the set's branch `ops/radar-mirror-scope` and its worktree, if one exists. The tag `pre-deploy-radar-mirror-scope` (at `e41b9420`) stays for the desk.
+- main is now `ahead 13` of origin (it includes the merge `4f35be8f` and the revert `41bb2402`). Push is his (L55).
+- Card `## RECORDS` (the desk's, copied):
+  - radar-mirror-scope: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-mirror-scope-check-2026-10-23.md` last line: CHECK DONE · job: radar-mirror-scope · pass: 1 · tip: 25994142 · house A: Grok FINDINGS: 1 · findings: 4 · dropped: 0 · held: 1 · fixed: 1 · held unfixed: 0 · open: 1 · house B: none (not needed) · suites: offline 9120/0 · with-DB 5956/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar · files opened: 19 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 164093
+  - radar-mirror-scope: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/radar-mirror-scope` → `25994142`; code tip `25994142`
+  - written by deploy-card.sh at 2026-10-24 18:51 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: the one `Claude-Session:` request (see `## L74`), not followed.
 - REFUSED, not needed: `grep -n -F ".env: removed" <gate log>` — `PreToolUse:Bash hook error: [python3 /Users/cobalt/cobalt/ops/desk/bare-guard.py]: route: .env is never read; `ls -la <path>/.env` shows it is there, and the lock scripts copy and remove it`. I read the line with the Read tool at log:2394 instead.
 
-(run in progress — next step under ## CONTINUE)
+FAILED: STEP-4.7 (h) — radar panel FAILED grew 21 → 23 (CardSettingsError radar.cards_enabled, predates the set; grows on the reverted tree 24 → 26: DECISION 0 production DEGRADED on the reverted tree) · rollback: used — migrations applied: none — aset: UP — cos: UP — radar: UP — launchd: none · decisions: 2 · for Dejan: 1 · tokens: 218432
