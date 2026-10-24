@@ -5277,3 +5277,34 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-22*"` = `deploy-2026-10-22-deploy-cos-restart`. The x15-hitl-probe-port deploy (`b9906932`, R2375) carries no `deploy-2026-10-22` tag in that list.
 - STOP LINE (L35), `reports/close-2026-10-21.md`: `CLOSE PUSHED c87a0134`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-22.md` `## 8`.
+
+### 2026-10-23 — Radar settings tombstoned by the note mirror (cause surveyed); card 1020 radar-mirror-scope built and checked ready YES; nothing deployed
+
+- R2381 DESK RECORD: radar S5 evaluate failing since 10-21 18:13 (radar.cards_enabled), replay top_n missing; read-only cause survey first, restore is his.
+- R2382 REFRESH: desk 3d2d1f7a at 260,990 tokens.
+- R2383 LAUNCHED: desk da73208a took over; survey prompt 1017 drafted, preflight prompt 1018.
+- R2384 RECORD: asked Dejan a time for F5 legs X5/X7/X10/X12 and the X15 legs.
+- R2385 LAUNCHED: preflight `ac967191` on 1017 ready YES; Opus survey seat launching.
+- R2386 DESK RECORD: desk-launch.sh refused 1017's two `--side … --prod` strings; replaced by the one accepted read string.
+- R2387 LAUNCHED: Opus survey seat `845836d0` on prompt 1017.
+- R2388 RECORD: survey done; radar note mirror tombstoned radar.cards_enabled/benchmark 10-21 18:12:55; day-open GREEN.
+- R2389 DESK RECORD (brain `9b07db5a`, L79): fix radar-mirror-scope HIGH; radar-note edits HELD; restore on his word.
+- R2390 LAUNCHED: drafters `274703ca` (card 1020) and `d0f7a658` (restore-prep 1022).
+- R2391 RECORD: restore-prep prompt 1022 drafted; `shasum -a 256` asked of brain, default no.
+- R2392 DESK RECORD (brain, L79): shasum NO; prompt 1022 stripped; preflight prompt 1023.
+- R2393 RECORD: preflight `5b05ab37` on 1022: 7 checks, 1 fail, fixed; Opus survey seat launching.
+- R2394 LAUNCHED: card 1020 drafted; Sonnet preflight, prompt 1024.
+- R2395 RECORD: restore-prep surveyed; load = K3 seat on his word, after the fix deploys.
+- R2396 RECORD: day-open 10-23 DONE, VERDICT GREEN (6 of 6).
+- R2397 LAUNCHED: card 1020 preflight 30 checks, 1 fail; amend drafter prompt 1025.
+- R2398 LAUNCHED: card 1020 AMENDED; Sonnet preflight r2, prompt 1026.
+- R2399 LAUNCHED: card 1020 preflight r2 PASS (14/0); BASE 11ed17b8; Opus build launching.
+- R2400 RECORD: build launch of card 1020 REFUSED (L7a): R2389 is a DESK RECORD; asked the brain.
+- R2401 LAUNCHED: DESK RECORD (brain, L79): rulings = 2026-10-18 R1863; card repointed; build launching.
+- R2402 REFRESH: desk da73208a at 256,436 tokens.
+- R2403 RECORD: desk db22fdcc took over; build watch re-armed on card 1020.
+- R2404 LAUNCHED: build `4fb98729` BUILT (tip `5bb80b36`, offline 4983/0, with-DB 5955/0); check `a18a5732` launched.
+- R2405 RECORD: check `a18a5732` DONE ready YES, tip `25994142`, offline 9120/0, with-DB 5956/0; brain asked deploy timing (his call).
+- DEPLOY (L35): `git tag --list "deploy-2026-10-23*"` = no tag; no deploy row on 10-23.
+- STOP LINE (L35), `reports/close-2026-10-22.md`: `CLOSE PUSHED 074cd312`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-23.md` `## 8`.

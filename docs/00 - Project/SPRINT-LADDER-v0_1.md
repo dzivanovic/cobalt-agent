@@ -1252,6 +1252,25 @@ OFF-LADDER work of 2026-10-22 (each with the ruling that ordered it):
 | Deploy-cos-restart (K5 card `1008`) | DONE-LIVE | Brain R2355, scope R2357. `deploy-2026-10-22-deploy-cos-restart` `fdf478a5`, smoke GREEN, RESTARTS none (R2373). |
 | X15 HITL probe port (card `994`), attempt 2 | DONE-LIVE | Brain R2322. Attempt 2 FAILED at RESTARTS (R2374), then DEPLOYED `b9906932`, smoke GREEN, downtime 21 s (R2375). |
 
+### Status 2026-10-23
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1023` for 10-23 alone from `reports/cto-2026-10-23.md` rows R2381–R2405 (08:12 → 11:22 ET); tag check (L35): `git tag --list "deploy-2026-10-23*"` = none. The 10-22 close ran (`CLOSE PUSHED 074cd312`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F4, F23, F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-22). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) and X3 values | DONE-DARK | Plists stay unloaded. Owed: his legs X5, X7, X10, X12; the desk asked him a time (R2384). |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | Unchanged. Owed: his one DM turn and X15 four legs (R2384). |
+| S5 radar-mirror-scope (card `1020`) | BUILT-NOT-MERGED | Build `4fb98729` tip `5bb80b36` (offline 4983/0, with-DB 5955/0, R2404); check `a18a5732` ready YES, tip `25994142` (offline 9120/0, with-DB 5956/0, R2405; report `d9ec36a8`). Brain asked deploy timing (his call). |
+| S5 radar S5 evaluate / replay (radar.cards_enabled, benchmark top_n) | RED | Tombstoned by the radar note mirror 10-21 18:12:55 (R2388, R2389); restore HELD until his word via the K3 seat, after the fix deploys (R2395). |
+
+**Stop date: 2026-10-28 (S5, day 9 of 14). S5: AT RISK.** Reason: radar settings are tombstoned until card 1020 deploys and he gives the restore word; F5 stays dark until his four legs pass or are ruled; X15 four legs wait on his ready. No ruling moved a date (`cto-2026-10-23.md`).
+
+OFF-LADDER work of 2026-10-23 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Radar settings cause survey (prompt 1017) | DONE | Brain R2381 (urgent, read-only first). Report `reports/survey-settings-writer-2026-10-23.md` (R2388). |
+| Restore-prep survey (prompt 1022) | DONE | Brain R2389; shasum refused (R2392). Report `reports/survey-restore-prep-2026-10-23.md` (R2395). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
