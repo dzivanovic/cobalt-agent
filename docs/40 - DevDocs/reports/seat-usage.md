@@ -31,16 +31,16 @@ weekly_pct_close:
 | `grok-4.7-build` | grok · — | 5,365,760 | 0 | 70,143 | $1.19 | $0.00 |
 | `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 761 | $0.00 [^free] | $0.00 |
 | `claude-opus-5-5` | claude · — | 28,702,099 | 1,164,673 | 171,927 | **unpriced** | — |
-| `claude-sonnet-5-5` | claude · — | 59,675,756 | 1,286,889 | 195,998 | **unpriced** | — |
+| `claude-sonnet-5-5` | claude · — | 61,728,234 | 1,388,744 | 212,028 | **unpriced** | — |
 
-**Day total (API-equivalent):** ≥ $1.19 · **96,997,706** tokens across 4 model(s), seats: claude, grok, qwen
-**Fresh input tokens:** 363,700 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+**Day total (API-equivalent):** ≥ $1.19 · **99,168,123** tokens across 4 model(s), seats: claude, grok, qwen
+**Fresh input tokens:** 363,754 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
 
 > **UNPRICED MODELS: `claude-opus-5-5`, `claude-sonnet-5-5`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
 
 [^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
 
-_Generated 2026-10-23 21:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Generated 2026-10-23 23:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
 _Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20261023 --until 20261023 --by-agent --offline`_
 <!-- /cobalt:unit seat-usage:2026-10-23 -->
 <!-- /cobalt:section seat-usage:2026-10-23 -->
