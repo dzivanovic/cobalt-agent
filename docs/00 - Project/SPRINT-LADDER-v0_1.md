@@ -1271,6 +1271,27 @@ OFF-LADDER work of 2026-10-23 (each with the ruling that ordered it):
 | Radar settings cause survey (prompt 1017) | DONE | Brain R2381 (urgent, read-only first). Report `reports/survey-settings-writer-2026-10-23.md` (R2388). |
 | Restore-prep survey (prompt 1022) | DONE | Brain R2389; shasum refused (R2392). Report `reports/survey-restore-prep-2026-10-23.md` (R2395). |
 
+### Status 2026-10-24
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1024` for 10-24 alone from `reports/cto-2026-10-24.md` rows R2406–R2418 (18:5x → 21:02 ET); tag check (L35): `git tag --list "deploy-2026-10-24*"` = none. The 10-23 close ran (`CLOSE PUSHED 7001737f`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F4, F23, F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-23). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) and X3 values | DONE-DARK | Plists stay unloaded. Owed: his legs X5, X7, X10, X12. |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | Unchanged. Owed: X15 four legs. |
+| S5 radar-mirror-scope (card `1020`, deploy card `1027`) | BUILT-NOT-MERGED | Deploy hub `5571b54a` FAILED at STEP-4.7 (h), rolled back `41bb2402` (R2409). Re-ship as port card `1032`: build `f167e437` BUILT tip `283389ff` (offline 4984/0, with-DB 5956/0, R2417); check `26966c4a` running; deploy after the restore. |
+| S5 radar settings restore (cards `1029` cards_enabled, `1030` benchmark) | BUILDING | His "Restore yes" (R2412, WRITE RULING). K3 seat `583fc969` launched on 1029 at 21:02 (R2418); 1030 follows after 1029 is WRITTEN. |
+| S5 radar S5 evaluate / replay | RED | `com.cobalt.replay` failed at step movers: radar.benchmark invalid (heartbeat 21:05 ET); clears when 1030 writes the benchmark. |
+
+**Stop date: 2026-10-28 (S5, day 10 of 14). S5: AT RISK.** Reason: radar settings are still tombstoned until the K3 restore writes both keys and the port deploys; F5 stays dark until his four legs pass or are ruled; X15 four legs wait on his ready. No ruling moved a date (`cto-2026-10-24.md`).
+
+OFF-LADDER work of 2026-10-24 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Deploy 1020 radar-mirror-scope (card `1027`) | FAILED, rolled back | His "Yes. Deploy" via brain (R2406). Deploy hub `5571b54a`, revert `41bb2402` (R2409). |
+| K3 restore of radar settings (cards `1029`, `1030`) | BUILDING | His "Restore yes" (R2407, R2412). Seat `583fc969` (R2418). |
+| Radar-mirror-scope port (card `1032`) | BUILT-NOT-MERGED | Brain R2410 (L79). Build `f167e437`, check `26966c4a` (R2416, R2417). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

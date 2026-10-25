@@ -5308,3 +5308,22 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-23*"` = no tag; no deploy row on 10-23.
 - STOP LINE (L35), `reports/close-2026-10-22.md`: `CLOSE PUSHED 074cd312`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-23.md` `## 8`.
+
+### 2026-10-24 — Deploy 1027 failed and rolled back; K3 restore of radar settings begun; radar-mirror-scope re-ship as a port
+
+- R2406 18:5x DESK RECORD (brain 9b07db5a): his "Yes. Deploy" (market closed): deploy 1020 radar-mirror-scope, tip `25994142`.
+- R2407 18:5x DESK RECORD (brain): his "Restore yes": K3 seat reloads radar.cards_enabled and radar.benchmark 20/10 after 1020 deployed.
+- R2408 18:51 LAUNCHED: deploy card 1027 (tip `25994142`, `172351fe`); deploy hub `5571b54a`.
+- R2409 19:52 RECORD: deploy hub `5571b54a` FAILED at STEP-4.7 (h), rolled back (revert `41bb2402`); residents UP.
+- R2410 19:52 DESK RECORD (brain): restore now, before the re-ship; 1020 re-ships as a fresh port from main.
+- R2411 19:54 LAUNCHED: drafters `72ebb46b` (K3 restore cards) and `433ed031` (port card).
+- R2412 19:55 HIS RULING, APPROVED (brain relay): "Restore yes" for radar.cards_enabled = true and radar.benchmark {top_n 20, min_move_pct 10}.
+- R2413 19:56 LAUNCHED: restore cards 1029, 1030 DRAFTED (`433b2e10`); Sonnet preflight `88458a78`.
+- R2414 19:57 LAUNCHED: port card 1032 DRAFTED (`0db910de`); Sonnet preflight `4f9814ee`.
+- R2415 19:58 RECORD: restore preflight `88458a78` 11 checks 0 fails; settings writes refused 20:00-21:00 ET.
+- R2416 19:58 LAUNCHED: port preflight `4f9814ee` 8/0, BASE `0866400b` (`8a52f030`); Opus build `f167e437` on card 1032.
+- R2417 20:51 LAUNCHED: port build `f167e437` BUILT (tip `283389ff`, offline 4984/0, with-DB 5956/0); check `26966c4a`.
+- R2418 21:02 LAUNCHED: K3 seat `583fc969` on card 1029 (cards_enabled), WRITE RULING R2412 (`9c493c24`).
+- DEPLOY (L35): `git tag --list "deploy-2026-10-24*"` = no tag (deploy 1027 rolled back, `41bb2402`).
+- STOP LINE (L35), `reports/close-2026-10-23.md`: `CLOSE PUSHED 7001737f`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-24.md` `## 8`.
