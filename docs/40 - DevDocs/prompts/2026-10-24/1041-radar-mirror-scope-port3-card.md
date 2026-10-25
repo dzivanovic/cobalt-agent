@@ -3,7 +3,7 @@ LADDER: OFF-LADDER — reports/survey-settings-writer-2026-10-23.md R2389
 BRANCH: ops/radar-mirror-scope-port3
 WORKTREE: radar-mirror-scope-port3
 BASE: bf033084
-TIP:
+TIP: 671e0215
 REPORT: /Users/cobalt/cobalt-wt/radar-mirror-scope-port3/docs/40 - DevDocs/reports/radar-mirror-scope-port3-build-2026-10-24.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-mirror-scope-port3-check-2026-10-24.md
 HOUSE B: as needed
