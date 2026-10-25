@@ -6,7 +6,7 @@ WORKTREE: none
 BASE: 1ef351db
 TAG:
 REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/prodwrite-restore-cards-enabled.md
-RULINGS: none
+RULINGS: 2026-10-24 R2412
 WRITE RULING: 2026-10-24 R2412
 
 ## ROWS
