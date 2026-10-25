@@ -125,15 +125,28 @@ class ReplayRadarStore:
 
 class ReplaySettingsStore:
     def __init__(self):
-        self.rows = {}
+        self.stored = {}
+        self.source = None
+
+    def rows(self):
+        return [
+            {"key": key, "value": value, "source": self.source, "updated_at": None}
+            for key, value in deepcopy(self.stored).items()
+        ]
 
     def values(self):
-        return deepcopy(self.rows)
+        return deepcopy(self.stored)
 
-    def put(self, rows, *, before_commit, **_kwargs):
+    def put(self, rows, *, source, before_commit, **_kwargs):
         before_commit()
-        self.rows = deepcopy(rows)
+        self.stored = deepcopy(rows)
+        self.source = source
         return {key: "created" for key in rows}
+
+
+def test_f1_replay_settings_store_rows_is_callable():
+    store = ReplaySettingsStore()
+    assert store.rows() == []
 
 
 class RecordingReplayCollector(ReplayCollector):
