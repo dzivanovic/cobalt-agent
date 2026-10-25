@@ -91,6 +91,7 @@ class Radar:
 
 class Settings:
     def __init__(self, events, fail=False): self.events, self.fail = events, fail
+    def rows(self): return []
     def values(self): return {}
     def put(self, _rows, *, source, before_commit=None):
         self.events.append("mirror")
@@ -307,17 +308,25 @@ class CrossingSettingsStore:
         self.clock = clock
         self.crossing = crossing
         self.commits = commits
-        self.rows = {}
+        self.stored = {}
+        self.source = None
+
+    def rows(self):
+        return [
+            {"key": key, "value": value, "source": self.source, "updated_at": None}
+            for key, value in deepcopy(self.stored).items()
+        ]
 
     def values(self):
-        return deepcopy(self.rows)
+        return deepcopy(self.stored)
 
-    def put(self, rows, *, before_commit, **_kwargs):
+    def put(self, rows, *, source, before_commit, **_kwargs):
         staged = deepcopy(rows)
         if self.crossing == "inside_s3":
             self.clock.cross()
         before_commit()
-        self.rows = staged
+        self.stored = staged
+        self.source = source
         self.commits.append(("mirror", self.clock.value))
         return {key: "created" for key in rows}
 
