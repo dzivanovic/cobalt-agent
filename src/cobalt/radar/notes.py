@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from loguru import logger
 from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from cobalt.session import session_clock
@@ -22,18 +21,6 @@ from .config import RadarConfig, load_config
 from .models import ExcludeBlock, ListBlock, PoolBlock, ScreenBlock
 
 FENCE_RE = re.compile(rb"```yaml[ \t]*\r?\n(.*?)\r?\n```", re.DOTALL)
-#: The label this mirror writes on every row it puts; a `radar.*` key whose
-#: stored `source` starts with it is the mirror's to tombstone.
-MIRROR_SOURCE_PREFIX = "vault:radar-notes@"
-#: The other writers of settings rows. A key they own is left alone, silently.
-FOREIGN_SOURCE_PREFIXES = (
-    "card:",  # settings/card.py:324
-    "optional:",  # settings/cli.py:218
-    "yaml:",  # settings/cli.py:283
-    "git:",  # settings/cli.py:280
-    "aset.change_line@",  # aset/web.py:1367
-    "db_migration:",  # db_migrations/0004_radar_pool.sql:74
-)
 
 
 class RadarNoteError(RuntimeError):
@@ -696,9 +683,7 @@ def configured_sources(config: RadarConfig | None = None) -> ParsedSources:
     )
 
 
-def _mirror_rows(
-    parsed: ParsedSources, before: dict[str, Any], owners: dict[str, str]
-) -> dict[str, Any]:
+def _mirror_rows(parsed: ParsedSources, before: dict[str, Any]) -> dict[str, Any]:
     rows: dict[str, Any] = {}
     for note in (parsed.screens, parsed.lists):
         note_key = f"radar.note.{note.kind}"
@@ -723,14 +708,9 @@ def _mirror_rows(
                 "status": status,
                 "error": error,
             }
-    # Only a key this mirror wrote is tombstoned when its block leaves the
-    # notes; another writer's `radar.*` key is never written here.
     current_keys = set(rows)
     for key in before:
-        if not key.startswith("radar.") or key in current_keys:
-            continue
-        source = owners[key]
-        if source.startswith(MIRROR_SOURCE_PREFIX):
+        if key.startswith("radar.") and key not in current_keys:
             rows[key] = {
                 "block": None,
                 "block_sha256": None,
@@ -738,19 +718,7 @@ def _mirror_rows(
                 "status": "removed",
                 "error": None,
             }
-        elif not source.startswith(FOREIGN_SOURCE_PREFIXES):
-            logger.warning("radar mirror left {} alone: source {} is not this mirror's", key, source)
     return rows
-
-
-def _changed_note_hash(parsed: ParsedSources, before: dict[str, Any]) -> str:
-    """The hash of the first note, Screens then Lists, that changed and has one."""
-    for note in (parsed.screens, parsed.lists):
-        prior = before.get(f"radar.note.{note.kind}")
-        prior_hash = prior.get("note_sha256") if isinstance(prior, dict) else None
-        if note.note_sha256 is not None and note.note_sha256 != prior_hash:
-            return note.note_sha256
-    return "missing"
 
 
 def mirror_sources(
@@ -764,9 +732,7 @@ def mirror_sources(
     if session_clock().session(instant) is Session.MARKET_RESET:
         raise RadarNoteError("radar mirror refused in market_reset before opening a transaction")
     target = store or TraderSettingsStore()
-    stored = target.rows()
-    before = {row["key"]: row["value"] for row in stored}
-    owners = {row["key"]: row["source"] for row in stored}
+    before = target.values()
     if all(
         isinstance(before.get(f"radar.note.{note.kind}"), dict)
         and before[f"radar.note.{note.kind}"].get("note_sha256") == note.note_sha256
@@ -776,11 +742,11 @@ def mirror_sources(
             f"radar.note.{note.kind}": "unchanged"
             for note in (parsed.screens, parsed.lists)
         }
-    rows = _mirror_rows(parsed, before, owners)
-    note_hash = _changed_note_hash(parsed, before)
+    rows = _mirror_rows(parsed, before)
+    note_hash = parsed.screens.note_sha256 or parsed.lists.note_sha256 or "missing"
     return target.put(
         rows,
-        source=f"{MIRROR_SOURCE_PREFIX}{note_hash[:12]}",
+        source=f"vault:radar-notes@{note_hash[:12]}",
         before_commit=before_commit,
     )
 
