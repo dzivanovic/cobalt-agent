@@ -64,3 +64,35 @@ Out-of-process Finviz callers (the 05:15 and 15:40 ET prefill jobs) are not in t
   bound alone (50 rpm) exceeds `radar.finviz_max_rpm` (45, ruled
   2026-09-16). Radar is disjoint and unaffected, but the archiver and
   replay sites refuse until Dejan rules the number.
+
+## 2026-10-23 — radar-mirror-scope
+
+- The cause (10-21): `mirror_sources` read `values()`, a map with no
+  `source`, and `_mirror_rows` wrote `status: removed` for every `radar.*`
+  key absent from the notes, whoever wrote it. A Lists note edit therefore
+  tombstoned `radar.cards_enabled` (written by `--card`) and
+  `radar.benchmark` (written by `--optional`). Any note edit that moved a
+  note hash could fire it.
+- OWNERSHIP: `mirror_sources` reads `rows()` once and builds `before`
+  (`{key: value}`, for the unchanged skip) and `owners` (`{key: source}`).
+  A `radar.*` key is the mirror's when its stored `source` starts with
+  `MIRROR_SOURCE_PREFIX` (`"vault:radar-notes@"`), the label every mirror
+  `put` writes. Only such a key is tombstoned when it leaves the notes; the
+  mirror never writes any other key.
+- A non-owned key is left alone. One whose source starts with a known
+  other writer's label (`FOREIGN_SOURCE_PREFIXES`: `card:`, `optional:`,
+  `yaml:`, `git:`, `aset.change_line@`, `db_migration:`) is left alone
+  silently. Any other source is UNKNOWN: left alone, with one
+  `logger.warning` per key per mirror call naming the key and its source
+  label, never its value.
+- THE LABEL: `source` is still `vault:radar-notes@<hash12>`, but the hash
+  is now the hash of the note that changed. It is the first note, Screens
+  then Lists, whose `note_sha256` differs from the stored
+  `radar.note.<kind>` row and is not `None`; `missing` when none has a hash
+  (`_changed_note_hash`). Before this, a Lists edit carried the unchanged
+  Screens hash.
+- Pinned by `tests/cobalt/test_radar_mirror_scope.py` (M1–M4).
+- 2026-10-23 check (A1): `test_radar_replay.py` `ReplaySettingsStore`, the
+  fake `scan_command` builds through the patched `TraderSettingsStore`, gains
+  `rows()`; without it the mirror stage failed inside the replay tests and
+  the runner stamped it as a mirror failure.

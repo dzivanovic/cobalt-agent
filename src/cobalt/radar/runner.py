@@ -629,6 +629,13 @@ def start_strike_thread(label: str, *, make_loop=None) -> StrikeThread:
     return thread
 
 
+def warm_config() -> None:
+    """The old tree's `Config` singleton is built in this thread before a second thread can see it half-built."""
+    from cobalt_agent.config import Config
+
+    Config.get_instance()
+
+
 def run_command(_args) -> None:
     async def resident() -> None:
         runner = await build_runner()
@@ -640,6 +647,7 @@ def run_command(_args) -> None:
 
     with job_run(JOB_LABEL) as run:
         # The resident only (S4-P1 C4): `scan` and replay start no strike loop.
+        warm_config()
         strike = start_strike_thread(JOB_LABEL, make_loop=lambda: make_strike_loop())
         try:
             asyncio.run(resident())
