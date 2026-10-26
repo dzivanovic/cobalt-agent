@@ -1,7 +1,10 @@
 # Deploy radar-mirror-scope-port3 · set: radar-mirror-scope-port3-r2 · migrations: none
 
 ## §0 Headline
-- (in progress)
+- Deploy of `ops/radar-mirror-scope-port3` (code tip `671e0215`, head `304a0b03`), card 1066: gate GREEN on `<m1>` `2ece355e` (offline 9141/0 · with-DB 5977/0 · live-note 148/0). Merged at 17:19 (`7ac03e07` → `5125be37`).
+- Smoke (b) RED: the new radar logged one Traceback (baseline 0) at 17:19:51, `strike loop: tick failed … 'Config' object has no attribute '_config'`, in `cobalt_agent/config.py`, a file this set does not touch.
+- STEP-5: one revert `8a088c7b6`, proven against `<pre-merge>`; aset, cos and radar UP on the old code at 17:21:23; re-smoke green, counts flat. Down 37 s + 35 s.
+- Next (the desk's): explain the startup trace (`## DECISIONS` 2), then re-land (THE ROLLBACK STRING 3) or recut.
 
 ## L74
 - A system notice in this session asked commits to also carry a `Claude-Session:` line. Recorded once; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -132,14 +135,77 @@ STEP-D1 (`date` → `Mon Oct 26 17:16:38 EDT 2026`):
 - `curl … /radar` → `200`. MARKERS → `0`; marker 2 `No such file or directory` (exit 2; DECISIONS 1).
 - THE LAUNCHD SET: empty → nothing. No migration → no `<RB>`, no D1-M.
 
+STEP-D2:
+- D2.0 `deploy-shipped.sh --moved e9c2ce13 "<card>"` → nothing. Commit `7ac03e07b docs(report): deploy radar-mirror-scope-port3 — gate green on 2ece355e`; `show --stat HEAD` → that one file (145 insertions). `rev-parse --short=8 main` → `7ac03e07` = `<pre-merge>`.
+- D2.1 `git -C <GATE> merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` `5125be37`; `5125be37^2` → `7ac03e07` = `<pre-merge>`; `merge-base --is-ancestor 2ece355e 5125be37` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 2ece355e 5125be37 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 6.3 h old` · `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 10582.6 MB` · `ssd: snapshot d6ebb334 — 0 new / 3 changed, 253.6 MB added, 1 pruned` · `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Mon Oct 26 17:18:59 EDT 2026`; `heartbeat show` → `HEARTBEAT RED — 2 job(s)  (2026-10-26 17:18:59 EDT)`, the same two REDs (agent, replay) as `<hb0>`; aset pid 36927, radar `running 2556 min, heartbeat fresh`, cos `running 2556 min, heartbeat fresh`; 140 s after D1; no new RED.
+- D2.6 `date` → `Mon Oct 26 17:19:04 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-radar-mirror-scope-port3` at `7ac03e07`.
+
+STEP-4:
+- 4.1 `date` → `<t down>` `Mon Oct 26 17:19:19 EDT 2026`.
+- 4.2 `launchctl bootout gui/501/com.cobalt.aset` → ok; print → `Could not find service "com.cobalt.aset" in domain for user gui: 501` (exit 113) · same for `com.cobalt.cos` (exit 113) and `com.cobalt.radar` (exit 113). ORPHAN-CLEAN `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` → `orphan-clean: aset · none found` (no kill). Agent not in the set.
+- 4.3 `rev-parse --short=8 HEAD` → `7ac03e07` = `<pre-merge>` · `git -C /Users/cobalt/cobalt merge --ff-only deploy/radar-mirror-scope-port3` → `Updating 7ac03e07b..5125be376` / `Fast-forward` (9 files, 561 insertions(+), 16 deletions(-)).
+- 4.4 migrations applied: none.
+- 4.5 `COBALT_ENV=production uv run cobalt validate` → exit 0, `13 trade_def(s) validated OK from the vault.`, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 `launchctl bootstrap gui/501 /Users/cobalt/cobalt/ops/com.cobalt.aset.plist` · `… /Users/cobalt/cobalt/ops/com.cobalt.cos.plist` · `… /Users/cobalt/Library/LaunchAgents/com.cobalt.radar.plist` → each ok, no retry. Prints: aset `state = running`, `pid = 57625` (≠ 36927) · cos `state = running`, `pid = 57651` (≠ 36938) · radar `state = running`, `pid = 57657` (≠ 36944). `date` → `<t up>` `Mon Oct 26 17:19:56 EDT 2026`. Downtime 37 s.
+- 4.6L `<launchd set>` empty → nothing.
+
+CLOSE (rollback path; STEP-7's green tag not set):
+- `<pre-merge>` `7ac03e07` → `<stack-final>` `5125be37` landed at 4.3, reverted at STEP-5 (2) by `8a088c7b6`; `main` code = `<pre-merge>` (proof: empty `diff --stat 7ac03e07 HEAD -- . ':(exclude)docs'`).
+- Tags: `pre-radar-mirror-scope-port3` at `7ac03e07` (kept); `deploy-2026-10-26-radar-mirror-scope-port3` NOT set.
+- Down windows: 4.2 → 4.6 `17:19:19` → `17:19:56` (37 s, new code); STEP-5 (1) → (3) `17:20:48` → `17:21:23` (35 s). The new code ran 17:19:5x → 17:20:48.
+- uv sync line: none printed at 4.5. Proof cost: none (no migration). migrations applied: none. `<RB>`: none.
+- Snapshot `d6ebb334` (ssd, 17:18:52).
+- RESTARTS done: com.cobalt.aset com.cobalt.cos com.cobalt.radar (twice: up on new code, then up on reverted code). LAUNCHD done: none. BOOTSTRAP OWED: none from this set.
+- THE ROLLBACK STRING (L54): 1. CODE `git -C /Users/cobalt/cobalt revert --no-edit -m 2 5125be37` — DONE at STEP-5 as `8a088c7b6`. 2. SCHEMA: none (no migration). 3. RE-LAND (the desk's, after the trace is explained): `git -C /Users/cobalt/cobalt revert --no-edit 8a088c7b6` — titled `Reapply "Merge branch 'main' into deploy/radar-mirror-scope-port3"`.
+
 ## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` 31 · `<rpr_up>` 60 · `<re_up>` 750 · `<lc_up>` 39 (= D1).
+- (a) `date` `Mon Oct 26 17:20:15 EDT 2026` · `cobalt.sh status` → `  Cobalt is OFFLINE.` (recorded retired: green). 4.6 prints: aset 57625, cos 57651, radar 57657, all `state = running`, new pids.
+- (b) `date` `Mon Oct 26 17:20:20 EDT 2026` · `grep -c "Started server process" aset.err` → `299` (> 298, ≤ 300) · `tail -n 30 aset.err` → `INFO:     Started server process [57625]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` · aset Traceback `217` = `<ta0>` · radar TaxonomyConfigError `0` = `<tc0>` · **radar Traceback `1` ≠ `<tr0>` `0` → RED.**
+- The trace, `logs/radar.err:103098`–`:103190`: `2026-10-26 17:19:51.808 | ERROR    | cobalt.radar.runner:_main:609 - strike loop: tick failed — the loop goes on at the next tick: 'Config' object has no attribute '_config'`, then the stack `src/cobalt/radar/runner.py:606 _main` → `runner.py:575 make_strike_loop` → `src/cobalt/strike/detector.py:335 build_detector` → `src/cobalt/archiver/collector.py:109 resolve_token` → `src/cobalt_agent/skills/research/finviz_api.py:101 __init__` → `src/cobalt_agent/config.py:666 get_config` → `config.py:435 load` → `AttributeError: 'Config' object has no attribute '_config'`. Stamped 17:19:51, from the new radar process (pid 57657), on its first strike tick. None of these files is in this set's diff (`src/cobalt/radar/notes.py` is the set's one source file). Cause unproven (L70) → RED → STEP-5.
+- Rows (c)–(h) not run on the new tree: STEP-5 entered at the first red row.
+
+STEP-5:
+- (0) `date` → `Mon Oct 26 17:20:48 EDT 2026`.
+- (1) `launchctl bootout gui/501/com.cobalt.aset` → print `Could not find service` (113) · same for `com.cobalt.cos` (113) and `com.cobalt.radar` (113). `<rp5>` 31 · `<rpr5>` 60 · `<re5>` 750 · `<lc5>` 39. (1L) `<launchd set>` empty → nothing.
+- (2) `git -C /Users/cobalt/cobalt log --oneline -1` → `5125be376 Merge branch 'main' into deploy/radar-mirror-scope-port3` = `<stack-final>` · `git -C /Users/cobalt/cobalt revert --no-edit -m 2 5125be37` → `[main 8a088c7b6] Revert "Merge branch 'main' into deploy/radar-mirror-scope-port3"` (9 files changed, 16 insertions(+), 561 deletions(-)) · PROOF `git -C /Users/cobalt/cobalt diff --stat 7ac03e07 HEAD -- . ':(exclude)docs'` → nothing: `<pre-merge>` restored. (2L) nothing.
+- (2a)/(2b) no migration.
+- (3) `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` → `orphan-clean: aset · none found` · bootstrap aset, cos, radar → each ok, no retry · prints: aset `state = running` `pid = 58145`, cos `state = running` `pid = 58158`, radar `state = running` `pid = 58164` · `date` → `Mon Oct 26 17:21:23 EDT 2026`. Second down window 17:20:48 → 17:21:23, 35 s. Agent recorded retired: no kickstart.
+- (4) re-smoke on the reverted tree:
+  - (a) prints above; `cobalt.sh status` → `  Cobalt is OFFLINE.`
+  - (b) aset `Started server process` `300` (= `<a0>` + 2: the new-tree start and this one) · `tail -n 30 aset.err` → `INFO:     Started server process [58145]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` · aset Traceback `217` · radar TaxonomyConfigError `0` · radar Traceback `1` (the 17:19:51 trace; no new one at this read).
+  - (c) `curl … /` → `200` · `/radar` → `200` · `/radar\?frame=phone` → `200`.
+  - radar tail: `date` `Mon Oct 26 17:22:54 EDT 2026` (+91 s) · `tail -n 12 radar.err` → `2026-10-26 17:22:49.628 | INFO     | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1793049680540`, no `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → settled GREEN. The reverted radar's strike start (17:21:20, finviz token resolved) logged no `strike loop: tick failed`.
+  - (e) #1 `date` `Mon Oct 26 17:21:52 EDT 2026` · `heartbeat show` → `HEARTBEAT RED — 2 job(s)  (2026-10-26 17:21:55 EDT)`, the same two REDs as `<hb0>` (agent, replay); aset pid 58145; `com.cobalt.radar running running 1 min, heartbeat fresh`; `com.cobalt.cos running running 1 min, heartbeat fresh`.
+  - (f) `validate` → exit 0, `13 trade_def(s) validated OK from the vault.`, `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.`, `Placement (docs/PLACEMENT.md): tree clean.` · `jobs restarts 7ac03e07..5125be37` → exit 0, `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` = STEP-R's set, no `UNCLASSIFIED`.
+  - (e) #2 `date` `Mon Oct 26 17:23:45 EDT 2026` (113 s after #1) · `heartbeat show` → `HEARTBEAT RED — 2 job(s)  (2026-10-26 17:23:48 EDT)`, the same two REDs as `<hb0>`; `com.cobalt.radar running running 2 min, heartbeat fresh`; `com.cobalt.cos running running 2 min, heartbeat fresh`; aset pid 58145. No new RED.
+  - (g) no migration.
+  - REVERT-READBACK after the settled tail: `radar panel FAILED` 31 = `<rp5>` · `radar pool refresh FAILED` 60 = `<rpr5>` · `radar S5 evaluate FAILED` 750 = `<re5>` · `lifecycle card read failed` 39 = `<lc5>` · radar Traceback still 1 (no new one on the reverted tree). No growing count.
 
 ## CONTINUE
 - next: STEP-D2 (gate green at Mon Oct 26 17:15:59 EDT 2026; D0, D1 done; D2.0 `deploy-shipped.sh --moved e9c2ce13` → nothing)
+- OUTAGE STARTING Mon Oct 26 17:19:04 EDT 2026 — residents of com.cobalt.aset com.cobalt.cos com.cobalt.radar going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 done 17:19:56; smoke (b) RED; STEP-5 done 17:21:23, residents up on the reverted tree. Ended FAILED with rollback used; not resumable here.
 
 ## DECISIONS
 1. ASK DESK: card `## MARKERS` line 2 gives `before 0`, but `tests/cobalt/test_radar_mirror_scope.py` is new with this set, so on production `grep -c -F` exits 2 `No such file or directory` rather than printing `0`. Production does not carry the marker. Safe default taken: read as `before` (absent = not carried), continue; smoke (d)'s `after 1` stands as written. [Mon Oct 26 16:22:02 EDT 2026]
+2. ASK DESK: the smoke (b) RED is a radar startup trace in code this set does not touch: `strike loop: tick failed … 'Config' object has no attribute '_config'` (`src/cobalt_agent/config.py:435` via `src/cobalt/archiver/collector.py:109`, `src/cobalt/strike/detector.py:335`, `src/cobalt/radar/runner.py:575`/`:606`), at 17:19:51 on the new radar's first strike tick. The log says the loop goes on at the next tick. The reverted radar started at 17:21:20 without it. Read: likely a first-access race on the `cobalt_agent` `Config` singleton (`load()` read `_config` before it was set), not this set's `notes.py` change. That is unproven (L70). Safe default taken: STEP-5, one revert, residents up on the old code. The desk decides whether a build explains or fixes the race before a re-land (THE ROLLBACK STRING 3) or a recut. [Mon Oct 26 17:20:48 EDT 2026]
 
 ## RECORDS
+- Downtime: 37 s (4.2–4.6) and 35 s (STEP-5); neither over 300 s.
+- `cobalt_dev: 0013 (F2 = F0)` — gate log `:2388`; lock released (`:2390`), `.env: removed`.
+- Carried RED as read: none of the radar family. Standing REDs at D1, D2.5 and after the rollback, unchanged: `com.cobalt.agent` (recorded retired) and `com.cobalt.replay` (`TraderSettingsError: invalid radar.benchmark`).
+- No `REFUSED` call. No message received. No `RETIRE OWED`.
+- L74: one system notice asked for a `Claude-Session:` commit line; recorded under `## L74`, not acted on.
+- `main` now carries two commits from this run beyond the D2.0 report: the ff-merge `5125be376` and its revert `8a088c7b6` (git's default message, from `revert --no-edit`).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-radar-mirror-scope-port3-r2` and branch `deploy/radar-mirror-scope-port3` (at `5125be37`), its `.venv`; the try1 gate `/Users/cobalt/cobalt-wt/deploy-radar-mirror-scope-port3` if still present; the set's branch `ops/radar-mirror-scope-port3`.
+- PRE-STOP SELF-CHECK: (1) every smoke row is quoted with its `date` (above); (2) `671e0215` and `304a0b03` re-read at P3 and ancestors of `deploy/radar-mirror-scope-port3` (STEP-T, exit 0), and `2ece355e` an ancestor of `5125be37` (D2.2); (3) REVERT-READBACK shown under STEP-5 (4), every count and sha copied from this run's tool output; (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`), no conflict marker.
+- radar-mirror-scope-port3: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-mirror-scope-port3-check-2026-10-24.md` last line: CHECK DONE · job: radar-mirror-scope-port3 · pass: 1 · tip: 671e0215 · … · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 165034 (card)
+- radar-mirror-scope-port3: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/radar-mirror-scope-port3` → `304a0b03`; code tip `671e0215` (card)
+- written by deploy-card.sh at 2026-10-26 16:21 ET (`date`); trial merge of the heads onto main in order: clean (card)
 
-(run in progress — next step under ## CONTINUE)
+FAILED: smoke (b) — radar Traceback 1 vs baseline 0 (strike loop 'Config' object has no attribute '_config', logs/radar.err:103098) · rollback: used — migrations applied: none — aset: UP — cos: UP — radar: UP — launchd: none · decisions: 2 · for Dejan: 0 · tokens: 209870
