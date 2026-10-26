@@ -1,0 +1,15 @@
+job=f4-probe
+tip=2e0d5f77b
+on=596ca32f
+migration=none
+offline=4993/0
+with_db=5965/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=none
+rows=8 of 8
+self_check=3 of 3
+decisions=3
+for_dejan=0
+tokens=264605
