@@ -238,3 +238,16 @@ def test_x15_prints_one_line_and_exits_by_verdict(monkeypatch, capsys, probe, ve
     code, line, _ = x15(monkeypatch, capsys, probe, replace(small(probe), **change))
     assert LINE.match(line).group(1) == verdict, line
     assert code == exit_code
+
+
+def test_check_o1_a_minute_of_exactly_the_ceiling_passes(probe):
+    hits = [probe.Hit("08:41", "radar", "/p", 200)] * 50
+    verdict, clause = probe._clause(hits, probe._Ledger(), 50)
+    assert verdict == "OK", clause
+
+
+def test_check_o2_a_429_within_the_ceiling_fails(probe):
+    hits = [probe.Hit("08:41", "radar", "/p", 200)] * 10 + [probe.Hit("08:41", "strike", "/p", 429)]
+    verdict, clause = probe._clause(hits, probe._Ledger(), 50)
+    assert verdict == "FAIL", clause
+    assert "429 1 (strike=1)" in clause and probe.CONSEQUENCE in clause
