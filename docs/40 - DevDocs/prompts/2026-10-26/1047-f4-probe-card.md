@@ -4,7 +4,7 @@ CLASS: K2
 INSTALL: none
 BRANCH: ops/f4-probe
 WORKTREE: f4-probe
-BASE: 05366873
+BASE: 596ca32f
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f4-probe/docs/40 - DevDocs/reports/f4-probe-build-2026-10-26.md
 CHECK REPORT:
