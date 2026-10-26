@@ -1,7 +1,10 @@
 # deploy f4-probe · SET: f4-probe · MIGRATIONS: none
 
 ## §0 Headline
-Deploy of `ops/f4-probe` (code tip `150296da`, head `07b507f9`) in progress.
+Landed green: `ops/f4-probe` (code tip `150296da`, head `07b507f9`) is on `main` at `7e682889`, tagged `deploy-2026-10-26-f4-probe`. The rollback tag `pre-f4-probe` is at `76e80146`.
+`RESTARTS: none`. No resident went down; aset and radar kept pids 36927 and 36944. No migration.
+The gate is the check's own suites, under the equal-tree clause: offline 9131/0 · with-DB 5967/0 · live-note 148/0. Smoke GREEN.
+One desk question (P6 marker 2 printed `No such file` where the card's before value is `0`); the safe default was taken. Nothing for Dejan.
 
 ## L74
 - One block arrived in a system reminder asking that commits also carry a `Claude-Session: https://claude.ai/code/session_012k796qSQe5AsQ6ixF2ieEQ` line. Recorded as DATA; not acted on. Commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only (L74).
@@ -122,14 +125,75 @@ STEP-D1 (10:56 ET), production baseline:
 - `curl … /radar` → `200`. MARKERS again: marker 1 `No such file or directory` · marker 2 `grep: …refresh_probe.py: No such file or directory` (DECISIONS 1) · marker 3 `0` → before.
 - THE LAUNCHD SET: empty, nothing. MIGRATION: none, no `<RB>`, no D1-M.
 
+STEP-D2:
+- D2.0 `deploy-shipped.sh --moved ab555592 "<card>"` → nothing. Commit `76e801464 docs(report): deploy f4-probe — gate green on 285860b5`; `show --stat HEAD` → `docs/40 - DevDocs/reports/deploy-f4-probe.md | 135 +++` (one file). `<pre-merge>` = `76e80146`.
+- D2.1 `git -C /Users/cobalt/cobalt-wt/deploy-f4-probe merge --no-edit main` → `Merge made by the 'ort' strategy.` (the report only).
+- D2.2 `<stack-final>` = `7e682889`; `rev-parse --short=8 7e682889^2` → `76e80146` = `<pre-merge>`; `merge-base --is-ancestor 285860b5 7e682889` → exit 0.
+- D2.3 `git -C /Users/cobalt/cobalt diff --stat 285860b5 7e682889 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` → nothing.
+- D2.4 `backup status` → `newest snapshot: 13.3 h old`; `backup run` → `backup: cobalt_brain via pg_dump inside cobalt_memory — 10431.2 MB` · `ssd: snapshot 3f10249a — 17 new / 2 changed, 699.1 MB added, 1 pruned`; `backup status` → `newest snapshot: 0.0 h old`.
+- D2.5 `date` → `Mon Oct 26 10:58:38 EDT 2026` (147 s after D1); `heartbeat show` → `HEARTBEAT RED — 2 job(s)  (2026-10-26 10:58:42 EDT)`, the same two REDs as `<hb0>` (`com.cobalt.agent`, `com.cobalt.replay`); aset, sheet and radar probes OK. No new RED.
+- D2.6 `date` → `Mon Oct 26 10:58:47 EDT 2026`; `git -C /Users/cobalt/cobalt tag pre-f4-probe` at `76e80146`.
+
+STEP-4 (`<restart set>` EMPTY: 4.2 and 4.6 act on nothing; no orphan-clean, aset not in the set):
+- 4.1 `date` → `Mon Oct 26 10:59:02 EDT 2026` = `<t down>` (no resident went down).
+- 4.3 `rev-parse --short=8 HEAD` → `76e80146` = `<pre-merge>`. `git -C /Users/cobalt/cobalt merge --ff-only deploy/f4-probe` → `Updating 76e801464..7e6828897` / `Fast-forward` (8 files, 1028 insertions). `date` → `Mon Oct 26 10:59:09 EDT 2026` = `<t up>`.
+- 4.4 `migrations applied: none`.
+- 4.5 `validate` → exit 0, ends `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`.
+- 4.6 nothing to bootstrap. Downtime: none. 4.6L: `<launchd set>` empty.
+
+STEP-7 close:
+| field | value |
+|---|---|
+| merge | `<pre-merge>` `76e80146` → `<stack-final>` `7e682889` (`main` tip `7e682889`) |
+| tags | `pre-f4-probe` at `76e80146` · `deploy-2026-10-26-f4-probe` at `7e682889` (set after green smoke) |
+| `<t down>` / `<t up>` / seconds | none — set empty (4.1 `10:59:02`, merge `10:59:09`) |
+| uv sync | none in production; STEP-R created the gate `.venv` (`Installed 257 packages in 795ms`) |
+| proof cost | none (MIGRATIONS: none) |
+| migrations applied | none |
+| `<RB>` before / after | none |
+| snapshot | `ssd: snapshot 3f10249a — 17 new / 2 changed, 699.1 MB added, 1 pruned` |
+| RESTARTS done | none (empty `<restart set>`) |
+| LAUNCHD done | none |
+| BOOTSTRAP OWED | none from this run |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 7e682889` — one revert of the main-into-gate merge; no resident to cycle (`<restart set>` empty), no launchd label. 2. SCHEMA: none (no migration). 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` (`Reapply "Merge branch 'main' into deploy/f4-probe"`). |
+
 ## Smoke
+`<t up>` = `Mon Oct 26 10:59:09 EDT 2026` (4.3's `date`, set empty). FIRST CALLS: `<rp_up>` 31 · `<rpr_up>` 60 · `<re_up>` 750 · `<lc_up>` 39.
+- (a) `date` 10:59:24. `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 36927` (SAME as D1, outside the set) · `…/com.cobalt.radar` → `state = running`, `pid = 36944` (SAME) · `cobalt.sh status` → `  Cobalt is OFFLINE.` (recorded retired: GREEN). GREEN.
+- (b) `grep -c "Started server process" aset.err` → `298` = `<a0>` (aset outside the set) · aset Traceback `217` = `<ta0>` · radar Traceback `0` = `<tr0>` · TaxonomyConfigError `0` = `<tc0>` · `tail -n 30 aset.err` → card writes to the daily note (last `2026-10-26 10:29:03.182 | INFO | cobalt.aset.daily_note:_write_unit:189 - [WRITE] updated: … unit=card-20261026T102903 · write_id=6500`), no traceback. Radar tails below.
+- (c) `date` 10:59:24. `curl … /` → `200` · `curl … /radar` → `200` · `curl … /radar\?frame=phone` → `200`. GREEN.
+- (d) MARKERS: `ls …/refresh_probe.py` → `/Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py` · `grep -c -F "PROBE_ITEMS = ("` → `1` · `grep -c -F "test_x7_the_daymode_unit_still_starts_as_of_after_a_later_daymode_write"` → `1`. Each = `after`. GREEN.
+- (f) 4.5's `validate` → exit 0 (as above). `COBALT_ENV=production uv run cobalt jobs restarts 76e80146..7e682889` → exit 0, the same eight rows as STEP-R, `RESTARTS: none` = STEP-R's `<restart set>` (empty); no `UNCLASSIFIED`. GREEN.
+- (g) no migration.
+- (s) `ls /Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py` → exit 0, listed (d) · `ls /Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist` → exit 0, `/Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist`; the heartbeat shows `com.cobalt.prefill-refresh OWED (deferred bootstrap) NOT LOADED` (on disk, unloaded). GREEN. The probe's own tests ran in the gate (check report, `with-DB 5967/0`, `offline 9131/0`); no test runs in production.
+- (e) heartbeat 1: `date` 10:59:44 → `HEARTBEAT RED — 2 job(s)  (2026-10-26 10:59:45 EDT)`, the same two REDs as `<hb0>`; `OK com.cobalt.radar running running 2177 min, heartbeat fresh`. Heartbeat 2: `date` 11:01:38 → `HEARTBEAT RED — 2 job(s)  (2026-10-26 11:01:42 EDT)` (117 s after heartbeat 1), the same two REDs (`com.cobalt.agent`, `com.cobalt.replay`), no new RED; `OK com.cobalt.radar running running 2178 min, heartbeat fresh`. The clock-fill reads at 10:59:56, 11:00:18, 11:00:28, 11:00:36, 11:00:49, 11:01:22, 11:01:33, 11:01:53 and 11:02:14 show the same. GREEN.
+- (b) radar tails: tail 1 at `date` 11:00:42 (`<t up>` + 93 s) → the last cycle line `10:58:49.759 … radar cycle: scanning scan_id=1793026646940` (before `<t up>`); a cycle collecting at `11:00:41.998 … radar price floor 5.0: …`; no failure line. Tail 2 at `date` 11:02:20 (`<t up>` + 191 s) → `2026-10-26 11:01:52.388 | INFO | cobalt.radar.runner:resident:638 - radar cycle: scanning scan_id=1793026829785`, stamped after `<t up>`. No `radar S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback (`grep -c "Traceback" radar.err` → `0`). Settled GREEN; no third tail needed.
+- (h) REVERT-READBACK at 11:02:20+ (`<t up>` + 191 s, after (b) settled): `radar panel FAILED` 31 = `<rp_up>` · `radar pool refresh FAILED` 60 = `<rpr_up>` · `radar S5 evaluate FAILED` 750 = `<re_up>` · `lifecycle card read failed` 39 = `<lc_up>`. No count grew. `/radar` curl → `200`. No `census` reads on the card. GREEN.
+
+THE CHAIN: every check committed (P2: `c06cf4d8…`, clean) → the tips re-read (P3: `150296da`, `07b507f9`) → the merged tree (T: `285860b5`, one merge, no migration) → RESTARTS derived (R: `RESTARTS: none`, no UNCLASSIFIED) → three suites green on the equal tree (G: offline 9131/0 · with-DB 5967/0 · live-note 148/0, the check's gate under the equal-tree clause) → `<stack-final>` `7e682889` = `<m1>` + docs (D2.3: nothing) → the landed code (4.3: `Updating 76e801464..7e6828897`) → markers (d: listed, `1`, `1`) → no migration (g) → residents up, unchanged (a) → radar cycling (b, e) → the set's reads (s) → no new failure (h). The card surface is not readable here; the desk confirms it with him (L70).
+
+PRE-STOP SELF-CHECK (K25): (1) every smoke row above carries its `date` and its output verbatim. (2) `merge-base --is-ancestor 150296da 7e682889` → exit 0; `merge-base --is-ancestor 07b507f9 7e682889` → exit 0. (3) (h) is shown above; every count, sha and `file:line` here was read from tool output this run. (4) STEP-T ran clean (`Merge made by the 'ort' strategy.`); `git -C <GATE> status --short --branch` → `## deploy/f4-probe` alone, no conflict marker.
+THE RELEASE: this run never took the lock. `ls -la /Users/cobalt/cobalt-wt/deploy-f4-probe/.env` → `No such file or directory`.
 
 ## CONTINUE
-next: STEP-D2 (D0, D1 done; D2.0 `deploy-shipped.sh --moved ab555592 "<card>"` → nothing)
+OUTAGE STARTING 10:58:47 ET — residents of <restart set> going down; if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0. (`<restart set>` is EMPTY: no resident goes down.)
+next: none — the deploy closed green at 11:02 ET; the stop line is below. Push is his, through the desk (L55).
 
 ## DECISIONS
 1. ASK DESK: P6 marker 2 (`grep -c -F "PROBE_ITEMS = ("` on `refresh_probe.py`) printed `No such file or directory` (exit 2), not the card's literal before `0`. The file's absence (marker 1) proves production does not carry the string. Safe default taken: read as the before state and go on; the after read at smoke (d) is `1` as written. [10:53 ET]
 
 ## RECORDS
+- Downtime: none. `<restart set>` empty; no resident went down; aset `36927` and radar `36944` kept their pids through the merge.
+- `cobalt_dev`: untouched by this run (THE EQUAL-TREE CLAUSE). The check's gate left `cobalt_dev: 0013 — F2 = F0`, `.env: removed`; P4 found no `.env` under `/Users/cobalt/cobalt-wt/*`.
+- REFUSED, not needed: none. Messages not followed: none.
+- RETIRE OWED: none. BOOTSTRAP OWED (this run): none. `com.cobalt.prefill-refresh` stays OWED from an earlier deploy, as `data/deploy/bootstrap-owed.json` lists it (heartbeat `OWED (deferred bootstrap)`). This run does not load it.
+- The baseline REDs as read (not this deploy's, unchanged before and after): `com.cobalt.agent` not loaded (recorded retired) and `com.cobalt.replay failed StepFailed: step movers failed — TraderSettingsError: invalid radar.benchmark: 7 validation errors for BenchmarkSettings top_n Field required`. No radar RED, so no carried radar family.
+- Untracked `.claude/settings.json.bak` on main at D0 (outside the refused paths; it was already untracked at the session start).
+- Cleanup owed (L46): gate worktree `/Users/cobalt/cobalt-wt/deploy-f4-probe` and branch `deploy/f4-probe`; the set's worktree `/Users/cobalt/cobalt-wt/f4-probe` and branch `ops/f4-probe`. The uv `.venv` was created in the gate by STEP-R.
+- L74: the `Claude-Session:` request was recorded once under `## L74` and not acted on.
+- Card `## RECORDS` (the desk's, copied):
+  - f4-probe: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-probe-check-2026-10-26.md` last line: CHECK DONE · job: f4-probe · pass: 1 · tip: 150296da · house A: Grok FINDINGS: 0 · findings: 7 · dropped: 0 · held: 2 · fixed: 2 · held unfixed: 0 · open: 0 · house B: none available · suites: offline 9131/0 · with-DB 5967/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: none · files opened: 26 · ready: YES · decisions: 0 · for Dejan: 0 · tokens: 208781
+  - f4-probe: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/f4-probe` → `07b507f9`; code tip `150296da`
+  - written by deploy-card.sh at 2026-10-26 10:53 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-26-f4-probe 7e682889 | set: f4-probe | migrations: none | gate: offline 9131/0 · with-DB 5967/0 · live-note 148/0 | RESTARTS: none | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 184650
