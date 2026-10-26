@@ -62,3 +62,5 @@ included, never the query, and answers 429 past the 50th in a minute; OK iff
 no minute holds more than 50 and no 429 was answered, else FAIL naming the
 FINAL `:221` consequence; a gate refusal is NOT RUN; a ceiling other than 50 is
 NOT RUN.
+
+2026-10-26 (f4-probe check O1, O2): the pass rule's two halves are pinned on `_clause` — a minute of exactly 50 is OK (`test_check_o1_…`), and a 429 within the ceiling is FAIL with the consequence (`test_check_o2_…`).
