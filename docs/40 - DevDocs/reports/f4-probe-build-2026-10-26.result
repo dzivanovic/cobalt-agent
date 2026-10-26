@@ -1,5 +1,5 @@
 job=f4-probe
-tip=2e0d5f77b
+tip=2e0d5f77
 on=596ca32f
 migration=none
 offline=4993/0
@@ -12,4 +12,4 @@ rows=8 of 8
 self_check=3 of 3
 decisions=3
 for_dejan=0
-tokens=264605
+tokens=80698

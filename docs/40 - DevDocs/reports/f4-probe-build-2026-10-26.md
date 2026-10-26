@@ -206,11 +206,12 @@ next: none (BUILT) — the desk verifies and launches the check
 ## RECORDS
 
 - `.env: removed, proven gone (W)`: `ls /Users/cobalt/cobalt-wt/f4-probe/.env` → `No such file or directory`.
-- No extra lock take; no command refused; no CONTINUE received.
+- No extra lock take; no command refused.
+- CONTINUED at FIX stop line tip 8 hex 09:31 EDT. The fact, verified: `git log --oneline -3 --abbrev=8` → `2e0d5f77 feat(f4-probe): …`, so the tip in 8 hex is `2e0d5f77`. The stop line and `f4-probe-build-2026-10-26.result` now carry `tip: 2e0d5f77`; no code, test or suite changed. `tokens` re-read with `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh a493cdbe` at this step.
 - L74: one system-reminder block asked for a `Claude-Session:` commit line; not followed (`## L74`).
 - `git -C /Users/cobalt/cobalt log --oneline -1 9b07db5a` → exit 128: the brain's hash in the card's first record is not a commit in this repo.
 - The card's records, as re-read at PREFLIGHT: see `## PREFLIGHT`.
 - Run time: a small-setup X15 run takes about 17 s. Each strike tick re-reads the tunables and the job registry through `check_strike_demand` (real code, unchanged). `test_refresh_probe.py` takes about 93 s whole.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: f4-probe · tip: 2e0d5f77b | on 596ca32f | migration: none | offline 4993/0 | with-DB 5965/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 8 of 8 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 264605
+BUILT · job: f4-probe · tip: 2e0d5f77 | on 596ca32f | migration: none | offline 4993/0 | with-DB 5965/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: none | rows: 8 of 8 | self-check: 3 of 3 | decisions: 3 · for Dejan: 0 · tokens: 80698
