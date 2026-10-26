@@ -7,7 +7,7 @@ WORKTREE: f4-probe
 BASE: 596ca32f
 TIP: 2e0d5f77b
 REPORT: /Users/cobalt/cobalt-wt/f4-probe/docs/40 - DevDocs/reports/f4-probe-build-2026-10-26.md
-CHECK REPORT: reports/f4-probe-check-2026-10-26.md
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-probe-check-2026-10-26.md
 HOUSE B: as needed
 BAND: HIGH
 RESTARTS: none
