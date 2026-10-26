@@ -486,6 +486,52 @@ class TestStamp:
 
         assert refresh_note_path(datetime(2026, 9, 4, 3, 30, tzinfo=timezone.utc)).name == NOTE_NAME
 
+    @pytest.mark.parametrize("how", ["absent", "None"])
+    @pytest.mark.parametrize("key", ["prefill.refresh_interval_min", "prefill.refresh_window"])
+    def test_x7_a_missing_or_unmeasured_refresh_tunable_is_refused(self, vault, finviz, monkeypatch, key, how):
+        """X7 (F4-FINAL :213), card 1047 T1: `refresh_demand_consumer` refuses
+        a refresh tunable absent or `value: None`, before any GET."""
+        from cobalt.prefill.config import PrefillConfigError
+        from cobalt.taxonomy import loader
+
+        store = MemoryStore()
+        refresh(at(5, 15), store)
+        before, gets = vault.read_bytes(), finviz.gets
+        rows = dict(loader.load_tunables().by_key)
+        if how == "absent":
+            del rows[key]
+        else:
+            rows[key] = rows[key].model_copy(update={"value": None})
+        monkeypatch.setattr(loader, "load_tunables", lambda *a, **kw: SimpleNamespace(by_key=rows))
+        with pytest.raises(PrefillConfigError, match=re.escape(key)):
+            refresh(at(7, 45), store)
+        assert finviz.gets == gets
+        assert vault.read_bytes() == before
+
+    def test_x7_the_daymode_unit_still_starts_as_of_after_a_later_daymode_write(self, vault, finviz):
+        """X7 (F4-FINAL :213, Grok's addition), card 1047 T2: after a
+        refresh-created note, `daymode.note.write` replaces the unit with
+        `render_body`, whose first line is the stamp — once. The config is
+        `test_daymode_note._cfg()`: `load_daymode_config()` reads
+        `"user".trader_settings` (`daymode/config.py:309-326`), a database."""
+        from test_daymode_note import _cfg
+
+        from cobalt.daymode import note as daymode_note
+
+        def outside(text: str) -> str:
+            lines = text.split("\n")
+            u = find_section(lines, "daymode").units["sheet_mode"]
+            return "\n".join(lines[: u.open_line + 1] + ["<unit>"] + lines[u.close_line:])
+
+        store = MemoryStore()
+        refresh(at(5, 15), store)
+        before = vault.read_text(encoding="utf-8")
+        daymode_note.write(vault, _cfg(), "reduced", stage="stage-1", store=store)
+        body = unit_body(vault, "daymode", "sheet_mode").split("\n")
+        assert re.match(r"^as of \d\d:\d\d ET$", body[0]), body[0]
+        assert [x for x in body if x.startswith("as of ")] == [body[0]]
+        assert outside(vault.read_text(encoding="utf-8")) == outside(before)
+
 
 class TestTemplateShape:
     def test_t6_render_half_and_the_stamp_lines(self):

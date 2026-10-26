@@ -92,7 +92,19 @@ def main() -> None:
         "--dry-run", action="store_true", help="Show the unified diff; write nothing."
     )
 
+    # F4 first-gate items (card 1047): dev only, in process, nothing sent or written.
+    from .refresh_probe import PROBE_ITEMS
+
+    probe_parser = sub.add_parser("probe", help="Run one F4 first-gate item, dev only (prefill/refresh_probe.py).")
+    probe_parser.add_argument("item", choices=PROBE_ITEMS)
+
     args = parser.parse_args()
+
+    if args.command == "probe":
+        # Outside `as_job`: a probe is not a run of a job.
+        from . import refresh_probe
+
+        sys.exit(refresh_probe.main(args.item))
 
     try:
         if args.command == "refresh":
