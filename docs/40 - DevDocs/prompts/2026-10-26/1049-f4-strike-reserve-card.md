@@ -50,7 +50,7 @@ ORDER: S1, S2 (each red, then green), S3, the card's offline suite `uv run pytes
 ## DEPLOY PROOF
 - `grep -c -F "def refresh_reservation(" /Users/cobalt/cobalt/src/cobalt/strike/detector.py` · before `0` · after `1`
 - `grep -c -F "REFRESH_BURST_RPM = 3.0" /Users/cobalt/cobalt/src/cobalt/strike/detector.py` · before `0` · after `1`
-- the strike detector is on the restarted tree · `grep -c -F "prefill-refresh-burst" /Users/cobalt/cobalt/src/cobalt/strike/detector.py` · prints 1 or more
+- the strike detector is on the restarted tree · `grep -c -F "prefill-refresh-burst" /Users/cobalt/cobalt/src/cobalt/strike/detector.py` · exit 0, a count of 1 or more
 - the refresh plist stays on disk, unloaded · `ls /Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist` · exit 0, listed
 
 ## RECORDS

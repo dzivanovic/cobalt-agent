@@ -57,7 +57,7 @@ ORDER: P1, P2, X15, C1 (each red, then green), T1, T2 (each green on BASE, quote
 
 ## DEPLOY PROOF
 - `ls /Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py` · before `ls: /Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py: No such file or directory` · after `/Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py`
-- `grep -c -F "PROBE_ITEMS = (\"X15\",)" /Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py` · before `0` · after `1`
+- `grep -c -F "PROBE_ITEMS = (" /Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py` · before `0` · after `1`
 - `grep -c -F "test_x7_the_daymode_unit_still_starts_as_of_after_a_later_daymode_write" /Users/cobalt/cobalt/tests/cobalt/test_prefill_refresh.py` · before `0` · after `1`
 - the probe module is on the tree · `ls /Users/cobalt/cobalt/src/cobalt/prefill/refresh_probe.py` · exit 0, listed
 - the refresh plist stays on disk, unloaded · `ls /Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist` · exit 0, listed

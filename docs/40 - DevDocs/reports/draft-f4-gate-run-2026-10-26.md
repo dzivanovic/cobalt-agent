@@ -60,4 +60,17 @@
 - Wrote `1049` and this section. Nothing run but reads; nothing committed.
 - 08:06:38 `date`.
 
-DRAFTED R2465 · decisions: 1
+## REVISION (preflight)
+### §0
+- Fixed the two FAILs in `reports/f4-gate-preflight-2026-10-26.md` `## ISSUES`. In 1048 `## SMOKE READS`, row 1 now expects `exit 0, a count of 1 or more` and row 2 expects `` exit 0, `1` ``. In 1047 `## DEPLOY PROOF`, marker 2's pattern is now `"PROBE_ITEMS = ("`, before `0`, after `1`, as in 973:62.
+- One more fix, same rule. 1048 row 2's pattern `"REFRESH_JOB = \"com.cobalt.prefill-refresh\""` had a backslash; `deploy-smoke.sh:125-127` cuts at the first quote and refuses a backslash. It is now `"REFRESH_JOB = "`, which counts `1` on `src/cobalt/prefill/cli.py` (checked with `grep -c -F`). The preflight's 5d said this row was a mapped shape.
+- 1049's smoke row now expects `exit 0, a count of 1 or more`; it had `prints 1 or more`, the same unread expectation.
+- NOTE 2: `grep -c -F` of the R2463 line the desk relayed gives `1` in each of 1045, 1047 and 1048, so the prompts carry exactly that line.
+
+### RECORDS
+- Read: the preflight report (`grep` of `## ISSUES` and the FAIL/NOTE rows); `ops/desk/deploy-smoke.sh:110-139` (`shape()`).
+- `grep -c -F "PROBE_ITEMS = (" src/cobalt/prefill/checkpoints.py` → `1` (973's pattern still maps on main). `grep -c -F "REFRESH_JOB = " src/cobalt/prefill/cli.py` → `1`.
+- Edited 1047, 1048, 1049 in place; nothing committed.
+- 08:11:33 `date`.
+
+DRAFTED PF · decisions: 0

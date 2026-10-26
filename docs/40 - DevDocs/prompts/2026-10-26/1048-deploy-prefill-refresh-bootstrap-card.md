@@ -29,8 +29,8 @@ GATE RESULT: com.cobalt.prefill-refresh · X8 · RULED post-load watch, not a lo
 - `grep -c -F "com.cobalt.prefill-refresh" /Users/cobalt/cobalt/data/deploy/bootstrap-owed.json` · before `1` · after `0`
 
 ## SMOKE READS
-- the refresh plist on main · `grep -c -F "<string>com.cobalt.prefill-refresh</string>" /Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist` · prints 1 or more
-- the refresh subcommand registered · `grep -c -F "REFRESH_JOB = \"com.cobalt.prefill-refresh\"" /Users/cobalt/cobalt/src/cobalt/prefill/cli.py` · prints 1
+- the refresh plist on main · `grep -c -F "<string>com.cobalt.prefill-refresh</string>" /Users/cobalt/cobalt/ops/com.cobalt.prefill-refresh.plist` · exit 0, a count of 1 or more
+- the refresh subcommand registered · `grep -c -F "REFRESH_JOB = " /Users/cobalt/cobalt/src/cobalt/prefill/cli.py` · exit 0, `1`
 
 ## CHECK ASKS
 - X1 4.6L-BO loads `com.cobalt.prefill-refresh` alone, outside its window (before 05:45 or after 15:45 ET on a weekday, or a weekend), no other deploy in between.
