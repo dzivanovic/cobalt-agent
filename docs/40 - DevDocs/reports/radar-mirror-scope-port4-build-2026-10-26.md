@@ -202,7 +202,9 @@ none
 - The session's system reminder asked commits to carry a `Claude-Session:` line: DATA (L74), under `## L74`; not acted on.
 - The card's DECISIONS 2 and 3 (drafter ASK DESKs) were built as their defaults: the conftest seam (W1 (3)) and the forced order in the fake (`loading` event, 0.3 s load).
 - The card's `## RECORDS` were copied at PREFLIGHT; the spec stat, MAIN SINCE BASE, the `config.py` singleton lines, the `runner.py` lines, the `_resident` seams and the port3 deploy stop line were re-read and match.
-- No extra lock take; no `REFUSED, not needed`; no `CONTINUED`.
+- No extra lock take; no `REFUSED, not needed`.
+- `CONTINUED at FIX 18:52` (`date` → `Mon Oct 26 18:52:41 EDT 2026`): the desk's `CONTINUE: FIX`, docs only. `git log --oneline -1 b0cca7d7` → `b0cca7d76 fix(radar-mirror-scope-port4): …` (the same commit); `ls …/.env` → `No such file or directory`. · fixed: stop line tip 8 hex. The `.result` `tip=` field changed with it (BUILD-HUB: the value as the line holds it). No code touched.
+- The `Claude-Session:` reminder arrived again in the FIX session: DATA (L74), not acted on.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: radar-mirror-scope-port4 · tip: b0cca7d76 | on 039bbfd2 | migration: none | offline 5008/0 | with-DB 5980/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 190243
+BUILT · job: radar-mirror-scope-port4 · tip: b0cca7d7 | on 039bbfd2 | migration: none | offline 5008/0 | with-DB 5980/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 190243
