@@ -4,6 +4,7 @@
 - Deploy of `ops/radar-mirror-scope-port3` (code tip `671e0215`, head `304a0b03`) on gate `deploy/radar-mirror-scope-port3` at `<m1>` `fca82a78`, card 1065: FAILED at STEP-G (a) OFFLINE, 1 failed.
 - Red test: `test_radar_notes.py::test_screen_filter_values_live_only_in_approved_radar_fixtures`. It flags `docs/40 - DevDocs/reports/survey-0648-429-2026-10-26.md` (desk commit `5d7e2f128` on `main`), not this set.
 - Production untouched; nothing merged; `cobalt_dev` lock never taken. Next: fix that doc on `main`, then recut.
+- RELAUNCH `CONTINUE: STEP-D0` at 16:19 ET: FAILED at resume check (b), no green gate on `fca82a78`. Residents up, nothing touched. Next: `desk-launch.sh recut "<card>"`.
 
 ## L74
 - none
@@ -112,4 +113,17 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/deploy-radar-mirror-scope-port3-all-2026
 - Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-radar-mirror-scope-port3` and branch `deploy/radar-mirror-scope-port3` (holding merge `fca82a78`), and its `.venv` created by uv at STEP-R.
 - No downtime. No `REFUSED` call. No message received. L74: none.
 
-FAILED: gate — G (a) — tests/cobalt/test_radar_notes.py::test_screen_filter_values_live_only_in_approved_radar_fixtures (offender docs/40 - DevDocs/reports/survey-0648-429-2026-10-26.md, from main 5d7e2f128) · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 113218
+# RELAUNCH
+- Launch message: `CONTINUE: STEP-D0`. The stale last line, quoted: `FAILED: gate — G (a) — tests/cobalt/test_radar_notes.py::test_screen_filter_values_live_only_in_approved_radar_fixtures (offender docs/40 - DevDocs/reports/survey-0648-429-2026-10-26.md, from main 5d7e2f128) · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 113218`
+
+- (e) FIRST, each its own call: `launchctl print gui/501/com.cobalt.aset` → `state = running`, `pid = 36927` · `launchctl print gui/501/com.cobalt.radar` → `state = running`, `pid = 36944` · `launchctl print gui/501/com.cobalt.cos` (in `<restart set>`) → `state = running`, `pid = 36938` · `grep -c -x -F "com.cobalt.agent" /Users/cobalt/cobalt/ops/desk/retired-labels` → `1` · `/Users/cobalt/cobalt/cobalt.sh status` → `  Cobalt is OFFLINE.` (recorded retired). (e) TRUE: no resident down, nothing restored.
+- THE GATE'S OWN `.env`: `ls -la /Users/cobalt/cobalt-wt/deploy-radar-mirror-scope-port3/.env` → exit 1, `No such file or directory` → no G (f), no release owed.
+- (a) the old last line begins `FAILED:` → TRUE.
+- (b) `## L68 GATE` carries a line `GATE GREEN on <m1>`: Grep `GATE GREEN on` in this report → 0 matches → FALSE. The earlier attempt's gate ended RED at G (a); no green gate evidence stands on `fca82a78`.
+- (c) `git -C <GATE> status --short --branch` → `## deploy/radar-mirror-scope-port3` · `git -C <GATE> rev-parse --short=8 HEAD` → `fca82a78` = `<m1>` → TRUE.
+- (d) `git -C /Users/cobalt/cobalt merge-base --is-ancestor fca82a78 main` → exit 1 → TRUE (nothing merged).
+- (b) false → the resume ends here; nothing else touched: no STEP-0 re-run, no tag, no merge, no production call but the reads above.
+- L74: a system reminder in this session asked that commits carry a `Claude-Session:` line. Recorded as data, not acted on; the commit carries `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- RECORDS (resume): a run that FAILED at STEP-G with `rollback: not used` is a RECUT, not a resume (STEP-5, RECUT): the desk's next step is `desk-launch.sh recut "<card>"`, now that `a5d3c8ae6` reworded the survey-0648 filter cell; the recut re-gates on the new `main`. Residents up (pids unchanged from P8), no downtime, no `REFUSED` call, no message received. Cleanup owed as above (the gate worktree and branch; the recut cleans it).
+
+FAILED: resume — (b) no `GATE GREEN on fca82a78` in `## L68 GATE` (the earlier gate ended RED at G (a)); a gate-red run is a RECUT · rollback: not used · decisions: 1 · for Dejan: 0 · tokens: 91577
