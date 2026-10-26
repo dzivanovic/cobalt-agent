@@ -5327,3 +5327,16 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-24*"` = no tag (deploy 1027 rolled back, `41bb2402`).
 - STOP LINE (L35), `reports/close-2026-10-23.md`: `CLOSE PUSHED 7001737f`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-24.md` `## 8`.
+
+### 2026-10-25 — Sunday: day-open GREEN, K3 restore verify moved to Monday, port3 waits for a clean radar cycle
+
+- R2446 00:56 RECORD: port3 check `3370843c` DONE, ready YES, 0 open, tip `671e0215`; nothing for him.
+- R2447 07:01 LAUNCHED: STANDING ORDER R1537: day plan written; day-open Qwen run in pane w2:p5.
+- R2448 07:02 REFRESH: desk `2c821f73` at 251,499 tokens; successor launches.
+- R2449 07:05 RECORD: desk `10d3752d` took over from `2c821f73`; day-open watch re-armed.
+- R2450 07:31 RECORD: day-open 10-25 DONE, GREEN 6/6; K3 verify moves to Mon 10-26 first non-idle cycle.
+- R2451 07:40 RECORD (brain L79): replay last run 10-23 FAILED movers (invalid radar.benchmark); not proven; next run Mon 10-26 ~20:30 ET.
+- R2452 18:14 RECORD: 18:00 check-in sent to the brain: goal 1 done, 2 slipping, 3 on track, 4 not started.
+- DEPLOY (L35): `git tag --list "deploy-2026-10-25*"` = no tag; no deploy row on 10-25.
+- STOP LINE (L35), `reports/close-2026-10-24.md`: `CLOSE PUSHED 7a9f8e66`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-25.md` `## 8`.

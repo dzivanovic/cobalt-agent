@@ -1292,6 +1292,22 @@ OFF-LADDER work of 2026-10-24 (each with the ruling that ordered it):
 | K3 restore of radar settings (cards `1029`, `1030`) | BUILDING | His "Restore yes" (R2407, R2412). Seat `583fc969` (R2418). |
 | Radar-mirror-scope port (card `1032`) | BUILT-NOT-MERGED | Brain R2410 (L79). Build `f167e437`, check `26966c4a` (R2416, R2417). |
 
+### Status 2026-10-25
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1025` for 10-25 alone from `reports/cto-2026-10-25.md` rows R2446–R2452 (00:56 → 18:14 ET); tag check (L35): `git tag --list "deploy-2026-10-25*"` = none. The 10-24 close ran (`CLOSE PUSHED 7a9f8e66`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F4, F23, F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-24). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) and X3 values | DONE-DARK | Plists stay unloaded. Owed: his legs X5, X7, X10, X12. |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | Unchanged. Owed: X15 four legs. |
+| S5 radar-mirror-scope port3 (card `1041`) | BUILT-NOT-MERGED | Check `3370843c` ready YES, tip `671e0215` (R2446). Deploys Mon 10-26 after 16:00 ET once radar.err shows a clean non-idle cycle (brain R2438). |
+| S5 radar settings restore (cards `1029`, `1030`) | DONE-LIVE, UNPROVEN | Keys written 10-24. Day-open 10-25 GREEN 6/6 (R2450); Sunday gave no non-idle cycle, so the verify moves to Mon 10-26 (R2450). |
+| S5 radar S5 evaluate / replay | RED | `com.cobalt.replay` last run 10-23 FAILED at step movers; not proven since the write; next run Mon 10-26 ~20:30 ET (R2451; heartbeat 21:05 ET still RED). |
+
+**Stop date: 2026-10-28 (S5, day 11 of 14). S5: AT RISK.** Reason: port3 is not deployed and the radar restore is unproven until Monday's non-idle cycle; F5 stays dark until his four legs pass or are ruled; X15 four legs wait on his ready. 18:00 check-in (R2452): goal 2 slipping (non-trading day). No ruling moved a date (`cto-2026-10-25.md`).
+
+OFF-LADDER work of 2026-10-25: none (rows are desk records, day-open and handover).
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
