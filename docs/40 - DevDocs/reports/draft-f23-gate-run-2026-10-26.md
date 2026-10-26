@@ -33,20 +33,28 @@
 
 ## REVISION (brain R2465)
 - F4 reservation card drafted in parallel, launched only on the X15 FAIL; F23 E1/E2 dev render by a K2 seat plus his open legs; E4 settled offline (+ first-Sunday watch); E5 moot; register only if already on the line; E6 post-load weekday check — brain 9b07db5a 2026-10-26
-- 1046 revised. E1 and E2 point to render seat 1050 and his session. E4 → `OK — settled offline` (parity tests, `date +%Z`, `/etc/localtime`). E5 → `RULED MOOT`. E6 → `RULED post-load watch`. The stop line counts `ruled`.
-- New `prompts/2026-10-26/1050-f23-render-seat.md`, K2, seat `f23-render`. Under the L76 lock (`f23-playbook-1013`), it runs a dev render with `--out /Users/cobalt/cobalt-wt/.f23-render/data`, builds the kill state, renders again, and keeps E2's synthetic decks with `--basetemp`. Its SECOND PASS reruns the swap while he has the decks open. The scratch folder is K1, owed to the desk.
+- 1046 revised. E1 and E2 point to render seat 1053 and his session. E4 → `OK — settled offline` (parity tests, `date +%Z`, `/etc/localtime`). E5 → `RULED MOOT`. E6 → `RULED post-load watch`. The stop line counts `ruled`.
+- New `prompts/2026-10-26/1053-f23-render-seat.md`, K2, seat `f23-render`. Under the L76 lock (`f23-playbook-1013`), it runs a dev render with `--out /Users/cobalt/cobalt-wt/.f23-render/data`, builds the kill state, renders again, and keeps E2's synthetic decks with `--basetemp`. Its SECOND PASS reruns the swap while he has the decks open. The scratch folder is K1, owed to the desk.
 - New `prompts/2026-10-26/1051-deploy-playbook-bootstrap-card.md`. It is the bootstrap-only load card, in 1048's shape. Its pre-written lines: E5 RULED MOOT, E6 RULED post-load. It carries E6 WATCH and E4 WATCH. The `unregistered` beat is recorded as expected in RECORDS and CHECK ASKS X3. Item 4: `DEPLOY-HUB.md:3` bars `jobs register` ("NO `jobs register`"), so no string was added.
-- `ASK DESK: 1050 step 3 does not land a real kill -9 between the two renames, which are microseconds apart. Instead it builds the on-disk state such a kill leaves (`mv <day> <day>.old`, no `<day>`), then proves the next render recovers it. Is the constructed state accepted as E1's kill leg? [08:08]` Default: yes; 1050's line names it `constructed kill state`.
-- `ASK DESK: the dev render reads cobalt_dev's cards, and the drafter can't confirm they include an 8-plus-row family or a why over 120 characters. 1050 therefore also keeps the synthetic test decks (exact E2 shape) via `pytest --basetemp`, and those are his E2 decks. The dev decks serve E1. Accept the split? [08:08]` Default: both are offered; E2 is read on the synthetic decks.
-- `ASK DESK: 1050 takes the lock in the name of worktree `f23-playbook-1013`, which exists; `take-devdb-lock.sh` copies `.env` into it until the release. Keep that worktree? [08:08]` Default: yes.
+- `ASK DESK: 1053 step 3 does not land a real kill -9 between the two renames, which are microseconds apart. Instead it builds the on-disk state such a kill leaves (`mv <day> <day>.old`, no `<day>`), then proves the next render recovers it. Is the constructed state accepted as E1's kill leg? [08:08]` Default: yes; 1053's line names it `constructed kill state`.
+- `ASK DESK: the dev render reads cobalt_dev's cards, and the drafter can't confirm they include an 8-plus-row family or a why over 120 characters. 1053 therefore also keeps the synthetic test decks (exact E2 shape) via `pytest --basetemp`, and those are his E2 decks. The dev decks serve E1. Accept the split? [08:08]` Default: both are offered; E2 is read on the synthetic decks.
+- `ASK DESK: 1053 takes the lock in the name of worktree `f23-playbook-1013`, which exists; `take-devdb-lock.sh` copies `.env` into it until the release. Keep that worktree? [08:08]` Default: yes.
 - Revision reads: `cto-2026-10-26.md:13` (R2465), `ls prompts/2026-10-26/` at 08:06 (1049 taken by `f4-strike-reserve`) and again before 1051, `DEPLOY-HUB.md:3`, `git show main:src/cobalt/playbook/cli.py` (`publish()`, the `.old` recovery), `git show main:ops/desk/take-devdb-lock.sh` and `release-devdb-lock.sh`, `git show main:configs/cobalt/playbook.yaml`, `data.py:156-173` (dev DB and vault), `vault_loader.py:91`, `ls` of the dev vault strategies folder (exists; contents not quoted), `ls -l /etc/localtime` → `America/New_York`, plist `:6`, `:20`, `:44-49`, `gate-lists.md:56` (`## LEVEL 0013`), card 1048 (shape), `ls /Users/cobalt/cobalt-wt/` (`f23-playbook-1013` present, no `.f23-render`).
 - Times: 08:06 (revision start), 08:08 (report). Commit: none.
 
 ## REVISION (brain R2467)
 - F23 render seat — E1 kill leg = constructed kill state; E2 = synthetic decks, E1 = dev decks; lock via f23-playbook-1013 with .env removed at release — brain 9b07db5a 2026-10-26
-- 1050: RULINGS adds R2467. Step 3's OK line names `constructed kill state`, accepted. Step 4 records `ls /Users/cobalt/cobalt-wt/f23-playbook-1013/.env` → "No such file" after the release, and a file still found there is `FAILED: lock release`. The SECOND PASS records the same. `## FOR HIS SESSION` offers two labelled groups: `E2 — synthetic decks (clip read)` and `E1 — dev decks (viewer-open swap)`. `## RECORDS` carries the R2467 line verbatim.
+- 1053: RULINGS adds R2467. Step 3's OK line names `constructed kill state`, accepted. Step 4 records `ls /Users/cobalt/cobalt-wt/f23-playbook-1013/.env` → "No such file" after the release, and a file still found there is `FAILED: lock release`. The SECOND PASS records the same. `## FOR HIS SESSION` offers two labelled groups: `E2 — synthetic decks (clip read)` and `E1 — dev decks (viewer-open swap)`. `## RECORDS` carries the R2467 line verbatim.
 - 1046: RULINGS adds R2467, and `## RECORDS` carries the R2467 line verbatim.
 - NUMBER CLASH: `prompts/2026-10-26/` holds both `1050-f23-render-seat.md` and `1050-f4-gate-run-preflight.md`. Per the desk, the render seat is renumbered at launch, and its launch line names its own file path.
 - Reads: `cto-2026-10-26.md:13` (R2467), `ls prompts/2026-10-26/` at 08:10. Time 08:10. Commit: none.
 
-DRAFTED R2467 · decisions: 8
+## REVISION (preflight)
+- Source: `reports/f23-gate-preflight-2026-10-26.md` `## ISSUES`, relayed by the desk.
+- (1) 1051 `## SMOKE READS`: the plist row now reads `exit 0, a count of 1 or more`, and the subcommand row `exit 0, `1``, as in 1048 (`deploy-smoke.sh:20`, `:349`). Neither pattern holds `$`, a backtick, a backslash or a quote (`deploy-smoke.sh:125-127`).
+- (2) 1051 CHECK ASKS X3 now cites the `never run yet (registered, not yet due)` text at `watchdog.py:530` (`git grep` on main) and the rule at `:336`.
+- (3) Renumbered the render seat to `prompts/2026-10-26/1053-f23-render-seat.md` (`ls` at 08:14: 1052 is `f23-gate-run-preflight`, 1053 free). Every `1050` in 1053 (both launch-line paths), 1046 (`CARD:` and steps 1–2) and 1051 (WAITS, RECORDS) is now `1053`, and so is this report's R2465/R2467 text. The NUMBER CLASH line above is resolved.
+- (4) Skipped: no change for F23.
+- Time 08:14. Commit: none.
+
+DRAFTED PF · decisions: 8

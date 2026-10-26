@@ -10,7 +10,7 @@ TAG: deploy-2026-10-27-playbook-bootstrap
 MIGRATIONS: none
 SET: playbook
 TICKERS: none
-WAITS: 1046 (F23 gate run) GATES DONE, 1050 (render seat) RENDER DONE and its SECOND PASS, his E1 viewer read and E2 clip read
+WAITS: 1046 (F23 gate run) GATES DONE, 1053 (render seat) RENDER DONE and its SECOND PASS, his E1 viewer read and E2 clip read
 
 ## LAUNCHD
 com.cobalt.playbook · add · prompts/2026-10-13/503-f23-card.md:P6 · dry run: none
@@ -29,19 +29,19 @@ GATE RESULT: com.cobalt.playbook · E6 · RULED post-load watch, not a load gate
 - `grep -c -F "com.cobalt.playbook" /Users/cobalt/cobalt/data/deploy/bootstrap-owed.json` · before `1` · after `0`
 
 ## SMOKE READS
-- the playbook plist on main · `grep -c -F "<string>com.cobalt.playbook</string>" /Users/cobalt/cobalt/ops/com.cobalt.playbook.plist` · prints 1
-- the playbook subcommand mounted · `grep -c -F "playbook_cli.add_parser(sub)" /Users/cobalt/cobalt/src/cobalt/cli.py` · prints 1
+- the playbook plist on main · `grep -c -F "<string>com.cobalt.playbook</string>" /Users/cobalt/cobalt/ops/com.cobalt.playbook.plist` · exit 0, a count of 1 or more
+- the playbook subcommand mounted · `grep -c -F "playbook_cli.add_parser(sub)" /Users/cobalt/cobalt/src/cobalt/cli.py` · exit 0, `1`
 
 ## CHECK ASKS
 - X1 4.6L-BO loads `com.cobalt.playbook` alone, with no other deploy in between, and not on a Sunday between 17:00 and 17:45 ET.
 - X2 `deploy-step-c.sh --bootstrap-only` refuses while any of E1, E2 or E4 has no line (`ops/desk/deploy-step-c.sh:182-186`). That refusal is the load rule holding.
-- X3 EXPECTED, NOT A RED SMOKE: the first heartbeat sweep after the load reads `RED com.cobalt.playbook unregistered — no jobs row existed — registered now; nothing has run yet`, once (`src/cobalt/jobs/watchdog.py:451-456`). The sweep registers the row itself, and the next beat reads `never run yet (registered, not yet due)` until Sunday (`:336`). Any other red line on the label, or this one a second time, is a red smoke.
+- X3 EXPECTED, NOT A RED SMOKE: the first heartbeat sweep after the load reads `RED com.cobalt.playbook unregistered — no jobs row existed — registered now; nothing has run yet`, once (`src/cobalt/jobs/watchdog.py:451-456`). The sweep registers the row itself, and the next beat reads `never run yet (registered, not yet due)` (`:530`) until Sunday (the rule, `:336`). Any other red line on the label, or this one a second time, is a red smoke.
 - X4 The E6 weekday check and the first-Sunday firing watch are desk jobs after the green stop line, not smoke.
 
 ## RECORDS
 - F4 reservation card drafted in parallel, launched only on the X15 FAIL; F23 E1/E2 dev render by a K2 seat plus his open legs; E4 settled offline (+ first-Sunday watch); E5 moot; register only if already on the line; E6 post-load weekday check — brain 9b07db5a 2026-10-26
-- LOAD RULE (brain R2465): E4 `OK` from 1046 (parity tests plus `date +%Z`, settled offline); E1 = 1050's kill leg OK + his viewer read; E2 = 1050's decks + his clip read; E5 moot; E6 post-load. E6 does not gate the load.
-- HIS INPUTS AND SOURCES: E1 = 1046's E1 offline leg, 1050's `E1 kill leg` line and its SECOND PASS line, plus his app read. E2 = 1046's E2 offline leg plus his clip read on 1050's two synthetic decks. E4 = 1046's E4 line. The desk writes each line as `OK — <its sources>`, or not at all.
+- LOAD RULE (brain R2465): E4 `OK` from 1046 (parity tests plus `date +%Z`, settled offline); E1 = 1053's kill leg OK + his viewer read; E2 = 1053's decks + his clip read; E5 moot; E6 post-load. E6 does not gate the load.
+- HIS INPUTS AND SOURCES: E1 = 1046's E1 offline leg, 1053's `E1 kill leg` line and its SECOND PASS line, plus his app read. E2 = 1046's E2 offline leg plus his clip read on 1053's two synthetic decks. E4 = 1046's E4 line. The desk writes each line as `OK — <its sources>`, or not at all.
 - THE UNREGISTERED BEAT (brain R2465 item 4): `cobalt jobs register` is not on the deploy hub's line, so no string is added. The one `unregistered` RED beat after the load is expected and is recorded here and in CHECK ASKS X3.
 - E6 WATCH (R2465): on the first weekday after the load, `COBALT_ENV=production uv run cobalt jobs check` (the desk's own read) prints the label's line. A red or `(MISSED)` line before the first Sunday → FINAL `:161`'s consequence applies: one manual render, as its own card.
 - E4 WATCH (R2465): the first Sunday 17:30 ET firing. Read `logs/playbook.log` and the label's job row. A firing at other than 17:30 ET wall-clock → FINAL `:159`'s consequence applies: the plist shape changes, as its own card. System TZ: `/etc/localtime -> …/America/New_York`.

@@ -4,7 +4,7 @@ LADDER: S5-P2 · F23
 RULINGS: 2026-10-18 R1863, 2026-10-26 R2465, 2026-10-26 R2467
 
 # Gate run: F23 `com.cobalt.playbook` (deferred), before load
-CARD: `prompts/2026-10-18/779-deploy-f23-playbook-card.md:21` `## LAUNCHD` · items `E1, E2, E4, E5, E6` (`data/deploy/bootstrap-owed.json:3`) · definitions `docs/30 - Design/F23-FINAL-2026-10-11.md` `## First-gate experiments` (`:151-161`) · code `src/cobalt/playbook/cli.py`, `src/cobalt/jobs/watchdog.py` · plist `ops/com.cobalt.playbook.plist` · code deploy `reports/deploy-f23-playbook.md` (DEPLOYED `7398d4a7`) · E1 kill leg and the E1/E2 decks: render seat `prompts/2026-10-26/1050-f23-render-seat.md` · load card `prompts/2026-10-26/1051-deploy-playbook-bootstrap-card.md`.
+CARD: `prompts/2026-10-18/779-deploy-f23-playbook-card.md:21` `## LAUNCHD` · items `E1, E2, E4, E5, E6` (`data/deploy/bootstrap-owed.json:3`) · definitions `docs/30 - Design/F23-FINAL-2026-10-11.md` `## First-gate experiments` (`:151-161`) · code `src/cobalt/playbook/cli.py`, `src/cobalt/jobs/watchdog.py` · plist `ops/com.cobalt.playbook.plist` · code deploy `reports/deploy-f23-playbook.md` (DEPLOYED `7398d4a7`) · E1 kill leg and the E1/E2 decks: render seat `prompts/2026-10-26/1053-f23-render-seat.md` · load card `prompts/2026-10-26/1051-deploy-playbook-bootstrap-card.md`.
 WRITE only `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f23-gate-run-2026-10-26.md`, with the Write tool. pytest writes only its `tmp_path`; delete nothing.
 
 ## RULES
@@ -24,19 +24,19 @@ WRITE only `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/f23-gate-run-2026-10-
 uv run pytest tests/cobalt/test_playbook_offline.py::test_rerun_same_date_leaves_only_the_new_run tests/cobalt/test_playbook_offline.py::test_a_crash_before_the_swap_keeps_the_previous_folder tests/cobalt/test_playbook_offline.py::test_validation_error_exits_1_and_keeps_the_previous_folder
 ```
    Quote pytest's last line.
-   - All three passed → `NOT RUN — offline leg 3 passed; kill leg by render seat 1050, viewer leg [HIS HAND] (brain R2465)`.
+   - All three passed → `NOT RUN — offline leg 3 passed; kill leg by render seat 1053, viewer leg [HIS HAND] (brain R2465)`.
    - Any failed → `FAIL` plus the first assertion line → previous decks not recoverable: the run must copy to a side folder and leave the locked folder, and stdout must say so (FINAL `:157`).
    - Not collected or an error → `NOT RUN` plus pytest's line.
-   The kill leg (the state a kill -9 between the renames leaves, on 1050's dev decks) is 1050's. [HIS HAND] the viewer leg: decks open in Keynote and PowerPoint while 1050's SECOND PASS reruns the swap; it joins his hands-on session.
+   The kill leg (the state a kill -9 between the renames leaves, on 1053's dev decks) is 1053's. [HIS HAND] the viewer leg: decks open in Keynote and PowerPoint while 1053's SECOND PASS reruns the swap; it joins his hands-on session.
 2. E2 (`:158`) — 8 rows per table slide, a 300-character `why` cut to 120 plus `…` (`test_playbook_offline.py:273`, `:291`; the values are the committed `rows_per_slide` 8, `why_max_chars` 120):
 ```
 uv run pytest tests/cobalt/test_playbook_offline.py::test_table_rows_newest_first_8_per_slide tests/cobalt/test_playbook_offline.py::test_why_is_cut_to_120_plus_ellipsis
 ```
    Quote pytest's last line.
-   - Both passed → `NOT RUN — offline leg 2 passed; decks by render seat 1050, clip read [HIS HAND] (brain R2465)`.
+   - Both passed → `NOT RUN — offline leg 2 passed; decks by render seat 1053, clip read [HIS HAND] (brain R2465)`.
    - Any failed → `FAIL` plus the first assertion line → `rows_per_slide` and `why_max_chars` change to the measured fit, not to 8 or 120 (FINAL `:158`).
    - Not collected or an error → `NOT RUN` plus pytest's line.
-   [HIS HAND] the clip leg: 1050's decks (an 8-row table, a 120-character `why` + `…`) opened in PowerPoint and Keynote; is any ticker or `why` clipped. It joins his hands-on session.
+   [HIS HAND] the clip leg: 1053's decks (an 8-row table, a 120-character `why` + `…`) opened in PowerPoint and Keynote; is any ticker or `why` clipped. It joins his hands-on session.
 3. E4 (`:159`), the offline leg — the plist's `StartCalendarInterval` equals the registry row (Weekday 0, 17:30), every plist carries `COBALT_ENV`, the row is a Sunday 17:30 one-shot (`tests/cobalt/test_jobs.py:88`, `:107`; `tests/cobalt/test_playbook_registry.py:16`):
 ```
 uv run pytest tests/cobalt/test_jobs.py::TestTheShippedRegistry::test_the_scheduled_times_match_the_plists tests/cobalt/test_jobs.py::TestTheShippedRegistry::test_every_plist_carries_cobalt_env tests/cobalt/test_playbook_registry.py::test_the_row_is_a_sunday_1730_one_shot
