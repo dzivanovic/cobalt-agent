@@ -121,6 +121,8 @@ def test_no_write_no_db_no_token_no_launchctl(monkeypatch, capsys, probe, tmp_pa
         ("cobalt.taxonomy.store", ("TradeDefStore",)),
         ("cobalt.archiver.collector", ("resolve_token",)),
         ("cobalt.aset.prefill", ("resolve_token",)),
+        ("cobalt.prefill.market", ("resolve_token",)),
+        ("cobalt.prefill.calendar", ("resolve_token",)),
         ("cobalt.jobs.entrypoint", ("as_job",)),
         ("cobalt.prefill.cli", ("as_job",)),
         ("cobalt.notify.mattermost", ("send_dm",)),

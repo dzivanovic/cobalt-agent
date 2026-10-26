@@ -40,3 +40,25 @@ registration. It runs under `as_job(REFRESH_JOB, skip=dry_run)`, prints the
 run report (every unified diff) and then raises `RefreshNotClean` inside the
 block when a field degraded or a write failed, so `job_run` records
 `exit_code=1`.
+
+## 2026-10-26 — f4-probe
+`prefill probe X15` added (card 1047; F4 FINAL `:221`): the parser takes one
+positional `item` (`choices=refresh_probe.PROBE_ITEMS`, today `X15`); the
+handler imports `refresh_probe` and exits with `main(item)`'s code, outside
+`as_job` (a probe is not a run of a job). `daily` and `refresh` are unchanged.
+The probe (`src/cobalt/prefill/refresh_probe.py`) prints one line, `PROBE X15
+OK|FAIL <clause>` (exit 0 / 1) or `PROBE X15 NOT RUN — <reason>` (exit 3).
+Boundary: `COBALT_ENV=dev` or a `FAIL refused:` line before anything is built;
+every `httpx.AsyncClient` gets the probe's `httpx.MockTransport` and a real
+transport is stopped (`FAIL error network`); the constructed token, no store,
+no vault write, no DM, no `launchctl`; loguru off for `cobalt` during the run; a
+crash is `FAIL error <ExceptionName>`. Virtual clock: one `monotonic` / `sleep`
+/ `now` from 08:40:00 to 08:46:00 ET on a constructed weekday drives the radar
+stand-in (40 rpm through `finviz_get`), the real `StrikeDetector.tick` over 5
+constructed ARMED cards (`fetch_bars`, a `TokenBucket` on the clock) and, at
+08:43:00, the real `_gated_fetch` (its gate, then its 3 GETs). The count: the
+mock records (virtual minute, consumer, path, status) per request, redirects
+included, never the query, and answers 429 past the 50th in a minute; OK iff
+no minute holds more than 50 and no 429 was answered, else FAIL naming the
+FINAL `:221` consequence; a gate refusal is NOT RUN; a ceiling other than 50 is
+NOT RUN.
