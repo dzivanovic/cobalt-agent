@@ -2,7 +2,7 @@ JOB: radar-mirror-scope-port4
 LADDER: OFF-LADDER — reports/survey-settings-writer-2026-10-23.md R2389
 BRANCH: ops/radar-mirror-scope-port4
 WORKTREE: radar-mirror-scope-port4
-BASE: 46a6f7d7
+BASE: 039bbfd2
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/radar-mirror-scope-port4/docs/40 - DevDocs/reports/radar-mirror-scope-port4-build-2026-10-26.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/radar-mirror-scope-port4-check-2026-10-26.md
