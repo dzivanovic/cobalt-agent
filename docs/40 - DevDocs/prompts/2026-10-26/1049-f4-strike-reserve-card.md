@@ -10,7 +10,7 @@ REPORT: /Users/cobalt/cobalt-wt/f4-strike-reserve/docs/40 - DevDocs/reports/f4-s
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-strike-reserve-check-2026-10-26.md
 HOUSE B: as needed
 BAND: HIGH
-RULINGS: 2026-10-18 R1863; 2026-10-26 R2512
+RULINGS: 2026-10-18 R1863, 2026-10-26 R2512
 
 ## ROWS
 
