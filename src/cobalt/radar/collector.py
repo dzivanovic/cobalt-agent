@@ -1,6 +1,6 @@
 """Finviz screener and daily-bar collection, strict CSV parsing, caching,
 and rate limiting. Every request from either collector takes a token from
-the one shared `radar.finviz_max_rpm` bucket."""
+the radar's one bucket, at `radar.finviz_rpm` (`radar_bucket_rpm`)."""
 
 from __future__ import annotations
 
@@ -82,6 +82,30 @@ def process_bucket(rpm: int) -> TokenBucket:
     return _BUCKET
 
 
+def radar_bucket_rpm(by_key=None) -> int:
+    """The radar's own per-minute Finviz cap, `radar.finviz_rpm` (his ruling
+    C, 2026-10-26 R2512); `radar.finviz_max_rpm` stays the shared ceiling.
+
+    With `TokenBucket`'s capacity of 1, a bucket at this rpm grants at most
+    this many requests in any half-open minute, burst included. The row is
+    the default: an `int` (a `bool` refused), 1 ≤ value ≤ the ceiling;
+    anything else is a `SourceFailure` naming the key (L1)."""
+    if by_key is None:
+        from cobalt.taxonomy.loader import load_tunables
+
+        by_key = load_tunables().by_key
+    ceiling_row = by_key.get("radar.finviz_max_rpm")
+    ceiling = None if ceiling_row is None else ceiling_row.value
+    if isinstance(ceiling, bool) or not isinstance(ceiling, int):
+        raise SourceFailure(f"radar.finviz_max_rpm = {ceiling!r} is unreadable; radar.finviz_rpm has no bound")
+    row = by_key.get("radar.finviz_rpm")
+    value = None if row is None else row.value
+    if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= ceiling:
+        state = "missing" if row is None else repr(value)
+        raise SourceFailure(f"radar.finviz_rpm = {state} is refused: an int from 1 to radar.finviz_max_rpm ({ceiling})")
+    return value
+
+
 def prune_cache(cache_root: Path, *, today: date, retention_days: int) -> None:
     """Remove every `<YYYY-MM-DD>` cache directory older than retention.
 
@@ -146,12 +170,7 @@ class FinvizScreenerCollector:
         self.config = config or load_config()
         self.token = token
         if bucket is None:
-            from cobalt.taxonomy.loader import load_tunables
-
-            raw = load_tunables().by_key["radar.finviz_max_rpm"].value
-            if raw is None:
-                raise SourceFailure("radar.finviz_max_rpm is unmeasured")
-            bucket = process_bucket(int(raw))
+            bucket = process_bucket(radar_bucket_rpm())
         self.bucket = bucket
         self.cache_root = cache_root or Path(self.config.cache.dir)
 
@@ -231,8 +250,8 @@ class FinvizDailyBarsCollector:
     The cache IS the once-per-day guarantee: `<cache_root>/<ET date>/daily/
     <TICKER>.csv`. A hit — in this process or after a restart — reads the
     file and makes no request and takes no token. A miss takes one token
-    from the SHARED bucket (the same `radar.finviz_max_rpm` bucket every
-    other consumer uses), fetches, validates, and only then writes the
+    from the SHARED bucket (the radar's one `radar.finviz_rpm` bucket every
+    other radar consumer uses), fetches, validates, and only then writes the
     cache: a refused body is never cached. The ET date, not the UTC date,
     names the day, so 20:00 ET does not roll the cache over.
     """
@@ -248,12 +267,7 @@ class FinvizDailyBarsCollector:
         self.config = config or load_config()
         self.token = token
         if bucket is None:
-            from cobalt.taxonomy.loader import load_tunables
-
-            raw = load_tunables().by_key["radar.finviz_max_rpm"].value
-            if raw is None:
-                raise SourceFailure("radar.finviz_max_rpm is unmeasured")
-            bucket = process_bucket(int(raw))
+            bucket = process_bucket(radar_bucket_rpm())
         self.bucket = bucket
         self.cache_root = cache_root or Path(self.config.cache.dir)
 

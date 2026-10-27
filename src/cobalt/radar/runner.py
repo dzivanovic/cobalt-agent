@@ -24,7 +24,7 @@ from cobalt.session.models import Session
 from cobalt.settings.store import TraderSettingsStore
 from cobalt.taxonomy.loader import load_tunables
 
-from .collector import FinvizScreenerCollector, SourceFailure, process_bucket
+from .collector import FinvizScreenerCollector, SourceFailure, process_bucket, radar_bucket_rpm
 from .config import RadarConfig, is_not_equity, load_config
 from .models import Candidate, ListBlock, OpenMember, ScreenBlock, SourceHealth, SourceSet
 from .notes import ParsedSources, configured_sources, mirror_sources
@@ -519,7 +519,7 @@ async def build_runner() -> RadarRunner:
     if rpm is None:
         raise RuntimeError("radar.finviz_max_rpm is unmeasured; run throttle-probe")
     token = await resolve_token()
-    bucket = process_bucket(int(rpm))
+    bucket = process_bucket(radar_bucket_rpm(tunables))
     from cobalt.cards.store import CardStore
     from cobalt.taxonomy.loader import load_defaults
     from cobalt.taxonomy.store import TradeDefStore

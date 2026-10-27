@@ -202,6 +202,7 @@ TUNABLE_UNITS = {
     "radar.poll_interval": TunableUnit.DURATION,
     "radar.poll_overlap_bars": TunableUnit.COUNT,
     "radar.finviz_max_rpm": TunableUnit.COUNT,
+    "radar.finviz_rpm": TunableUnit.COUNT,
     "radar.poll_bar_max_age_s": TunableUnit.DURATION,
     "db.query.timeout_s": TunableUnit.DURATION,
 }
@@ -220,6 +221,13 @@ def check() -> tuple[RadarConfig, dict[str, object]]:
                 f"tunables.yaml: {key} has unit {row.unit.value}, expected {unit.value}"
             )
         values[key] = row.value
+    # The collector imports this module; the bound check is imported here.
+    from .collector import SourceFailure, radar_bucket_rpm
+
+    try:
+        radar_bucket_rpm(registry)
+    except SourceFailure as e:
+        raise RadarConfigError(f"tunables.yaml: {e}") from e
     return config, values
 
 

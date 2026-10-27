@@ -14,3 +14,6 @@ Strict Finviz screener collector using the shared transport and one process toke
 
 ## Gotchas
 The `TokenBucket` WAITS and never refuses. The only refusal is the demand plan in `notes.py`, checked before a scan starts. At runtime, too much demand shows up as slower cycles, never as traffic above the ceiling.
+
+## 2026-10-26 — f4-strike-reserve
+`radar_bucket_rpm(by_key=None) -> int` reads `radar.finviz_rpm`, the radar's own Finviz cap (ruled 37, his ruling C, R2512). It must be an `int` (a `bool` is refused) from 1 to `radar.finviz_max_rpm`. A missing, `None`, non-int or out-of-bounds value raises `SourceFailure` naming the key. Both default-bucket branches now call `process_bucket(radar_bucket_rpm())`, so no collector in the radar process can build a second bucket at the 50 ceiling. `TokenBucket` is unchanged. Its capacity of 1 is what makes the rpm a true per-minute cap: a saturated or idle-then-burst bucket at 37 grants 37 requests in any half-open minute, and the 38th lands at +60 s exactly (`test_a_50_request_burst_is_held_to_37_in_one_minute`). `radar.finviz_max_rpm` stays the shared ceiling.

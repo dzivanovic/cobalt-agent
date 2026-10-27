@@ -88,6 +88,7 @@ from cobalt.prefill.errors import PrefillFetchError
 from cobalt.prefill.market import MarketRow, fetch_market_table
 from cobalt.prefill.rules_gen import RULES_MD_RELATIVE_PATH, RulesSourceError, _parse_rules_md, regenerate_rules_config
 from cobalt.prefill.vault_writer import read_if_exists, resolve_dir, resolve_target
+from cobalt.radar.collector import SourceFailure, radar_bucket_rpm
 from cobalt.radar.notes import (
     DemandConsumer,
     DemandWindow,
@@ -97,7 +98,7 @@ from cobalt.radar.notes import (
 )
 from cobalt.session import SessionClock
 from cobalt.settings.drc import NOT_GIVEN, DailyRisk, daily_risk_values
-from cobalt.strike.detector import read_plan
+from cobalt.strike.detector import DemandPlan, read_plan
 from cobalt.vaultwrite import (
     NoteChangedOnDisk,
     VaultWriteStore,
@@ -794,6 +795,30 @@ def check_refresh_demand() -> Optional[str]:
         check_scheduled_demand(REFRESH_SUBJECT, radar_rpm=plan.planned_rpm, extra=[refresh_demand_consumer()])
     except (TotalDemandExceeded, RadarNoteError) as e:
         return str(e)
+    from cobalt.radar import notes
+
+    try:
+        radar_cap = radar_bucket_rpm()
+    except SourceFailure as e:
+        return str(e)
+    ceiling = notes._ceiling()
+    if ceiling is None:
+        return "radar.finviz_max_rpm is unmeasured — the refresh burst cannot be bounded"
+    return refresh_burst_refusal(plan, ceiling=ceiling, radar_cap=radar_cap)
+
+
+def refresh_burst_refusal(plan: DemandPlan, *, ceiling: int, radar_cap: int) -> Optional[str]:
+    """His ruling C (2026-10-26, R2512): in refresh's one minute the radar
+    sends up to its cap, the strike loop up to its headroom and refresh its
+    `REFRESH_GETS`. One comparison of the headroom against the integer
+    allowance `ceiling - radar_cap - REFRESH_GETS`, with `radar/notes.py`'s
+    tolerance: no float sum lands on the exactly-the-ceiling hazard
+    (F4-FINAL X17). None = admitted."""
+    allowance = ceiling - radar_cap - REFRESH_GETS
+    if plan.headroom_rpm > allowance + 1e-9:
+        return (f"the radar's cap, the strike loop at its headroom and refresh's 3 GETs exceed the ceiling in one "
+                f"minute: radar.finviz_rpm {radar_cap} + headroom_rpm {plan.headroom_rpm} + REFRESH_GETS "
+                f"{REFRESH_GETS} > ceiling {ceiling}")
     return None
 
 

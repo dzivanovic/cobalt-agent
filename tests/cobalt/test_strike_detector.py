@@ -358,3 +358,96 @@ def test_seen_at_and_transition_time_are_the_polls_wall_clock():
     call = store.calls[0]
     assert datetime.fromisoformat(call["evidence"]["seen_at"]) == clock.now()
     assert call["now"] == clock.now()
+
+
+# -- f4-strike-reserve R6: the headroom against the radar's cap (brain R2513) -----
+
+
+def _radar_plans(monkeypatch, planned_rpm, headroom_rpm):
+    """`read_plan` reads `configured_sources` at call time; a stand-in in
+    `ParsedSources`' shape (`planned_rpm`, `demand.headroom_rpm`)."""
+    from types import SimpleNamespace
+
+    from cobalt.radar import notes
+
+    demand = None if headroom_rpm is None else SimpleNamespace(headroom_rpm=headroom_rpm)
+    monkeypatch.setattr(notes, "configured_sources", lambda: SimpleNamespace(planned_rpm=planned_rpm, demand=demand))
+
+
+def _reading(store, fetch):
+    d = detector(store, fetch)
+    d.plan = det.read_plan
+    return d
+
+
+def test_radar_planned_20_strike_still_polls_every_30_s(monkeypatch):
+    _radar_plans(monkeypatch, 20.0, 30.0)
+    assert det.read_plan().headroom_rpm == 10.0
+    store = FakeStore([card(i, armed_minute=i) for i in range(1, 6)])
+    fetch = FakeFetch()
+    d = _reading(store, fetch)
+    report = asyncio.run(d.tick())
+    assert report.interval_s == 30 and d.interval_s() == 30
+    assert len(fetch.calls) == 5
+
+
+def test_radar_planned_45_strike_still_polls_every_30_s_and_is_admitted(monkeypatch):
+    _radar_plans(monkeypatch, 45.0, 5.0)
+    assert det.read_plan().headroom_rpm == 10.0
+    store = FakeStore([card(i, armed_minute=i) for i in range(1, 6)])
+    fetch = FakeFetch()
+    d = _reading(store, fetch)
+    report = asyncio.run(d.tick())
+    assert report.refused is None
+    assert report.interval_s == 30 and d.interval_s() == 30
+    assert len(fetch.calls) == 5
+
+
+def test_the_strike_reserve_equals_refreshs_gets():
+    from cobalt.prefill.daily import REFRESH_GETS
+
+    assert det.REFRESH_BURST_RPM == REFRESH_GETS
+
+
+def test_read_plan_keeps_none_and_no_headroom(monkeypatch):
+    _radar_plans(monkeypatch, None, 30.0)
+    assert det.read_plan() == DemandPlan(planned_rpm=None, headroom_rpm=None)
+    _radar_plans(monkeypatch, 51.0, -1.0)
+    assert det.read_plan().headroom_rpm == -1.0
+
+
+def test_an_unreadable_cap_in_read_plan_refuses_the_tick_no_fetch(monkeypatch):
+    from cobalt.radar.collector import SourceFailure
+
+    def unreadable(by_key=None):
+        raise SourceFailure("radar.finviz_rpm = None is refused (constructed)")
+
+    _radar_plans(monkeypatch, 20.0, 30.0)
+    monkeypatch.setattr(det, "radar_bucket_rpm", unreadable)
+    store = FakeStore([card(i, armed_minute=i) for i in range(1, 6)])
+    fetch = FakeFetch()
+    d = _reading(store, fetch)
+    before = d.interval_s()
+    report = asyncio.run(d.tick())
+    assert report.refused and "headroom_rpm=None" in report.refused
+    assert fetch.calls == []
+    assert d.interval_s() == before
+
+
+def test_an_unreadable_cap_at_the_strike_gate_makes_no_fetch_and_never_polls_faster(monkeypatch):
+    from cobalt.radar.collector import SourceFailure
+
+    store = FakeStore([card(i, armed_minute=i) for i in range(1, 6)])
+    fetch = FakeFetch()
+    d = detector(store, fetch, plan=DemandPlan(planned_rpm=20.0, headroom_rpm=10.0))
+    first = asyncio.run(d.tick())
+    assert first.interval_s == 30 and len(fetch.calls) == 5
+
+    def unreadable(by_key=None):
+        raise SourceFailure("radar.finviz_rpm = None is refused (constructed)")
+
+    monkeypatch.setattr(det, "radar_bucket_rpm", unreadable)
+    with pytest.raises(SourceFailure):
+        asyncio.run(d.tick())
+    assert len(fetch.calls) == 5
+    assert d.interval_s() == 30

@@ -177,16 +177,24 @@ def finviz(monkeypatch):
 
 @pytest.fixture
 def plan(monkeypatch):
-    """The radar plan the strike loop reads, and the ceiling: 10 rpm planned
-    of 50 unless a test says otherwise."""
-    state = SimpleNamespace(plan=DemandPlan(planned_rpm=10.0, headroom_rpm=40.0), ceiling=50, error=None)
+    """The radar plan the strike loop reads, the ceiling and the radar's cap
+    (`radar.finviz_rpm`): X15's plan, 40 rpm planned with the strike loop's
+    10 of headroom, under 50 with the radar capped at 37, unless a test says
+    otherwise. `state.bucket` set to an exception makes the cap unreadable."""
+    state = SimpleNamespace(plan=DemandPlan(planned_rpm=40.0, headroom_rpm=10.0), ceiling=50, error=None, bucket=37)
 
     def _read_plan():
         if state.error is not None:
             raise state.error
         return state.plan
 
+    def _bucket(by_key=None):
+        if isinstance(state.bucket, BaseException):
+            raise state.bucket
+        return state.bucket
+
     monkeypatch.setattr(daily_module, "read_plan", _read_plan, raising=False)
+    monkeypatch.setattr(daily_module, "radar_bucket_rpm", _bucket, raising=False)
     monkeypatch.setattr(radar_notes, "_ceiling", lambda: state.ceiling)
     return state
 
@@ -662,6 +670,7 @@ class TestSharedGate:
             SimpleNamespace(error=RuntimeError("radar notes unreadable (fixture)"), plan=None),
             SimpleNamespace(error=None, plan=DemandPlan(planned_rpm=None, headroom_rpm=None)),
             SimpleNamespace(error=None, plan=DemandPlan(planned_rpm=50.0, headroom_rpm=0.0)),
+            SimpleNamespace(error=None, plan=DemandPlan(planned_rpm=40.0, headroom_rpm=None)),
         ],
     )
     def test_x14_unreadable_plan_no_get_no_none_radar_call(self, vault, finviz, plan, monkeypatch, broken):
@@ -683,6 +692,46 @@ class TestSharedGate:
         after = table(vault)
         assert [x for x in after if x.startswith("| ")] == [x for x in before if x.startswith("| ")]
         assert "cobalt-degraded" in after[0]
+
+    # -- his ruling C (2026-10-26, R2512): the radar cap + strike + refresh ---
+
+    def test_c_radar_cap_strike_headroom_and_refresh_over_the_ceiling_is_refused_no_get(self, vault, finviz, plan):
+        from cobalt.prefill.daily import check_refresh_demand
+
+        store, before = self._filled(vault, finviz)
+        plan.plan = DemandPlan(planned_rpm=30.0, headroom_rpm=20.0)  # 37 + 20 + 3 = 60
+        refusal = check_refresh_demand()
+        assert refusal is not None
+        assert "radar.finviz_rpm" in refusal and "REFRESH_GETS" in refusal
+        gets = finviz.gets
+        assert refresh(at(8, 15), store).exit_code == 1
+        assert finviz.gets == gets, "a refused gate issues no GET"
+        assert [x for x in table(vault) if x.startswith("| ")] == [x for x in before if x.startswith("| ")]
+
+    def test_c_x15_plan_is_admitted_at_exactly_the_ceiling_and_gets_three(self, vault, finviz, plan):
+        store, _ = self._filled(vault, finviz)
+        plan.plan = DemandPlan(planned_rpm=40.0, headroom_rpm=10.0)  # 37 + 10 + 3 = 50
+        gets = finviz.gets
+        assert refresh(at(8, 15), store).exit_code == 0
+        assert finviz.gets - gets == 3
+
+    def test_c_one_over_the_allowance_is_refused(self, vault, finviz, plan):
+        store, _ = self._filled(vault, finviz)
+        plan.plan = DemandPlan(planned_rpm=39.0, headroom_rpm=11.0)  # 37 + 11 + 3 = 51
+        gets = finviz.gets
+        assert refresh(at(8, 15), store).exit_code == 1
+        assert finviz.gets == gets
+
+    def test_c_an_unreadable_radar_finviz_rpm_makes_no_get(self, vault, finviz, plan):
+        from cobalt.prefill.daily import check_refresh_demand
+        from cobalt.radar.collector import SourceFailure
+
+        store, _ = self._filled(vault, finviz)
+        plan.bucket = SourceFailure("radar.finviz_rpm = None is refused (constructed)")
+        assert "radar.finviz_rpm" in (check_refresh_demand() or "")
+        gets = finviz.gets
+        assert refresh(at(8, 15), store).exit_code == 1
+        assert finviz.gets == gets
 
 
 # ===========================================================================

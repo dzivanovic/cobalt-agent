@@ -49,6 +49,69 @@ def test_token_bucket_fake_clock_waits_for_second_token():
     assert waits == [1.0]
 
 
+def test_a_50_request_burst_is_held_to_37_in_one_minute():
+    """f4-strike-reserve R1: capacity 1 makes `TokenBucket(37)` a true
+    per-minute cap — 37 grants in [0, 60), the 38th at 60, and no half-open
+    60 s window over the grant times holds more than 37. The burst lands
+    on a bucket left idle (full) for ten minutes, so banked tokens count."""
+    clock = [-600.0]
+    grants = []
+
+    async def sleep(delay):
+        # + 1 ns: a fake clock that adds exactly the bucket's deficit can leave
+        # its token at 0.9999… forever (float); real time always moves on.
+        clock[0] += delay + 1e-9
+
+    bucket = TokenBucket(37, monotonic=lambda: clock[0], sleep=sleep)
+    clock[0] = 0.0  # ten idle minutes: the bucket refills to its capacity
+
+    async def one():
+        await bucket.acquire()
+        grants.append(clock[0])
+
+    async def run():
+        await asyncio.gather(*(one() for _ in range(50)))
+
+    asyncio.run(run())
+    assert len(grants) == 50
+    assert sum(1 for t in grants if t < 60.0) == 37
+    assert sorted(grants)[37] >= 60.0
+    assert max(sum(1 for t in grants if start <= t < start + 60.0) for start in grants) <= 37
+
+
+def test_the_radar_bucket_rpm_is_radar_finviz_rpm():
+    from cobalt.radar.collector import radar_bucket_rpm
+
+    assert radar_bucket_rpm() == 37
+
+
+def _by_key(rpm=..., ceiling=50):
+    rows = {"radar.finviz_max_rpm": SimpleNamespace(value=ceiling)}
+    if rpm is not ...:
+        rows["radar.finviz_rpm"] = SimpleNamespace(value=rpm)
+    return rows
+
+
+@pytest.mark.parametrize("rpm", [..., None, 0, -1, 51, "37", True])
+def test_radar_finviz_rpm_out_of_bounds_is_refused(rpm):
+    from cobalt.radar.collector import radar_bucket_rpm
+
+    with pytest.raises(SourceFailure, match="radar.finviz_rpm"):
+        radar_bucket_rpm(_by_key(rpm))
+    assert radar_bucket_rpm(_by_key(50)) == 50
+
+
+def test_a_default_collector_takes_the_37_bucket(monkeypatch, tmp_path):
+    from cobalt.radar.collector import FinvizDailyBarsCollector
+
+    monkeypatch.setattr(module, "_BUCKET", None)
+    monkeypatch.setattr(module, "_BUCKET_RPM", None)
+    screener = FinvizScreenerCollector("synthetic", config=load_config(), cache_root=tmp_path)
+    daily = FinvizDailyBarsCollector("synthetic", config=load_config(), cache_root=tmp_path)
+    assert screener.bucket.rate == 37 / 60
+    assert daily.bucket is screener.bucket
+
+
 def test_cache_root_is_gitignored():
     import subprocess
     result = subprocess.run(["git", "check-ignore", "data/radar-cache/probe.csv"], capture_output=True, text=True)
