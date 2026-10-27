@@ -5,7 +5,7 @@ INSTALL: none
 BRANCH: ops/f4-strike-reserve
 WORKTREE: f4-strike-reserve
 BASE: 1d5ba104
-TIP:
+TIP: a79fca72
 REPORT: /Users/cobalt/cobalt-wt/f4-strike-reserve/docs/40 - DevDocs/reports/f4-strike-reserve-build-2026-10-26.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-strike-reserve-check-2026-10-26.md
 HOUSE B: as needed
