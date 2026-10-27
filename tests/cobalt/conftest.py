@@ -406,6 +406,26 @@ def frozen_session_clock(monkeypatch):
 
 
 # ---------------------------------------------------------------------
+# radar-mirror-scope-port4 W1: no test builds the old tree's `Config`
+# ---------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def radar_warm_config_noop(monkeypatch, request):
+    """`run_command` warms the old tree's `Config` (`_load_config`: the
+    top-level YAML and, with `COBALT_MASTER_KEY`, a vault unlock). Every test
+    but W1's own file gets a no-op `warm_config`; W1's file puts a fake
+    `cobalt_agent.config` in `sys.modules` instead."""
+    if request.path.name == "test_radar_config_warmup.py":
+        yield
+        return
+    from cobalt.radar import runner as radar_runner
+
+    monkeypatch.setattr(radar_runner, "warm_config", lambda: None)
+    yield
+
+
+# ---------------------------------------------------------------------
 # S3 C4 fix r1 — F1: a trade-note path outside tmp_path fails loud (L1, L28)
 # ---------------------------------------------------------------------
 

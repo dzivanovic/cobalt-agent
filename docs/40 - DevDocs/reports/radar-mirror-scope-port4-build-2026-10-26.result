@@ -1,0 +1,15 @@
+job=radar-mirror-scope-port4
+tip=b0cca7d7
+on=039bbfd2
+migration=none
+offline=5008/0
+with_db=5980/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset com.cobalt.cos com.cobalt.radar
+rows=7 of 7
+self_check=3 of 3
+decisions=0
+for_dejan=0
+tokens=190243

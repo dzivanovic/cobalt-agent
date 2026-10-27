@@ -37,3 +37,6 @@ Check O1: each row's price enters the scan's `prices` as the row is read, before
 
 ## 2026-10-09 — s4-p1-1009 check
 Check O1/A3: a strike tick STARTS every derived interval — `StrikeThread` waits only what the tick's token-paced GETs left of the interval (`time.monotonic`), not a whole interval after the tick.
+
+## 2026-10-26 — radar-mirror-scope-port4
+`run_command` calls `warm_config()` (`Config.get_instance()`) in the main thread before it starts `StrikeThread`, so the strike thread and the resident never race the old tree's singleton build.
