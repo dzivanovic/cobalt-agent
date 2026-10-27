@@ -64,7 +64,9 @@ ADDED_KEYS = (*STEP3_KEYS, "leg.consolidation_max_retrace", "range.micro.bound_f
               "prefill.refresh_window", "prefill.refresh_interval_min",
               # + F20's six rows (card 730 C4c), as every added row (R95)
               "cos.max_turns", "cos.turn_timeout_s", "cos.poll_interval_s", "cos.session_rotate_at",
-              "hitl.request_ttl_min", "hitl.page_base_url")
+              "hitl.request_ttl_min", "hitl.page_base_url",
+              # + the radar's own Finviz cap (f4-strike-reserve R1, R2512), as every added row (R95)
+              "radar.finviz_rpm")
 STEP3_CONVENTIONS = ("dayrange.session", "frame.warmup_source", "vwap.anchor")
 
 
