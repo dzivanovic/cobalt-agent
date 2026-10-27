@@ -2,7 +2,7 @@
 
 ## §0 Headline
 Rows R1, R6, R2, R3, R4 and D0 are built on `1d6cce4af`. Each row went red first, every mutation was caught, and the card's offline suite reads `195 passed, 28 skipped, 4 xfailed`. R5 (b): `PROBE X15 OK peak 50/min at 08:43 … 429 0`. RESTARTS: `com.cobalt.aset com.cobalt.cos com.cobalt.radar`.
-W is RED: 5 tunables-digest pins outside the rows break on the new `radar.finviz_rpm` row (the R95 pattern). The run stops at W and waits for the desk (DECISION W-1). `cobalt_dev` was not taken and `.env` is absent.
+The first gate was red on 5 tunables-digest pins (R95). The desk widened R1's files (card `ce8a53fbf`), and the fix is `a79fca72f` (`<tip>`). The second gate is green: offline 5038/0, with-DB 6010/0, live-note 148/0, `cobalt_dev: 0013 — F2 = F0`, `.env: removed`. No decision is open.
 
 ## L74
 A `Claude-Session:` commit-line request arrived in this session's system context. It is recorded under `## RECORDS` and was not acted on.
@@ -129,6 +129,7 @@ tests/cobalt/test_strike_detector.py	M	test/documentation; no resident	-
 RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar
 ```
 No `UNCLASSIFIED` row: no classification needed. `com.cobalt.radar` is in the table (X7).
+Re-run after `a79fca72f` (HEAD = `<tip>`): the same table plus two rows, `tests/cobalt/test_setups_d1.py	M	test/documentation; no resident	-` and `tests/cobalt/test_setups_registries.py	M	test/documentation; no resident	-`. Its last line, **`RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar`**, is the stop line's field.
 
 R5 RUN (asserts nothing beyond its tests), each `COBALT_ENV=dev` call preceded by `ls -la /Users/cobalt/cobalt-wt/f4-strike-reserve/.env` → `No such file or directory`:
 - (a) `COBALT_ENV=dev uv run pytest -q -rP tests/cobalt/test_radar_config.py::test_radar_check_prints_radar_finviz_rpm_37` → WHOLE:
@@ -177,23 +178,90 @@ The 5 reds (log `:89-189`), each a pinned card digest that carries `tunables_sha
 - `tests/cobalt/test_setups_registries.py:211` `test_lego_ii_every_card_spec_is_byte_identical_through_the_registries[countertrend]` → `assert '3d4c83c50437...0bcd9e597183b' == '7a0e5796e33e...1f8811573450a'`; `[mixed]` → `assert '01d8844fbe47...5a830b604737b' == '5c4dcce2c86b...dde0629d9a3a7'`.
 CAUSE (tool output): `_tunables_digests` (`test_setups_registries.py:119-128`) hashes every row of `load_tunables().by_key` (`radar_p2_support.py:109-110`), then maps the snapshot back by dropping the keys added since the pins (`STEP3_KEYS`, `:97-…`). `test_setups_d1.py:192` does the same with `ADDED_KEYS` (`:53-…`). R1's new row `radar.finviz_rpm` is in neither list, so the mapped-back digest moves. The standing pattern, "as every added row (R95)": `test_setups_d1.py:60-63` (the strike rows, the F4 refresh rows), and `git log` on `test_setups_registries.py` → `da8a84ddf fix(s4-p1-1009): tunables-digest pins exclude the four strike rows as every added row (R95) …`. The fix is two lines: add `"radar.finviz_rpm"` to `STEP3_KEYS` (`test_setups_registries.py`) and to `ADDED_KEYS` (`test_setups_d1.py`). **Neither file is in the card's rows.** BUILD-HUB `## W`: "A red at W … fix it inside the rows' files only"; the card's `## NOT IN THIS JOB`: "A red outside these rows: a `## DECISIONS` item … never fixed here". Not fixed; ASK DESK under `## DECISIONS`.
 
+SECOND GATE (after `CONTINUE: W`, card `ce8a53fbf`). The fix is `a79fca72f fix(f4-strike-reserve): tunables-digest pins exclude radar.finviz_rpm as every added row (R1, W-1; R95)`, 2 files: `"radar.finviz_rpm"` added to `ADDED_KEYS` (`test_setups_d1.py:69`) and `STEP3_KEYS` (`test_setups_registries.py:118`), each with a neighbour-shaped comment; no pin value touched. Its red is the first gate's 5 reds above. Green: `uv run pytest -q -p no:cacheprovider --color=no --tb=line tests/cobalt/test_rubberband_forms.py tests/cobalt/test_setups_d1.py tests/cobalt/test_setups_registries.py` → `85 passed, 6 skipped in 220.26s (0:03:40)`. RESTARTS was run again (table below: the same last line). **`<tip>` = `a79fca72f`.**
+`sh /Users/cobalt/cobalt/ops/desk/gate.sh f4-strike-reserve all --deploy` → **exit 0**, verdict lines WHOLE:
+```
+tests/ops: skipped (no ops paths)
+offline 5038/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 6010/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_checkpoints_live.py:36: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live checkpoint dry run
+SKIPPED [1] tests/cobalt/test_playbook_live.py:31: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 148/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/f4-strike-reserve-all-20261026-214157.log
+```
+None of the nine SKIPPED lines is marked `OUTSIDE the allowed set`. The skips naming `COBALT_LIVE_VAULT_ROOT` are lines the gate prints for the with-DB pass, which runs without that variable. The live-note pass itself is `148/0` (log `:2387` `148 passed, 1 skipped, 15 warnings in 26.64s`), and its one skip is `test_replay_line.py:266` (`COBALT_TEST_LIVE_DRC`).
+- (a) offline `<p>` = **5038** (log `:2` `$ uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy`, `:958` `5038 passed, 878 skipped, 4 xfailed, 36 warnings in 776.20s (0:12:56)`). Tests this build adds: `test_radar_collector.py::{test_a_50_request_burst_is_held_to_37_in_one_minute, test_the_radar_bucket_rpm_is_radar_finviz_rpm, test_radar_finviz_rpm_out_of_bounds_is_refused[×7], test_a_default_collector_takes_the_37_bucket}`, `test_radar_price_floor.py::test_build_runner_buckets_at_radar_finviz_rpm`, `test_radar_config.py::{test_radar_finviz_rpm_is_the_ruled_37, test_radar_check_refuses_an_out_of_bounds_radar_finviz_rpm[×5], test_radar_check_prints_radar_finviz_rpm_37}`, `test_strike_detector.py::` the six R6 tests, `test_prefill_refresh.py::TestSharedGate::` the four `test_c_*` and the x14 `[broken3]` param, `test_refresh_probe.py::test_x15_the_radar_cap_holds_a_50_rpm_radar_to_37_and_passes`. Offline line: `tests/ops: skipped (no ops paths)`.
+- (b) `lock taken: f4-strike-reserve` (log `:965`; `lock: waited 0 min`); `F0: 664 35 272c95bbb12241e3611e4b36326ccf87` (`:976`); `LEVEL 0013`.
+- (c) PASS 1 `<d1>` = **5766** (log `:1204` `5766 passed, 9 skipped, 138 deselected, 7 xfailed, 43 warnings in 950.00s (0:15:50)`). The executed command (log `:1034`), WHOLE: `COBALT_ENV=dev uv run pytest -q -rs -p no:cacheprovider tests/cobalt tests/taxonomy --deselect tests/cobalt/test_tenancy.py::TestMigrationRoundTrip --deselect tests/cobalt/test_tenancy.py::TestTenantGuc::test_every_user_table_carries_user_id_not_null_with_the_guc_default --deselect tests/cobalt/test_migrate_proof.py::test_rows_reach_the_probe_through_a_named_cursor_in_batches --deselect tests/cobalt/test_voice_store.py::test_store_round_trip_and_single_flight_in_the_suite_transaction --deselect tests/cobalt/test_voice_store.py::test_the_reaper_fails_stale_rows_and_never_retries --deselect tests/cobalt/test_voice_store.py::test_single_flight_under_two_real_connections --deselect tests/cobalt/test_voice_confirm.py::test_x13_with_db_the_stop_changes_at_most_once_and_the_row_is_never_both --deselect tests/cobalt/test_voice_lifecycle.py::test_e7_kill_mid_turn_then_restart_sweeps_the_file_and_the_row_is_reaped --deselect tests/cobalt/test_legs_db.py --deselect tests/cobalt/test_fill_transaction_db.py --deselect tests/cobalt/test_legs_c2_db.py --deselect tests/cobalt/test_s3_c2_experiments.py --deselect tests/cobalt/test_cards.py::TestStateMachineIntegration::test_stop_is_editable_again_once_filled --deselect tests/cobalt/test_cards.py::TestStopEditRecomputesTheCard::test_a_filled_stop_edit_holds_the_shares_and_moves_open_risk --deselect tests/cobalt/test_x5_tap_refresh_db.py --deselect tests/cobalt/test_drc_d5_db.py --deselect tests/cobalt/test_drc_d5_experiments_db.py --deselect tests/cobalt/test_f15_p2_replay_db.py --deselect tests/cobalt/test_radar_price_floor_db.py --deselect tests/cobalt/test_strike_detector_db.py --deselect tests/cobalt/test_strike_stream_db.py --deselect tests/cobalt/test_strike_ack_db.py --deselect tests/cobalt/test_playbook_db.py --deselect tests/cobalt/test_db_apply_db.py --deselect tests/cobalt/test_dml_roles_db.py --deselect tests/cobalt/test_genesis_db.py --deselect tests/cobalt/test_genesis_experiments_db.py --deselect tests/cobalt/test_genesis_vectors_db.py --deselect tests/cobalt/test_checkpoints_db.py` (the gate-lists' own deselects; this build adds none).
+- (c2) `dev forward: APPLIED 22:11:11` (log `:1206`); `F1: 954 47 126f2d6983fa59f9d0eaaff7da7dd29c` (`:1290`).
+- (c3) PASS 2 `<d2>` = **244** (log `:1292` the gate-lists' PASS 2 command, `:2186` `244 passed, 1 deselected, 5 warnings in 244.69s (0:04:04)`); this build adds no with-DB test id. It includes `tests/cobalt/test_rubberband_forms.py` (one of the W-1 pins) and `tests/cobalt/test_strike_detector_db.py`. `<d>` = 5766 + 244 = **6010** = the gate's `with-DB 6010/0`.
+- (c3r) `stray rows: not read (no --tickers given)`: this build writes no ticker on `cobalt_dev`.
+- (e) live-note `<l>` = **148** (log `:2332` the LIVE-NOTE command, `:2387`).
+- (f) `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (log `:2260`) = F0 field for field → **`cobalt_dev: 0013 — F2 = F0`**; `lock released` (`:2316`); `.env: removed`; `ls /Users/cobalt/cobalt-wt/f4-strike-reserve/.env` → `No such file or directory`.
+
 ## PRE-STOP SELF-CHECK
+(1) "Every added or changed test shown RED for its named reason against a mutation or negative control; any test that stayed green was rewritten." — **holds.**
+- E2 reds (`## E2 RED`): all 25 named tests.
+- E3 mutation reds (`## E3 THE ROWS`, THE MUTATIONS): every new or edited test, including the burst test (red `assert 38 == 37` under capacity 2.0, after it was rewritten because it stayed green), the added `check` pin (red `DID NOT RAISE`), `test_c_x15_plan_is_admitted…` (red under `>=`), and the x14 `None` param, which guards the kept S2 fix (green on BASE by design: no `src` change of this build touches that refusal).
+- The `small` and FAIL-param edits are red on BASE (`TypeError … 'radar_cap'`).
+- The two W-1 key additions: red at the first gate (the 5 pins), green after `a79fca72f`.
+(2) "Every entry path of each rule pinned by a test." — **holds.** Each PREFLIGHT caller and the test that pins it:
+- `radar/collector.py:173/:270` (default buckets) → `test_a_default_collector_takes_the_37_bucket`.
+- `radar/runner.py:522` → `test_build_runner_buckets_at_radar_finviz_rpm`.
+- `radar/config.py check()` → `test_radar_check_refuses_an_out_of_bounds_radar_finviz_rpm`, `test_radar_check_prints_radar_finviz_rpm_37`.
+- `strike/detector.py read_plan` (resident `build_detector :349`, refresh `daily.py:100/:788`) → the R6 `read_plan` tests; refresh's path via `test_prefill_refresh.py` (its fixture patches `read_plan`; the cap's `SourceFailure` through `read_plan` is caught by `check_refresh_demand`'s first `except`).
+- `check_strike_demand` (`detector.py tick`) → planned 45 and path (ii).
+- `check_refresh_demand` / `_gated_fetch` (`daily.py`) → the four `test_c_*` and x14.
+- Probe `_x15` → the R3 tests.
+- `replay/cli.py:69 process_bucket(ceiling)`: NOT IN THIS JOB (its own process), unchanged.
+- Edge inputs pinned: missing, `None`, `0`, `-1`, `51`, `"37"`, `True`, `50`-at-50; headroom `None`/`-1`; exactly at the allowance (50) and one over (51).
+(3) "Every `file:line`, count and quote in the report re-read from tool output at the tip." — **holds.** Re-read at `a79fca72f`:
+- Grep: `tunables.yaml:711`, `detector.py:69`, `refresh_probe.py:85`, `daily.py:810`, `collector.py:85/:101/:173/:270`, `config.py:205`, `runner.py:522`, `test_setups_d1.py:69`, `test_setups_registries.py:118`, `test_radar_price_floor.py:386`, `test_radar_collector.py:99`, `test_radar_config.py:260`.
+- `git log --oneline 1d5ba104..HEAD` (4 commits, below).
+- Gate log lines `:2/:958/:965/:976/:1034/:1204/:1206/:1290/:1292/:2186/:2260/:2316/:2332/:2387` (grep `-n`).
 
 ## FOR THE CHECK
+- Range `1d5ba104..a79fca72f`. Commit subjects (`git log --oneline 1d5ba104..HEAD`, oldest last; the report commit follows):
+  - `a79fca72f fix(f4-strike-reserve): tunables-digest pins exclude radar.finviz_rpm as every added row (R1, W-1; R95)`
+  - `8db1461c7 wip(f4-strike-reserve): W — offline red on 5 tunables-digest pins outside the rows (DECISION W-1)`
+  - `1d6cce4af fix(f4-strike-reserve): radar Finviz bucket capped at radar.finviz_rpm 37, strike headroom against the cap, refresh burst gate, X15 at the cap (R1, R6, R2, R3, R4, D0; L1, L3, L10, L53, L79)`
+  - `b8c0aaead wip(f4-strike-reserve): red`
+- Per row, the reds, mutation runs and greens: `## E2 RED`, `## E3 THE ROWS`; the W-1 pins: `## W`. The caller greps: `## PREFLIGHT` (CALLERS) and self-check (2). RUN row R5, its output WHOLE: `## RESTARTS` (R5 (a), (b), (c)).
+- The three suites: offline 5038/0 · with-DB 6010/0 (5766 + 244) · live-note 148/0; the executed commands and log lines are in `## W`. The first gate (exit 1, offline 5 failed) is also in `## W`.
+- Fingerprints: first gate, no lock take. Second gate: `F0 664 35 272c95bbb12241e3611e4b36326ccf87` · `F1 954 47 126f2d6983fa59f9d0eaaff7da7dd29c` · `F2 664 35 272c95bbb12241e3611e4b36326ccf87`.
+- Lock: taken (log `:965`, waited 0 min); forward applied 22:11:11; released (log `:2316`) after the rollback; `.env: removed`.
+- RESTARTS table: `## RESTARTS`. Records copied at PREFLIGHT: `## PREFLIGHT` (THE CARD'S RECORDS).
+- The CHECK ASKS, where each is answered: X1 (R1 caller pins; `process_bucket` keeps one bucket, so a default collector shares the 37 bucket); X2 (the burst test, idle-then-burst; `TokenBucket`'s body unchanged, `git diff` shows docstrings only in that file region); X3 (both refusal pins; `build_runner` calls the same `radar_bucket_rpm`); X4 (`test_c_*`, x14); X5 (R3 tests, the BASE FAIL at `radar_cap=50`); X6 (R6 tests; `grep -rn -F "cobalt.prefill" src/cobalt/strike` → comments only); X7 (RESTARTS).
 
 ## CONTINUE
-next: W — after the desk adds `tests/cobalt/test_setups_registries.py` and `tests/cobalt/test_setups_d1.py` to R1's `files` (DECISION W-1). On `CONTINUE: W`: add `"radar.finviz_rpm"` to `STEP3_KEYS` and `ADDED_KEYS` with the comment shape of their neighbours; run the 5 reds plus the card's offline suite; commit as a second `fix(f4-strike-reserve):` commit; RESTARTS again; the gate again (`all --deploy`); then PRE-STOP SELF-CHECK, CLOSE.
+next: none — CLOSE done.
 
 ## DECISIONS
-- DECISION W-1 · ASK DESK [21:35]: the gate's offline pass is red on 5 tunables-digest pins (`test_rubberband_forms.py:526`, `test_setups_d1.py:233` ×2, `test_setups_registries.py:211` ×2). R1's new row `radar.finviz_rpm` changes `tunables_sha256`. The fix is the standing R95 pattern (every added row is listed in `STEP3_KEYS` / `ADDED_KEYS`; `da8a84ddf` did it for the strike rows), but those two test files are not in R1's `files`. Safe default taken: nothing edited outside the rows, the run stops at W. To unblock: widen R1's `files` with the two test files and send `CONTINUE: W`. No lock was taken and nothing is left on `cobalt_dev`.
+- DECISION W-1: ANSWERED by the desk (card `ce8a53fbf`, `CONTINUE: W` 21:37). R1's `files` now include the two R95 pin files; the fix is `a79fca72f`, and the second gate is green. Nothing open.
+- none open.
 
 ## RECORDS
 - L74: this session's system context asked that commits carry a `Claude-Session:` line. BUILD-HUB L74 says commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only, so every commit here carries only that line. Recorded once; nothing acted on.
-- Extra lock takes: none (E2 had no with-DB red; the W gate stopped at (a) before its take).
+- Lock takes: one, the second gate's (the gate's own take, `## W`). E2 had no with-DB red, and the first gate stopped at (a) before its take. One extra gate call (the W-1 rerun) is recorded here.
 - `refresh_probe.py` has no DevDocs page (`docs/40 - DevDocs/cobalt/prefill/refresh_probe*`: no file). The card's D0 names five pages and `prefill/daily.md` already describes the probe, so no page was created.
 - E3 test additions beyond the card's named tests: `test_radar_config.py::test_radar_check_refuses_an_out_of_bounds_radar_finviz_rpm` (5 params; pins X3's `radar check` path). The burst test was rewritten to burst after ten idle minutes, because it stayed green under `capacity = 2.0`.
 - The card's records, re-read at PREFLIGHT (copied there): R2512 row at `cto-2026-10-26.md:72`; BASE `1d5ba104` holds port4 (D1).
 - `.env`: never present in this worktree (PREFLIGHT `ls` → no such file; after the gate → `No such file or directory`).
+- CONTINUED at W 21:37 — the desk's `CONTINUE: W` (from `cto-desk`). Fact verified: `git -C /Users/cobalt/cobalt log --oneline -2 -- <card>` → `ce8a53fbf docs(desk): card 1049-C R1 files widened by two R95 test files (W-1)`. The card diff `17f82377c..ce8a53fbf` changes only R1's `files` cell, adding `tests/cobalt/test_setups_registries.py` and `tests/cobalt/test_setups_d1.py` ("the edit is the mechanical key addition only, `"radar.finviz_rpm"` into `STEP3_KEYS` / `ADDED_KEYS`; no pin value is loosened").
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-FAILED: W — offline suite red on 5 tunables-digest pins outside the card's rows — "A red at W … fix it inside the rows' files only" (BUILD-HUB ## W); DECISION W-1 asks the desk to add tests/cobalt/test_setups_registries.py and tests/cobalt/test_setups_d1.py to R1's files
+BUILT · job: f4-strike-reserve · tip: a79fca72f | on 1d5ba104 | migration: none | offline 5038/0 | with-DB 6010/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 301915
