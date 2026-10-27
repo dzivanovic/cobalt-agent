@@ -379,6 +379,14 @@ def test_build_runner_hands_one_card_store_to_both_stages():
     assert source.count("card_store=card_store") == 2
 
 
+def test_build_runner_buckets_at_radar_finviz_rpm():
+    """f4-strike-reserve R1: the radar's one pacer runs at `radar.finviz_rpm`;
+    the ceiling stays the lifecycle admission's (`ceiling_rpm=int(rpm)`)."""
+    source = inspect.getsource(runner_module.build_runner)
+    assert "process_bucket(radar_bucket_rpm(" in source
+    assert "process_bucket(int(rpm))" not in source
+
+
 def test_open_radar_cards_reads_radar_origin_only():
     """The control for his manual sheet cards: the one read the stage
     makes never returns an `origin = 'manual'` card."""

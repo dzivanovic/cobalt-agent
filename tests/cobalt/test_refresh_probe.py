@@ -57,8 +57,9 @@ def probe(monkeypatch, capsys):
 
 
 def small(probe):
-    """A stand-in plan: 1 ARMED card, the radar at 10 rpm."""
-    return replace(probe.SETUP, cards=1, radar_rpm=10.0, planned_rpm=10.0, headroom_rpm=40.0)
+    """A stand-in plan: 1 ARMED card, the radar at 10 rpm; the plan X15's
+    (planned 40, headroom 10), which the refresh gate admits under the cap."""
+    return replace(probe.SETUP, cards=1, radar_rpm=10.0, planned_rpm=40.0, headroom_rpm=10.0)
 
 
 def x15(monkeypatch, capsys, probe, setup=None):
@@ -174,7 +175,7 @@ def test_x15_counts_every_consumer_per_minute(monkeypatch, capsys, probe):
 
 
 def test_x15_a_minute_above_50_fails_and_names_the_consequence(monkeypatch, capsys, probe):
-    code, line, _ = x15(monkeypatch, capsys, probe, replace(probe.SETUP, radar_rpm=50.0))
+    code, line, _ = x15(monkeypatch, capsys, probe, replace(probe.SETUP, radar_cap=50))
     assert code == 1 and line.startswith("PROBE X15 FAIL "), line
     minute = [r for r in records(probe) if r.minute == "08:43"]
     assert len(minute) >= 51
@@ -182,6 +183,21 @@ def test_x15_a_minute_above_50_fails_and_names_the_consequence(monkeypatch, caps
     assert minute[50].status == 429
     assert re.search(r"peak \d+/min at \d\d:\d\d", line)
     assert "FINAL :221" in line
+
+
+def test_x15_the_radar_cap_holds_a_50_rpm_radar_to_37_and_passes(monkeypatch, capsys, probe):
+    """His ruling C (R2512): the default stand-in offers 50 rpm; the radar's
+    bucket at `radar.finviz_rpm` holds it to 37 a minute, so radar + strike
+    + refresh fit the ceiling at 08:43."""
+    code, line, _ = x15(monkeypatch, capsys, probe)
+    print(line)
+    assert code == 0 and line.startswith("PROBE X15 OK "), line
+    seen = records(probe)
+    radar = Counter(r.minute for r in seen if r.consumer == "radar")
+    assert radar and max(radar.values()) <= 37, radar
+    assert per_minute(line)["08:43"] <= 50
+    assert " · 429 0 · " in line
+    assert "refresh gate admitted" in line
 
 
 def test_x15_a_redirect_is_counted(monkeypatch, capsys, probe):
@@ -230,7 +246,7 @@ def test_an_unknown_item_is_refused(monkeypatch, capsys, probe, item):
     ("verdict", "exit_code", "change"),
     [
         ("OK", 0, {}),
-        ("FAIL", 1, {"cards": 5, "radar_rpm": 50.0, "planned_rpm": 40.0, "headroom_rpm": 10.0}),
+        ("FAIL", 1, {"cards": 5, "radar_rpm": 50.0, "planned_rpm": 40.0, "headroom_rpm": 10.0, "radar_cap": 50}),
         ("NOT RUN", 3, {"planned_rpm": 49.95, "headroom_rpm": 0.05}),
     ],
 )

@@ -12,6 +12,7 @@ from cobalt.radar.config import (
     NotEquityConfig,
     RadarConfigError,
     check,
+    command,
     is_not_equity,
     load_config,
     screener_columns,
@@ -24,8 +25,9 @@ def test_shipped_config_and_all_tunables_validate():
     assert cfg.export.v == 152
     assert set(values) == {
         "radar.scan_interval", "radar.poll_interval", "radar.poll_overlap_bars",
-        "radar.finviz_max_rpm", "radar.poll_bar_max_age_s", "db.query.timeout_s",
+        "radar.finviz_max_rpm", "radar.finviz_rpm", "radar.poll_bar_max_age_s", "db.query.timeout_s",
     }
+    assert values["radar.finviz_rpm"] == 37
 
 
 def test_staleness_key_is_split_poller_180_heartbeat_320():
@@ -231,3 +233,22 @@ def test_finviz_ceiling_is_the_ruled_50():
     assert row.source == "ruling"
     assert any("ruled 45 on 2026-09-16" in c for c in row.consumers)
     assert any("ruled 50 on 2026-09-17" in c for c in row.consumers)
+
+
+def test_radar_finviz_rpm_is_the_ruled_37():
+    """His ruling C (2026-10-26, R2512): the radar's own Finviz bucket is
+    capped at 37 a minute; `radar.finviz_max_rpm` stays the shared ceiling."""
+    from cobalt.taxonomy.loader import load_tunables
+
+    row = load_tunables().by_key["radar.finviz_rpm"]
+    assert row.value == 37
+    assert row.source == "ruling"
+    assert any("ruled 37 on 2026-10-26" in c for c in row.consumers)
+
+
+def test_radar_check_prints_radar_finviz_rpm_37(capsys):
+    """L10: the dry-run `uv run cobalt radar check` prints the key."""
+    command(None)
+    out = capsys.readouterr().out
+    print(out)
+    assert "radar.finviz_rpm = 37" in out.splitlines()
