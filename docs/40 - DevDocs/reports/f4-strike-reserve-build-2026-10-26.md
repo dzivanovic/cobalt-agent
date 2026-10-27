@@ -262,6 +262,7 @@ next: none — CLOSE done.
 - The card's records, re-read at PREFLIGHT (copied there): R2512 row at `cto-2026-10-26.md:72`; BASE `1d5ba104` holds port4 (D1).
 - `.env`: never present in this worktree (PREFLIGHT `ls` → no such file; after the gate → `No such file or directory`).
 - CONTINUED at W 21:37 — the desk's `CONTINUE: W` (from `cto-desk`). Fact verified: `git -C /Users/cobalt/cobalt log --oneline -2 -- <card>` → `ce8a53fbf docs(desk): card 1049-C R1 files widened by two R95 test files (W-1)`. The card diff `17f82377c..ce8a53fbf` changes only R1's `files` cell, adding `tests/cobalt/test_setups_registries.py` and `tests/cobalt/test_setups_d1.py` ("the edit is the mechanical key addition only, `"radar.finviz_rpm"` into `STEP3_KEYS` / `ADDED_KEYS`; no pin value is loosened").
+- CONTINUED at FIX 22:19 · fixed: stop line tip 8 hex (the desk's `CONTINUE: FIX` from `cto-desk`: `tip: a79fca72f` → `tip: a79fca72`, the card's TIP; `.result` `tip=` the same; docs only, no code touched).
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: f4-strike-reserve · tip: a79fca72f | on 1d5ba104 | migration: none | offline 5038/0 | with-DB 6010/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 301915
+BUILT · job: f4-strike-reserve · tip: a79fca72 | on 1d5ba104 | migration: none | offline 5038/0 | with-DB 6010/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 3 of 3 | decisions: 0 · for Dejan: 0 · tokens: 301915
