@@ -4,11 +4,11 @@ CLASS: K2
 INSTALL: none
 BRANCH: ops/f4-strike-reserve
 WORKTREE: f4-strike-reserve
-BASE: 05366873
+BASE: 1d5ba104
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/f4-strike-reserve/docs/40 - DevDocs/reports/f4-strike-reserve-build-2026-10-26.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/f4-strike-reserve-check-2026-10-26.md
+HOUSE B: as needed
 BAND: HIGH
 RULINGS: 2026-10-18 R1863; 2026-10-26 R2512
 
