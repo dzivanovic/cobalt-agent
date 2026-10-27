@@ -5340,3 +5340,85 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-25*"` = no tag; no deploy row on 10-25.
 - STOP LINE (L35), `reports/close-2026-10-24.md`: `CLOSE PUSHED 7a9f8e66`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-25.md` `## 8`.
+
+### 2026-10-26 — Monday: f4-probe and port4 deployed, port3 failed and rolled back twice over, card 1049-C (radar bucket cap 37/min) building
+
+- R2454 00:05 RECORD: day rolled to 10-26; day plan and §5 CURRENT carried; watches re-armed.
+- R2455 05:57 RECORD: 06:00 check-in to the brain; goals 1-3 on track, 4 not started.
+- R2456 07:00 LAUNCHED: STANDING ORDER R1537, day-open in Qwen pane w2:p5.
+- R2457 07:15 RECORD: day-open 10-26 AMBER (tier_a Finviz 429 at 06:48, transient); K3 radar proof met; facts to the brain.
+- R2458 07:20 DESK RECORD (brain L79): 429 not a blocker; port3 after 16:00 ET if tier_a probe green or no 429 in 3 cycles.
+- R2459 07:30 DESK RECORD (brain L79 R1841): F4 prefill-refresh and F23 playbook gate runs launched, drafters 1043/1044.
+- R2460 07:55 REFRESH: desk `10d3752d` at 253,047 tokens.
+- R2461 07:54 RECORD: desk `bc5a658e` took over from `10d3752d`; five watches re-armed.
+- R2462 07:56 RECORD: draft-f4-gate-run DRAFTED, 7 decisions; asked the brain.
+- R2463 07:57 DESK RECORD (brain `9b07db5a`): F4 gate 1045 rulings (X10 OK, X8 post-load, X15 by probe card f4-probe).
+- R2464 08:04 RECORD: F4 and F23 drafters DRAFTED, 9 asks sent to the brain.
+- R2465 08:04 DESK RECORD (brain): F4 reservation card drafted, launched only on X15 FAIL; F23 E1/E2 dev render.
+- R2466 08:07 LAUNCHED: f4-gate-preflight (Sonnet), prompt 1050.
+- R2467 08:09 DESK RECORD (brain): F23 render seat rulings (E1 kill leg constructed state, lock via f23-playbook-1013).
+- R2468 08:10 LAUNCHED: f23-gate-preflight (Sonnet), prompt 1052.
+- R2469 08:11 LAUNCHED: F4 preflight ready NO (2 fails); f4-gate-run on 1045.
+- R2470 08:12 RECORD: f4-gate-run DONE ok 1 fail 1 (X9) not run 2 (X7, X15) ruled 1 (X8).
+- R2471 08:13 HIS RULING (standing R1863, relayed by brain L79): X9 ruled stale label; f4-probe 1047 build GO.
+- R2472 08:13 RECORD: F23 preflight ready NO (1 fail: 1051 smoke wording); drafter fixing.
+- R2473 08:14 LAUNCHED: f4-probe-build `c355a064` (card 1047, BASE `596ca32f`).
+- R2474 08:14 RECORD: F23 drafter DRAFTED; 1051 smoke fixed, render seat renumbered 1053.
+- R2475 08:15 LAUNCHED: f23-gate-run `ec994048` on 1046.
+- R2476 08:17 RECORD: f23-gate-run DONE ok 1 (E4), ruled 2, not run 2; render seat 1053 launched.
+- R2477 08:18 RECORD: f23-render DONE (E1 kill OK, E2 decks OK); his Keynote/PowerPoint opens asked.
+- R2478 09:20 RECORD: f4-probe BUILT tip `2e0d5f77b` (offline 4993/0, with-DB 5965/0); asked the brain.
+- R2479 09:21 DESK RECORD (brain): f4-probe standard check; 1049 preflight in parallel; build only on real X15 FAIL.
+- R2480 09:23 RECORD: f4-reserve-preflight ready NO (1 fail: 1049 S2 TypeError when headroom None).
+- R2481 09:24 REFRESH: desk `bc5a658e` at 244,865 tokens.
+- R2482 09:26 RECORD: desk `a5da0e44` took over from `bc5a658e`.
+- R2483 09:28 LAUNCHED: f4-probe-check-preflight `6a1888ff` (Sonnet, prompt 1057); card 1055 header filled, `2b7c1134e`.
+- R2484 09:30 OPEN: preflight 1055 ready NO (fixed `bd6440dce`); check launch refused, stop-line tip 9 hex vs 8 hex; asked the brain.
+- R2485 09:31 DESK RECORD (brain): stop-line tip 9→8 hex by the builder; LAUNCHED f4-probe-build `a493cdbe`.
+- R2486 09:32 LAUNCHED: f4-probe-build `a493cdbe` DONE (`1fcf33e8d`); f4-probe-check `cc74d45c` (card 1055).
+- R2487 10:53 LAUNCHED: f4-probe-check `cc74d45c` DONE ready YES (tip 8 hex); deploy card 1058; deploy-hub-f4-probe `80d7101d`.
+- R2488 10:59 RECORD: f4-probe DEPLOYED `7e682889`, smoke GREEN, RESTARTS none.
+- R2489 11:05 DESK RECORD (brain): F4 gate second pass on 1045; LAUNCHED f4-gate-run `d3572159`.
+- R2490 11:26 RECORD: second pass X15 FAIL, peak 53/min at 08:43 (radar 40 + strike 10 + refresh 3, 429 x3).
+- R2491 11:27 DESK RECORD (brain): 1049 must refuse any minute where planned total + refresh > 50; LAUNCHED draft-f4-reserve-fix `bb236085`.
+- R2492 11:34 DESK RECORD (brain): 1049 strike interval unchanged, radar yields 3 in the refresh minute or refresh waits.
+- R2493 11:35 LAUNCHED: draft-f4-reserve-amend `cbb3218d` and draft-survey-0648-429 `eef88f1f`.
+- R2494 11:36 LAUNCHED: survey-0648-preflight `092d823b` (prompt 1064); survey drafted.
+- R2495 11:38 LAUNCHED: survey-0648-429 `6263cb18` (prompt 1063); preflight ready YES.
+- R2496 11:39 OPEN: draft-f4-reserve-amend FAILED as allowed (radar yield impossible); his one question to the brain.
+- R2497 11:40 RECORD: survey-0648-429 DONE; third consumer unproven; own rate far under 50.
+- R2498 11:45 REFRESH: desk `a5da0e44` at 253,458 tokens.
+- R2499 11:44 RECORD: desk `2fb3f016` took over from `a5da0e44`; reconciled 5 rows.
+- R2500 15:52 RECORD: port3 deploy card written (1065, TIP `304a0b03`); radar.err clean cycle 15:46.
+- R2501 16:01 LAUNCHED: port3 deploy hub `eabd9109` on card 1065.
+- R2502 16:19 RECORD: port3 deploy 1065 FAILED gate G(a) (quoted filter string in survey doc); nothing merged.
+- R2503 16:20 LAUNCHED: STEP-D0 hub `8d2598f1` (brain L79); card 1049 options A/B/C from the brain.
+- R2504 16:20 OPEN: ASKED HIM card 1049 (A strike 43 s, B refresh off, C cap radar 37/min); brain recommends C.
+- R2505 16:24 LAUNCHED: port3 RECUT, card 1066, hub `8e40ca51`.
+- R2506 16:43 RECORD: port3 recut merged, FAILED smoke (b), reverted `8a088c7b6`; residents up.
+- R2507 16:50 DESK RECORD (brain `9b07db5a`): Config cold-start race (`config.py:405-414`); fix ships as card radar-mirror-scope-port4.
+- R2508 17:05 DESK RECORD (brain): port4 card 1068 DRAFTED, 4 decisions defaults hold; preflight 1069.
+- R2509 17:36 HIS RULING (standing R1863, relayed by brain): port4 build GO; preflight ready YES; BASE `46a6f7d7`.
+- R2510 17:38 LAUNCHED: port4 build `3ee78ae3` (card 1068).
+- R2511 17:57 RECORD: port4 build `3ee78ae3` FAILED E0 base red (prompt 1069 quoted a filter string); BASE `039bbfd2`; relaunch.
+- R2512 18:05 HIS RULING (words via brain: "C as you recommend"): card 1049 caps radar's Finviz bucket at 37/min; A and B rejected.
+- R2513 18:25 DESK RECORD (brain): 1049-C strike headroom vs `radar.finviz_rpm` 37 + refresh 3; drafter CONTINUE.
+- R2514 18:35 RECORD: card 1049-C DRAFTED (6 decisions); preflight 1071 launched.
+- R2515 18:43 RECORD: REFRESH at 258k tokens; NOW rewritten.
+- R2516 18:09 RECORD: desk `6a9cca19` took over from `2fb3f016`; 4 pending-fold rows applied.
+- R2517 18:10 RECORD: 1049-C preflight `f2ec7382` ready NO (1 fail #8); asked the brain.
+- R2518 18:10 DESK RECORD (brain): 1049-C fix = build proofs by pytest; X15 load-gate line from F4 gate third pass.
+- R2519 18:12 LAUNCHED: draft-f4-reserve-c-fix `fca5cb92` (prompt 1072).
+- R2520 18:13 RECORD: card 1049-C fix DRAFTED (1 decision, default holds).
+- R2521 18:13 LAUNCHED: f4-reserve-c-preflight-r2 `676721cd` (prompt 1073).
+- R2522 18:14 RECORD: 1049-C preflight r2 READY YES (14 checks, 0 fails); build waits for port4.
+- R2523 18:51 RECORD: port4 BUILT (`eae23083`) tip `b0cca7d76`, offline 5008/0, with-DB 5980/0, rows 7 of 7.
+- R2524 18:53 LAUNCHED: check launch refused (tip 9 hex); build CONTINUE FIX `625260d4`.
+- R2525 18:55 LAUNCHED: port4 stop-line fix `421af1711`; port4 check `4b128820` (card 1068).
+- R2526 20:29 RECORD: port4 check DONE ready YES (tip `b0cca7d7`); deploy card 1074 written (TIP `421af171`).
+- R2527 20:36 LAUNCHED: port4 deploy hub `130ac2a2` (card 1074, RESTARTS aset cos radar).
+- R2528 20:48 RECORD: port4 DEPLOYED `05a21999`, smoke GREEN, downtime 58 s, report `6384db53a`.
+- R2529 20:49 LAUNCHED: f4-strike-reserve-build `75e3835b` (card 1049-C, BASE `1d5ba104`).
+- DEPLOY (L35): `git tag --list "deploy-2026-10-26*"` = `deploy-2026-10-26-f4-probe`, `deploy-2026-10-26-radar-mirror-scope-port4`.
+- STOP LINE (L35), `reports/close-2026-10-25.md`: `CLOSE PUSHED 8eca82c5`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-26.md` `## 8`.

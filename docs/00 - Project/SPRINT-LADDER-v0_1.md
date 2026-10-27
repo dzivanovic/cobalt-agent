@@ -1308,6 +1308,32 @@ Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as writt
 
 OFF-LADDER work of 2026-10-25: none (rows are desk records, day-open and handover).
 
+### Status 2026-10-26
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1026` for 10-26 alone from `reports/cto-2026-10-26.md` rows R2454–R2529 (00:05 → 20:49 ET); tag check (L35): `git tag --list "deploy-2026-10-26*"` = `deploy-2026-10-26-f4-probe`, `deploy-2026-10-26-radar-mirror-scope-port4`. The 10-25 close ran (`CLOSE PUSHED 8eca82c5`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-25). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) and X3 values | DONE-DARK | Plists stay unloaded. Owed: his legs X5, X7, X10, X12. |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | Unchanged. Owed: X15 four legs. |
+| S5 F4 prefill (cards `778`, `1047` f4-probe) | DONE-LIVE (probe) · DONE-DARK (prefill-refresh) | f4-probe DEPLOYED `7e682889`, smoke GREEN (R2488, tag `deploy-2026-10-26-f4-probe`). Gate X15 FAIL: peak 53/min at 08:43 (R2490). The prefill-refresh plist stays unloaded (heartbeat: OWED bootstrap). Owed: his X7 render and X9 Sync legs. |
+| S5 F4 strike reserve (card `1049-C`) | BUILDING | His "C as you recommend" (R2512): cap radar's Finviz bucket at 37/min. Build `75e3835b` launched 20:49 ET on BASE `1d5ba104` (R2529); then check, deploy, F4 gate third pass. |
+| S5 F23 playbook (cards `779`, `1046`) | DONE-DARK | Gate: E4 OK, E1 kill OK, E2 decks OK, E5/E6 ruled (R2476, R2477). Waits for his Keynote/PowerPoint opens; the playbook plist is OWED bootstrap. |
+| S5 radar-mirror-scope port3 (cards `1041`, `1065`, `1066`) | FAILED, rolled back | First deploy failed gate G(a) (R2502); recut merged, failed smoke (b), reverted `8a088c7b6` (R2506). Superseded by port4. |
+| S5 radar-mirror-scope port4 (card `1068`, deploy `1074`) | DONE-LIVE | DEPLOYED `05a21999`, tag `deploy-2026-10-26-radar-mirror-scope-port4`, smoke GREEN, downtime 58 s, RESTARTS aset cos radar (R2528). |
+| S5 radar settings restore (cards `1029`, `1030`) | DONE-LIVE, cards_enabled PROVEN | No CardSettingsError since 10-24 (R2457, brain R2458). Benchmark waits for the replay. |
+| S5 radar S5 evaluate / replay | RED | Heartbeat 21:05 ET: `com.cobalt.replay` failed at step movers, radar.benchmark invalid (TraderSettingsError); `replay.log` has no 10-26 line at 21:03. |
+
+**Stop date: 2026-10-28 (S5, day 12 of 14). S5: AT RISK.** Reason: the replay is still RED on radar.benchmark; the 1049-C reserve card is building and not deployed, so X15 stays FAIL and the F4 prefill-refresh stays dark; F5, F4 and F23 wait on his legs; com.cobalt.agent is not loaded. No ruling moved a date (`cto-2026-10-26.md`).
+
+OFF-LADDER work of 2026-10-26 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| f4-probe (card `1047`) | DONE-LIVE | Brain R2471 (L79, standing R1863). Deploy `7e682889` (R2488). |
+| Survey of the 06:48 tier_a 429 | DONE | Brain R2492; own rate far under 50, third consumer unproven (R2497). |
+| Radar-mirror-scope port3 and port4 | port3 FAILED, port4 DONE-LIVE | Brain R2458, R2507 (L79); R2509 build GO. See rows above. |
+| Card 1049-C strike reserve | BUILDING | His "C as you recommend" (R2512). Build `75e3835b` (R2529). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)
