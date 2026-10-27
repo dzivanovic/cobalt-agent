@@ -20,7 +20,9 @@ THE BOUNDARY (the `checkpoint_probe.py` shape):
 X15 (F4-FINAL `:221`), IN PROCESS ON A VIRTUAL CLOCK (card DECISION 1): one
 virtual `monotonic` / `sleep` / `now` drives three consumers from 08:40:00
 ET on a constructed weekday to 08:46:00 ET:
-- `radar`, a stand-in at its planned rpm through `finviz_get` (DECISION 2);
+- `radar`, a stand-in offering 50 rpm through `finviz_get` (DECISION 2), each
+  request first taking a token from a `TokenBucket` at the radar's cap
+  (`radar.finviz_rpm`, his ruling C): the cap, not the spacing, sets its minute;
 - `strike`, the real `StrikeDetector.tick` over 5 constructed ARMED cards,
   `fetch_bars`, a `TokenBucket` on the virtual clock;
 - `refresh`, the real `_gated_fetch` at 08:43:00 ET: its gate, then its 3 GETs.
@@ -59,8 +61,8 @@ REFRESH_AT_S = 180
 RUN_S = 360
 #: FINAL :221's ceiling; the tunable must say the same or the item is not run.
 FINAL_CEILING = 50
-CONSEQUENCE = ("→ strike/refresh residual cannot ship as named; a strike-side reservation row on the F4 card "
-               "before the plist loads (FINAL :221, L75)")
+CONSEQUENCE = ("→ radar cap + strike + refresh exceed the ceiling in a minute; the F4 plist stays unloaded "
+               "(FINAL :221, L75)")
 #: A fake clock that wakes exactly at a bucket's deficit can leave its token
 #: at 0.9999… forever (float); real time always moves on.
 _EPS = 1e-6
@@ -71,13 +73,16 @@ _CONSUMER: contextvars.ContextVar[str] = contextvars.ContextVar("refresh_probe_c
 @dataclass(frozen=True)
 class X15Setup:
     """FINAL :221: 5 ARMED cards, the radar planned 40, ceiling 50.
+    `radar_rpm`: the stand-in's OFFERED rate (a full-ceiling burst);
+    `radar_cap`: its bucket, None = `radar_bucket_rpm()` (the tunable).
     `redirects`: the mock answers the first n requests 302 (the tests')."""
 
     cards: int = 5
-    radar_rpm: float = 40.0
+    radar_rpm: float = 50.0
     planned_rpm: float = 40.0
     headroom_rpm: float = 10.0
     redirects: int = 0
+    radar_cap: Optional[int] = None
 
 
 SETUP = X15Setup()
@@ -318,13 +323,14 @@ def _cards(n: int, start: datetime):
             for i in range(n)]
 
 
-async def _radar(clock: VirtualClock, rpm: float, get: Callable[..., Awaitable]) -> None:
+async def _radar(clock: VirtualClock, rpm: float, get: Callable[..., Awaitable], bucket) -> None:
     from cobalt.archiver.collector import CollectorError
 
     _CONSUMER.set("radar")
     spacing = 60 / rpm
     for k in itertools.count():
         await clock.sleep(max(0.0, k * spacing - clock.monotonic()))
+        await bucket.acquire()
         try:
             await get("/export/screener", {"v": "111"}, TOKEN)
         except CollectorError:
@@ -379,7 +385,7 @@ def _clause(records: list[Hit], ledger: _Ledger, ceiling: int) -> tuple[str, str
 
 def _x15(setup: X15Setup) -> tuple[str, str]:
     from cobalt.archiver.collector import fetch_bars, finviz_get
-    from cobalt.radar.collector import TokenBucket
+    from cobalt.radar.collector import TokenBucket, radar_bucket_rpm
     from cobalt.session import SessionClock
     from cobalt.session.clock import ET
     from cobalt.strike.config import check
@@ -402,9 +408,12 @@ def _x15(setup: X15Setup) -> tuple[str, str]:
         bucket_factory=lambda rpm: TokenBucket(rpm, monotonic=clock.monotonic, sleep=clock.sleep),
     )
     ledger = _Ledger()
+    cap = setup.radar_cap if setup.radar_cap is not None else radar_bucket_rpm()
+    radar_bucket = TokenBucket(cap, monotonic=clock.monotonic, sleep=clock.sleep)
     with _boundary(transport, plan) as reached:
         try:
-            asyncio.run(clock.run([_radar(clock, setup.radar_rpm, finviz_get), _strike(clock, detector, ledger),
+            asyncio.run(clock.run([_radar(clock, setup.radar_rpm, finviz_get, radar_bucket),
+                                   _strike(clock, detector, ledger),
                                    _refresh(clock, ledger)], RUN_S))
         except Exception:
             if reached:

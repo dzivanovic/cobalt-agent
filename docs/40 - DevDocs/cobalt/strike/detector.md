@@ -28,3 +28,6 @@ New module (S4-P1 C2, C3).
 
 ## 2026-10-09 — s4-p1-1009 check
 Check O3/A2: `seen_at`, the cross's `now` and the TRIGGERED transition's `now` are each card's own poll clock (read after its fetch), not the tick's start.
+
+## 2026-10-26 — f4-strike-reserve
+`read_plan`'s `headroom_rpm` is now `radar.finviz_max_rpm − radar_bucket_rpm() − REFRESH_BURST_RPM` (50 − 37 − 3 = 10, brain R2513), taken from one `load_tunables().by_key`, no longer the radar's planned headroom. Five names therefore poll every 30 s whatever the radar plans. It is `None` when the planned rpm or the demand is `None`, and it passes the radar's own headroom through when that is ≤ 0. `REFRESH_BURST_RPM = 3` is pinned equal to `prefill.daily.REFRESH_GETS` by a test; `strike/` imports nothing from `cobalt.prefill`. `check_strike_demand` counts the radar at `min(planned_rpm, radar.finviz_rpm)`, since the radar cannot send above its cap in a minute. An unreadable cap fails safe on both paths: through `read_plan` → `_read_plan` gives `DemandPlan(None, None)` and the tick is refused with no fetch; at the strike gate → the `SourceFailure` leaves `tick` before any fetch and before `self._interval` is set. `poll_interval`, `tick` and `DemandPlan` are unchanged.

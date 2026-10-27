@@ -40,3 +40,6 @@ Check O1/A3: a strike tick STARTS every derived interval — `StrikeThread` wait
 
 ## 2026-10-26 — radar-mirror-scope-port4
 `run_command` calls `warm_config()` (`Config.get_instance()`) in the main thread before it starts `StrikeThread`, so the strike thread and the resident never race the old tree's singleton build.
+
+## 2026-10-26 — f4-strike-reserve
+`build_runner` builds the radar's one bucket at `radar.finviz_rpm` (`process_bucket(radar_bucket_rpm(tunables))`, 37, his ruling C). The daily collector, the screener and the poller all share it. An unreadable or out-of-bounds key raises `SourceFailure` and the runner is not built. `rpm` (`radar.finviz_max_rpm`, 50) is still read and still passed as `ceiling_rpm`, so lifecycle admission is checked against the shared ceiling, not the cap. A cycle can run up to +16% slower (about 3 → 3.5 min, brain R2513), to be measured on the first live cycles.

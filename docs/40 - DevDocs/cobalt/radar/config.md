@@ -16,3 +16,6 @@ Four modules used to build the 151-index list for themselves (`radar/collector.p
 
 ## 2026-10-08 — price-floor-1008
 R692: `RadarConfig.price_floor` (`Decimal`, `gt=0`, no default; `radar.yaml` ships `5.00`) and `MetricHeaders.price` (`Price`, required of every export through `load_config`'s header check), so a config without the floor, with one at or below zero, or without `Price` in `required_headers` is refused at load, naming it.
+
+## 2026-10-26 — f4-strike-reserve
+`TUNABLE_UNITS` gains `radar.finviz_rpm` (`count`). After its unit loop, `check()` calls `collector.radar_bucket_rpm(registry)`, which requires an `int` from 1 to `radar.finviz_max_rpm` (a `bool` is refused). A `SourceFailure` from it becomes `RadarConfigError`. The import sits inside the function because the collector imports this module. The dry-run `uv run cobalt radar check` (`command`) prints every `TUNABLE_UNITS` key, so it shows `radar.finviz_rpm = 37`.

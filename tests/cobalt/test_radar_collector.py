@@ -52,8 +52,9 @@ def test_token_bucket_fake_clock_waits_for_second_token():
 def test_a_50_request_burst_is_held_to_37_in_one_minute():
     """f4-strike-reserve R1: capacity 1 makes `TokenBucket(37)` a true
     per-minute cap — 37 grants in [0, 60), the 38th at 60, and no half-open
-    60 s window over the grant times holds more than 37."""
-    clock = [0.0]
+    60 s window over the grant times holds more than 37. The burst lands
+    on a bucket left idle (full) for ten minutes, so banked tokens count."""
+    clock = [-600.0]
     grants = []
 
     async def sleep(delay):
@@ -62,6 +63,7 @@ def test_a_50_request_burst_is_held_to_37_in_one_minute():
         clock[0] += delay + 1e-9
 
     bucket = TokenBucket(37, monotonic=lambda: clock[0], sleep=sleep)
+    clock[0] = 0.0  # ten idle minutes: the bucket refills to its capacity
 
     async def one():
         await bucket.acquire()

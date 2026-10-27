@@ -246,6 +246,21 @@ def test_radar_finviz_rpm_is_the_ruled_37():
     assert any("ruled 37 on 2026-10-26" in c for c in row.consumers)
 
 
+@pytest.mark.parametrize("value", [None, 0, 51, "37", True])
+def test_radar_check_refuses_an_out_of_bounds_radar_finviz_rpm(monkeypatch, value):
+    """L10: the dry-run refuses the key as the runner would (X3)."""
+    from types import SimpleNamespace
+
+    from cobalt.radar import config as config_module
+    from cobalt.taxonomy.loader import load_tunables
+
+    by_key = dict(load_tunables().by_key)
+    by_key["radar.finviz_rpm"] = by_key["radar.finviz_rpm"].model_copy(update={"value": value})
+    monkeypatch.setattr(config_module, "load_tunables", lambda: SimpleNamespace(by_key=by_key))
+    with pytest.raises(RadarConfigError, match="radar.finviz_rpm"):
+        check()
+
+
 def test_radar_check_prints_radar_finviz_rpm_37(capsys):
     """L10: the dry-run `uv run cobalt radar check` prints the key."""
     command(None)

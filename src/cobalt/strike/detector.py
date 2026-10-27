@@ -15,7 +15,8 @@ A TICK, only in PREMARKET or RTH:
    ARMED transition (DECISION D4); every card left out is logged by name;
 4. THE INTERVAL (DECISION D2): `poll_interval(names, headroom_rpm, floor_s)
    = max(floor_s, ⌈names × 60 / headroom_rpm⌉)`, the headroom being
-   `radar.finviz_max_rpm` less the radar's planned rpm; the strike demand,
+   `radar.finviz_max_rpm` less the radar's cap `radar.finviz_rpm` and
+   refresh's `REFRESH_BURST_RPM` (`read_plan`, R2513); the strike demand,
    names × 60 / interval rpm, is counted as one more consumer by
    `check_scheduled_demand("strike", …)`. A refusal, an unreadable plan or
    no headroom → logged loud, no GET this tick;
@@ -47,7 +48,7 @@ from loguru import logger
 from cobalt.archiver.collector import scrub
 from cobalt.archiver.models import Interval
 from cobalt.cards.models import Actor, CardState, IllegalTransition
-from cobalt.radar.collector import TokenBucket
+from cobalt.radar.collector import TokenBucket, radar_bucket_rpm
 from cobalt.radar.notes import RadarNoteError, TotalDemand
 from cobalt.session.models import Session
 
@@ -61,6 +62,11 @@ CONTRACT_KEYS = (
     "via", "policy", "entry", "cross_price", "bar_ts", "bar_close_at", "seen_at", "cadence_s", "def_md5",
     "card_def_md5",
 )
+#: Refresh's GETs in its one minute (f4-strike-reserve R6, brain R2513): the
+#: strike loop's headroom leaves them free. Pinned equal to
+#: `cobalt.prefill.daily.REFRESH_GETS` by a test; `strike/` never imports
+#: `cobalt.prefill`.
+REFRESH_BURST_RPM = 3
 
 
 @dataclass(frozen=True)
@@ -109,12 +115,15 @@ def poll_interval(names: int, headroom_rpm: Optional[float], floor_s: int) -> in
 
 
 def check_strike_demand(names: int, interval_s: int, planned_rpm: Optional[float]) -> TotalDemand:
-    """The strike loop as one more consumer of the ONE shared ceiling (L53)."""
+    """The strike loop as one more consumer of the ONE shared ceiling (L53).
+    The radar is counted at `min(planned, radar.finviz_rpm)`: its bucket
+    cannot send above its cap in a minute (R6 (b))."""
     from cobalt.radar.notes import DemandConsumer, check_scheduled_demand, radar_window
 
     consumer = DemandConsumer(name="strike", rpm=names * 60 / interval_s, window=radar_window(),
                               basis=f"{names} ARMED names x 60 / {interval_s} s")
-    return check_scheduled_demand("strike", radar_rpm=planned_rpm, extra=[consumer])
+    radar_rpm = None if planned_rpm is None else min(planned_rpm, radar_bucket_rpm())
+    return check_scheduled_demand("strike", radar_rpm=radar_rpm, extra=[consumer])
 
 
 def contract(*, via: str, cross: Cross, entry: Decimal, seen_at: datetime, cadence_s: int, def_md5: Optional[str],
@@ -311,12 +320,25 @@ class StrikeDetector:
 
 
 def read_plan() -> DemandPlan:
-    """The radar's planned rpm and headroom, from its notes (read only)."""
+    """The radar's planned rpm, from its notes (read only), and the strike
+    loop's headroom: the ceiling less the radar's CAP and refresh's GETs
+    (brain R2513), never less the radar's planned rpm — so the strike
+    cadence does not move with the radar's plan. None when the plan is
+    unreadable; the radar's own headroom when it is ≤ 0 (a radar over the
+    ceiling leaves none). An unreadable cap raises `SourceFailure`."""
     from cobalt.radar.notes import configured_sources
+    from cobalt.taxonomy.loader import load_tunables
 
     parsed = configured_sources()
     demand = parsed.demand
-    return DemandPlan(planned_rpm=parsed.planned_rpm, headroom_rpm=demand.headroom_rpm if demand else None)
+    if parsed.planned_rpm is None or demand is None:
+        return DemandPlan(planned_rpm=parsed.planned_rpm, headroom_rpm=None)
+    if demand.headroom_rpm <= 0:
+        return DemandPlan(planned_rpm=parsed.planned_rpm, headroom_rpm=demand.headroom_rpm)
+    by_key = load_tunables().by_key
+    cap = radar_bucket_rpm(by_key)
+    headroom = float(by_key["radar.finviz_max_rpm"].value - cap - REFRESH_BURST_RPM)
+    return DemandPlan(planned_rpm=parsed.planned_rpm, headroom_rpm=headroom)
 
 
 async def build_detector() -> StrikeDetector:
@@ -351,6 +373,6 @@ async def build_detector() -> StrikeDetector:
 
 
 __all__ = [
-    "CONTRACT_KEYS", "DemandPlan", "IntervalRefused", "StrikeCard", "StrikeDetector", "TickReport", "VIA_MISSED",
-    "VIA_TRIGGERED", "build_detector", "check_strike_demand", "contract", "poll_interval", "read_plan",
+    "CONTRACT_KEYS", "DemandPlan", "IntervalRefused", "REFRESH_BURST_RPM", "StrikeCard", "StrikeDetector", "TickReport",
+    "VIA_MISSED", "VIA_TRIGGERED", "build_detector", "check_strike_demand", "contract", "poll_interval", "read_plan",
 ]
