@@ -1334,6 +1334,23 @@ OFF-LADDER work of 2026-10-26 (each with the ruling that ordered it):
 | Radar-mirror-scope port3 and port4 | port3 FAILED, port4 DONE-LIVE | Brain R2458, R2507 (L79); R2509 build GO. See rows above. |
 | Card 1049-C strike reserve | BUILDING | His "C as you recommend" (R2512). Build `75e3835b` (R2529). |
 
+### Status 2026-10-27
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1027` for 10-27 alone from `reports/cto-2026-10-27.md` rows R2541–R2558 (00:30 → 07:12 ET); tag check (L35): `git tag --list "deploy-2026-10-27*"` = none (the 00:30 deploy carries the 10-26 tag above). The 10-26 close ran (`CLOSE PUSHED cbc7a276`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-26). F21 production genesis import: no card, held for his memory/Scribe discussion (R2554). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) and X3 values | DONE-DARK | Plists stay unloaded. Owed: his legs X5, X7, X10, X12 (setup and click-paths ready, R2557). |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | Unchanged. Owed: X15 four legs. |
+| S5 F4 prefill (cards `778`, `1047`, `1049-C`) | DONE-LIVE (probe, reserve) · DONE-DARK (prefill-refresh) | Gate THIRD PASS: X15 OK, peak 50/min, 429: 0 on `0ea89b17` (R2551, `b1c3e0736`). The prefill-refresh plist stays unloaded until his X7 render and X9 Sync legs. |
+| S5 F23 playbook (cards `779`, `1046`) | DONE-DARK | Waits for his Keynote/PowerPoint opens (asked R2548); then SECOND PASS to f23-gate-run `ec994048` and bootstrap deploy 1051. |
+| S5 radar-mirror-scope port4 and settings restore | DONE-LIVE | Unchanged; radar.err clean on 10-27, cycle live 07:01 (R2557). Day-open 10-27 GREEN (R2558). |
+| S5 radar S5 evaluate / replay | DONE | `com.cobalt.replay` last finish 10-26 21:26 ET exit 0 (heartbeat 21:05 ET 10-27). |
+
+**Stop date: 2026-10-28 (S5, day 13 of 14). S5: AT RISK.** Reason: F5, F4 and F23 stay dark until his legs pass or are ruled (the brain waits on his time for one sitting); bootstrap deploys 1048 and 1051 wait on those legs; com.cobalt.agent is not loaded. No ruling moved a date (`cto-2026-10-27.md`).
+
+OFF-LADDER work of 2026-10-27: none (rows are desk records, day-open, the X15 third pass and its cleanup, all under the F4 ladder row; the F4 THIRD PASS probe was ordered by brain R2542, L79).
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

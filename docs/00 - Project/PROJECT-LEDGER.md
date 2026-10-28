@@ -5422,3 +5422,27 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-26*"` = `deploy-2026-10-26-f4-probe`, `deploy-2026-10-26-radar-mirror-scope-port4`.
 - STOP LINE (L35), `reports/close-2026-10-25.md`: `CLOSE PUSHED 8eca82c5`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-26.md` `## 8`.
+
+### 2026-10-27 — 1049-C deployed and X15 proven on it; day-open GREEN; his legs file ready; F4 plist stays unloaded
+
+- R2541 00:30 RECORD: 1049-C DEPLOYED `0ea89b17`, smoke GREEN, RESTARTS aset cos radar; close-1026 stopped; day file opened.
+- R2542 00:32 DESK RECORD (brain `9b07db5a`): brain idle on his time, not blocked; go on with F4 THIRD PASS; goal 5 added.
+- R2543 00:32 RECORD: REFRESH at 306k tokens; NOW rewritten.
+- R2544 00:34 RECORD: desk `dfaeff87` took over from `6a9cca19`; 4 rows reconciled.
+- R2545 00:34 LAUNCHED: drafter `7e4269af` (prompt 1077, draft-f4-gate-third).
+- R2546 00:40 RECORD: prompt 1078 DRAFTED (X15 only); 2 ASK DESKs answered by defaults.
+- R2547 00:41 LAUNCHED: preflight (prompt 1079, Sonnet) of 1078.
+- R2548 00:37 RECORD: ASKED him to open the F23 deck in Keynote and PowerPoint; then F23 SECOND PASS and bootstrap deploy 1051.
+- R2549 00:37 RECORD: preflight `726fd5e3` of 1078: 24 checks, 0 fails, ready YES.
+- R2550 00:38 LAUNCHED: probe seat f4-gate-third (prompt 1078, Opus 5.5).
+- R2551 00:45 RECORD: F4 gate THIRD PASS DONE: X15 OK, peak 50/min, 429: 0 on `0ea89b17` (`b1c3e0736`); plist stays unloaded.
+- R2552 00:46 RECORD: L46 cleanup DONE (f4-strike-reserve worktrees and branches removed); seat `c0827fe5` stopped.
+- R2553 00:55 DESK RECORD (brain): F23 render seat already ran (R2477); production genesis import card: none.
+- R2554 01:00 DESK RECORD (brain): F21 production genesis import held, his scope call; goal 5 DONE (`his-legs-ready-2026-10-27.md`).
+- R2555 07:01 LAUNCHED: day-open 10-27 in Qwen pane w2:p5 (standing order R1537).
+- R2556 07:02 RECORD: 06:00 check-in sent to the brain (late).
+- R2557 07:08 DESK RECORD (brain): G5 click-paths and cos DM leg written; G3 MET (radar.err no 429/ERROR/Traceback on 10-27).
+- R2558 07:12 RECORD: day-open 10-27 GREEN (C1-C6 PASS, radar pid 99054, 280 membership rows).
+- DEPLOY (L35): `git tag --list "deploy-2026-10-27*"` = none; the 00:30 deploy carries the 10-26 tag `deploy-2026-10-26-f4-strike-reserve`.
+- STOP LINE (L35), `reports/close-2026-10-26.md`: `CLOSE PUSHED cbc7a276`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-27.md` `## 8`.
