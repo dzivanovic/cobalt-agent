@@ -415,37 +415,41 @@ class TestMatchCheckAtTheSheet:
 
     def _stub_daymode(self, monkeypatch, *, attested, mode=None):
         cfg = _offline_daymode_config()
+        row = {"attested_sheet": attested} if attested else {}
         monkeypatch.setattr(
             web_module,
             "_daymode_state",
             lambda: {
                 "cfg": cfg,
                 "day": None,
-                "row": ({"attested_sheet": attested} if attested else {}),
+                "row": row,
                 "mode": mode or cfg.lowest_enabled,
                 "stage": "stage 1 (system rule)",
                 "error": None,
             },
         )
+        return row
 
     @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
-    def test_full_sheet_attested_on_a_reduced_day_refuses_the_card(self, monkeypatch):
-        """'He loads the full sheet on a half day -> card refused with
-        the reason' (Charter §3 F6)."""
-        self._stub_daymode(monkeypatch, attested="full.htk")
+    def test_full_sheet_attested_on_a_reduced_day_warns(self, monkeypatch):
+        """'He loads the full sheet on a half day' (Charter §3 F6) — R2563:
+        the warning is on the page and the card goes on to persistence."""
+        row = self._stub_daymode(monkeypatch, attested="full.htk")
+        before = dict(row)
         r = client.post("/size", data=BASE_SIZE_FORM)
-        assert "FAILED" in r.text
+        assert "never reach AsetStore" in r.text
         assert "sheet FULL loaded, day mode REDUCED" in r.text
         assert "reload half.htk or overrule" in r.text
-        assert "never reach AsetStore" not in r.text, "no card was written"
+        assert row == before
 
     @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
-    def test_nothing_attested_refuses_too(self, monkeypatch):
-        self._stub_daymode(monkeypatch, attested=None)
+    def test_nothing_attested_warns(self, monkeypatch):
+        row = self._stub_daymode(monkeypatch, attested=None)
+        before = dict(row)
         r = client.post("/size", data=BASE_SIZE_FORM)
-        assert "FAILED" in r.text
+        assert "never reach AsetStore" in r.text
         assert "No hotkey file attested" in r.text
-        assert "never reach AsetStore" not in r.text
+        assert row == before
 
     @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_a_key_outside_the_rung_is_refused(self, monkeypatch):
