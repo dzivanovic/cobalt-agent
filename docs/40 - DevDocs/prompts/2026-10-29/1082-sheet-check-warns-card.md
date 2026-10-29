@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-29.md R2563
 BRANCH: ops/sheet-check-warns
 WORKTREE: sheet-check-warns
 BASE: 78a6ab4a
-TIP:
+TIP: 01107570
 REPORT: /Users/cobalt/cobalt-wt/sheet-check-warns/docs/40 - DevDocs/reports/sheet-check-warns-build-2026-10-29.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/sheet-check-warns-check-2026-10-29.md
+HOUSE B: as needed
 BAND: MID
 RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar
 MIGRATIONS: none
