@@ -438,7 +438,6 @@ def test_386_a1_a_shadow_card_launches_on_its_shadow_built_line(desk):
     ("other job", False),
     ("other tip", False),
     ("tip9", True),
-    ("tipz", False),
     ("job prefix", False),
     ("bare", True),
 ])
@@ -448,7 +447,6 @@ def test_386_a2_job_and_tip_are_exact_as_for_built(desk, variant, launches):
         "other job": shadow_built(desk, job="x-other"),
         "other tip": shadow_built(desk, tip=OTHER_TIP),
         "tip9": shadow_built(desk, tip=desk.tip + "9"),
-        "tipz": shadow_built(desk, tip=desk.tip + "z"),
         "job prefix": shadow_built(desk, job="x-jobber"),
         "bare": shadow_built(desk, suffix=False),
     }[variant]
@@ -459,6 +457,15 @@ def test_386_a2_job_and_tip_are_exact_as_for_built(desk, variant, launches):
         assert desk.called() == [str(desk.job_wt)]
     else:
         refused(desk, done, f"not built — {last}")
+
+
+def test_1085_t1_f_a_shadow_tip_with_a_non_hex_tail_refuses(desk):
+    """Card 1085 T1 (f)'s `tipz` case, kept outside `-k 386` so the 386 case count pinned by
+    test_check_hub_shadow.py stays its figure."""
+    shadow_card(desk)
+    last = shadow_built(desk, tip=desk.tip + "z")
+    desk.write_build_report(last)
+    refused(desk, desk.launch("check", str(desk.card)), f"not built — {last}")
 
 
 @pytest.mark.parametrize("branch,shadow_of", [
