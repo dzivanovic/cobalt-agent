@@ -7,7 +7,7 @@ TIP: 011075704
 REPORT: /Users/cobalt/cobalt-wt/sheet-check-warns/docs/40 - DevDocs/reports/sheet-check-warns-build-2026-10-29.md
 CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/sheet-check-warns-check-2026-10-29.md
 HOUSE B: as needed
-BAND: MID
+BAND: HIGH
 RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar
 MIGRATIONS: none
 RULINGS: 2026-10-29 R2563
