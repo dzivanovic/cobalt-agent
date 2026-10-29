@@ -48,3 +48,6 @@ sheet FULL loaded, day mode REDUCED — reload reduced_day.htk or overrule
 
 Both refusals run in `POST /size` **before any write**, and both are
 logged: a refusal nobody can count is a rule nobody can review at the DRC.
+
+## 2026-10-29 — sheet-check-warns
+The sheet check warns, never refuses (R2563). `sheet_warning(row, mode, *, cfg=None) -> Optional[str]` returns `None` when the attested file's sheet is the mode's sheet, the mismatch sentence when it is not, and the "No hotkey file attested…" sentence when nothing is attested. It raises nothing of its own (`sheet_for_hotkey_file` still raises `ConfigError`). The grade check (`assert_grade_allowed`) still refuses a key outside the rung. An unresolved day mode still refuses. `note.py`'s note/selector conflict refusal is unchanged.

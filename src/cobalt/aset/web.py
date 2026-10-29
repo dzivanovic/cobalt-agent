@@ -54,7 +54,7 @@ from cobalt.daymode import (
     DayModeStore,
     SheetMismatch,
     assert_grade_allowed,
-    assert_sheet_matches,
+    sheet_warning,
     decided_or_stage1,
     load_daymode_config,
     stage2_open,
@@ -532,9 +532,10 @@ def _daymode_state() -> dict:
 
     Never raises: a config or database failure renders as a LOUD banner
     rather than a 500, because a sheet that will not paint is a sheet he
-    cannot trade beside. `error` being set is itself the refusal — every
-    card write re-checks through `assert_sheet_matches`, so a degraded
-    banner can never let a card through. A note/selector CONFLICT lands
+    cannot trade beside. `error` being set is itself the refusal — an
+    unresolved mode still refuses every card. The sheet check is
+    `sheet_warning`: a mismatch warns, and the card is still written.
+    A note/selector CONFLICT lands
     in the same `error` for the same reason.
     """
     try:
@@ -603,14 +604,14 @@ def _daymode_banner(dm: dict) -> str:
     keys = ", ".join(g.value for g in cfg.enabled_grades_for(mode))
     attested = (row or {}).get("attested_sheet")
 
-    # The match check, rendered. Same call the write path makes — the
-    # banner cannot say "matched" while the write path refuses.
-    try:
-        assert_sheet_matches(row, mode, cfg=cfg)
+    # The match check, rendered. Same call the write path makes: a
+    # mismatch or no attestation is a WARNING (R2563), not a refusal.
+    warning = sheet_warning(row, mode, cfg=cfg)
+    if warning is None:
         match_html = f'<span style="color:#24d986">✓ {e(attested)} matches</span>'
         klass = "mode"
-    except SheetMismatch as mismatch:
-        match_html = f'<b style="color:#ff8ea4">⚠ {e(str(mismatch))}</b>'
+    else:
+        match_html = f'<b style="color:#ff8ea4">⚠ {e(warning)}</b>'
         klass = "mode mismatch"
 
     reason = (row or {}).get("reason") or ""
@@ -964,8 +965,8 @@ def api_health():
     cfg = dm["cfg"]
     return {
         # False iff the banner is a refusal: an error was caught, or
-        # there is no mode — which is the same thing to a trader, since
-        # `assert_sheet_matches` refuses every card either way.
+        # there is no mode. An unresolved mode still refuses every card.
+        # `sheet_warning` does not: a sheet mismatch warns, the card is written.
         "ok": not dm["error"] and not dm.get("account_error") and mode is not None,
         "day": str(dm["day"]) if dm["day"] else None,
         "mode": mode,
@@ -1022,15 +1023,16 @@ async def size(request: Request) -> str:
             inp, sheet_modes_cfg.enabled_grades, cfg.validation.max_stop_distance_pct
         )
 
-        # F6, part 2: the MATCH CHECK — "the loaded .htk is checked
-        # against the mode and mismatch refuses cards" (Charter §3 F6).
-        # Still ahead of every write: nothing has been persisted at this
-        # point, so a refusal here leaves no row and no note to unwind.
-        # Two separate refusals — the attested sheet must BE the mode in
-        # force, and the key must be one the rung permits (reduced is
-        # B-only). Both are logged: a refusal nobody can count is a rule
-        # nobody can review at the DRC.
-        assert_sheet_matches(dm["row"], dm["mode"], cfg=dm["cfg"])
+        # F6, part 2: the MATCH CHECK warns (R2563). The attested `.htk`
+        # is his word, not a read of DAS. A mismatch or no attestation
+        # is a warning on the card; the write still happens, and this
+        # path does not write `day_modes.attested_sheet`. The grade
+        # check still refuses a key the rung does not permit.
+        sheet_warn = sheet_warning(dm["row"], dm["mode"], cfg=dm["cfg"])
+        if sheet_warn:
+            logger.warning(
+                "aset.card SHEET WARNING (F6, attested not read): {}", sheet_warn
+            )
         assert_grade_allowed(inp.grade, dm["mode"], cfg=dm["cfg"])
     except SheetMismatch as e:
         logger.error("aset.card REFUSED (F6 match check): {}", e)
@@ -1040,6 +1042,12 @@ async def size(request: Request) -> str:
     except Exception as e:
         return _render(banner=_failed(f"{type(e).__name__}: {e}"), form=form)
 
+    sheet_line = (
+        f'<div class="warn">⚠ .htk: {html.escape(sheet_warn)} (attested, not read)</div>'
+        if sheet_warn
+        else ""
+    )
+
     try:
         store = AsetStore()
         store.ensure_schema()
@@ -1047,7 +1055,8 @@ async def size(request: Request) -> str:
         form["account_mode"] = store.account_mode_for(row_id)
     except Exception as e:
         return _render(
-            banner=_failed(f"Persistence FAILED: {type(e).__name__}: {e}"), form=form
+            banner=sheet_line + _failed(f"Persistence FAILED: {type(e).__name__}: {e}"),
+            form=form,
         )
 
     try:
@@ -1055,7 +1064,7 @@ async def size(request: Request) -> str:
     except DailyNoteRefused as e:
         form["orig_timestamp"] = ""
         form["card_row_id"] = str(row_id)
-        banner = _failed(
+        banner = sheet_line + _failed(
             f"Persisted: aset_sizings id {row_id} ({store.db_name}) — but "
             f"daily-note write FAILED: {e}"
         )
@@ -1073,21 +1082,21 @@ async def size(request: Request) -> str:
                 "trade_def_slug": None}
         trade_path, trade_action = upsert_trade_note(card, when, prefill_paths, entry_price=inp.entry)
     except (PrefillConfigError, VaultWriteError) as e:
-        banner = _failed(
+        banner = sheet_line + _failed(
             f"Persisted: aset_sizings id {row_id} ({store.db_name}) — daily note "
             f"appended to {note_path} — but trade-note write FAILED: {e}"
         )
         return _render(banner=banner, result=_result_card(result, form), form=form)
 
     if note_write is None:
-        banner = (
+        banner = sheet_line + (
             f'<div class="warn">Persisted: aset_sizings id {row_id} '
             f"({html.escape(store.db_name)}) · trade note {trade_action}: "
             f"{html.escape(str(trade_path))} · ⚠ DAILY-NOTE WRITE IS DISABLED "
             "(daily_note.write_enabled=false) — this card is NOT in the journal.</div>"
         )
     else:
-        banner = (
+        banner = sheet_line + (
             f'<div class="saved">Persisted: aset_sizings id {row_id} ({html.escape(store.db_name)}) '
             f"· {html.escape(note_write.action)} in {html.escape(str(note_path))} "
             f"(unit {html.escape(note_write.unit or '')}) "
@@ -1767,8 +1776,13 @@ async def radar_card_key(card_id: int, request: Request):
         except ValueError:
             return _refused(422, f"not a key: {raw!r} (keys: A+, A, B, C, pass)")
         dm = _todays_rung()
-        # F6 unchanged: the attested .htk must be the sheet in force.
-        assert_sheet_matches(dm["row"], dm["mode"], cfg=dm["cfg"])
+        # F6 (R2563): the attested .htk is checked and a mismatch warns;
+        # the tap still goes on. Attested, not read.
+        sheet_warn = sheet_warning(dm["row"], dm["mode"], cfg=dm["cfg"])
+        if sheet_warn:
+            logger.warning(
+                "aset.card SHEET WARNING (F6, attested not read): {}", sheet_warn
+            )
         cfg = load_config()
         card = store.radar_card(card_id)
         sizing = size_at_key(
@@ -1795,9 +1809,11 @@ async def radar_card_key(card_id: int, request: Request):
         return JSONResponse(status_code=500, content={
             "status": "FAILED", "persisted": written,
             "reason": f"key sized and persisted, but the daily-note write FAILED: {e}",
+            "sheet_warning": sheet_warn,
         })
     return {"status": "ok", **written, "note": str(note_path),
-            "note_write": None if note_write is None else note_write.action}
+            "note_write": None if note_write is None else note_write.action,
+            "sheet_warning": sheet_warn}
 
 
 @app.post("/radar/card/{card_id}/dot/{factor}")

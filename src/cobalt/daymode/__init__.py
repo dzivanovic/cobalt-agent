@@ -6,7 +6,8 @@
 * `propose.py` — stage 1 is a system rule (lowest enabled, no input
   asked); stage 2 is the 09:00 proposal with an assembled reason.
 * `match.py`   — the loaded `.htk` is ATTESTED, never read (Cobalt does
-  not touch DAS), and a mismatch refuses card creation.
+  not touch DAS). A mismatch or no attestation is a WARNING on the
+  sheet and the card (R2563), not a refusal.
 * `store.py`   — one `day_modes` row per trading day; stage 1 has none.
 * `note.py`    — the daily note's sheet-mode line, BOTH ways: Cobalt
   writes the decided mode + attestation as an L28 unit, and a checkbox
@@ -24,7 +25,7 @@ from .config import (
     StepDown,
     load_daymode_config,
 )
-from .match import SheetMismatch, assert_grade_allowed, assert_sheet_matches
+from .match import SheetMismatch, assert_grade_allowed, sheet_warning
 from .note import NoteAttestation, NoteAttestationConflict
 from .propose import (
     BAND_MAX_KEY,
@@ -59,7 +60,7 @@ __all__ = [
     "Proposal",
     "SheetMismatch",
     "assert_grade_allowed",
-    "assert_sheet_matches",
+    "sheet_warning",
     "decided_or_stage1",
     "load_daymode_config",
     "prior_trading_day",
