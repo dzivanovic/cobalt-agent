@@ -2129,9 +2129,19 @@ check)
     if [ -z "$pass2" ]; then
         [ -f "$report" ] || refuse "not built — no build report: $report"
         last=$(grep -v '^[[:space:]]*$' "$report" | tail -n 1)
+        # card 1085: the stop-line tip is the card TIP or the TIP plus hex (git's 9-hex form) up to
+        # the next space or the end of the line, nothing looser
+        tiptail=""
         case "$last" in
-            "BUILT · job: $job · tip: $tip"|"BUILT · job: $job · tip: $tip "*) ;;
-            "SHADOW BUILT · job: $job · tip: $tip"|"SHADOW BUILT · job: $job · tip: $tip "*)
+            "BUILT · job: $job · tip: $tip"*) tiptail=${last#"BUILT · job: $job · tip: $tip"} ;;
+            "SHADOW BUILT · job: $job · tip: $tip"*) tiptail=${last#"SHADOW BUILT · job: $job · tip: $tip"} ;;
+        esac
+        case "${tiptail%% *}" in
+            *[!0-9a-f]*) refuse "not built — $last" ;;
+        esac
+        case "$last" in
+            "BUILT · job: $job · tip: $tip"*) ;;
+            "SHADOW BUILT · job: $job · tip: $tip"*)
                 [ -n "$shadow" ] || refuse "not built — $last" ;;
             *) refuse "not built — $last" ;;
         esac

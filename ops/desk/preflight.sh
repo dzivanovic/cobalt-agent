@@ -282,11 +282,19 @@ if [ "$kind" = check ]; then
                 esac
                 ;;
             # card 386 L5: a shadow card's SHADOW-HUB stop line carries no self-check field
-            "SHADOW BUILT · job: $job · tip: $tip"|"SHADOW BUILT · job: $job · tip: $tip "*)
-                if [ -n "$shadow" ]; then
-                    ok=0
-                    k=3
-                fi
+            # card 1085: the tip is the card TIP or the TIP plus hex (git's 9-hex form) up to the next
+            # space or the end of the line, as the launcher admits it; nothing looser
+            "SHADOW BUILT · job: $job · tip: $tip"*)
+                tiptail=${last#"SHADOW BUILT · job: $job · tip: $tip"}
+                case "${tiptail%% *}" in
+                    *[!0-9a-f]*) ;;
+                    *)
+                        if [ -n "$shadow" ]; then
+                            ok=0
+                            k=3
+                        fi
+                        ;;
+                esac
                 ;;
         esac
         row report "tail -n 3 \"$report\"" 0 "$last" "$ok"
