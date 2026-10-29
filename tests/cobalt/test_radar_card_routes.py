@@ -132,6 +132,24 @@ def test_nothing_attested_warns(cards, monkeypatch):
     assert "No hotkey file attested" in body["sheet_warning"]
 
 
+def test_the_daily_note_failure_answer_carries_the_sheet_warning(cards, monkeypatch):
+    """W2: the 500 answer after a persisted tap carries the warning too."""
+    from cobalt.aset.daily_note import DailyNoteRefused
+
+    def _refuse(cfg, result, when=None, **kw):
+        raise DailyNoteRefused("constructed refusal")
+
+    monkeypatch.setattr(web_module, "_daymode_state", lambda: {
+        "cfg": SETTINGS.daymode, "mode": "reduced", "row": {"attested_sheet": "full.htk"}, "error": None,
+    })
+    monkeypatch.setattr(web_module, "save_card", _refuse)
+    response = client.post("/radar/card/1/key", data={"grade": "A"})
+    assert response.status_code == 500, response.text
+    body = response.json()
+    assert "reload half.htk" in body["sheet_warning"]
+    assert [c[0] for c in cards.calls] == ["tap_key"]
+
+
 def test_pass_moves_watch_to_passed_by_you(cards):
     response = client.post("/radar/card/1/key", data={"grade": "pass"})
     assert response.status_code == 200
