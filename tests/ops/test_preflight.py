@@ -451,6 +451,16 @@ def test_386_c1_a_shadow_check_whose_report_ends_shadow_built_passes(job):
     assert "(recorded)" not in done.stdout
 
 
+def test_1085_a2_a_shadow_check_with_a_nine_hex_tip_passes(job):
+    """Card 1085: git's 9-hex form of the tip on the SHADOW BUILT line passes as the launcher admits it."""
+    wt, repo, job_wt, base, card, env = job
+    tip = built(job_wt, SHADOW_LAST.replace("tip: {tip}", "tip: {tip}9"))
+    write_shadow_card(card, job_wt, base, tip)
+    done = preflight(env, "check", card)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert last_line(done) == "PREFLIGHT OK"
+
+
 @pytest.mark.parametrize("last,branch,shadow_of", [
     (SHADOW_LAST, "ops/x-job", False),                                    # a non-shadow card
     (SHADOW_LAST, "ops/x-job", True),                                     # SHADOW OF, BRANCH not shadow/
@@ -459,7 +469,7 @@ def test_386_c1_a_shadow_check_whose_report_ends_shadow_built_passes(job):
     (SHADOW_LAST.replace("job: x-job", "job: x-other"), "shadow/x-job", True),
     (SHADOW_LAST.replace("job: x-job", "job: x-jobber"), "shadow/x-job", True),
     (SHADOW_LAST.replace("tip: {tip}", "tip: 0000beef"), "shadow/x-job", True),
-    (SHADOW_LAST.replace("tip: {tip}", "tip: {tip}9"), "shadow/x-job", True),
+    (SHADOW_LAST.replace("tip: {tip}", "tip: {tip}z"), "shadow/x-job", True),
 ])
 def test_386_c2_a_shadow_built_line_off_a_shadow_card_or_of_another_job_or_tip_fails(job, last, branch, shadow_of):
     wt, repo, job_wt, base, card, env = job
