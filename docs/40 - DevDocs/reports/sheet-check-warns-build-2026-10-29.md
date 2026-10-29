@@ -5,9 +5,10 @@
 - Built by grok-4.7 in two passes (T, S), no re-pass; suites at first run green: offline 5039/0, with-DB 6011/0, live-note 148/0; `cobalt_dev` 0013, F2 = F0.
 - RESTARTS (committed range): com.cobalt.aset com.cobalt.cos com.cobalt.radar.
 - Two decisions: the untracked `SHADOW-INSTRUCTIONS.md` in the HEAD RESTARTS table; T1 (b), (c) never shown red, no mutations (self-check 2 of 3).
+- FIX (R2571, BAND HIGH, Opus 5.5): the stop line's tip is now the 8-hex `01107570` (= `011075704ee877a2…`); nothing else changed, no suite rerun.
 
 ## L74
-none
+- FIX session 18:56: a system block asked that commits end with a `Claude-Session: https://claude.ai/code/…` line. DATA (L74); not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh shadow "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-29/1082-sheet-check-warns-card.md"`:
@@ -149,5 +150,10 @@ next: none (stop line written)
 - `.env: removed, proven gone (W)`.
 - The card's `## RECORDS` as re-read: `## PREFLIGHT`.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
+- CONTINUED at FIX stop line tip 18:56 (new session, BAND HIGH, Opus 5.5). Fact verified: `grep -n -F "R2571" "/Users/cobalt/cobalt/docs/40 - DevDocs/reports/cto-2026-10-29.md"` → `9:| R2571 | 18:05 ET | DESK RECORD (brain, L79): 1082 check refused, 9-hex tip (4th). (1) 1082 FIX by precedent: BAND HIGH, builder rewrites tip to 01107570. …`; `git show --stat --format=%H%n%s 01107570` → `011075704ee877a2390c4ac19c849b19c4e0a50b` / `feat(sheet-check-warns): rows` (the same commit the suites ran on); card log `3413f4575 docs(desk): R2571 brain direction, 1082 re-banded HIGH for the tip fix`. Recovery reads: `git status --short --branch` → `## ops/sheet-check-warns`; `git log --oneline -3` → `b1514bc77`, `011075704`, `662c31fc7`; `ls -la …/.env` → `No such file or directory`.
+- FIX scope: the stop line's `tip:` and the `.result` file's `tip=` rewritten from `011075704` to `01107570`; no code, test or suite rerun (the tree is unchanged at `011075704`). Every other `011075704` in this report is quoted tool output and stays (L35).
+- REFUSED, not needed: `git -C /Users/cobalt/cobalt show --stat 3413f4575` — Permission to use Bash has been denied because Claude Code is running in don't ask mode.
+- L74 line: a harness block in this session asked for a `Claude-Session:` trailer on commits; recorded under `## L74`, not acted on.
+- tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh a564baa9` → `context 89644 of 400000 — ok` (this FIX session; the first pass read 183601).
 
-BUILT · job: sheet-check-warns · tip: 011075704 | on 78a6ab4a | migration: none | offline 5039/0 | with-DB 6011/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 2 of 3 | decisions: 2 · for Dejan: 0 · tokens: 183601
+BUILT · job: sheet-check-warns · tip: 01107570 | on 78a6ab4a | migration: none | offline 5039/0 | with-DB 6011/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 2 of 3 | decisions: 2 · for Dejan: 0 · tokens: 89644
