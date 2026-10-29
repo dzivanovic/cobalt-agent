@@ -2,7 +2,7 @@ JOB: launcher-tip-prefix
 LADDER: OFF-LADDER — reports/cto-2026-10-29.md R2571
 BRANCH: ops/launcher-tip-prefix
 WORKTREE: launcher-tip-prefix
-BASE: «FILL: 8-hex main commit the branch is cut from»
+BASE: 4f1c991f
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/launcher-tip-prefix/docs/40 - DevDocs/reports/launcher-tip-prefix-build-2026-10-29.md
 CHECK REPORT:
