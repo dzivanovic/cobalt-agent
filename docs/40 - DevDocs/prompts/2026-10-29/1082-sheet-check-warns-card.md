@@ -2,7 +2,7 @@ JOB: sheet-check-warns
 LADDER: OFF-LADDER — reports/cto-2026-10-29.md R2563
 BRANCH: ops/sheet-check-warns
 WORKTREE: sheet-check-warns
-BASE: «FILL: 8-hex commit on main before this job's first commit»
+BASE: 78a6ab4a
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/sheet-check-warns/docs/40 - DevDocs/reports/sheet-check-warns-build-2026-10-29.md
 CHECK REPORT:
@@ -10,7 +10,7 @@ HOUSE B:
 BAND: MID
 RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar
 MIGRATIONS: none
-RULINGS: «FILL: the desk's rows binding this job»
+RULINGS: cto-2026-10-29.md R2563 (his: all day modes enabled; desk reading A: the sheet check warns, never refuses)
 
 ## ROWS
 
@@ -57,7 +57,7 @@ ORDER: T1 (its RED run), M1, W1, W2, W3, the touched files' offline run `uv run 
 - the web module is on the tree · `ls /Users/cobalt/cobalt/src/cobalt/aset/web.py` · exit 0, listed
 
 ## RECORDS
-- HITL: the sheet check is his own trading check (Charter §3 F6, `match.py:3-5`); the change is ruled, R2563 (`cto-2026-10-29.md:10`), the desk's reading A.
+- HITL: the sheet check is his own trading check (Charter §3 F6, `match.py:3-5`); the change is ruled, R2563 (`cto-2026-10-29.md:13`), the desk's reading A.
 - Two card paths refuse on `SheetMismatch` from the sheet check (`git grep -n "assert_sheet_matches" main -- src`): `web.py:1033` (`/size`), `web.py:1771` (radar key); plus the banner `web.py:609`. Other `SheetMismatch` raises in `web.py` (`:1012`, `:1241`, `:1247`, `:1745`) are not the sheet check.
 - `git grep -c -F "assert_sheet_matches(" main -- src/cobalt/aset/web.py` → `3`; `… src/cobalt/daymode/match.py` → `1`.
 - RESTARTS reading: `cobalt.daymode` is imported by `src/cobalt/aset/*`, `src/cobalt/radar/runner.py`, `src/cobalt/radar/evaluate.py`, `src/cobalt/prefill/daily.py`, `src/cobalt/heartbeat/runner.py` (git grep, main); `prefill/daily.py` derived `com.cobalt.aset com.cobalt.cos com.cobalt.radar` (card 1049 R5). R1's table is the record.
