@@ -10,7 +10,7 @@ HOUSE B:
 BAND: MID
 RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar
 MIGRATIONS: none
-RULINGS: 2026-10-29 R2563 (cto-2026-10-29.md; his: all day modes enabled; desk reading A: the sheet check warns, never refuses)
+RULINGS: 2026-10-29 R2563
 
 ## ROWS
 
