@@ -111,6 +111,8 @@ def test_a_second_run_changes_nothing(desk):
         STOP.replace("job: x-job", "job: x-jobber"),
         STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4"),
         STOP.replace("tip: 1a2b3c4d", "tip: 1A2B3C4D"),
+        STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4dz"),
+        STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4d9z"),
         "(run in progress — next step under ## CONTINUE)",
     ],
 )
@@ -174,6 +176,15 @@ def test_386_e1_a_shadow_card_is_filled_from_its_shadow_built_line(desk):
     assert "TIP: → TIP: 1a2b3c4d" in done.stdout
 
 
+def test_1085_f1_a_nine_hex_shadow_line_fills_the_eight_hex_tip(desk):
+    card, report, reports, env = desk
+    make_shadow(card)
+    report.write_text("# build\n\n## RECORDS\n\n" + SHADOW_STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4d5") + "\n\n")
+    done = fill(str(card), env=env)
+    assert done.returncode == 0, done.stderr
+    assert "TIP: 1a2b3c4d" in card.read_text().split("\n")
+
+
 @pytest.mark.parametrize(
     "last,branch,shadow_of",
     [
@@ -184,7 +195,7 @@ def test_386_e1_a_shadow_card_is_filled_from_its_shadow_built_line(desk):
         (SHADOW_STOP.replace("job: x-job", "job: x-other"), "shadow/x-job", "header"),
         (SHADOW_STOP.replace("job: x-job", "job: x-jobber"), "shadow/x-job", "header"),
         (SHADOW_STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4"), "shadow/x-job", "header"),
-        (SHADOW_STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4d5"), "shadow/x-job", "header"),
+        (SHADOW_STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4dz"), "shadow/x-job", "header"),
         (STOP.replace("self-check: 3 of 3", "self-check: 2 of 3"), "ops/x-job", "none"),
     ],
 )
