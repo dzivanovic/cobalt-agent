@@ -124,6 +124,14 @@ def test_a_report_not_ending_in_a_full_built_line_of_this_job_is_refused(desk, l
     assert card.read_bytes() == before
 
 
+def test_1085_check_o1_a_nine_hex_built_line_fills_the_eight_hex_tip(desk):
+    card, report, reports, env = desk
+    report.write_text("# build\n\n## RECORDS\n\n" + STOP.replace("tip: 1a2b3c4d", "tip: 1a2b3c4d9") + "\n\n")
+    done = fill(str(card), env=env)
+    assert done.returncode == 0, done.stderr
+    assert "TIP: 1a2b3c4d" in card.read_text().split("\n")
+
+
 def test_a_card_with_no_report_is_refused(desk):
     card, report, reports, env = desk
     card.write_text(card.read_text().replace(f"REPORT: {report}\n", ""))
