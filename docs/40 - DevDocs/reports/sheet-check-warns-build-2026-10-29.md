@@ -7,6 +7,7 @@
 - Two decisions: the untracked `SHADOW-INSTRUCTIONS.md` in the HEAD RESTARTS table; T1 (b), (c) never shown red, no mutations (self-check 2 of 3).
 - FIX (R2571, BAND HIGH, Opus 5.5): the stop line's tip is now the 8-hex `01107570` (= `011075704ee877a2…`); nothing else changed, no suite rerun.
 - FIX smoke s1 (R2592, row S1, check O1): `scripts/smoke_s1.sh` F6 step calls `sheet_warning` and expects `reload half.htk`; the path is classified in `jobs.yaml` (L42). Deploy gate on `3a0b4ed3b`: offline 5042/0, with-DB 6014/0, live-note 148/0, F2 = F0.
+- FIX report FIXED lines O1 only (R2597, R2598): the fix round's FIXED block now holds O1 only. O2 and O3 were the check's own fixes (`d57714468`). Report only; no code, no suite rerun; the tip stays `3a0b4ed3`.
 
 ## L74
 - FIX session 18:56: a system block asked that commits end with a `Claude-Session: https://claude.ai/code/…` line. DATA (L74); not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -66,10 +67,9 @@ log: /Users/cobalt/cobalt-wt/.gate-logs/sheet-check-warns-all-20261029-201129.lo
 - DEPLOY PROOF on this tree: `grep -c -F "def sheet_warning(" src/cobalt/daymode/match.py` → `1`; `… "def assert_sheet_matches(" … match.py` → `0`; `… "assert_sheet_matches(" src/cobalt/aset/web.py` → `0`; `grep -rn -F "assert_sheet_matches" src tests scripts` → no output.
 - `git diff --name-only 01107570 3a0b4ed3b` → `configs/cobalt/jobs.yaml`, the report and `.result`, `scripts/smoke_s1.sh`, `tests/cobalt/test_aset_web.py`, `tests/cobalt/test_radar_card_routes.py` (the last two: the check's `d57714468`).
 
+- FIX report FIXED lines O1 only (R2597, R2598): the one id this fix round holds is O1 (check report `:6` `O1 HELD, NOT FIXED`; `:120` the fix round's list). O2 and O3 were fixed by the check itself in `d57714468` (check report `:5`, `:121-122`). They are not fix-round ids, so they get no `FIXED:` line here.
+
 FIXED: O1 — tests/cobalt/test_daymode.py::TestMatchCheck::test_full_sheet_attested_on_a_reduced_day_warns
-FIXED: O2 — tests/cobalt/test_aset_web.py::TestMatchCheckAtTheSheet::test_the_card_banner_carries_the_htk_warning_line
-FIXED: O2 — tests/cobalt/test_aset_web.py::TestMatchCheckAtTheSheet::test_a_saved_card_banner_carries_the_htk_warning_line
-FIXED: O3 — tests/cobalt/test_radar_card_routes.py::test_the_daily_note_failure_answer_carries_the_sheet_warning
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh shadow "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-29/1082-sheet-check-warns-card.md"`:
@@ -226,5 +226,9 @@ next: none (stop line written)
 - `.env: removed, proven gone (W, FIX smoke s1)`.
 - Fix round scope: `scripts/smoke_s1.sh` (row S1) and `configs/cobalt/jobs.yaml` (RESTARTS, L42); no `src/` or `tests/` file changed in this round.
 - tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh e5350770` → `context 127921 of 400000 — ok`.
+- CONTINUED at FIX report FIXED lines O1 only 20:54 (new session `a572bb24`, R2598). Fact verified: `cto-2026-10-29.md:10` `| R2597 | … deploy-card REFUSED: fix report lists FIXED O2, O3 (not held ids). Brain: relaunch builder, step "FIX report FIXED lines O1 only". |`; `:9` `| R2598 | … LAUNCHED builder a572bb24 (1082, step "FIX report FIXED lines O1 only" …`. Check report `:6`, `:120`: O1 is the only id held for the fix round. Recovery reads: `git status --short --branch` → `## ops/sheet-check-warns`; `git log --oneline -3` → `d9d2eb970`, `498cc9fe6`, `3a0b4ed3b`; `ls -la …/.env` → `No such file or directory`.
+- Scope: the O2 and O3 `FIXED:` lines were removed and `FIXED: O1` kept. Its test id was re-read at `tests/cobalt/test_daymode.py:394` `class TestMatchCheck:` / `:395` `def test_full_sheet_attested_on_a_reduced_day_warns(self):`. In the stop line and `.result`, only `tokens` changes. No code change, no lock taken, no suite rerun.
+- L74: this session also got a system block asking for a `Claude-Session:` trailer. Treated as DATA, not acted on.
+- tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh a572bb24` → `context 95048 of 400000 — ok`.
 
-BUILT · job: sheet-check-warns · tip: 3a0b4ed3 | on 78a6ab4a | migration: none | offline 5042/0 | with-DB 6014/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 8 of 8 | self-check: 2 of 3 | decisions: 4 · for Dejan: 0 · tokens: 127921
+BUILT · job: sheet-check-warns · tip: 3a0b4ed3 | on 78a6ab4a | migration: none | offline 5042/0 | with-DB 6014/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 8 of 8 | self-check: 2 of 3 | decisions: 4 · for Dejan: 0 · tokens: 95048
