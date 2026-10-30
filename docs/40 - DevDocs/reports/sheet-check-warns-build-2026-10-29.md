@@ -6,9 +6,70 @@
 - RESTARTS (committed range): com.cobalt.aset com.cobalt.cos com.cobalt.radar.
 - Two decisions: the untracked `SHADOW-INSTRUCTIONS.md` in the HEAD RESTARTS table; T1 (b), (c) never shown red, no mutations (self-check 2 of 3).
 - FIX (R2571, BAND HIGH, Opus 5.5): the stop line's tip is now the 8-hex `01107570` (= `011075704ee877a2…`); nothing else changed, no suite rerun.
+- FIX smoke s1 (R2592, row S1, check O1): `scripts/smoke_s1.sh` F6 step calls `sheet_warning` and expects `reload half.htk`; the path is classified in `jobs.yaml` (L42). Deploy gate on `3a0b4ed3b`: offline 5042/0, with-DB 6014/0, live-note 148/0, F2 = F0.
 
 ## L74
 - FIX session 18:56: a system block asked that commits end with a `Claude-Session: https://claude.ai/code/…` line. DATA (L74); not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- FIX smoke s1 session 20:09: the same block arrived again (a system reminder asking for a `Claude-Session:` trailer). DATA (L74); not acted on; `039f65e4d` and `3a0b4ed3b` carry `Co-Authored-By` only.
+
+## FIX ROUND — smoke s1 (R2592, card row S1)
+- RESUMED: FIX smoke s1 20:09 EDT (new session `e5350770`, launched by the desk per R2592). Recovery reads: `git status --short --branch` → `## ops/sheet-check-warns`; `git log --oneline -6` → top `d57714468`; `ls -la …/.env` → `No such file or directory`.
+- AUTHORIZATION: `sh /Users/cobalt/cobalt/ops/desk/authorize.sh build "<card>"` → CARD COMMITTED `107dc5a5d7e8d43c808ff502e24829f429b30f78`, CARD UNCHANGED nothing, STANDING LIST R60 row `:46` committed `962e9d17…`, RULING R2563 row `:35` committed `868d51c0…`, last line `AUTHORIZED`.
+- S1 edit (`scripts/smoke_s1.sh:101-105` at tip): description `the full sheet on a reduced day warns, no refusal`; needle `reload half.htk` unchanged; snippet `from cobalt.daymode import sheet_warning, load_daymode_config` / `cfg = load_daymode_config()` / `print(sheet_warning({'attested_sheet': 'full.htk'}, cfg.lowest_enabled, cfg=cfg) or 'NO WARNING')`; no `try`/`except`. The grade steps `:80-100` and the selector step keep theirs.
+- S1 greps: `grep -n -F "assert_sheet_matches" scripts/smoke_s1.sh` → no output (exit 1); `grep -n -F "sheet_warning" scripts/smoke_s1.sh` → `103:from cobalt.daymode import sheet_warning, load_daymode_config` / `105:print(sheet_warning({'attested_sheet': 'full.htk'}, cfg.lowest_enabled, cfg=cfg) or 'NO WARNING')`.
+- The pin of the string (T1 (a)), read: `tests/cobalt/test_daymode.py:395` `def test_full_sheet_attested_on_a_reduced_day_warns(self):`, `:400` `message = sheet_warning(row, "reduced", cfg=cfg)`, `:401-404` `assert message == ("sheet FULL loaded, day mode REDUCED (= the HALF sheet) — " "reload half.htk or overrule")`.
+- Commit `039f65e4d fix(sheet-check-warns): smoke F6 sheet step calls sheet_warning and expects the warning (S1, check O1, R2563)`.
+- RESTARTS on `78a6ab4a..039f65e4d` → exit 1, `scripts/smoke_s1.sh	M	UNCLASSIFIED	com.cobalt.agent,…,com.cobalt.radar` / `ESCALATE: unclassified path scripts/smoke_s1.sh`. Reader: `grep -rn -F "smoke_s1" src` → nothing; `grep -rn -F "smoke_s1" ops configs src tests` → nothing. `restarts.py` has no `scripts/` rule (`:198-262` read); `NoResidentRead.readers` is `min_length=1` (`config.py:371`). Classified in `configs/cobalt/jobs.yaml` `no_resident_reads` as its no-job neighbours `classify/trial.yaml` / `route.yaml` are (`readers: [com.cobalt.generated]`, named for the schema only; `## DECISIONS` 4). `uv run pytest -q -rs -p no:cacheprovider tests/cobalt/test_jobs_reads.py tests/cobalt/test_jobs_restarts.py` → `49 passed in 17.96s`. Commit `3a0b4ed3b fix(sheet-check-warns): scripts/smoke_s1.sh classified (L42)`.
+- RESTARTS `uv run cobalt jobs restarts 78a6ab4a..3a0b4ed3b`, WHOLE:
+```
+path	change	rule	restart
+configs/cobalt/jobs.yaml	M	registry; register, no restart	-
+docs/40 - DevDocs/cobalt/aset/web.md	M	DOCS	-
+docs/40 - DevDocs/cobalt/daymode/match.md	M	DOCS	-
+docs/40 - DevDocs/reports/sheet-check-warns-build-2026-10-29.md	A	DOCS	-
+docs/40 - DevDocs/reports/sheet-check-warns-build-2026-10-29.result	A	DOCS	-
+scripts/smoke_s1.sh	M	no resident reads (one-shot: com.cobalt.generated)	-
+src/cobalt/aset/web.py	M	static import reach	com.cobalt.aset,com.cobalt.cos,com.cobalt.radar
+src/cobalt/daymode/__init__.py	M	static import reach	com.cobalt.aset,com.cobalt.cos,com.cobalt.radar
+src/cobalt/daymode/match.py	M	static import reach	-
+tests/cobalt/test_aset_web.py	M	test/documentation; no resident	-
+tests/cobalt/test_daymode.py	M	test/documentation; no resident	-
+tests/cobalt/test_radar_card_routes.py	M	test/documentation; no resident	-
+tests/cobalt/test_sheet_daymode_probe.py	M	test/documentation; no resident	-
+RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar
+```
+- The deploy gate `sh /Users/cobalt/cobalt/ops/desk/gate.sh sheet-check-warns all --deploy` on `<tip>` = `3a0b4ed3b` → exit 0, verdict lines WHOLE:
+```
+tests/ops: skipped (no ops paths)
+offline 5042/0
+lock: waited 0 min
+proof-only: on cobalt_dev, nothing CHANGED — the table is in the log (W (b))
+LEVEL 0013
+pass 1: whole (deploy)
+stray rows: not read (no --tickers given)
+cobalt_dev: 0013 — F2 = F0
+.env: removed
+with-DB 6014/0
+SKIPPED [1] tests/cobalt/test_cards_picks.py:388: S2-P2's card_score column is present on cobalt_dev
+SKIPPED [1] tests/cobalt/test_cards_picks.py:401: real S2-P2 0007 applied: radar cards need provenance; the P2 suite owns this path once merged
+SKIPPED [1] tests/cobalt/test_checkpoints_live.py:36: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live checkpoint dry run
+SKIPPED [1] tests/cobalt/test_playbook_live.py:31: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live playbook render
+SKIPPED [1] tests/cobalt/test_radar_evaluate.py:695: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note proof
+SKIPPED [1] tests/cobalt/test_replay_line.py:266: requires_vault: COBALT_TEST_LIVE_DRC (a live DRC note path, read only) not set
+SKIPPED [1] tests/cobalt/test_s3_c4_experiments.py:95: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live template read
+SKIPPED [1] tests/taxonomy/test_catalyst.py:365: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live catalyst review draft
+SKIPPED [1] tests/taxonomy/test_predicate.py:262: COBALT_LIVE_VAULT_ROOT not set — the hub runs the live-note grammar proof
+live-note 148/0
+log: /Users/cobalt/cobalt-wt/.gate-logs/sheet-check-warns-all-20261029-201129.log
+```
+  No skip marked `OUTSIDE the allowed set`. Log (`grep -n -F`): `:958` offline `5042 passed, 878 skipped, 4 xfailed, 36 warnings in 810.96s (0:13:30)`; `:965` `lock taken: sheet-check-warns`; `:976` `F0: 664 35 272c95bbb12241e3611e4b36326ccf87`; `:1204` pass 1 `5770 passed, 9 skipped, 138 deselected, 7 xfailed, 43 warnings in 960.61s (0:16:00)`; `:1290` `F1: 954 47 126f2d6983fa59f9d0eaaff7da7dd29c`; `:2186` pass 2 `244 passed, 1 deselected, 5 warnings in 255.80s (0:04:15)`; `:2260` `F2: 664 35 272c95bbb12241e3611e4b36326ccf87` (= F0); `:2316` `lock released`; `:2387` live-note `148 passed, 1 skipped, 15 warnings in 30.14s`. The three added by `d57714468` (O2, O3) are in the offline count (5042 = 5039 + 3). `ls /Users/cobalt/cobalt-wt/sheet-check-warns/.env` → `No such file or directory`; `.env: removed, proven gone (W, FIX smoke s1)`.
+- DEPLOY PROOF on this tree: `grep -c -F "def sheet_warning(" src/cobalt/daymode/match.py` → `1`; `… "def assert_sheet_matches(" … match.py` → `0`; `… "assert_sheet_matches(" src/cobalt/aset/web.py` → `0`; `grep -rn -F "assert_sheet_matches" src tests scripts` → no output.
+- `git diff --name-only 01107570 3a0b4ed3b` → `configs/cobalt/jobs.yaml`, the report and `.result`, `scripts/smoke_s1.sh`, `tests/cobalt/test_aset_web.py`, `tests/cobalt/test_radar_card_routes.py` (the last two: the check's `d57714468`).
+
+FIXED: O1 — tests/cobalt/test_daymode.py::TestMatchCheck::test_full_sheet_attested_on_a_reduced_day_warns
+FIXED: O2 — tests/cobalt/test_aset_web.py::TestMatchCheckAtTheSheet::test_the_card_banner_carries_the_htk_warning_line
+FIXED: O2 — tests/cobalt/test_aset_web.py::TestMatchCheckAtTheSheet::test_a_saved_card_banner_carries_the_htk_warning_line
+FIXED: O3 — tests/cobalt/test_radar_card_routes.py::test_the_daily_note_failure_answer_carries_the_sheet_warning
 
 ## AUTHORIZATION
 `sh /Users/cobalt/cobalt/ops/desk/authorize.sh shadow "/Users/cobalt/cobalt/docs/40 - DevDocs/prompts/2026-10-29/1082-sheet-check-warns-card.md"`:
@@ -137,11 +198,13 @@ DEPLOY PROOF markers, read on this tree (`/Users/cobalt/cobalt-wt/sheet-check-wa
 - Card records as re-read at PREFLIGHT: `## PREFLIGHT` last bullet.
 
 ## CONTINUE
-next: W (S1 fix round: the deploy gate on `3a0b4ed3b`)
+next: none (stop line written)
 
 ## DECISIONS
 1. ASK DESK [18:17]: `uv run cobalt jobs restarts 78a6ab4a..HEAD` names the untracked, never-committed harness file `SHADOW-INSTRUCTIONS.md` UNCLASSIFIED (exit 1). Safe default taken: not classified (it is never committed; X9 unsettled), as `cos-outage-1018-build-2026-10-18.md` and `agy-read-1018-build-2026-10-18.md` did; the stop line carries the committed range `78a6ab4a..011075704`: `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` (= the card's header).
 2. T1 (b), (c) red UNPROVEN (L70, as the card's T1 allows): the with-DB tests were not run on BASE (no E2 lock take), and the gate seat edits no `src/`, so no E3 mutation was made for any row. They are green at tip (pass 1, 0 failed). Default: `self-check: 2 of 3`; the check may run the mutation (undo W1's `sheet_warning` in `/size`, expect (c) red).
+3. UNPROVEN (L70) — S1 snippet not run (uv run python not on the BUILD line). The old red (`ImportError`) and the new green of the smoke step's snippet were not run; the whole `scripts/smoke_s1.sh` was not run (card S1). The string it expects is pinned by T1 (a), green in the gate's offline pass.
+4. ASK DESK [20:15]: `scripts/smoke_s1.sh` came out UNCLASSIFIED at RESTARTS. No job reads it, `restarts.py` has no rule for `scripts/`, and the `no_resident_reads` schema needs a registered one-shot reader. Default taken: classified like `configs/cobalt/classify/trial.yaml` (`readers: [com.cobalt.generated]`, its `because` says the label is named for the schema only). It derives no restart; RESTARTS stays `com.cobalt.aset com.cobalt.cos com.cobalt.radar`. `configs/cobalt/jobs.yaml` is not among S1's `files`; BUILD-HUB RESTARTS orders the classification in this build.
 
 ## RECORDS
 - `SHADOW-INSTRUCTIONS.md` at the worktree root is the one untracked file (SHADOW-HUB step 4), never committed.
@@ -157,5 +220,11 @@ next: W (S1 fix round: the deploy gate on `3a0b4ed3b`)
 - tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh a564baa9` → `context 89644 of 400000 — ok` (this FIX session; the first pass read 183601).
 
 - First FIX stop line (tip fix, superseded by the S1 fix round below): `tip: 01107570 | … | rows: 7 of 7 | self-check: 2 of 3 | decisions: 2 · for Dejan: 0 · tokens: 89644`.
+- CONTINUED at FIX smoke s1 20:09 (new session `e5350770`, R2592). Fact verified: `grep "1082|S1|1093|1091"` on `cto-2026-10-29.md` → `9:| R2592 | 20:55 ET | S1 re-preflight ready YES (14 checks, 0 fails); … LAUNCHED FIX build e5350770 (1082, step "FIX smoke s1", HIGH Opus …)`; check report `:6` `O1 HELD, NOT FIXED: scripts/smoke_s1.sh:103,106 …`.
+- A commit this session did not make: `498cc9fe6 docs(sheet-check-warns): build report stop line after FIX smoke s1` (20:12, `Co-Authored-By: Claude Sonnet 5.5`, a `Claude-Session:` trailer). Its diff holds only this session's own uncommitted report edits of 20:09-20:11 (`## CONTINUE` → `next: W`, the last line → `(run in progress …)`); left as is, no history rewrite.
+- One lock take in the fix round (the gate's, W): taken log `:965`, released `:2316`. No extra take.
+- `.env: removed, proven gone (W, FIX smoke s1)`.
+- Fix round scope: `scripts/smoke_s1.sh` (row S1) and `configs/cobalt/jobs.yaml` (RESTARTS, L42); no `src/` or `tests/` file changed in this round.
+- tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh e5350770` → `context 127921 of 400000 — ok`.
 
-(run in progress — next step under ## CONTINUE)
+BUILT · job: sheet-check-warns · tip: 3a0b4ed3 | on 78a6ab4a | migration: none | offline 5042/0 | with-DB 6014/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 8 of 8 | self-check: 2 of 3 | decisions: 4 · for Dejan: 0 · tokens: 127921
