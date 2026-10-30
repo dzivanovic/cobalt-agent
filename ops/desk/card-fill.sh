@@ -2,7 +2,8 @@
 # card-fill.sh "<card>" [--no-house "<date> R<n>"]
 # Fills a job card for its check from the build's stop line (card 17 A3). Reads the card's
 # REPORT, takes its last non-blank line, and refuses unless it starts
-# "BUILT · job: <the card's JOB> · tip: <8 hex>" and carries "self-check: 3 of 3".
+# "BUILT · job: <the card's JOB> · tip: <8 hex>" and carries "self-check: 3 of 3"; the tip
+# is 8 hex, optionally followed by more hex (git's 9-hex form, card 1085), and TIP gets the 8.
 # Then, editing ONLY header lines (those above the card's first blank line):
 #   TIP:          <- that tip
 #   CHECK REPORT: <- $REPORTS/<JOB>-check-<today>.md when empty
@@ -68,10 +69,10 @@ last = next((line for line in reversed(text.split("\n")) if line.strip()), "")
 # SHADOW-HUB's stop line, which carries no self-check field
 shadow = (at["SHADOW OF"] is not None and value(at["SHADOW OF"]) != ""
           and at["BRANCH"] is not None and re.match(r"shadow/.", value(at["BRANCH"])) is not None)
-m = re.match(r"BUILT · job: (\S+) · tip: ([0-9a-f]{8})(?=\s|$)", last)
+m = re.match(r"BUILT · job: (\S+) · tip: ([0-9a-f]{8})[0-9a-f]*(?=\s|$)", last)  # card 1085: 8 hex, then git's further hex
 shadow_built = None
 if m is None and shadow:
-    m = shadow_built = re.match(r"SHADOW BUILT · job: (\S+) · tip: ([0-9a-f]{8})(?=\s|$)", last)
+    m = shadow_built = re.match(r"SHADOW BUILT · job: (\S+) · tip: ([0-9a-f]{8})[0-9a-f]*(?=\s|$)", last)  # card 1085
 if not m or m.group(1) != job:
     refuse("the report's last line is not a BUILT line of job %s: %s" % (job, last))
 if shadow_built is None and "self-check: 3 of 3" not in last:

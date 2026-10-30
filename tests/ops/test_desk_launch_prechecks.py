@@ -339,11 +339,40 @@ def test_l2_a_check_launches_on_the_built_line_for_its_job_and_tip(desk):
     "FAILED: W — x",
     "BUILT · job: x-job · tip: 0000beef | on x",
     "BUILT · job: x-other · tip: TIP | on x",
-    "BUILT · job: x-job · tip: TIP9 | on x",
+    "BUILT · job: x-job · tip: TIPz | on x",
     "(run in progress — next step under ## CONTINUE)",
 ])
 def test_l2_a_report_not_ending_in_its_built_line_refuses(desk, last):
     last = last.replace("TIP", desk.tip)
+    desk.write_build_report(last)
+    refused(desk, desk.launch("check", str(desk.card)), f"not built — {last}")
+
+
+# ---- card 1085: the stop-line tip is the card TIP, or the TIP plus hex (git's 9-hex form) -------
+
+
+def test_1085_t1_a_nine_hex_tip_on_the_built_line_launches(desk):
+    desk.write_build_report(desk.built_line(tip=desk.tip + "9"))
+    done = desk.launch("check", str(desk.card))
+    assert done.returncode == 0, done.stderr
+    assert desk.called() == [str(desk.job_wt)]
+
+
+def test_1085_t1_a_different_eight_hex_prefix_refuses(desk):
+    last = desk.built_line(tip=OTHER_TIP)
+    desk.write_build_report(last)
+    refused(desk, desk.launch("check", str(desk.card)), f"not built — {last}")
+
+
+@pytest.mark.parametrize("tail", ["z", "9z"])
+def test_1085_t1_a_nine_char_tip_with_a_non_hex_tail_refuses(desk, tail):
+    last = desk.built_line(tip=desk.tip + tail)
+    desk.write_build_report(last)
+    refused(desk, desk.launch("check", str(desk.card)), f"not built — {last}")
+
+
+def test_1085_t1_a_shorter_tip_refuses(desk):
+    last = desk.built_line(tip=desk.tip[:7])
     desk.write_build_report(last)
     refused(desk, desk.launch("check", str(desk.card)), f"not built — {last}")
 
@@ -408,7 +437,7 @@ def test_386_a1_a_shadow_card_launches_on_its_shadow_built_line(desk):
 @pytest.mark.parametrize("variant,launches", [
     ("other job", False),
     ("other tip", False),
-    ("tip9", False),
+    ("tip9", True),
     ("job prefix", False),
     ("bare", True),
 ])
@@ -428,6 +457,15 @@ def test_386_a2_job_and_tip_are_exact_as_for_built(desk, variant, launches):
         assert desk.called() == [str(desk.job_wt)]
     else:
         refused(desk, done, f"not built — {last}")
+
+
+def test_1085_t1_f_a_shadow_tip_with_a_non_hex_tail_refuses(desk):
+    """Card 1085 T1 (f)'s `tipz` case, kept outside `-k 386` so the 386 case count pinned by
+    test_check_hub_shadow.py stays its figure."""
+    shadow_card(desk)
+    last = shadow_built(desk, tip=desk.tip + "z")
+    desk.write_build_report(last)
+    refused(desk, desk.launch("check", str(desk.card)), f"not built — {last}")
 
 
 @pytest.mark.parametrize("branch,shadow_of", [
