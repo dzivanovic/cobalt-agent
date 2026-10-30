@@ -125,8 +125,8 @@ class TestTheRefusalCase:
 
     def test_a_null_mode_with_no_error_is_still_red(self, sheet):
         """`ok` is false iff error is set OR mode is null — to a trader
-        those are the same thing, because `assert_sheet_matches` refuses
-        every card either way."""
+        those are the same thing, because an unresolved mode still refuses
+        every card (the sheet check warns, R2563)."""
         probe = probes.sheet_daymode(
             sheet({**GREEN, "ok": False, "mode": None, "error": None})
         )

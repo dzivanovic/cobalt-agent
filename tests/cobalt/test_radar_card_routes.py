@@ -84,6 +84,7 @@ def test_a_plus_key_tap_on_the_half_day_records_a_plus_sizes_at_a_70_with_notice
     response = client.post("/radar/card/1/key", data={"grade": "A+"})
     assert response.status_code == 200, response.text
     body = response.json()
+    assert body["sheet_warning"] is None
     assert body["tapped_grade"] == "A+" and body["sized_grade"] == "A" and body["risk_budget"] == "70.00"
     assert "A+" in body["snap_notice"] and "$70" in body["snap_notice"]
     sizing = cards.calls[0][1]
@@ -110,13 +111,43 @@ def test_key_tap_refused_once_armed(cards):
     assert cards.notes == []
 
 
-def test_the_hotkey_file_mismatch_refusal_is_unchanged(cards, monkeypatch):
+def test_the_hotkey_file_mismatch_warns(cards, monkeypatch):
     monkeypatch.setattr(web_module, "_daymode_state", lambda: {
         "cfg": SETTINGS.daymode, "mode": "reduced", "row": {"attested_sheet": "full.htk"}, "error": None,
     })
     response = client.post("/radar/card/1/key", data={"grade": "A"})
-    assert response.status_code == 409 and "reload half.htk" in response.json()["reason"]
-    assert cards.calls == []
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "reload half.htk" in body["sheet_warning"]
+    assert [c[0] for c in cards.calls] == ["tap_key"]
+
+
+def test_nothing_attested_warns(cards, monkeypatch):
+    monkeypatch.setattr(web_module, "_daymode_state", lambda: {
+        "cfg": SETTINGS.daymode, "mode": "reduced", "row": {}, "error": None,
+    })
+    response = client.post("/radar/card/1/key", data={"grade": "A"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert "No hotkey file attested" in body["sheet_warning"]
+
+
+def test_the_daily_note_failure_answer_carries_the_sheet_warning(cards, monkeypatch):
+    """W2: the 500 answer after a persisted tap carries the warning too."""
+    from cobalt.aset.daily_note import DailyNoteRefused
+
+    def _refuse(cfg, result, when=None, **kw):
+        raise DailyNoteRefused("constructed refusal")
+
+    monkeypatch.setattr(web_module, "_daymode_state", lambda: {
+        "cfg": SETTINGS.daymode, "mode": "reduced", "row": {"attested_sheet": "full.htk"}, "error": None,
+    })
+    monkeypatch.setattr(web_module, "save_card", _refuse)
+    response = client.post("/radar/card/1/key", data={"grade": "A"})
+    assert response.status_code == 500, response.text
+    body = response.json()
+    assert "reload half.htk" in body["sheet_warning"]
+    assert [c[0] for c in cards.calls] == ["tap_key"]
 
 
 def test_pass_moves_watch_to_passed_by_you(cards):

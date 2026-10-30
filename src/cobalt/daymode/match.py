@@ -2,7 +2,10 @@
 
 Charter §3 F6: "the loaded `.htk` is checked against the mode and
 mismatch refuses cards. Test: he loads the full sheet on a half day ->
-card refused with the reason."
+card refused with the reason." R2563 (2026-10-29) re-reads that test.
+The loaded `.htk` is attested, not read, and a mismatch or no
+attestation is a WARNING on the sheet and the card, not a refusal. The
+card is still written.
 
 WHAT SLICE 2 ACTUALLY SHIPPED, and why this module is an attestation.
 The ".htk-match check" appears in the ledger's slice-2 scope line
@@ -25,11 +28,11 @@ know which hotkey file is loaded, and the honest design is not to
 pretend: **he states it, and Cobalt holds him to it.**
 
 That is what this module does. `attested_sheet` on the `day_modes` row
-is his word, `attested_at` is when he gave it, and every card creation
-is refused while his word disagrees with the decided mode. The refusal
-names both sides and both ways out:
+is his word, `attested_at` is when he gave it, and a card is still
+written when his word disagrees with the decided mode or he has
+attested nothing. The warning names both sides and both ways out:
 
-    "sheet FULL loaded, day mode REDUCED — reload reduced_day.htk or overrule"
+    "sheet FULL loaded, day mode REDUCED (= the HALF sheet) — reload half.htk or overrule"
 
 The attestation is a weaker guarantee than a read, and it is labelled as
 one everywhere it surfaces (the sheet says "attested, not read"). It is
@@ -48,8 +51,9 @@ and the file names are derived from the declared sheets
 (`daymode.hotkey_file_template`), so the selector can only ever offer him
 a file that corresponds to a real key table. Today `reduced` sizes from
 `half`, so `half.htk` is the matching attestation and `full.htk` is the
-refusal — which is the same trading answer as before, reached without a
-name nobody could trace back to a config row.
+warning — the same trading answer as before, reached without a name
+nobody could trace back to a config row. A mismatch or no attestation
+is a WARNING on the sheet and the card (R2563).
 
 SECOND SOURCE, SAME ANSWER (S1-P3). The daily note carries the same
 attestation as a Cobalt-owned unit with one checkbox per sheet
@@ -77,19 +81,20 @@ class SheetMismatch(RuntimeError):
         self.mode = mode
 
 
-def assert_sheet_matches(
+def sheet_warning(
     row: Optional[dict[str, Any]],
     mode: str,
     *,
     cfg: Optional[DayModeConfig] = None,
-) -> str:
-    """Refuse unless the attested file's SHEET is the sheet in force.
+) -> Optional[str]:
+    """The attested file's SHEET against the sheet in force. Attested, not read.
 
-    Returns the attested filename on success. Raises `SheetMismatch`
-    when he has attested a different key table — and ALSO when he has
-    attested nothing at all, because "no attestation" is not the same as
-    "it matches": an unstated hotkey file is exactly the state in which a
-    full-size key gets pressed on a reduced-size day.
+    Returns None when they match. A mismatch, or no attestation at all,
+    is a WARNING on the sheet and the card (R2563), not a refusal: the
+    card is still written. "No attestation" is not the same as "it
+    matches". This function raises nothing of its own;
+    `cfg.sheet_for_hotkey_file` still raises `ConfigError` for a name
+    off the declared list.
     """
     cfg = cfg or load_daymode_config()
     attested = (row or {}).get("attested_sheet")
@@ -97,24 +102,19 @@ def assert_sheet_matches(
     expected = cfg.hotkey_file_for_sheet(expected_sheet)
 
     if not attested:
-        raise SheetMismatch(
-            "No hotkey file attested for today. Cobalt cannot read DAS (it never "
-            "touches a trading platform) — say which .htk you have loaded before "
-            f"writing a card. Day mode is {mode.upper()} (= the "
-            f"{expected_sheet.upper()} sheet); the matching file is {expected}.",
-            attested=None,
-            mode=mode,
+        return (
+            f"No hotkey file attested for today — Cobalt cannot read DAS (it never "
+            f"touches a trading platform). Day mode is {mode.upper()} (= the "
+            f"{expected_sheet.upper()} sheet); the matching file is {expected}."
         )
 
     attested_sheet = cfg.sheet_for_hotkey_file(attested)
     if attested_sheet != expected_sheet:
-        raise SheetMismatch(
+        return (
             f"sheet {attested_sheet.upper()} loaded, day mode {mode.upper()} "
-            f"(= the {expected_sheet.upper()} sheet) — reload {expected} or overrule",
-            attested=attested,
-            mode=mode,
+            f"(= the {expected_sheet.upper()} sheet) — reload {expected} or overrule"
         )
-    return attested
+    return None
 
 
 def assert_grade_allowed(
@@ -143,4 +143,4 @@ def assert_grade_allowed(
         )
 
 
-__all__ = ["SheetMismatch", "assert_grade_allowed", "assert_sheet_matches"]
+__all__ = ["SheetMismatch", "assert_grade_allowed", "sheet_warning"]

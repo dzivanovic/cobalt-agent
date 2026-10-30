@@ -415,37 +415,81 @@ class TestMatchCheckAtTheSheet:
 
     def _stub_daymode(self, monkeypatch, *, attested, mode=None):
         cfg = _offline_daymode_config()
+        row = {"attested_sheet": attested} if attested else {}
         monkeypatch.setattr(
             web_module,
             "_daymode_state",
             lambda: {
                 "cfg": cfg,
                 "day": None,
-                "row": ({"attested_sheet": attested} if attested else {}),
+                "row": row,
                 "mode": mode or cfg.lowest_enabled,
                 "stage": "stage 1 (system rule)",
                 "error": None,
             },
         )
+        return row
 
     @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
-    def test_full_sheet_attested_on_a_reduced_day_refuses_the_card(self, monkeypatch):
-        """'He loads the full sheet on a half day -> card refused with
-        the reason' (Charter §3 F6)."""
-        self._stub_daymode(monkeypatch, attested="full.htk")
+    def test_full_sheet_attested_on_a_reduced_day_warns(self, monkeypatch):
+        """'He loads the full sheet on a half day' (Charter §3 F6) — R2563:
+        the warning is on the page and the card goes on to persistence."""
+        row = self._stub_daymode(monkeypatch, attested="full.htk")
+        before = dict(row)
         r = client.post("/size", data=BASE_SIZE_FORM)
-        assert "FAILED" in r.text
+        assert "never reach AsetStore" in r.text
         assert "sheet FULL loaded, day mode REDUCED" in r.text
         assert "reload half.htk or overrule" in r.text
-        assert "never reach AsetStore" not in r.text, "no card was written"
+        assert row == before
 
     @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
-    def test_nothing_attested_refuses_too(self, monkeypatch):
-        self._stub_daymode(monkeypatch, attested=None)
+    def test_nothing_attested_warns(self, monkeypatch):
+        row = self._stub_daymode(monkeypatch, attested=None)
+        before = dict(row)
         r = client.post("/size", data=BASE_SIZE_FORM)
-        assert "FAILED" in r.text
+        assert "never reach AsetStore" in r.text
         assert "No hotkey file attested" in r.text
-        assert "never reach AsetStore" not in r.text
+        assert row == before
+
+    def test_the_card_banner_carries_the_htk_warning_line(self, monkeypatch):
+        """W1 (R2563): the `⚠ .htk:` line sits on the card's own banner, not
+        only in the day-mode banner `_render` paints. Offline: `_render`
+        returns the banner it is handed."""
+        self._stub_daymode(monkeypatch, attested="full.htk")
+        monkeypatch.setattr(web_module, "_render", lambda banner="", result="", form=None: banner)
+        r = client.post("/size", data=BASE_SIZE_FORM)
+        assert "Persistence FAILED" in r.text
+        assert (
+            '<div class="warn">⚠ .htk: sheet FULL loaded, day mode REDUCED (= the HALF sheet) — '
+            "reload half.htk or overrule (attested, not read)</div>"
+        ) in r.text
+
+    def test_a_saved_card_banner_carries_the_htk_warning_line(self, monkeypatch):
+        """W1 (R2563): the saved card's banner, after the write, carries the line too."""
+        from datetime import datetime as _dt
+
+        class _SavingStore:
+            db_name = "cobalt_test"
+
+            def ensure_schema(self):
+                pass
+
+            def save(self, result):
+                return 7
+
+            def account_mode_for(self, row_id):
+                return "paper"
+
+        self._stub_daymode(monkeypatch, attested=None)
+        monkeypatch.setattr(web_module, "_render", lambda banner="", result="", form=None: banner)
+        monkeypatch.setattr(web_module, "AsetStore", _SavingStore)
+        monkeypatch.setattr(web_module, "save_card", lambda cfg, result, **kw: ("note.md", _dt(2026, 1, 6, 9, 30), None))
+        monkeypatch.setattr(web_module, "load_prefill_paths", lambda: None)
+        monkeypatch.setattr(web_module, "upsert_trade_note", lambda *a, **kw: ("trade.md", "created"))
+        r = client.post("/size", data=BASE_SIZE_FORM)
+        assert "Persisted: aset_sizings id 7" in r.text
+        assert '<div class="warn">⚠ .htk: No hotkey file attested' in r.text
+        assert "(attested, not read)</div>" in r.text
 
     @pytest.mark.skipif('not (os.getenv("POSTGRES_HOST") and os.getenv("POSTGRES_USER"))', reason="reaches cobalt_dev (lock-relief G1)")
     def test_a_key_outside_the_rung_is_refused(self, monkeypatch):

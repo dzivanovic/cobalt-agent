@@ -30,7 +30,7 @@ from cobalt.daymode.config import REDUCED, DayModeConfig
 from cobalt.daymode.match import (
     SheetMismatch,
     assert_grade_allowed,
-    assert_sheet_matches,
+    sheet_warning,
 )
 from cobalt.daymode.propose import (
     NO_PRIOR_DRC,
@@ -392,14 +392,12 @@ class TestProposal:
 
 
 class TestMatchCheck:
-    def test_full_sheet_attested_on_a_reduced_day_refuses_with_the_reason(self):
-        """Charter §3 F6: 'he loads the full sheet on a half day -> card
-        refused with the reason.'"""
+    def test_full_sheet_attested_on_a_reduced_day_warns(self):
+        """Charter §3 F6, re-read by R2563: he loads the full sheet on a
+        half day -> a warning, and the card is not refused."""
         cfg = _cfg()
         row = {"attested_sheet": "full.htk"}
-        with pytest.raises(SheetMismatch) as excinfo:
-            assert_sheet_matches(row, "reduced", cfg=cfg)
-        message = str(excinfo.value)
+        message = sheet_warning(row, "reduced", cfg=cfg)
         assert message == (
             "sheet FULL loaded, day mode REDUCED (= the HALF sheet) — "
             "reload half.htk or overrule"
@@ -410,22 +408,21 @@ class TestMatchCheck:
         S1-P2). `reduced` sizes from `half`, so `half.htk` matches — and
         there is no `reduced_day.htk` any more, because no key table in
         configs/cobalt/aset.yaml ever corresponded to that name."""
-        assert assert_sheet_matches({"attested_sheet": "half.htk"}, "reduced", cfg=_cfg()) \
-            == "half.htk"
+        assert sheet_warning({"attested_sheet": "half.htk"}, "reduced", cfg=_cfg()) is None
 
     def test_a_file_naming_no_declared_sheet_is_refused(self):
         with pytest.raises(ConfigError, match="unknown hotkey file"):
-            assert_sheet_matches({"attested_sheet": "reduced_day.htk"}, "reduced", cfg=_cfg())
+            sheet_warning({"attested_sheet": "reduced_day.htk"}, "reduced", cfg=_cfg())
 
-    def test_attesting_nothing_is_a_refusal_not_a_pass(self):
-        with pytest.raises(SheetMismatch, match="No hotkey file attested"):
-            assert_sheet_matches({}, "reduced", cfg=_cfg())
-        with pytest.raises(SheetMismatch, match="No hotkey file attested"):
-            assert_sheet_matches(None, "reduced", cfg=_cfg())
+    def test_attesting_nothing_warns(self):
+        for row in ({}, None):
+            message = sheet_warning(row, "reduced", cfg=_cfg())
+            assert isinstance(message, str)
+            assert "No hotkey file attested" in message
 
     def test_an_unknown_htk_file_is_refused(self):
         with pytest.raises(ConfigError, match="unknown hotkey file"):
-            assert_sheet_matches({"attested_sheet": "made_up.htk"}, "reduced", cfg=_cfg())
+            sheet_warning({"attested_sheet": "made_up.htk"}, "reduced", cfg=_cfg())
 
 
 class TestGradeRestriction:
@@ -515,14 +512,18 @@ class TestDayModeStore:
         store.attest_sheet(day, filename="full.htk")
         assert store.for_date(day)["attested_sheet"] == "full.htk"
 
-    def test_a_card_is_refused_while_the_attested_sheet_disagrees(self, store):
-        """End to end: attest FULL, day mode REDUCED, card refused."""
+    def test_a_card_warns_while_the_attested_sheet_disagrees(self, store):
+        """End to end: attest FULL, day mode REDUCED, warning returned, sheet unchanged."""
         day = date(2026, 9, 3)
         store.attest_sheet(day, filename="full.htk")
         store.upsert_proposal(day, proposed="reduced", reason="r")
         row = store.decide(day, decided="reduced", decided_by="you")
-        with pytest.raises(SheetMismatch, match="reload half.htk or overrule"):
-            assert_sheet_matches(row, decided_or_stage1(row, _cfg()), cfg=_cfg())
+        message = sheet_warning(row, decided_or_stage1(row, _cfg()), cfg=_cfg())
+        assert message == (
+            "sheet FULL loaded, day mode REDUCED (= the HALF sheet) — "
+            "reload half.htk or overrule"
+        )
+        assert store.for_date(day)["attested_sheet"] == "full.htk"
 
     def test_writes_are_refused_in_market_reset(self, store, monkeypatch):
         from cobalt.session import SessionBlocked

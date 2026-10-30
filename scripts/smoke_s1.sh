@@ -98,14 +98,11 @@ for g in ('A', 'A+', 'B'):
     try:
         assert_grade_allowed(g, mode, cfg=cfg); print(f'{g} ACCEPTED')
     except SheetMismatch: print(f'{g} REFUSED')"
-check "the full sheet on a reduced day refuses a card" contains "reload half.htk" -- \
+check "the full sheet on a reduced day warns, no refusal" contains "reload half.htk" -- \
   uv run python -c "
-from cobalt.daymode import assert_sheet_matches, load_daymode_config, SheetMismatch
+from cobalt.daymode import sheet_warning, load_daymode_config
 cfg = load_daymode_config()
-try:
-    assert_sheet_matches({'attested_sheet': 'full.htk'}, cfg.lowest_enabled, cfg=cfg)
-    print('NOT REFUSED')
-except SheetMismatch as e: print(e)"
+print(sheet_warning({'attested_sheet': 'full.htk'}, cfg.lowest_enabled, cfg=cfg) or 'NO WARNING')"
 check "the selector lists only declared sheets"  lacks "reduced_day.htk" -- \
   uv run python -c "
 from cobalt.daymode import load_daymode_config

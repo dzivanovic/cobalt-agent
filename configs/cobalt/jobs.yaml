@@ -462,6 +462,14 @@ no_resident_reads:
       `cobalt playbook render` command of the com.cobalt.playbook one-shot.
       No resident calls it: cobalt.cli imports playbook.cli for add_parser
       only. Card 503, 2026-10-18.
+  - path: scripts/smoke_s1.sh
+    readers: [com.cobalt.generated]
+    because: >
+      The S1 sprint smoke, run by hand at a shell (scripts/smoke_s1.sh:10).
+      No plist executes it and nothing under src, ops, configs or tests names
+      it (grep smoke_s1, 2026-10-29); no resident reads it. com.cobalt.generated
+      is named only because the schema needs a registered one-shot, as for
+      trial.yaml above. Card 1082 S1, 2026-10-29.
   # configs/cobalt/rules.yaml LEFT this list in DRC D3 ([F-28]): the DRC build
   # calls regenerate_rules_config() inside com.cobalt.aset — it is now in that
   # job's `reads:` (the 15:40 prefill-drc reader is retired).

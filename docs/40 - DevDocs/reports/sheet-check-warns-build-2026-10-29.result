@@ -1,0 +1,15 @@
+job=sheet-check-warns
+tip=3a0b4ed3
+on=78a6ab4a
+migration=none
+offline=5042/0
+with_db=6014/0
+live_note=148/0
+cobalt_dev=0013
+env=removed
+restarts=com.cobalt.aset com.cobalt.cos com.cobalt.radar
+rows=8 of 8
+self_check=2 of 3
+decisions=4
+for_dejan=0
+tokens=95048
