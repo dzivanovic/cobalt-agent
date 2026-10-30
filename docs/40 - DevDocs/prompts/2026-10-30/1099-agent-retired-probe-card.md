@@ -1,0 +1,53 @@
+JOB: agent-retired-probe
+LADDER: OFF-LADDER — reports/cto-2026-10-30.md R2610
+BRANCH: ops/agent-retired-probe
+WORKTREE: agent-retired-probe
+BASE: «FILL: 8-hex commit of main the branch is cut from»
+TIP:
+REPORT: /Users/cobalt/cobalt-wt/agent-retired-probe/docs/40 - DevDocs/reports/agent-retired-probe-build-2026-10-30.md
+CHECK REPORT:
+HOUSE B:
+BAND: MID
+RESTARTS: com.cobalt.cos
+MIGRATIONS: none
+RULINGS: 2026-10-21 R2232, 2026-10-30 R2610
+
+## ROWS
+
+WHY: `com.cobalt.agent` was retired on his word (2026-10-21 R2232); the record is `ops/desk/retired-labels` (one line, `com.cobalt.agent`, committed `5dfea1164`, 2026-10-21 17:10 ET). The deploy tools read it (`ops/desk/deploy-step0.sh:77`, `ops/desk/deploy-outage.sh:93`); the two job checks do not, so `com.cobalt.agent` (still registered in `configs/cobalt/jobs.yaml:127`, `enabled` by default) reads "not loaded" as RED on every beat (heartbeat 10-29 22:06 ET, 1 job). Loading it would bring back a second listener and `cos` would refuse to start (F-14). A permanent false RED hides real ones. Brain direction L79, 2026-10-30 (R2610): one small defect card. No trading logic, no HITL step beyond the standing deploy approval.
+
+THE RULE (all rows): a label listed in `ops/desk/retired-labels` (one label per line, blank lines skipped; the file absent = nothing retired, as `deploy-outage.sh:6` says) is RETIRED, not RED, when it is not loaded in launchd; it is RED, with the text `retired but running`, when it is loaded. A label not in the record is judged exactly as today. A record that exists and cannot be read is refused loud (the label stays red, the file named), never read as "nothing retired". The RETIRED line must not contain the words `not loaded` in any case (`scripts/smoke_s1.sh:54` asserts `cobalt jobs check` `lacks "not loaded"`).
+
+| row | what | red first | files |
+|---|---|---|---|
+| T1 | THE TESTS, first. (A) `tests/cobalt/test_jobs.py`, new class `TestRetiredLabels` beside `TestBootstrapOwed` (`:955`), reusing its `_sweep` stub store and `launchctl_status` monkeypatch (`:957-995`) with `monkeypatch.setattr(watchdog, "RETIRED_LABELS_PATH", path, raising=False)` and a record file written under `tmp_path`: `test_2610_a_retired_label_not_loaded_is_not_red` (record lists the label, `loaded=False`: `f.ok` and `f.state == "retired"` and `"not loaded"` not in `f.detail.lower()`); `test_2610_b_unlisted_label_not_loaded_is_still_red` (record lists another label or is absent, `loaded=False`: `not f.ok` and `f.state == "not loaded"`); `test_2610_c_retired_label_found_running_is_red` (record lists the label, `loaded=True`: `not f.ok` and `"retired but running" in f.detail`). (B) `tests/cobalt/test_smoke.py`, three new tests after `test_ow1_a_loaded_listed_label_is_a_match` (`:1638`), through `_k18` (`:1591`) with the same path monkeypatch: `test_2610_k18_a_retired_unloaded_label_passes` (verdict PASS, label in `out.detail` under `RETIRED`), `test_2610_k18_b_unlisted_unloaded_label_still_fails` (verdict FAIL, label in `out.detail`), `test_2610_k18_c_retired_loaded_label_fails` (verdict FAIL, `"retired but running"` in `out.detail`) | RUN on BASE's `src/`: `uv run pytest -q -p no:cacheprovider --color=no tests/cobalt/test_jobs.py tests/cobalt/test_smoke.py -k "2610"`, quoted whole. RED, by name: `test_2610_a_…` (`assert f.ok` fails, finding is RED `not loaded`); `test_2610_c_…` (no `retired but running` text); `test_2610_k18_a_…` (verdict FAIL, `enabled but not loaded: ['…']`); `test_2610_k18_c_…` (verdict PASS). GREEN on BASE and after, quoted as the boundary controls: `test_2610_b_…` and `test_2610_k18_b_…` | `tests/cobalt/test_jobs.py`, `tests/cobalt/test_smoke.py` |
+| W1 | `src/cobalt/jobs/watchdog.py`: beside `BOOTSTRAP_OWED_PATH` (`:55`) and `bootstrap_owed` (`:63`) add `RETIRED_LABELS_PATH = REPO_ROOT / "ops" / "desk" / "retired-labels"`, `RetiredLabelsError(RuntimeError)` and `retired_labels(path=None) -> frozenset[str]` (stripped non-blank lines; absent file = empty; any other read error raises `RetiredLabelsError` naming the file). In `sweep`, after the `launchctl_status` try block (ends `:420`) and before `if not status.loaded:` (`:421`): for a retired label, not loaded → `Finding(label, True, "retired", "retired by record (ops/desk/retired-labels); stays unloaded by design")` and `continue`, with no `store.mark_probe` (as the one-shot branch at `:431-432` does not for non-residents; a retired resident's row is not touched either); loaded → `Finding(label, False, "retired", "retired but running — loaded in launchd (" + status.detail + "); ops/desk/retired-labels says it must stay unloaded")` and `continue`. An unreadable record: the label falls to today's path with `" (retired record unreadable: <err>)"` appended to the red detail, as `owed_note` does at `:440`. A comment `card 1099` on the new lines. The line `findings.append(Finding(spec.label, False, "not loaded", …))` (`:448`) is unchanged | T1 (A) a and c GREEN; b still green; the `TestBootstrapOwed` tests (`:997-1032`) still green | `src/cobalt/jobs/watchdog.py` |
+| K1 | `src/cobalt/smoke/checks.py` `_launchctl`, mode `registry_match` (`:415-451`, the K18 drift check): read the record once, lazily, as `bootstrap_owed` is at `:432-435` (`from cobalt.jobs.watchdog import retired_labels`); in the loop at `:425-443`, for a retired label: `loaded` → append to a new `retired_running` list and `line += "\tretired"`; not loaded → append to `retired_labels_seen`, `line += "\tretired"`, and it enters neither `not_loaded` nor `loaded_disabled`. FAIL detail gains `; retired but running: <labels>` only when that list is non-empty; PASS detail gains `; RETIRED (unloaded by record): <labels>` only when that list is non-empty. When neither list has a label the two detail strings are byte-for-byte today's (`test_ow1_no_state_file_is_today` pins `:1635`, `test_ow1_a_loaded_listed_label_is_a_match` pins `:1643`). An unreadable record raises (verdict ERROR), as an unreadable owed file does (`:431` comment). A comment `card 1099` on the new lines | T1 (B) a and c GREEN; b still green; `tests/cobalt/test_smoke.py:457-465` (`Spec("com.cobalt.agent", False)` drift test) still green | `src/cobalt/smoke/checks.py` |
+
+K1 RUNS AFTER W1 (K1 imports `retired_labels` from W1). No other site needs the fix: `scripts/smoke_s1.sh:54` reads `cobalt jobs check` (W1) and needs no edit; the heartbeat beat reads `sweep` (`src/cobalt/heartbeat/runner.py:154`), `cobalt jobs check` reads `sweep` (`src/cobalt/jobs/cli.py:129`), so both follow W1. Commands for the builder are those on the BUILD line of `prompts/BUILD-HUB.md`: `uv run pytest`, Edit, `git add`, `git commit`.
+
+## NOT IN THIS JOB
+- `configs/cobalt/jobs.yaml:127` (the `com.cobalt.agent` registry entry) stays: `tests/cobalt/test_jobs.py:133` reads it and `cobalt validate` holds registry = `ops/` = plists. Removing the entry is a separate item.
+- `ops/desk/retired-labels`, `ops/desk/deploy-step0.sh`, `ops/desk/deploy-outage.sh`: read only, unchanged.
+- A retired agent started by hand (a live `logs/cobalt.pid`, no launchd label): the pidfile probe (`pidfile_alive`, `watchdog.py:216`) is not asked here; "running" is "loaded in launchd".
+- Any plist, any migration, any `src/` file but the two named, `data/deploy/bootstrap-owed.json` logic.
+- A red outside this fix: a `## DECISIONS` item, UNPROVEN (L70), with the output; never fixed here.
+
+## READ
+- `src/cobalt/jobs/watchdog.py:44-82` (`REPO_ROOT`, `BOOTSTRAP_OWED_PATH`, `bootstrap_owed`), `:169-205` (`launchctl_status`), `:411-449` (the loaded check and the `not loaded` finding).
+- `src/cobalt/smoke/checks.py:415-451` (`_launchctl`, `registry_match`).
+- `tests/cobalt/test_jobs.py:953-1032` (`OWED_LABEL`, `TestBootstrapOwed`, `_sweep`); `tests/cobalt/test_smoke.py:1583-1643` (`OWED_LABEL`, `_Spec`, `_k18`, the `test_ow1_*` tests).
+- `ops/desk/deploy-outage.sh:5-6` (the record's format), `ops/desk/retired-labels`.
+
+## DEPLOY PROOF
+- `grep -c -F "RETIRED_LABELS_PATH" /Users/cobalt/cobalt/src/cobalt/jobs/watchdog.py` · before `0` · after the count the builder quotes from its `TIP` (at least `2`)
+- `grep -c -F "card 1099" /Users/cobalt/cobalt/src/cobalt/smoke/checks.py` · before `0` · after the count the builder quotes from its `TIP` (at least `1`)
+- `grep -c -F "test_2610" /Users/cobalt/cobalt/tests/cobalt/test_jobs.py` · before `0` · after the count the builder quotes from its `TIP` (at least `3`)
+- `grep -c -F "test_2610" /Users/cobalt/cobalt/tests/cobalt/test_smoke.py` · before `0` · after the count the builder quotes from its `TIP` (at least `3`)
+- ONE SMOKE READ after the merge: `uv run pytest -q -p no:cacheprovider tests/cobalt/test_jobs.py tests/cobalt/test_smoke.py` → `0 failed`.
+- AFTER DEPLOYED, the desk's: `COBALT_ENV=production uv run cobalt jobs check` prints a `com.cobalt.agent` line that starts `OK` and carries `retired`, and no `RED` line for it; the next heartbeat beat header no longer counts it. `launchctl list` still does not know `com.cobalt.agent` (it is never loaded).
+
+## RECORDS
+- com.cobalt.agent stays retired, never loaded; false heartbeat RED fixed by agent-retired-probe (reads ops/desk/retired-labels; retired-but-running stays RED) — brain 9b07db5a 2026-10-30
+- Drafter `draft-agent-retired-probe`, 2026-10-30 07:1x ET (the machine's `date`), `main` HEAD `6840cf32` (`git -C /Users/cobalt/cobalt rev-parse --short=8 main`). Every `file:line` read on the working tree and re-read with `git -C /Users/cobalt/cobalt grep -n … main -- <path>` (`watchdog.py:44,55,63,421,441,448`; `checks.py:426,428,436`; `test_jobs.py:952,955`; `test_smoke.py:1583,1586,1591`). Nothing was run but reads; no test was executed (every RED above is UNPROVEN until the builder quotes it).
+- RESTARTS is read, not derived: `src/cobalt/cos/run.py:50` imports `pidfile_alive` from `cobalt.jobs.watchdog`, so a change to `watchdog.py` reaches the `com.cobalt.cos` resident (L42). The derivation `uv run cobalt jobs restarts <BASE>..HEAD` is the builder's and the deploy's; its output replaces this line if it differs.
