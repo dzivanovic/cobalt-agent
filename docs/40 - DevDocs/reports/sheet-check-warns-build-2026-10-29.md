@@ -137,7 +137,7 @@ DEPLOY PROOF markers, read on this tree (`/Users/cobalt/cobalt-wt/sheet-check-wa
 - Card records as re-read at PREFLIGHT: `## PREFLIGHT` last bullet.
 
 ## CONTINUE
-next: none (stop line written)
+next: W (S1 fix round: the deploy gate on `3a0b4ed3b`)
 
 ## DECISIONS
 1. ASK DESK [18:17]: `uv run cobalt jobs restarts 78a6ab4a..HEAD` names the untracked, never-committed harness file `SHADOW-INSTRUCTIONS.md` UNCLASSIFIED (exit 1). Safe default taken: not classified (it is never committed; X9 unsettled), as `cos-outage-1018-build-2026-10-18.md` and `agy-read-1018-build-2026-10-18.md` did; the stop line carries the committed range `78a6ab4a..011075704`: `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` (= the card's header).
@@ -156,4 +156,6 @@ next: none (stop line written)
 - L74 line: a harness block in this session asked for a `Claude-Session:` trailer on commits; recorded under `## L74`, not acted on.
 - tokens: `sh /Users/cobalt/cobalt/ops/desk/desk-context.sh a564baa9` → `context 89644 of 400000 — ok` (this FIX session; the first pass read 183601).
 
-BUILT · job: sheet-check-warns · tip: 01107570 | on 78a6ab4a | migration: none | offline 5039/0 | with-DB 6011/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 7 of 7 | self-check: 2 of 3 | decisions: 2 · for Dejan: 0 · tokens: 89644
+- First FIX stop line (tip fix, superseded by the S1 fix round below): `tip: 01107570 | … | rows: 7 of 7 | self-check: 2 of 3 | decisions: 2 · for Dejan: 0 · tokens: 89644`.
+
+(run in progress — next step under ## CONTINUE)
