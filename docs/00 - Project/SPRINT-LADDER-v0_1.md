@@ -1351,6 +1351,31 @@ Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as writt
 
 OFF-LADDER work of 2026-10-27: none (rows are desk records, day-open, the X15 third pass and its cleanup, all under the F4 ladder row; the F4 THIRD PASS probe was ordered by brain R2542, L79).
 
+### Status 2026-10-29
+Sprint status block (ruled 09-19 R14); earlier `### Status` blocks stay as written. Written by close hub `close-1029` for 10-29 alone from `reports/cto-2026-10-29.md` rows R2559–R2604 (09:36 → 22:45 ET); tag check (L35): `git tag --list "deploy-2026-10-29*"` = `deploy-2026-10-29-sheet-check-warns`. No `cto-2026-10-28.md` exists (the desk was idle), so there is no 10-28 block and the 10-28 close stopped at AUTHORIZATION (`close-2026-10-28.md`); the 10-27 close ran (`CLOSE PUSHED 817b65d97`). Status only — scope, dates and order change by his ruling alone.
+
+| Feature | Status | Evidence |
+|---|---|---|
+| S3 F11, F22, F14, F15, smoke · S4 · S5 F21, F16 | DONE-LIVE | Unchanged (see 10-08 to 10-27). F21 production genesis import: no card, held for his scope call (R2554, OWED in `cto-2026-10-29.md` §5). |
+| S5 F5 (card `731`, port job `f5-checkpoints-fr2`) and X3 values | DONE-DARK | The four checkpoint plists are OWED bootstrap (heartbeat 22:06 ET). Owed: his legs X5, X7, X10, X12. |
+| S5 F20 (cards `929`, `1000`, `1004`) | DONE-LIVE | `com.cobalt.cos` running, loop stamping (heartbeat 22:06 ET). Owed: X15 four legs. |
+| S5 F4 prefill (cards `778`, `1047`, `1049-C`) | DONE-LIVE (probe, reserve) · DONE-DARK (prefill-refresh) | prefill-refresh plist OWED bootstrap. Owed: his X7 render and X9 Sync legs. |
+| S5 F23 playbook (cards `779`, `1046`) | DONE-DARK | `com.cobalt.playbook` OWED bootstrap. Waits for his Keynote/PowerPoint opens (asked again R2585); then SECOND PASS to f23-gate-run `ec994048` and bootstrap deploy 1051. |
+| S5 radar-mirror-scope port4 and settings restore | DONE-LIVE | Unchanged; `com.cobalt.radar` running, day-open 10-29 GREEN (R2562). |
+| S5 radar S5 evaluate / replay | DONE | `com.cobalt.replay` last finish 2026-10-29 21:27 ET exit 0 (heartbeat 22:06 ET). |
+| Day-mode open, card `1081` (enabled_modes, prodwrite seat `c5bba788`) | DONE-LIVE | WRITTEN (R2587, backup ssd/534339ca); `cobalt validate` shows enabled `['reduced', 'half', 'full']`. |
+| Day-mode open, card `1082` sheet-check-warns | DONE-LIVE | DEPLOYED `cf4e75f3` (main `6ffe03d09`), tag `deploy-2026-10-29-sheet-check-warns`, smoke GREEN, downtime 20 s (R2602). |
+| K5 launcher-tip-prefix, card `1085` | BUILDING | Built tip `2edcf295` (R2594); check ready NO, tip `5babf712`, O1 held (R2600); route A ruled (R2601); F1 FIX build `1492da15` launched 22:45 ET (R2604); then deploy-card `--fix-report`, deploy, install-ops. |
+
+**Stop date: 2026-10-28 (S5, day 14 of 14; passed). 10-29 is day 1 of the acceptance week (10-29 → 11-04). S5: LATE.** Reason: F5, F4 prefill-refresh and F23 are still DONE-DARK and wait on his legs and opens, bootstrap deploys 1048 and 1051 wait on them, and `com.cobalt.agent` is not loaded (heartbeat RED, 1 job). No ruling moved a date (`cto-2026-10-29.md`).
+
+OFF-LADDER work of 2026-10-29 (each with the ruling that ordered it):
+| Item | Status | Ruling · evidence |
+|---|---|---|
+| Day-mode open, cards `1081` and `1082` | DONE-LIVE | His R2563 ("enable everything I need to use. I want all enabled"). 1081 WRITTEN (R2587), 1082 DEPLOYED (R2602). |
+| One production read of the seven daymode/aset settings rows | DONE | Brain R2568 (L79), under R686. |
+| K5 card launcher-tip-prefix `1085` | BUILDING | Brain R2571, R2595, R2601 (L79). Build `7d1bc3fb`, check `d50416d7`, F1 FIX build `1492da15` (R2604). |
+
 ---
 
 ## S4 — 19b trigger detection + strike alert (10-08 → 10-14, ONE WEEK, CAPPED; was 10-19 → 10-23)

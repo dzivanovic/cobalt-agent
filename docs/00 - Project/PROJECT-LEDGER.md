@@ -5446,3 +5446,52 @@ Source: `cto-2026-10-03.md` §4 R1–R291 (the file carries 10-03 and 10-04 rows
 - DEPLOY (L35): `git tag --list "deploy-2026-10-27*"` = none; the 00:30 deploy carries the 10-26 tag `deploy-2026-10-26-f4-strike-reserve`.
 - STOP LINE (L35), `reports/close-2026-10-26.md`: `CLOSE PUSHED cbc7a276`.
 - PUSHES (L55): this close's push is recorded in `reports/close-2026-10-27.md` `## 8`.
+
+### 2026-10-29 — All day modes enabled in production (1081) and sheet-check-warns deployed (1082); launcher-tip-prefix 1085 check ready NO, F1 FIX build running
+
+- R2559 09:36 RECORD: day file 10-29 opened by desk `dfaeff87` (no 10-28 file); OWED carried from `cto-2026-10-27.md`.
+- R2560 09:50 RECORD: his words, aset must not stop him; asked one A/B (enable all modes + sheet check warns, or check off), recommend A.
+- R2561 10:25 LAUNCHED: day-open 10-29 first run FAILED (stale 10-27 report); relaunched once after a verified /clear.
+- R2562 10:45 RECORD: day-open 10-29 GREEN on the rerun (C1-C6 PASS, radar pid 99054, 720 membership rows).
+- R2563 11:05 HIS RULING · APPROVED: all day modes enabled; sheet check warns, never refuses (A).
+- R2564 11:08 LAUNCHED: drafter `978579d1` (draft-daymode-open) for cards 1081 and 1082.
+- R2565 17:46 RECORD: drafter DRAFTED cards 1081 and 1082; 5 ASK DESK answered by defaults.
+- R2566 17:55 LAUNCHED: preflight `b362cfe4` of cards 1081 and 1082.
+- R2567 17:50 RECORD: preflight 32 checks, 1 fail (R2563 cite line), ready YES; desk REFRESHING at 236k tokens.
+- R2568 17:50 RECORD: brain direction (L79): one production read for 1081 under R686; 1082 launch ok.
+- R2569 17:51 LAUNCHED: build 1082 sheet-check-warns `14fcda4a` (MID, routed; BASE `78a6ab4a`; commit `597c9a753`).
+- R2571 18:05 DESK RECORD (brain, L79): 1082 check refused on the 9-hex tip; 1082 FIX by precedent; K5 card launcher-tip-prefix.
+- R2572 18:56 LAUNCHED: 1082 FIX `a564baa9` (HIGH Opus, tip `01107570`).
+- R2573 18:56 LAUNCHED: drafter `d2231a09` (draft-launcher-tip-prefix).
+- R2574 19:09 LAUNCHED: 1082 check `1da6ae62`; the FIX landed first (tip `01107570`, `61824a61b`).
+- R2575 19:10 DESK RECORD (brain, L79): 1081 GATE 1/2 dry runs are the prodwrite seat's first steps.
+- R2576 19:10 RECORD: finding, bare-guard.py:1099-1105 refuses `--dry-run` for the prodwrite seat; K5 guard card proposed.
+- R2577 18:58 DESK RECORD (brain, L79): R2576 guard card DROPPED; 1081 follows the 10-24 restores.
+- R2579 18:59 LAUNCHED: drafter `e9179aa8` (amend 1081); `d2231a09` DRAFTED card 1085.
+- R2581 19:05 DESK RECORD (brain, L79): route (b), bare `settings load --from <forward> --apply`.
+- R2582 19:06 LAUNCHED: amend drafter r2 `7cf37139` and preflight `979a1346` of card 1085; `e9179aa8` FAILED.
+- R2583 19:20 LAUNCHED: build 1085 launcher-tip-prefix `7d1bc3fb` (K5, HIGH Opus, BASE `4f1c991f`).
+- R2584 19:30 RECORD: 1081 amend DRAFTED; LAUNCHED Sonnet preflight `2cccac0e` (BASE `1903c47f`).
+- R2585 19:34 RECORD: ASKED him to open the F23 deck in Keynote and PowerPoint, then SECOND PASS to `ec994048` and bootstrap deploy 1051.
+- R2586 19:06 LAUNCHED: prodwrite 1081 `c5bba788` (K3, Opus; backup first, bare `settings load --from … --apply`).
+- R2587 19:10 RECORD: 1081 WRITTEN (backup ssd/534339ca, rows 1); read-back of the seven rows: only daymode.enabled_modes moved.
+- R2588 19:20 RECORD: 1082 check ready NO (tip `d57714468`), O1 held; LAUNCHED drafter `4a58f193`.
+- R2589 20:12 RECORD: desk `14f91d58` took over (HANDOVER 20:04); LAUNCHED preflight `55b31d52` of S1.
+- R2590 20:25 RECORD: S1 preflight NO (3 fails); LAUNCHED drafter `8da49c01` to re-issue S1.
+- R2591 20:40 LAUNCHED: S1 re-issued DRAFTED; Sonnet preflight `6f4ee784` (prompt 1093).
+- R2592 20:55 RECORD: S1 re-preflight ready YES (14 checks, 0 fails); LAUNCHED FIX build `e5350770` (1082).
+- R2593 21:10 RECORD: watch fired on a stale .result; desk committed a report mid-write (wt `498cc9fe6`), a slip.
+- R2594 21:40 RECORD: 1085 BUILT (tip `2edcf295`, offline 9181/0); ASKED the brain to judge 2 decisions.
+- R2595 21:50 DESK RECORD (brain `9b07db5a`, L79): 1085 ACCEPT both decisions; LAUNCHED check `d50416d7`.
+- R2596 22:30 RECORD: 1082 FIX build BUILT (tip `3a0b4ed3`, with-DB 6014/0); ASKED the brain to judge 4 decisions.
+- R2597 23:05 DESK RECORD (brain, L79): 1082 four decisions ACCEPT; deploy-card REFUSED (fix report lists FIXED O2, O3).
+- R2598 23:15 LAUNCHED: builder `a572bb24` (1082, trim the fix report to FIXED O1).
+- R2599 20:57 LAUNCHED: deploy hub `1ff65dae` (1082, card 1094, TIP `e43330f5`); card committed `5c0f824b6`.
+- R2600 21:20 RECORD: 1085 CHECK DONE ready NO (tip `5babf712`, held unfixed 1: O1); ASKED the brain.
+- R2601 21:35 DESK RECORD (brain, L79): 1085 O1 route A, fix row F1 on card 1085; drafter prompt 1095 written.
+- R2602 22:00 RECORD: 1082 DEPLOYED `cf4e75f3` (main `6ffe03d09`), smoke GREEN, downtime 20 s, gate 9178/0 · 6014/0 · 148/0.
+- R2603 22:20 RECORD: F1 for card 1085 DRAFTED (2 ASK DESK, defaults); LAUNCHED Sonnet preflight `2b6b0571` (prompt 1096).
+- R2604 22:45 LAUNCHED: F1 preflight ready YES (12 checks, 0 fails); FIX build `1492da15` (1085, HIGH Opus).
+- DEPLOY (L35): `git tag --list "deploy-2026-10-29*"` = `deploy-2026-10-29-sheet-check-warns` (`cf4e75f34`).
+- STOP LINE (L35), `reports/close-2026-10-28.md`: `FAILED: AUTHORIZATION — no desk report committed`; the newest PUSHED close is `reports/close-2026-10-27.md`: `CLOSE PUSHED 817b65d97`.
+- PUSHES (L55): this close's push is recorded in `reports/close-2026-10-29.md` `## 8`.

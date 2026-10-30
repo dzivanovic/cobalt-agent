@@ -19,6 +19,31 @@ size, not as an amount owed.
 Newest day first.
 
 <!-- cobalt:days -->
+<!-- cobalt:section seat-usage:2026-10-29 -->
+### 2026-10-29
+
+weekly_pct_open:
+weekly_pct_close:
+
+<!-- cobalt:unit seat-usage:2026-10-29 -->
+| model | role hint | cache read | cache write | output | API-equivalent $ | Δ since last run |
+|---|---|---:|---:|---:|---:|---:|
+| `grok-4.7-build` | grok · — | 3,864,576 | 0 | 138,392 | $1.28 | $0.00 |
+| `mainframe` | qwen · local lane (L23) — delegated mundane work, token conservation | 0 | 0 | 4,497 | $0.00 [^free] | $0.00 |
+| `claude-opus-5-5` | claude · — | 70,538,130 | 2,468,015 | 292,731 | **unpriced** | — |
+| `claude-sonnet-5-5` | claude · — | 94,342,626 | 1,878,553 | 288,611 | **unpriced** | — |
+
+**Day total (API-equivalent):** ≥ $1.28 · **174,696,068** tokens across 4 model(s), seats: claude, grok, qwen
+**Fresh input tokens:** 879,937 — not a column above because it is a rounding error beside cache reads, but it is priced into the dollar figures.
+
+> **UNPRICED MODELS: `claude-opus-5-5`, `claude-sonnet-5-5`.** These were used today and the pinned tool's offline pricing table has no rate for them, so their cost is missing rather than zero, and the day total above is a FLOOR. Fix by bumping the pin in `configs/cobalt/seat_usage.yaml` (a decision, with a diff), never by letting the job reach the network.
+
+[^free]: `mainframe` — the local Qwen3.8-27B MLX server on this Mac (L23's local lane). Its cost is electricity and the Mac Studio, not API spend — $0 here is the true number, not a missing one, so it never raises the hourly unpriced warning.
+
+_Generated 2026-10-29 22:00 EDT by `seatusage.report` · ccusage 20.0.20 (MIT, pinned) · offline pricing, no network at run time._
+_Command: `/Users/cobalt/.npm-global/bin/ccusage daily --json --breakdown --since 20261029 --until 20261029 --by-agent --offline`_
+<!-- /cobalt:unit seat-usage:2026-10-29 -->
+<!-- /cobalt:section seat-usage:2026-10-29 -->
 <!-- cobalt:section seat-usage:2026-10-28 -->
 ### 2026-10-28
 
