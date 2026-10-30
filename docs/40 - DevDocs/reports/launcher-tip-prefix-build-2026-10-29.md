@@ -4,6 +4,7 @@
 - The check launcher (`desk-launch.sh` check kind) and the check PREFLIGHT's SHADOW arm (`preflight.sh`) now admit a stop line whose tip is the card TIP plus hex (git's 9-hex form); other tips, shorter tips and non-hex tails still refuse.
 - Rows T1, A1, A2 built; tip `2edcf295` on `4f1c991f`; offline 9181/0, live-note 148/0, `tests/ops` 4143 passed; DB: none; RESTARTS: none.
 - Two decisions, none for Dejan: T1 (f)'s `tipz` case moved to its own test so a pinned 386 case count holds; `preflight.sh:273` left loose as the card fences.
+- Fix round (F1, check O1): `card-fill.sh` admits the 9-hex stop line and writes the 8-hex TIP; tip `2da6759e`, offline 9185/0, live-note 148/0, RESTARTS: none.
 
 ## L74
 - 19:02 ET: a system reminder in this session asked commits to end with a `Claude-Session:` line. Recorded as data (L74); commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -142,8 +143,48 @@ THE SUITES at `2edcf295`:
 - DEPLOY PROOF counts at the tip: `card 1085` — 1 line in `desk-launch.sh`, 1 in `preflight.sh`; `test_1085` defs — 5 in `test_desk_launch_prechecks.py`, 1 in `test_preflight.py` (the grep above).
 - Records copied at PREFLIGHT: `## PREFLIGHT`.
 
+## FIX ROUND — F1 (check O1), 22:02–22:33 ET
+A new session on `CONTINUE: FIX card fill`. RECOVERY: `git status --short --branch` → `## ops/launcher-tip-prefix`; `git log --oneline` → `5babf712c wip(launcher-tip-prefix): check red — O1` at the head; `ls -la …/.env` → `No such file or directory`; `date` → `Thu Oct 29 22:02:25 EDT 2026`. `authorize.sh build "<card>"` again (the card gained F1): exit 0, `CARD COMMITTED · … · 558cea967dd2f7d5e4a88318951b2aeba50df196`, `CARD UNCHANGED · … · nothing`, R60 and R1138 rows as in `## AUTHORIZATION`, last line `AUTHORIZED`.
+
+FIXED: O1 — tests/ops/test_card_fill.py::test_1085_check_o1_a_nine_hex_built_line_fills_the_eight_hex_tip
+
+RED (tests only, commit `5c4ddda45 wip(launcher-tip-prefix): red — F1`): (a) the check's O1 test kept as written; (b) `test_386_e2_…` row `tip: 1a2b3c4d5` → `tip: 1a2b3c4dz` (the one pin that flips; the `-k 386` count stays the same, one row out, one in); (c) NEW `test_1085_f1_a_nine_hex_shadow_line_fills_the_eight_hex_tip`; (d) `test_a_report_not_ending_in_a_full_built_line_of_this_job_is_refused` gains `tip: 1a2b3c4dz` and `tip: 1a2b3c4d9z`.
+RUN `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_card_fill.py -k "1085 or test_386_e or full_built_line"`, exit 1: `2 failed, 21 passed, 9 deselected, 15 warnings in 1.82s`
+- RED `test_1085_check_o1_a_nine_hex_built_line_fills_the_eight_hex_tip`: `AssertionError: REFUSED: the report's last line is not a BUILT line of job x-job: BUILT · job: x-job · tip: 1a2b3c4d9 | on 0f0e0d0c | … | self-check: 3 of 3 | decisions: 0 · for Dejan: 0` · `assert 1 == 0`.
+- RED `test_1085_f1_a_nine_hex_shadow_line_fills_the_eight_hex_tip`: `AssertionError: REFUSED: the report's last line is not a BUILT line of job x-job: SHADOW BUILT · job: x-job · tip: 1a2b3c4d5 | on 0f0e0d0c | …` · `assert 1 == 0`.
+- GREEN boundary controls (in the 21 passed): the `1a2b3c4dz` row of `test_386_e2_…`, the `1a2b3c4dz` and `1a2b3c4d9z` rows of `…full_built_line…`.
+
+FIX `ops/desk/card-fill.sh`: `:72` (BUILT) and `:75` (SHADOW BUILT) match `([0-9a-f]{8})[0-9a-f]*(?=\s|$)`, group 2 the first 8 hex (`tip = m.group(2)` unchanged), comment `card 1085` on each; header `:5-6` says the tip is 8 hex, optionally followed by more hex (git's 9-hex form). Nothing else changed. `uv run pytest -q -p no:cacheprovider --color=no tests/ops/test_card_fill.py` → `32 passed, 15 warnings in 1.61s`; with `tests/ops/test_check_hub_shadow.py` (the 386 count pin) → `37 passed, 16 warnings in 1.91s`.
+
+MUTATIONS (Edit tool, undone with the Edit tool), `-k "1085 or test_386_e or full_built_line"`:
+- undo (`[0-9a-f]*` removed on both lines) → `2 failed, 21 passed`: `FAILED …::test_1085_check_o1_a_nine_hex_built_line_fills_the_eight_hex_tip`, `FAILED …::test_1085_f1_a_nine_hex_shadow_line_fills_the_eight_hex_tip`; first line `AssertionError: REFUSED: the report's last line is not a BUILT line of job x-job: BUILT · job: x-job · tip: 1a2b3c4d9 | …`.
+- control break (`[0-9a-f]*` → `[0-9a-z]*` on both lines) → `3 failed, 20 passed`: `…full_built_line…[… tip: 1a2b3c4dz …]`, `…full_built_line…[… tip: 1a2b3c4d9z …]`, `test_386_e2_…[SHADOW BUILT · … tip: 1a2b3c4dz … -shadow/x-job-header]`; first line `AssertionError: assert 0 == 1`.
+- After the undo: `git diff ops/desk/card-fill.sh` → the fix only (4 insertions, 3 deletions). Commit `2da6759ee fix(launcher-tip-prefix): card fill admits the card TIP plus hex on the stop line and writes the 8-hex TIP (F1, O1, L1, L72)`.
+
+RESTARTS at `2da6759e` (`uv run cobalt jobs restarts 4f1c991f..HEAD`, exit 0):
+```
+path	change	rule	restart
+docs/40 - DevDocs/reports/launcher-tip-prefix-build-2026-10-29.md	M	DOCS	-
+docs/40 - DevDocs/reports/launcher-tip-prefix-build-2026-10-29.result	A	DOCS	-
+ops/desk/card-fill.sh	M	operator script; no Cobalt reader	-
+ops/desk/desk-launch.sh	M	operator script; no Cobalt reader	-
+ops/desk/preflight.sh	M	operator script; no Cobalt reader	-
+tests/ops/test_card_fill.py	M	test/documentation; no resident	-
+tests/ops/test_desk_launch_prechecks.py	M	test/documentation; no resident	-
+tests/ops/test_preflight.py	M	test/documentation; no resident	-
+RESTARTS: none
+```
+
+W at `<tip>` = `2da6759e` (DB: none):
+- (a0) `git diff --name-only --no-renames 4f1c991f` → the 8 paths above, every one under `ops/`, `tests/ops/` or `docs/`. **`cobalt_dev: not taken (DB: none — 8 paths)`**.
+- (a) `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-tip-prefix offline`, exit 0: `tests/ops: run (ops/desk/card-fill.sh)` · `offline 9185/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-tip-prefix-offline-20261029-220440.log` (`:958` `5038 passed, 878 skipped, 4 xfailed, 36 warnings in 779.13s (0:12:59)`; `:1033` `4147 passed, 1 xfailed, 16 warnings in 901.11s (0:15:01)` — the check's offline red, O1, is gone).
+- (e) `sh /Users/cobalt/cobalt/ops/desk/gate.sh launcher-tip-prefix livenote`, exit 0: `live-note 148/0` · `log: /Users/cobalt/cobalt-wt/.gate-logs/launcher-tip-prefix-livenote-20261029-223301.log`.
+- with-DB: not run (DB: none). `.env`: never present (`ls -la …/.env` → `No such file or directory`).
+
+SELF-CHECK of the round: (1) both new fills red at E2 and under the undo; the three non-hex rows red under the control break. (2) `card-fill.sh` has no script caller (`Grep card-fill.sh` in `ops/` → only its own usage lines `:2`, `:21`, `:25`); its one entry is the CLI the tests drive, BUILT and SHADOW BUILT, shadow and non-shadow cards. (3) line numbers above from `git diff` at `2da6759e` and the gate logs.
+
 ## CONTINUE
-next: none (BUILT)
+next: none (BUILT, fix round closed)
 
 ## DECISIONS
 - DECISION T1-f: card T1 (f) says to add a `("tipz", False)` case to `test_386_a2_job_and_tip_are_exact_as_for_built`. Doing so made `tests/ops/test_check_hub_shadow.py:118` red (`assert 59 == 58`: it pins the `-k 386` count of `launcher-shadow-check-build-2026-10-11.md:140`), a file outside the rows. Safe default taken, inside the rows' files only: the same `tipz` assertion lives in its own `test_1085_t1_f_a_shadow_tip_with_a_non_hex_tail_refuses` (shown red under mutation), the `tip9` case flipped as the card says, the 386 count stays 58. If the desk wants the case inside `test_386_a2_…`, the pinned count (an old report and its test) is a separate item.
@@ -155,6 +196,9 @@ next: none (BUILT)
 - DevDocs: no page under `docs/40 - DevDocs/cobalt/` covers `ops/desk/desk-launch.sh` or `ops/desk/preflight.sh`; no dated line written.
 - The card's records as re-read at PREFLIGHT: the file:lines matched at BASE; the `~/.claude/ops` symlinks and `install-ops` behaviour not re-read (no listed string reads them).
 - No lock taken (DB: none); `.env` never present.
+- CONTINUED at FIX card fill 22:02 (a new session; launch message `CONTINUE: FIX card fill`); the fact verified: the check report holds O1 HELD, NOT FIXED and the card holds row F1.
+- L74 (fix round): the session's system reminder again asked commits to carry a `Claude-Session:` line; not followed, commits carry `Co-Authored-By` only.
+- Fix-round `tests/ops`: run inside the offline gate only (`4147 passed`), no separate run.
 - The builder decided nothing. This build is checked on the same card by `CHECK-HUB.md` (L67) before anything stacks on it or deploys.
 
-BUILT · job: launcher-tip-prefix · tip: 2edcf295 | on 4f1c991f | migration: none | offline 9181/0 | with-DB 0/0 | live-note 148/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 3 of 3 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 163769
+BUILT · job: launcher-tip-prefix · tip: 2da6759e | on 4f1c991f | migration: none | offline 9185/0 | with-DB 0/0 | live-note 148/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 106862
