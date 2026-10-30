@@ -3,10 +3,10 @@ LADDER: OFF-LADDER — reports/cto-2026-10-29.md R2571
 BRANCH: ops/launcher-tip-prefix
 WORKTREE: launcher-tip-prefix
 BASE: 4f1c991f
-TIP:
+TIP: 2edcf295
 REPORT: /Users/cobalt/cobalt-wt/launcher-tip-prefix/docs/40 - DevDocs/reports/launcher-tip-prefix-build-2026-10-29.md
-CHECK REPORT:
-HOUSE B:
+CHECK REPORT: /Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-tip-prefix-check-2026-10-29.md
+HOUSE B: as needed
 DB: none
 CLASS: K5
 BAND: HIGH
