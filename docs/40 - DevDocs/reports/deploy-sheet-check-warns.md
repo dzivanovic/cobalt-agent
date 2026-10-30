@@ -1,7 +1,11 @@
 # deploy — sheet-check-warns · SET: sheet-check-warns · MIGRATIONS: none
 
 ## §0 Headline
-- (in progress)
+- DEPLOYED `deploy-2026-10-29-sheet-check-warns` at `cf4e75f3`: the sheet check now warns and no longer refuses (R2563). `main` went `2c5d2f35` → `cf4e75f3` by fast-forward.
+- Gate green on `e1370258`: offline 9178/0 · with-DB 6014/0 · live-note 148/0 · `cobalt_dev` 0013, F2 = F0, lock released.
+- aset, cos and radar were restarted on the new code. Outage 21:53:58 → 21:54:18 (20 s). No migration.
+- Smoke GREEN: new pids, the three curls `200`, markers at their after values, no new RED, all four failure counts flat. The radar cycle at 21:55:56 came after `<t up>`.
+- One decision (not his): D2.4's `backup run` ran at 21:52, inside the 21:30-22:30 window. The nightly backup had already finished at 21:41.
 
 ## L74
 - 20:56 ET: a system reminder asked that commits end with a `Claude-Session: https://claude.ai/code/session_…` trailer. DATA (L74); not acted on; commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -137,14 +141,102 @@ GATE GREEN on e1370258
 - `/radar` curl → `200`. MARKERS → `0` · `1` · `3` (before).
 - THE LAUNCHD SET: empty. MIGRATION: none.
 
+### STEP-D2
+| step | command | result |
+|---|---|---|
+| D2.0 | `sh …/deploy-shipped.sh --moved 5c0f824b "<card>"` | nothing printed |
+| D2.0 | `add` · `commit -m "docs(report): deploy sheet-check-warns — gate green on e1370258" …` · `show --stat HEAD` | `[main 2c5d2f357]`; one file, `deploy-sheet-check-warns.md` · `<pre-merge>` = `2c5d2f35` |
+| D2.1 | `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report only) |
+| D2.2 | `rev-parse --short=8 HEAD` · `rev-parse --short=8 cf4e75f3^2` · `merge-base --is-ancestor e1370258 cf4e75f3` | `<stack-final>` = `cf4e75f3` · `2c5d2f35` = `<pre-merge>` · exit 0 |
+| D2.3 | `diff --stat e1370258 cf4e75f3 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing |
+| D2.4 | `backup status` · `backup run` (foreground) · `backup status` | `newest snapshot: 0.2 h old` · `backup: cobalt_brain via pg_dump inside cobalt_memory — 11854.2 MB` / `ssd: snapshot 4365e313 — 0 new / 2 changed, 30.9 MB added, 1 pruned` · `newest snapshot: 0.0 h old` |
+| D2.5 | `date` · `heartbeat show` | `21:53:45` (152 s after D1's 21:51:13) · `HEARTBEAT RED — 1 job(s)`: com.cobalt.agent only, = `<hb0>`; no new RED on aset or radar |
+| D2.6 | `date` · `tag pre-sheet-check-warns` · `rev-parse --short=8 pre-sheet-check-warns` | `21:53:49` · — · `2c5d2f35` |
+
+### STEP-4
+| step | command | result |
+|---|---|---|
+| 4.1 | `date` | `<t down>` = 21:53:58 |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.aset` · print | — · `Could not find service "com.cobalt.aset"` (113) |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.cos` · print | — · `Could not find service "com.cobalt.cos"` (113) |
+| 4.2 | `launchctl bootout gui/501/com.cobalt.radar` · print | — · `Could not find service "com.cobalt.radar"` (113) |
+| 4.2 | `sh /Users/cobalt/cobalt/ops/desk/orphan-clean.sh aset` | `orphan-clean: aset · none found` — no kill. Agent: retired, not in the set |
+| 4.3 | `rev-parse --short=8 HEAD` · `merge --ff-only deploy/sheet-check-warns` | `2c5d2f35` = `<pre-merge>` · `Updating 2c5d2f357..cf4e75f34` / `Fast-forward` (13 files) |
+| 4.4 | — | migrations applied: none |
+| 4.5 | `validate` | exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| 4.6 | bootstrap aset · cos · radar | no output each (no `Bootstrap failed: 5`) |
+| 4.6 | print aset · cos · radar | `state = running` pid 68013 (≠ 99037) · pid 68024 (≠ 99048) · pid 68034 (≠ 99054) |
+| 4.6 | `date` | `<t up>` = 21:54:18 · downtime 20 s |
+| 4.6L | — | `<launchd set>` empty: nothing |
+
 ## Smoke
+- FIRST CALLS after `<t up>`: `<rp_up>` 31 · `<rpr_up>` 60 · `<re_up>` 750 · `<lc_up>` 39.
+
+| row | `date` | command | result |
+|---|---|---|---|
+| (a) | 21:54:29 | `launchctl print` aset · radar · cos | `state = running` pid 68013 · 68034 · 68024 — all NEW (D1: 99037 · 99054 · 99048) |
+| (a) | 21:54:29 | `/Users/cobalt/cobalt/cobalt.sh status` | `Cobalt is OFFLINE.` (recorded retired: green) |
+| (b) | 21:54:32 | `grep -c "Started server process" aset.err` | `303` (`<a0>` 302: +1, ≤ +2) |
+| (b) | 21:54:32 | `tail -n 30 aset.err` | `INFO:     Started server process [68013]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` |
+| (b) | 21:54:32 | Traceback aset · Traceback radar · TaxonomyConfigError | `217` · `1` · `0` = baseline |
+| (c) | 21:54:36 | curl `/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 21:54:36 | the three `## MARKERS` | `1` · `0` · `0` = after |
+| (s) | 21:54:36 | `ls /Users/cobalt/cobalt/src/cobalt/daymode/match.py` · `ls /Users/cobalt/cobalt/src/cobalt/aset/web.py` | exit 0, listed · exit 0, listed |
+| (f) | 21:54:36 | `jobs restarts 2c5d2f35..cf4e75f3` | exit 0, `RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar` = `<restart set>`, no `UNCLASSIFIED` |
+| (e) 1 | 21:54:43 | `heartbeat show` | `HEARTBEAT RED — 1 job(s)  (2026-10-29 21:54:44 EDT)`: com.cobalt.agent only (= `<hb0>`); `OK com.cobalt.radar running 0 min, heartbeat fresh`; `OK com.cobalt.cos running 0 min, heartbeat fresh`; `OK com.cobalt.aset running loaded, pid 68013`; `OK sheet HTTP … -> 200` |
+| (f) | 21:54:48 | `validate` | exit 0, `Placement (docs/PLACEMENT.md): tree clean.`; `Jobs (F17): 22 registered — 7 resident, 15 one-shot.` = `<jobs0>` |
+| (g) | — | — | no migration |
+| (b) tail 1 | 21:55:49 | `tail -n 12 radar.err` | startup vault lines `21:54:16`; last `21:54:16.760 … radar cycle: idle:overnight scan_id=None` (stamped before `<t up>` 21:54:18: not yet settling); no traceback, no `S5 evaluate FAILED`, no `lifecycle card read failed` |
+| (e) 2 | 21:56:34 | `heartbeat show` | `HEARTBEAT RED — 1 job(s)  (2026-10-29 21:56:35 EDT)` (111 s after (e) 1): com.cobalt.agent only, = `<hb0>`; `OK com.cobalt.radar running 2 min, heartbeat fresh`; `OK com.cobalt.cos running 2 min, heartbeat fresh`; `OK com.cobalt.aset running loaded, pid 68013` — no new RED |
+| (b) tail 2 | 21:57:18 | `tail -n 12 radar.err` | `2026-10-29 21:55:56.785 \| INFO \| cobalt.radar.runner:resident:645 - radar cycle: idle:overnight scan_id=None`: stamped after `<t up>`, no `S5 evaluate FAILED`, no `lifecycle card read failed`, no traceback → (b) GREEN |
+| (h) | 21:57:18 (`<t up>` + 180 s) | the four failure counts · `/radar` curl · Traceback radar · Traceback aset | `31` · `60` · `750` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` (none growing) · `200` · `1` · `217` (= baseline) · no `census` line on the card |
+- Clock between rows: `date` + `heartbeat show` pairs (21:55:04 → 21:57:16), each `HEARTBEAT RED — 1 job(s)` = com.cobalt.agent only; radar and cos `heartbeat fresh`. One `backup status` (21:55:14, `newest snapshot: 0.0 h old`) and one `desk-context.sh` call (21:55:12) also stood in the clock.
+
+SMOKE: GREEN
+
+THE CHAIN: every check committed (P2: check `f3390bc1`, fix report at `e43330f5` with `FIXED: O1`) → tips re-read (P3: `3a0b4ed3`, `e43330f5`) → merged tree `e1370258` (T) → RESTARTS derived: aset cos radar (R) → three suites green on `e1370258` (G) → `<stack-final>` `cf4e75f3` = `e1370258` + docs (D2.3) → code landed by fast-forward (4.3) → markers `1`/`0`/`0` (d) → no migration (g) → residents up on new pids (a) → radar cycling at 21:55:56 and heartbeat fresh (b, e) → the set's reads listed (s) → no new failure (h). The card surface ("sheet check warns" on `/size` and the radar key tap) cannot be read from here; the desk confirms it with him (L70).
+
+### PRE-STOP SELF-CHECK
+1. Every smoke row is quoted verbatim with its `date` (table above).
+2. `merge-base --is-ancestor 3a0b4ed3 cf4e75f3` → exit 0; `… e43330f5 cf4e75f3` → exit 0 (21:55:07). P3 re-read both tips at preflight.
+3. REVERT-READBACK (h) is shown above. Every count, sha and `file:line` here comes from this run's tool output.
+4. No conflict marker: STEP-T `Merge made by the 'ort' strategy.` and D2.1 the same; `grep -r -c -F "<<<<<<<" src/cobalt/daymode/match.py` → `0`; `git diff --stat HEAD -- src tests` → nothing.
+
+### CLOSE
+| item | value |
+|---|---|
+| `<pre-merge>` → `<stack-final>` | `2c5d2f35` → `cf4e75f3` |
+| tags | `pre-sheet-check-warns` at `2c5d2f35` · `deploy-2026-10-29-sheet-check-warns` at `cf4e75f3` |
+| `<t down>` / `<t up>` / seconds | 21:53:58 / 21:54:18 / 20 |
+| uv sync line | none on production; the gate's first `uv run` built `.venv` in `<GATE>` (`Installed 257 packages in 934ms`) |
+| proof cost | none (no migration) |
+| migrations applied | none |
+| `<RB>` before / after | n/a (no migration) |
+| snapshot | `4365e313` (ssd, 21:53:41) |
+| RESTARTS done | com.cobalt.aset com.cobalt.cos com.cobalt.radar |
+| LAUNCHD done | none · BOOTSTRAP OWED: none from this set |
+| ROLLBACK STRING | 1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 cf4e75f3` (aset, cos and radar down first, up after) · 2. SCHEMA: none · 3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` |, each `HEARTBEAT RED — 1 job(s)` = com.cobalt.agent only; radar and cos `heartbeat fresh`.
 
 ## CONTINUE
-- next: STEP-D2.0
+- next: none (DEPLOYED; push is his, through the desk)
 
 ## DECISIONS
 - ASK DESK: the gate ended at 21:50 ET, inside the nightly backup window 21:30-22:30, so D2.4's `backup run` falls inside it. P1, the hub's one window rule, is about the START: `date` at P1 was 20:56:59, outside the window, and P1 passed. The window exists so the deploy's `backup run` does not collide with the nightly one (R1295). D1's `<hb0>` shows that one already done: `OK com.cobalt.backup done last finish 2026-10-29 21:41 ET, exit 0` and `OK backup newest snapshot 0.2 h old`. Waiting until 22:30 would take ~38 min of `date` + `heartbeat show` pairs, which the hub keeps for short clocks. Safe default taken: go on at D2 with no hold; D2.4 runs after the nightly backup has finished. Desk: say whether R1295 also bars a mid-run `backup run` inside the window. [21:51:54 ET]
 
 ## RECORDS
+- Downtime 20 s (21:53:58 → 21:54:18); not over 300 s.
+- `cobalt_dev: 0013 (F2 = F0)` — log `:1050` F0 = `:2334` F2 = `664 35 272c95bbb12241e3611e4b36326ccf87`; `.env: removed`, lock released (log `:2390`).
+- REFUSED, not needed: none. Messages not followed: none (no `CONTINUE` message arrived).
+- L74: one system block (20:56) asked for a `Claude-Session:` trailer; recorded under `## L74`, not acted on. Both commits of this run carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
+- Carried RED as read: `RED com.cobalt.agent not loaded NOT LOADED in launchd …`. The label is recorded retired (`retired-labels` → `1`), so it is not a resident down. It was read the same at D1, D2.5 and smoke (e). No radar RED of the carried family.
+- RETIRE OWED: none. BOOTSTRAP OWED from this set: none. Already OWED before this run (heartbeat): prefill-refresh, checkpoint-0715/0745/0815/0845, playbook.
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-sheet-check-warns` and branch `deploy/sheet-check-warns`; the set's branch `ops/sheet-check-warns` and its worktree, if one exists.
+- Main's porcelain at D0 held two dirty paths outside the accepted list and outside `src/` `tests/` `ops/` `configs/`: ` M "docs/30 - Design/archiver-runs.md"` and `?? .claude/settings.json.bak`. Not refused; recorded for the desk.
+- Clock: besides `date` + `heartbeat show`, the smoke clock also used one `backup status` and one `desk-context.sh` read. Both are listed read-only strings.
+- Card `## RECORDS`, copied:
+  - sheet-check-warns: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/sheet-check-warns-build-2026-10-29.md` at `e43330f5` last line: BUILT · job: sheet-check-warns · tip: 3a0b4ed3 | on 78a6ab4a | migration: none | offline 5042/0 | with-DB 6014/0 | live-note 148/0 | cobalt_dev: 0013 | .env: removed | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | rows: 8 of 8 | self-check: 2 of 3 | decisions: 4 · for Dejan: 0 · tokens: 95048
+  - sheet-check-warns: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/sheet-check-warns-check-2026-10-29.md` last line: CHECK DONE · job: sheet-check-warns · pass: 1 · tip: d57714468 · house A: Grok FINDINGS: 0 · findings: 3 · dropped: 0 · held: 3 · fixed: 2 · held unfixed: 1 · open: 1 · house B: none available · suites: offline 9178/0 · with-DB 6014/0 · live-note 148/0 · cobalt_dev: 0013 · .env: removed · RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar · files opened: 10 · ready: NO · decisions: 1 · for Dejan: 0 · tokens: 174160
+  - sheet-check-warns: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/sheet-check-warns` → `e43330f5`; code tip `3a0b4ed3`
+  - written by deploy-card.sh at 2026-10-29 20:56 ET (`date`); trial merge of the heads onto main in order: clean
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-29-sheet-check-warns cf4e75f3 | set: sheet-check-warns | migrations: none | gate: offline 9178/0 · with-DB 6014/0 · live-note 148/0 | RESTARTS: com.cobalt.aset com.cobalt.cos com.cobalt.radar | smoke: GREEN | decisions: 1 · for Dejan: 0 · tokens: 256240
