@@ -1,7 +1,11 @@
 # deploy launcher-tip-prefix — set: launcher-tip-prefix · migrations: none
 
 ## §0 Headline
-- (in progress)
+- launcher-tip-prefix (card 1085: check launcher, check preflight and card fill admit git's 9-hex stop-line tip) is on `main` at `609643b3`, tag `deploy-2026-10-29-launcher-tip-prefix`; rollback tag `pre-launcher-tip-prefix` at `680e3b47`.
+- Gate green on `2b57dabe`: offline 9189/0 · with-DB 6014/0 · live-note 148/0; `cobalt_dev: 0013 — F2 = F0`, lock released.
+- RESTARTS: none — no resident went down; aset `68013` and radar `68034` unchanged; smoke GREEN.
+- Migrations: none. Snapshot `daef4c11` taken before the merge.
+- The desk still owes `install-ops` and its `card 1085` grep (card `## SMOKE READS`).
 
 ## L74
 - 22:35 ET: this session's system reminder asked commits to carry a `Claude-Session:` line. Recorded as data (L74); commits carry `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>` only.
@@ -158,16 +162,102 @@ STEP-D1 (23:29 ET):
 | LAUNCHD SET | empty — nothing |
 | MIGRATION | none — no `<RB>`, no D1-M |
 
-D2.0: `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 34f5d0bd "<card>"` → printed nothing, exit 0.
+D2.0: `sh /Users/cobalt/cobalt/ops/desk/deploy-shipped.sh --moved 34f5d0bd "<card>"` → printed nothing, exit 0. Report committed `680e3b473 docs(report): deploy launcher-tip-prefix — gate green on 2b57dabe`; `show --stat HEAD` → that one file (173 insertions). `rev-parse --short=8 main` → `680e3b47` = `<pre-merge>`.
+
+| step | result |
+|---|---|
+| D2.1 `git -C <GATE> merge --no-edit main` | `Merge made by the 'ort' strategy.` (the report, 1 file) |
+| D2.2 `<stack-final>` | `609643b3`; `609643b3^2` → `680e3b47` = `<pre-merge>`; `merge-base --is-ancestor 2b57dabe 609643b3` → exit 0 |
+| D2.3 `diff --stat 2b57dabe 609643b3 -- . ':(exclude)docs' ':(exclude)configs/cobalt/rules.yaml'` | nothing — docs only |
+| D2.4 `backup status` before | `newest snapshot: 1.6 h old` |
+| D2.4 `backup run` (foreground) | `backup: cobalt_brain via pg_dump inside cobalt_memory — 11854.2 MB` · `ssd: snapshot daef4c11 — 0 new / 3 changed, 27.5 MB added, 1 pruned`; `backup status` after → `newest snapshot: 0.0 h old` |
+| D2.5 `date` · `heartbeat show` | `Thu Oct 29 23:31:47 EDT 2026` (150 s after D1's 23:29:18 read); `HEARTBEAT RED — 1 job(s)`, the same one RED `com.cobalt.agent not loaded`; aset `pid 68013`, radar `running 98 min, heartbeat fresh`, `radar idle (overnight)` — no new RED |
+| D2.6 `date` | `Thu Oct 29 23:31:53 EDT 2026` |
+| D2.6 `tag pre-launcher-tip-prefix` | at `680e3b47` (`rev-parse --short=8 pre-launcher-tip-prefix` → `680e3b47`) |
+| 4.1 `date` | `Thu Oct 29 23:32:12 EDT 2026` = `<t down>` (= `<t up>`: empty set) |
+| 4.2 | `<restart set>` empty: no bootout; aset not in the set: no orphan-clean; agent recorded retired: no stop |
+| 4.3 `rev-parse --short=8 HEAD` | `680e3b47` = `<pre-merge>` |
+| 4.3 `merge --ff-only deploy/launcher-tip-prefix` | `Updating 680e3b473..609643b3d` · `Fast-forward` · 8 files changed, 319 insertions(+), 14 deletions(-) |
+| 4.4 | `migrations applied: none` |
+| 4.5 `validate` | exit 0; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>`; `Placement (docs/PLACEMENT.md): tree clean.` |
+| 4.6 | nothing taken down: nothing to bootstrap; downtime `none` |
+| 4.6L | `<launchd set>` empty: nothing |
+| STEP-7.1 `tag deploy-2026-10-29-launcher-tip-prefix` | after green smoke; `rev-parse --short=8` → `609643b3` |
+
+CLOSE:
+- `<pre-merge>` `680e3b47` → `<stack-final>` `609643b3` (main tip `609643b3`).
+- Tags: `pre-launcher-tip-prefix` → `680e3b47`; `deploy-2026-10-29-launcher-tip-prefix` → `609643b3`.
+- `<t down>` / `<t up>` / seconds: none (empty `<restart set>`; 4.1 / 4.3 `date` 23:32:12).
+- uv sync line: none at 4.4 (no migration); the gate tree's `.venv` was created at STEP-R (`Installed 257 packages in 1.00s`).
+- Proof cost: none in production (no migration); the gate's dev proof-only: `Proof cost: total 6.4 s` (log `:2381`).
+- `migrations applied: none`; `<RB>` before / after: none (no READ-BACK on the card).
+- Snapshot: `daef4c11` (ssd).
+- `RESTARTS done: none`. `LAUNCHD done: none`. No `BOOTSTRAP OWED` line.
+- THE ROLLBACK STRING (the desk's, never this session's):
+  1. CODE: `git -C /Users/cobalt/cobalt revert --no-edit -m 2 609643b3` — ONE revert of the main-into-gate merge; `<restart set>` empty: no resident down or up; `<launchd set>` empty.
+  2. SCHEMA: none (no migration).
+  3. RE-LAND: `git -C /Users/cobalt/cobalt revert --no-edit <revert sha>` — `Reapply "Merge branch 'main' into deploy/launcher-tip-prefix"`.
 
 ## Smoke
+`<t up>` = 4.3's `date` `23:32:12` (empty set). First calls: `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` = `31` · `60` · `750` · `39` (= D1's).
+
+| row | `date` | command | result |
+|---|---|---|---|
+| (a) | 23:32:34 | `launchctl print gui/501/com.cobalt.aset` | `state = running`, `pid = 68013` — SAME as D1 (outside the empty set) |
+| (a) | 23:32:34 | `launchctl print gui/501/com.cobalt.radar` | `state = running`, `pid = 68034` — SAME as D1 |
+| (a) | 23:32:34 | `/Users/cobalt/cobalt/cobalt.sh status` | `  Cobalt is OFFLINE.` (recorded retired: OFFLINE is green) |
+| (b) | 23:32:34 | `grep -c "Started server process" aset.err` | `303` = `<a0>` (aset outside the set) |
+| (b) | 23:32:34 | Traceback aset / Traceback radar / TaxonomyConfigError | `217` · `1` · `0` = baseline |
+| (b) | 23:34:30 | `tail -n 30 aset.err` | last `INFO:     Started server process [68013]` … `INFO:     Uvicorn running on http://127.0.0.1:5010 (Press CTRL+C to quit)` (the 21:54 start; unchanged) |
+| (b) | 23:34:30 (`<t up>` + 138 s) | `tail -n 12 radar.err` | `2026-10-29 23:32:37.942 | INFO | cobalt.radar.runner:resident:645 - radar cycle: idle:overnight scan_id=None` · `2026-10-29 23:34:17.956 | … radar cycle: idle:overnight scan_id=None` — cycle lines after `<t up>`, no S5 / lifecycle failure, no traceback → GREEN |
+| (c) | 23:32:34 | `curl … https://cobalt.taild24291.ts.net/` · `/radar` · `/radar\?frame=phone` | `200` · `200` · `200` |
+| (d) | 23:32:34 | the four `## MARKERS` | `1` · `1` · `5` · `1` — each at least the card's after (`1`, `1`, `4`, `1`); the builder's tip counts: `card 1085` 1 in `desk-launch.sh`, 1 in `preflight.sh`; `test_1085` defs 5 in `test_desk_launch_prechecks.py`, 1 in `test_preflight.py` |
+| (s) | 23:32:40 | `cd <GATE>` · `ls -la <GATE>/.env` (No such file) · `uv run pytest -q -p no:cacheprovider tests/ops/test_desk_launch_prechecks.py tests/ops/test_preflight.py` (at `<stack-final>` `609643b3` = main) | exit 0 · `239 passed, 15 warnings in 83.40s (0:01:23)` — `0 failed`; `cd /Users/cobalt/cobalt` · `ls -la /Users/cobalt/cobalt/.env` listed |
+| (e) 1 | 23:34:37 | `heartbeat show` | `HEARTBEAT RED — 1 job(s)  (2026-10-29 23:34:38 EDT)`; the one RED `com.cobalt.agent not loaded` (in `<hb0>`); `OK   com.cobalt.radar             running   running 100 min, heartbeat fresh`; `OK   radar idle (overnight)` |
+| (f) | 23:34:43 | `jobs restarts 680e3b47..609643b3` | exit 0, the same 8 rows, `RESTARTS: none` = STEP-R's `<restart set>` (empty); no UNCLASSIFIED |
+| (f) | 23:34:43 | `validate` | exit 0; `Jobs (F17): 22 registered — 7 resident, 15 one-shot. Kill phrase 'COBALT STOP'.` = `<jobs0>` |
+| (g) | — | — | no migration |
+| (h) | 23:35:20 (`<t up>` + 188 s, after (b) settled) | the four failure counts | `31` · `60` · `750` · `39` = `<rp_up>` `<rpr_up>` `<re_up>` `<lc_up>` — none grew |
+| (h) | 23:35:20 | `curl … /radar` | `200` |
+| (h) | — | `census` reads | none on the card |
+| (e) 2 | 23:36:28 | `heartbeat show` | `HEARTBEAT RED — 1 job(s)  (2026-10-29 23:36:31 EDT)` — 113 s after (e) 1; the same one RED `com.cobalt.agent not loaded` (in `<hb0>`); `OK   com.cobalt.radar             running   running 102 min, heartbeat fresh`; no new RED |
+
+Clock between (e) 1 and (e) 2 filled with `date` + `heartbeat show` pairs only (23:35:11/14, 23:35:33/37, 23:35:41/45, 23:36:10/13, 23:36:19/22: each `HEARTBEAT RED — 1 job(s)`, the same agent RED).
+
+SMOKE: GREEN.
+
+THE CHAIN: every check committed (P2: check `79186d4c`, fix report at `3a6c1bfa`, O1 FIXED) → the tips re-read (P3: `2da6759e`, `3a6c1bfa`) → the merged tree (T: `2b57dabe`, clean) → RESTARTS derived (R: `RESTARTS: none`) → three suites green on `<m1>` (G: offline 9189/0 · with-DB 6014/0 · live-note 148/0) → `<stack-final>` `609643b3` = `<m1>` + docs (D2.3: nothing outside docs) → the landed code (4.3: `Updating 680e3b473..609643b3d`, Fast-forward) → markers (d: 1 · 1 · 5 · 1) → no migration (g) → residents unchanged after the merge (a: aset 68013, radar 68034) → radar cycling (b: 23:32:37, 23:34:17; e: heartbeat fresh) → the set's read (s: `239 passed`) → no new failure (h: 31 · 60 · 750 · 39). The card surface is not readable here; the desk confirms the first real 9-hex check launch (L70, L81 (3)).
+
+PRE-STOP SELF-CHECK:
+1. Every smoke row's evidence is quoted verbatim with its `date` (table above).
+2. Every code tip and head was re-read (P3: `rev-parse --short=8 2da6759e` → `2da6759e`, `ops/launcher-tip-prefix` → `3a6c1bfa`); each is an ancestor of `<stack-final>` (`merge-base --is-ancestor 2da6759e 609643b3` → exit 0; `… 3a6c1bfa 609643b3` → exit 0).
+3. REVERT-READBACK shown: (h) at 23:35:20, the four counts = `<rp_up>`…`<lc_up>`. Every count, sha and `file:line` here was read from tool output this run.
+4. No conflict marker: STEP-T ran clean (`Merge made by the 'ort' strategy.`), D2.1 clean.
 
 ## CONTINUE
-next: STEP-D2.1 (report committed at D2.0; gate green at 23:28 ET)
+OUTAGE STARTING 23:31:53 ET — residents of <restart set> going down (<restart set> is EMPTY: no resident goes down; the merge lands with the residents up); if this is the last entry and they are down, the restore is STEP-5 (3); a relaunch is CONTINUE: STEP-D0
+- 4.6 ended 23:32:12 (nothing taken down); smoke GREEN 23:36:31; tagged.
+next: none (deployed; the desk's `install-ops` read follows)
 
 ## DECISIONS
+none
 
 ## RECORDS
+- Downtime: none (`<restart set>` empty; the merge landed with the residents up).
+- `cobalt_dev: 0013 (F2 = F0)` — `F0`/`F2` `664 35 272c95bbb12241e3611e4b36326ccf87` (gate log `:1050`, `:2334`); lock released by the gate (`lock released`, `.env: removed`).
+- The carried RED as read: `RED  com.cobalt.agent not loaded NOT LOADED in launchd` at D1, D2.5 and smoke (e) — the agent is recorded retired (`ops/desk/retired-labels`); not the radar carried family; no radar RED at any read (`radar idle (overnight)`).
+- No `RETIRE OWED`; no `BOOTSTRAP OWED` from this set (STEP-C `ADMITTED 0`). The heartbeat's six OWED labels (prefill-refresh, checkpoint-0715/0745/0815/0845, playbook) are earlier deploys' entries in `data/deploy/bootstrap-owed.json`.
+- `?? .claude/settings.json.bak` on main at D0: outside the ACCEPTED list and outside the REFUSED `src/` / `tests/` / `ops/` / `configs/` paths; not touched.
+- The gate's `.venv` was created by uv in `<GATE>` at STEP-R (`Installed 257 packages`).
+- A PreToolUse hook (`ops/desk/bare-guard.py`) blocked a `grep -n -F ".env: removed" <gate log>` of mine (a read I added): `route: .env is never read; …`. Not re-sent in another spelling; the release line was read with the Read tool (log `:2389-2394`).
+- Cleanup owed (L46): the gate worktree `/Users/cobalt/cobalt-wt/deploy-launcher-tip-prefix` and branch `deploy/launcher-tip-prefix`; the set's worktree `/Users/cobalt/cobalt-wt/launcher-tip-prefix` and branch `ops/launcher-tip-prefix`.
+- AFTER DEPLOYED, the desk's (card `## SMOKE READS`): `sh /Users/cobalt/.claude/ops/desk-launch.sh install-ops` once, its last line `0 linked`; `grep -c -F "card 1085" /Users/cobalt/.claude/ops/desk-launch.sh` → at least `1`. Not run here.
+- Card records copied:
+  - launcher-tip-prefix: fix report `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-tip-prefix-build-2026-10-29.md` at `3a6c1bfa` last line: BUILT · job: launcher-tip-prefix · tip: 2da6759e | on 4f1c991f | migration: none | offline 9185/0 | with-DB 0/0 | live-note 148/0 | cobalt_dev: not taken | .env: removed | RESTARTS: none | rows: 4 of 4 | self-check: 3 of 3 | decisions: 2 · for Dejan: 0 · tokens: 106862
+  - launcher-tip-prefix: check `/Users/cobalt/cobalt/docs/40 - DevDocs/reports/launcher-tip-prefix-check-2026-10-29.md` last line: CHECK DONE · job: launcher-tip-prefix · pass: 1 · tip: 5babf712 · … · held unfixed: 1 · open: 1 · … · ready: NO · decisions: 2 · for Dejan: 0 · tokens: 163970
+  - launcher-tip-prefix: head `git -C /Users/cobalt/cobalt rev-parse --short=8 ops/launcher-tip-prefix` → `3a6c1bfa`; code tip `2da6759e`
+  - written by deploy-card.sh at 2026-10-29 22:34 ET (`date`); trial merge of the heads onto main in order: clean
+- L74: one system reminder asked for a `Claude-Session:` line on commits; not followed (`## L74`).
 - REFUSED, not needed: `git -C /Users/cobalt/cobalt grep -n -F "def test_1085_check_o1_…" 2da6759e -- tests/ops/test_card_fill.py` — "Permission to use Bash has been denied because Claude Code is running in don't ask mode." Read instead with the listed `git -C * show*`.
 
-(run in progress — next step under ## CONTINUE)
+DEPLOYED deploy-2026-10-29-launcher-tip-prefix 609643b3 | set: launcher-tip-prefix | migrations: none | gate: offline 9189/0 · with-DB 6014/0 · live-note 148/0 | RESTARTS: none | smoke: GREEN | decisions: 0 · for Dejan: 0 · tokens: 219778
