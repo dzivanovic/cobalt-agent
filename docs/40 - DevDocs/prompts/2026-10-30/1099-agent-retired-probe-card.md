@@ -2,7 +2,7 @@ JOB: agent-retired-probe
 LADDER: OFF-LADDER — reports/cto-2026-10-30.md R2610
 BRANCH: ops/agent-retired-probe
 WORKTREE: agent-retired-probe
-BASE: «FILL: 8-hex commit of main the branch is cut from»
+BASE: 115ff234
 TIP:
 REPORT: /Users/cobalt/cobalt-wt/agent-retired-probe/docs/40 - DevDocs/reports/agent-retired-probe-build-2026-10-30.md
 CHECK REPORT:
